@@ -1,0 +1,739 @@
+# 効果・タイミング・操作 設計書(DM_SIM)
+
+- 版: v0.1 / 作成日: 2026-10-14
+- 位置づけ: このプロジェクトで**最も難しい部分**(カード効果の汎用処理、タイミング処理、クリック/ドラッグで遊べる操作)の設計。design.md の第6章(カード能力の実装方針)を詳細化し、置き換える。
+- 関連: [design.md](./design.md)(全体)/ [spec.md](./spec.md)(仕様)/ [decks.md](./decks.md)(対象28枚)/ [reference_duel-hub.md](./reference_duel-hub.md)(参考: 既存の一人回しツールのUIと効果の記述形式)
+- ルールの根拠: 総合ゲームルール Ver.1.52 の条番号。**条文は要約ツール経由で確認したもので、原文との照合は未実施**。実装前に原文で確認する項目は第15章にまとめた。
+
+---
+
+## 0. 要点
+
+詰まりどころは次の3つで、すべて「1つの仕組みで全カードを扱う」ことで解く。
+
+| 難所 | 解き方(概要) | 章 |
+|---|---|---|
+| 汎用的なカード効果 | 能力を**データ(AST)**で書き、小さな**インタプリタ(VM)**で実行する。カード固有コードは書かず、足りない時は**原始操作を足す** | 6 |
+| 大量のタイミング | すべての状態変化を**原始操作 → イベント**に集約。誘発は「イベント×パターン照合」で**待機プール**に入れ、**チェックポイントで1つずつ**解決する | 4, 5 |
+| クリック/ドラッグで効果を処理 | エンジンの「選択待ち(pending)」を**7種類の入力形式**に正規化し、UIは7種のウィジェットを1回作るだけにする | 11 |
+
+### 0.1 ユーザー要望の確認(同時に誘発した効果の順序)
+
+「同時にトリガーした効果はどちらから使っても良い」は、**同じプレイヤーの能力同士**については正しい。ただし公式ルールには次の優先順位がある(101.4 / 101.4a / 101.4c / 101.4g)。
+
+1. **S・トリガー**が最優先(ターンプレイヤー → 非ターンプレイヤーの順)。
+2. それ以外は**ターンプレイヤー側を先**に処理し、各プレイヤーは**自分の能力を好きな順**で解決する。
+3. 処理中に新しく誘発した能力は**待機**し、処理中の能力を先に終える。処理中に新しく待機した S・トリガーは、すでに待機していたものより先に解決する。
+
+つまり「プレイヤー間の先後は固定、同一プレイヤー内の順序は選べる」。第5章はこれに従う。
+
+---
+
+## 1. 設計原則
+
+| ID | 原則 | 理由 |
+|---|---|---|
+| E1 | 状態を変える操作は**少数の原始操作**(移動・タップ・シールド追加など)を必ず通す。原始操作が「提案 → 置換 → 実行 → イベント発行」を行う | 置換・誘発・ログ・履歴調査を1箇所に集められる |
+| E2 | 能力は**データ**。コードは「原始操作」と「インタプリタ」だけ。例外を書く前に原始操作を足す | オルゲイトの「能力のコピー」のように、能力を値として扱えるのはデータだけ |
+| E3 | 誘発は「イベント → パターン照合 → 待機プール」。解決は**チェックポイント**でのみ行う | 「処理中に誘発したものは待機」(101.4a)を構造で保証する |
+| E4 | 効果の実行は**再開可能**。入力が要る所で止まり、状態(フレーム)ごとJSONで保存できる | 人間の入力待ち・AIの探索・リプレイのすべてで必要 |
+| E5 | 継続効果は状態に書き込まず、**派生ビュー**で計算する。ただし「生成時に範囲が決まる効果」は対象のIDを保存する(110.2e) | 解除忘れを避ける |
+| E6 | 人間もAIも**同じ pending と Action**で操作する。UIは pending を入力ウィジェットに写すだけ | 実装の二重化を避ける |
+| E7 | 状態・イベントはJSON。決定的。イベントログがそのままリプレイ・アニメーション・使用履歴調査になる | 再現性とシミュレータ |
+| E8 | **カードごとのシナリオテスト**を最初に用意する(第13章) | 「効果の正しさ」は人間の目では守れない |
+| E9 | オブジェクトの参照は `(uid, epoch)`。ゾーンを移動すると `epoch` が増え、古い参照は無効になる | 「別のゾーンに移ったカードは別のものとして扱う」(400.5)を一律に守れる |
+
+---
+
+## 2. 全体の層
+
+```
+ カードJSON(能力のAST) ──load/検証──▶ AbilityRegistry(ゾーン別・イベント別の索引)
+                                           │
+ UI/AI ──Action──▶ step() ──▶ 手続きフレーム(ターン進行・プレイ・攻撃)
+                      │            │ 原始操作を呼ぶ
+                      │            ▼
+                      │      Primitive ops ──(提案イベント)──▶ 置換パイプライン ──▶ 状態更新
+                      │            │                                              │
+                      │            └──────────(確定イベント)──▶ EventBus ──照合──▶ 待機プール
+                      │                                                             │
+                      │      チェックポイント: 状況起因処理 → プールから1つ選ぶ → 効果フレーム(VM)を積む
+                      ▼
+          { state, events }      派生ビュー(derive): コスト・パワー・文明・能力・攻撃可否 …
+```
+
+- `step` は純粋関数のまま。内部では「実行スタック(`cont`)」と「待機プール(`pool`)」を状態に持つ。
+- ターン進行・プレイ手順・攻撃手順も**フレーム**として書く(第9・10章)。「S・トリガーの最中にブロック」「効果の最中に置換の選択」などの割り込みが、同じ仕組みで入れ子になる。
+
+---
+
+## 3. 状態モデルの追加
+
+design.md 第4章の型に、次を追加・変更する。
+
+```ts
+type ObjRef = { uid: number; ep: number };     // ep: ゾーン移動のたびに増える(E9)
+
+interface CardInstance { uid: number; ep: number; defId: string; owner: PlayerId; /* tapped 等 */ }
+
+// バトルゾーンは「重なり(山)」の配列。進化・侵略で複数枚が重なる
+interface Permanent {
+  pid: number;                  // 山の識別子(位置・タップ状態・攻撃状態の持ち主)
+  cards: CardInstance[];        // 先頭が一番上(クリーチャー本体)。2枚目以降は進化元
+  tapped: boolean;
+  sick: boolean;                // 召喚酔い(自分のターン開始時に解除)
+  exShields: ObjRef[];          // EXライフで置いたシールド(第8章)
+  enteredTurn: number;
+}
+
+interface GameState {
+  /* 既存 … */
+  cont: Frame[];                // 実行スタック(下がターン進行、上が最新の効果)
+  pool: PoolEntry[];            // 待機プール(誘発済み・未解決の能力)
+  effects: ContinuousEffect[];  // 生成時に範囲が決まる継続効果(期限つき)
+  turnLog: LoggedEvent[];       // 今ターンの確定イベント(「各ターン2体目」「そのターン呪文を唱えた」用)
+  usage: Record<string, number>;// 「1ターンに1回」の使用記録(キー: uid:ep:能力番号 → ターン番号)
+  seq: number;                  // 連番(バッチ・フレーム・プールのID)
+  pending: Pending | null;      // 入力待ち。メインステップの行動待ちも pending の一種にする
+}
+
+type Frame =
+  | { kind: "proc"; name: "turn" | "play" | "attack" | "breakShields" | "settle"; stage: number; vars: Json }   // TS製の手続き
+  | { kind: "effect"; id: number; ability: AbilityRef; source: ObjRef; lki: CardSnapshot; controller: PlayerId;
+      pc: number[]; vars: Record<string, Json>; trigger?: LoggedEvent };                                       // DSL製の効果
+
+interface PoolEntry {
+  id: number; batch: number;           // batch: 同時に誘発した組。大きいほど新しい
+  ability: AbilityRef; source: ObjRef; lki: CardSnapshot; controller: PlayerId;
+  event: LoggedEvent; shieldTrigger?: boolean;
+}
+```
+
+- **メインステップの行動待ちも pending にする**(`kind: "turnAction"`)。`legalActions(state)` は常に `state.pending` だけを見て返せばよく、UIとAIの経路が1本になる。
+- `CardSnapshot`(最後の情報): 発生源がその後ゾーンを離れても、誘発時点の文明・コスト・パワー・所有者・能力を参照できる(110.5a)。
+- `usage` のキーに `ep` を含めるので、ゾーンを移動したカードの「1ターンに1回」は自然にリセットされる。
+
+### Action の整理
+
+design.md 4.1 の個別 Action(`BLOCK` / `CHOOSE_TARGET` / `ORDER` …)は、**回答用の1種類に統合**する。
+
+```ts
+type Action =
+  | { type: "CHARGE_MANA"; uid: number } | { type: "SKIP_MANA" }
+  | { type: "PLAY_CARD"; uid: number; from?: ZoneId; face?: number; extra?: PlayExtra }  // extra: ハイパーエナジーのタップ対象、手動マナ指定など
+  | { type: "ATTACK"; attacker: number; target: AttackTarget }
+  | { type: "END_MAIN" } | { type: "END_TURN" }
+  | { type: "ANSWER"; id: number; value: AnswerValue };   // id は pending.id。古い画面からの二重送信を弾く
+```
+
+---
+
+## 4. イベント体系
+
+### 4.1 原始イベント
+
+イベントは**少数の原始イベント**にして、日本語の「〜時」は**パターンで表す**(4.2)。
+
+| 原始イベント | ペイロード | 備考 |
+|---|---|---|
+| `moved` | `card, from: Zone, to: Zone, cause, by?, via?, lki` | すべてのゾーン移動。`cause` = draw / discard / destroy / bounce / break / manaPlace / summon / cast / free / evolve / invade / effect … |
+| `entered` | `perm, card, via` | バトルゾーンに出た(`moved` の後に発行)。`via` = summon / free / evolve / invade / effect |
+| `evolved` | `perm, top, base` | 「重なった時」。進化・侵略・S-MAX進化 |
+| `cast` | `card, face, free` | 呪文を唱えた |
+| `summoned` | `card, free` | 召喚を宣言し、コストを払った |
+| `tapped` / `untapped` | `perm or card, cause` | |
+| `attackDeclared` | `attacker, target` | 「攻撃する時」。攻撃クリーチャーをタップした直後 |
+| `blocked` | `attacker, blocker` | |
+| `battleEnded` | `winner?, loser?, draw?` | |
+| `shieldBroken` | `attacker, shield, by` | ブレイクされたシールド1枚ごと |
+| `triggerDeclared` | `card, kind` | S・トリガー/G・ストライクの宣言 |
+| `abilityTriggered` | `ability, source, controller` | 置換フィルタを通過して**実際に誘発した**能力(オルゲイトが見る) |
+| `stepStart` / `stepEnd` | `step, player` | ターン開始・各ステップの境界。ターン終了時は `stepStart(end)` |
+| `looked` / `revealed` | `cards, to` | 情報の公開(`to` = 見えるプレイヤー)。CPUの情報条件・UIの表示用 |
+| `gameLoss` | `player, reason` | 「ゲームに負ける時」の置換(ジャオウガ) |
+
+- 同時に複数枚が動く操作(ドルファディロムの全体破壊、ジャオウガのシールド墓地送り)は**1つのバッチ**として実行する。置換はカード1枚ずつ適用し、誘発の収集は**バッチ全体の実行後**に、バッチ前の状態(最後の情報)を使って行う。これで「同時に離れた」クリーチャー同士の誘発が正しく見える。
+- すべてのイベントに `id` と `causedBy`(元になったフレーム/イベントのID)を付ける。対戦ログの**因果ツリー**表示とデバッグに使う。
+
+### 4.2 「〜時」のパターン対応表
+
+| 日本語 | パターン(`on`) | 使うカード例 |
+|---|---|---|
+| 出た時 | `entered` ・subject=self | デドダム、ガイアッシュ・カイザー、アクアン |
+| 召喚によって出た時 | `entered` ・via=summon ・subject=self | ヨビニオン、ジ・ウォッチ |
+| 重なった時 | `evolved` ・subject=self | デッドダムド |
+| 攻撃する時 | `attackDeclared` ・attacker=self | ジャオウガ、ジ・ウォッチ |
+| 破壊される時(置換) | `moved` ・from=battle, to=grave, cause=destroy | ヨビニオン・トライブ |
+| バトルゾーンを離れる時(置換) | `moved` ・from=battle | ジャオウガ、EXライフ |
+| 手札を捨てた時 | `moved` ・from=hand, to=grave, cause=discard ・owner=相手 | フミシュナ |
+| 呪文を唱えた時 | `cast` | ジ・ウォッチ |
+| 自分の2体目のクリーチャーが出た時 | `entered` ・owner=自分 ・nthThisTurn=2 | マルル、シンバリー |
+| ターン終了時 / 相手のターン終了時 | `stepStart(end)` ・player=自分 / 相手 | ザーディクリカ、カイザー |
+| シールドが離れた時(EXライフ) | `moved` ・from=shield ・flag=exLife | ドルファディロム |
+| 相手のクリーチャーの能力がトリガーした時 | `abilityTriggered` ・controller=相手 ・turn=相手 | オルゲイト |
+| 負ける時(置換) | `gameLoss` ・player=自分 | ジャオウガ |
+| 攻撃する時(他のクリーチャー、侵略) | `attackDeclared` ・attacker=条件 ・**監視ゾーン=手札/墓地/マナ/バトル** | デッドダムド |
+
+### 4.3 トリガー指定(`TriggerSpec`)
+
+```ts
+interface TriggerSpec {
+  on: EventPattern;                  // 原始イベントの種類 + 属性の絞り込み
+  watch?: ZoneId[];                  // この能力が働くゾーン(省略 = バトルゾーン)。侵略は ["battle","hand","grave","mana"]
+  subject?: "self" | "other" | "any";
+  turn?: "own" | "opponent" | "any"; // 誰のターンか
+  nthThisTurn?: number;              // 「各ターンN体目」
+  limit?: { perTurn: number };       // 「1ターンに1回」
+  if?: Cond;                         // 誘発条件(誘発の瞬間に評価)
+  ifAtResolve?: Cond;                // 解決時にもう一度確認する条件(「〜場合」)
+}
+```
+
+- `watch` を持てるので、**バトルゾーン外から働く能力**(侵略、手札/墓地/マナからの条件つき召喚、シールドゾーンのS・トリガー/G・ストライク)も同じ仕組みで扱える。
+- 能力の索引は、読み込み時に `(監視ゾーン, 原始イベント種別)` で作る。イベントのたびに全カードを走査しない。
+
+---
+
+## 5. トリガーの処理(待機プールとチェックポイント)
+
+### 5.1 収集
+
+```
+emit(event):
+  candidates = registry.lookup(event.type)             // 索引から候補能力
+  for each (card, ability) in candidates where card is in ability.watch zones:
+      if !match(ability.on, event, card)          continue
+      if !evalCond(ability.if, ctx)               continue
+      if !withinLimit(ability, card)              continue    // 1ターンに1回
+      proposal = { ability, source: ref(card), controller: card.owner, event }
+      proposal = applyTriggerReplacement(proposal)            // キーナリー: 「かわりにトリガーしない」
+      if proposal == null                         continue
+      pool.push({ ...proposal, batch: currentBatch })
+      emit(abilityTriggered(proposal))                        // オルゲイトが見る(再帰する)
+```
+
+- 誘発した瞬間に待機状態になる(111.2a)。効果の解決中に誘発したものも同じ。
+- 誘発したあとは、発生源から**独立**する。発生源が離れても効果は解決される(110.5a)。発生源の情報は `lki` から読む。
+- **誘発の抑制**(キーナリー「相手のクリーチャーが出てその能力がトリガーする時、かわりにトリガーしない」)は、置換効果の1種として `applyTriggerReplacement` に置く(第8章)。`abilityTriggered` が発行されないので、オルゲイトも反応しない。裁定メモの「同時には働かない」と一致する。
+
+### 5.2 プールからの選び方
+
+```
+pickNext(pool, turnPlayer) → { player, candidates } | null
+  1. S・トリガー層: shieldTrigger の項目があれば、最も新しい batch の中から、
+        ターンプレイヤー所有 → 非ターンプレイヤー所有の順。          // 101.4 / 101.4a / 101.4g
+  2. 通常層: ターンプレイヤー所有の項目があればそれ、なければ非ターンプレイヤー所有。 // 101.4a / 101.4c
+  3. 選べるのは、その層・そのプレイヤーの項目のどれでもよい(順序は本人が決める)
+  candidates が1つなら自動で進める。2つ以上なら pending(pickNext)を出す。
+```
+
+- 「プール全体から毎回選び直す」方式にする。解決の途中で新しく誘発した能力があっても、**ターンプレイヤー優先**(101.4c)が自然に保たれる。
+- 要確認: 通常能力で、新しく誘発した能力と、すでに待機していた能力のどちらを先にするか(S・トリガーだけは新しい方が先と明記されている)。第15章の台帳 L1。実装は `WaitingPolicy` として差し替え可能にし、公式Q&Aで確認したらテストで固定する。
+- UIの設定: 「同時誘発の順序を毎回選ぶ / 自動(左から)」。AIは評価関数・探索で選ぶ。
+
+### 5.3 チェックポイント
+
+```
+settle(state):                                     // 手続きフレームの区切りで呼ぶ
+  loop:
+    state = sba(state)                             // 状況起因処理(5.4)
+    if state.winner: return
+    if exists effect frame in state.cont: return   // 処理中の効果があるなら、プールは触らない(101.4a)
+    pick = pickNext(state.pool)
+    if !pick: return
+    entry = pick.candidates.length == 1 ? it : ask(pickNext pending)
+    state.pool.remove(entry)
+    if entry.ifAtResolve && !eval(entry.ifAtResolve): continue
+    push effect frame(entry)                       // 以降は VM が実行。終わったら再び settle
+```
+
+- `settle` を呼ぶ場所: ①手続きフレームの各段階の終わり(プレイ手順の「出た」直後、シールドブレイク後、バトル終了後、ステップ境界など)②効果フレームが最後まで終わった直後。
+- 効果フレームの中から呪文を踏み倒す(ザーディクリカ)場合、その呪文の解決は**親の効果の一部**なので、親が終わるまで `settle` は何もしない。
+
+### 5.4 状況起因処理(SBA)
+
+次を `settle` のたびに、安定するまで繰り返し処理する(111.2d)。
+
+- パワー0以下のクリーチャーを破壊する(108.1b: マイナスは0として扱う)
+- バトルに負けたクリーチャーの破壊(115.3b)
+- 山札が0枚になったプレイヤーの敗北、ダイレクトアタックによる勝利
+
+実行のタイミングは設定 `sbaTiming: "afterEachStep" | "afterEffect"`(既定 `afterEachStep`、効果の途中でも優先して処理する、111.2d)。要確認(L2)。
+
+---
+
+## 6. 効果の記述と実行(インタプリタ)
+
+### 6.1 能力の種類
+
+```ts
+type Ability =
+  | { kind: "keyword"; name: KeywordName; args?: Json }                      // blocker, breaker(2), shieldTrigger, speedAttacker …
+  | { kind: "trigger"; spec: TriggerSpec; optional?: boolean; steps: Step[] }// 誘発型能力・S・トリガーの本体
+  | { kind: "spell"; steps: Step[] }                                         // 呪文の効果(呪文面)
+  | { kind: "static"; scope: Selector; mod: Modifier; while?: Cond }         // 常在型(継続効果)
+  | { kind: "replace"; match: EventPattern; apply: Replacement; optional?: boolean }  // 置換効果
+  | { kind: "permission"; play: "summon" | "cast"; from: ZoneId; after?: "deckBottom" }  // マナから召喚、墓地から唱える
+  | { kind: "costMod"; mod: CostMod };                                        // シンパシー、ハイパーエナジー、カイザーの軽減
+```
+
+「選択肢を持つ呪文」「ヨビニオン」「EXライフ」などは**キーワード名で登録した展開テンプレート**にして、読み込み時に上の基本形へ展開する(カードJSONを短く保つため)。
+
+### 6.2 ステップ(`Step`)
+
+```ts
+type Step =
+  | { op: "act";    act: Act }                                                    // 原始操作の呼び出し
+  | { op: "select"; as: string; who?: Who; from: Selector; min: Qty; max: Qty;
+      random?: boolean; hidden?: boolean; optional?: boolean }                    // 対象や枚数を選び、変数 as に束縛
+  | { op: "may";    then: Step[]; else?: Step[] }                                 // 「〜してもよい」
+  | { op: "if";     cond: Cond; then: Step[]; else?: Step[] }
+  | { op: "each";   in: Ref; as: string; body: Step[] }
+  | { op: "repeat"; times: Qty; body: Step[] }
+  | { op: "modes";  pick: Qty; repeat: boolean; options: Mode[]; allIf?: Cond; who?: Who }  // N回選ぶ / 条件で全部
+  | { op: "custom"; handler: string; args?: Json };                               // 最後の手段(6.6)
+
+type Who = "controller" | "opponent" | "eachPlayer"; // eachPlayer: ターンプレイヤーから順に
+```
+
+- **選ぶ前に対象がない/足りない場合**: `select` は選べる最大数に自動で縮み、0なら**続く `act` をスキップ**する(「選んで〜する」は選べなければ何も起きない)。
+- **解決時の選択**: 呪文の選択肢・対象は、唱えた時でなく**解決時**に選ぶ(spec 3.12)。`modes` は開始時に回数分まとめて選び、上から順に実行する。
+- **相手が選ぶ**: `who: "opponent"` で pending の `player` が相手になる(ティンパニの「相手は自身のクリーチャーを選んで破壊」、決断の「相手は手札を1枚選んで捨てる」)。
+
+### 6.3 原始操作(`Act`)
+
+必要になったものから足す。**ここだけが「エンジンのコード」で、カードの数が増えても増えない**のが目標。
+
+| 分類 | 操作 |
+|---|---|
+| 移動 | `move(sel, to, {cause, position, tapped?})`(破壊・バウンス・墓地送り・マナ送り・捨てる・手札に加える・山札の下へ …は全部これの別名) |
+| 山札 | `draw(n)` / `lookTop(n, as)` / `revealUntil(cond, as)` / `shuffle` / `bottom(sel)` |
+| 割り振り | `assign(items, slots)`(デドダム: 手札/マナ/墓地)。1つの `Step` ではなく、入力形式 `assign`(11.2)を出す操作 |
+| 状態 | `tap` / `untap` / `addShield(fromTopOfDeck)` / `breakShield(n)` |
+| 継続効果の生成 | `addEffect(scopeLocked, mod, duration)`(パワー-4000、攻撃不可、ブロッカー付与 …) |
+| 場に出す/唱える | `summonFree(sel, from, {condition})` / `castFree(sel, from, {after})` |
+| ターン | `skipRestOfTurn` |
+| メタ | `copyAbility(ref, as: controller)`(オルゲイト) |
+
+破壊の例: `move(sel, "grave", { cause: "destroy" })`。**破壊されるかどうか**は置換パイプライン(第8章)が決めるので、`destroy` に個別のコードは要らない。
+
+`move` は山(`Permanent`)を動かす時、進化クリーチャーなら**下にあるカードも一緒に**動かす(「進化クリーチャーとして」離れる時は一番上だけがクリーチャー、下のカードは単にカードとして離れる。109.2b / 316.3)。
+
+### 6.4 セレクタ・式
+
+```ts
+interface Selector {
+  zone: ZoneId | ZoneId[];
+  owner: "self" | "opponent" | "any";
+  type?: "creature" | "spell" | "card" | "shield" | "element";
+  where?: Cond;           // 例: コスト ≤ $x、多色でない、闇、光のドラゴンで進化でない …
+  except?: "self";
+  chooseable?: boolean;   // 「選ぶ」対象になるか(ジャストダイバーの「選ばれない」を判定)
+}
+type Expr = number | { var: string } | { count: Selector } | { cost: Ref } | { add: Expr[] } | { sub: [Expr, Expr] } | { min: Expr[] } | { max: Expr[] };
+```
+
+- 例:
+  - スカイソード: `cost < count(自分のマナ)` の自分のマナのクリーチャー。
+  - ドンドン火噴くナウ: 直前に墓地へ置いたカードのコスト ≤ `$graveCost`。
+  - ボスカツ: 「捨てさせたカードと同じ文明」→ 変数 `$discarded` を `select` の `where` で参照する。
+- Cond/Expr は小さな関数群(`and/or/not`、比較、`hasCiv`、`isMulticolor`、`inZone` …)。ソリティア調査の `Goal` とは別物だが、**判定部品(CardMatcher)は共有**する(spec 6.3)。
+
+### 6.5 実行(VM)
+
+```ts
+function runEffect(s: GameState, f: Frame & {kind:"effect"}): GameState {
+  while (true) {
+    const step = fetch(f.ability, f.pc);
+    if (!step) return popFrame(s);                        // 終了 → 呼び出し元が settle する
+    switch (step.op) {
+      case "act":    s = doAct(s, f, step.act);           // 入力が要る操作は pending を出して return
+                     if (s.pending) return s; break;
+      case "select": const need = prepareSelect(s, f, step);
+                     if (need.auto) bind(f, step.as, need.auto);
+                     else return withPending(s, f, need.spec);         // 回答後に再開
+      case "may":    if (!f.vars["$may"+pcKey]) return withPending(s, f, yesNoSpec); /* 回答後に then/else へ */
+      case "modes":  /* 開始時にまとめて選ぶ → vars に保存 → 上から順に子ステップを実行 */
+      …
+    }
+    advancePc(f);
+    s = checkpointInEffect(s);                            // SBAのみ。プールは触らない
+  }
+}
+```
+
+- フレームは `pc: number[]`(ステップ木の経路)と `vars`(JSON)だけを持つ。**クロージャ・ジェネレータを状態に入れない**ので、直列化・巻き戻し・探索の複製がそのままできる。
+- 回答 (`ANSWER`) を受けたら、`pending` を消して該当フレームの `pc` から再開する。
+- 参照 `ObjRef` は使用時に `ep` を照合する。無効なら「対象が存在しない」として扱う(`select` の対象から外れる、`act` はその対象をスキップ)。
+- 暴走対策: 1回の `step` で処理するフレーム数・原始操作数に上限(例 10,000)を置き、超えたら `RuleLoopError`。公式の無限ループ規定は確認できていない(L7)。
+
+### 6.6 カード固有コード(`custom`)の規約
+
+- `custom` は `(ctx) => StepResult` の関数で、**原始操作とセレクタだけ**を呼ぶ。直接 `state` を書き換えない。
+- 状態は `ctx.vars`(JSON)に置く。中断・再開が必要なら `stage` を `vars` に保存する(手続きフレームと同じ書き方)。
+- `custom` が必要になったら、まず「足りない原始操作はないか」を考える。2枚以上で同じ `custom` が出たら原始操作に昇格させる。
+
+### 6.7 記述例
+
+**天災 デドダム**(出た時、山札の上3枚を手札/マナ/墓地に1枚ずつ)
+
+```jsonc
+{ "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
+  "steps": [
+    { "op": "act", "act": { "lookTop": { "n": 3, "as": "$top" } } },
+    { "op": "act", "act": { "assign": { "items": "$top", "slots": [
+        { "id": "hand", "to": "hand", "count": 1 },
+        { "id": "mana", "to": "mana", "count": 1 },
+        { "id": "grave", "to": "grave", "count": 1 } ] } } }
+  ] }
+```
+
+**修羅の死神フミシュナ「この先は修羅の道ぞ」**(S・トリガー、2回選ぶ)
+
+```jsonc
+{ "kind": "spell", "steps": [
+  { "op": "modes", "pick": 2, "repeat": true, "options": [
+      { "label": "カードを1枚引く", "steps": [ { "op": "act", "act": { "draw": 1 } } ] },
+      { "label": "相手のクリーチャー1体をバウンス", "steps": [
+          { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
+          { "op": "act", "act": { "move": { "sel": "$t", "to": "hand", "cause": "bounce" } } } ] } ] } ] }
+```
+
+**ティンパニ=シンバリー**(各ターン2体目が出た時)
+
+```jsonc
+{ "kind": "trigger", "optional": true,
+  "spec": { "on": { "type": "entered", "owner": "self", "kind": "creature" }, "subject": "any", "nthThisTurn": 2 },
+  "steps": [
+    { "op": "act", "act": { "move": { "sel": "$self", "to": "grave", "cause": "destroy" } } },
+    { "op": "if", "cond": { "moved": "$self" }, "then": [      // 置換で破壊されなかった場合は「そうした場合」にならない
+      { "op": "select", "as": "$v", "who": "opponent", "from": { "zone": "battle", "owner": "opponent", "type": "creature" }, "min": 1, "max": 1 },
+      { "op": "act", "act": { "move": { "sel": "$v", "to": "grave", "cause": "destroy" } } } ] } ] }
+```
+
+**逆転の剣スカイソード**(S・トリガー、出た時)
+
+```jsonc
+{ "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
+  "steps": [
+    { "op": "may", "then": [
+        { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
+        { "op": "act", "act": { "move": { "sel": "$t", "to": "mana", "cause": "manaPlace" } } } ] },   // 移動先は既定で「持ち主」のゾーン
+    { "op": "may", "then": [
+        { "op": "select", "as": "$c", "from": { "zone": "mana", "owner": "self", "type": "creature",
+            "where": { "cost": { "lt": { "count": { "zone": "mana", "owner": "self" } } } } }, "min": 1, "max": 1 },
+        { "op": "act", "act": { "summonFree": { "sel": "$c", "from": "mana" } } } ] } ] }
+```
+
+---
+
+## 7. 継続効果と派生ビュー
+
+### 7.1 2種類の継続効果
+
+| 種類 | 保存先 | 範囲 | 期限 | 例 |
+|---|---|---|---|---|
+| 常在型 | カードの `static` 能力(状態に書かない) | 常に再評価 | 発生源がゾーンにある間 | ガイアッシュ・カイザーのコスト軽減、ドルファディロムの呪文制限、キーナリー |
+| 生成型 | `state.effects[]` | **生成時の対象IDを固定**(110.2e) | `endOfTurn` / `untilNextTurnStart(player)` / `untilSourceLeaves` | パワー-4000、「攻撃できない」(G・ストライク)、ブロッカー付与(ドラゴンズ・サイン)、ジャストダイバー |
+
+- 生成型の期限は、ターン進行のフレームが `stepStart` ごとに掃除する。
+- 生成型の範囲固定:「同一ターン中に後から範囲に入ったカードは影響を受けない」(110.2e)。
+
+### 7.2 派生ビュー
+
+```ts
+interface View {                            // derive(state) の結果。state の参照でメモ化する
+  cost(card, ctx): number;                  // 軽減・増加を適用(0未満にならない)
+  power(perm): number;  civs(card): Civ[];  isMulticolor(card): boolean;
+  has(perm, keyword): boolean;              // 付与された能力も含む
+  canAttack(perm, target): boolean;  canBlock(perm, attacker): boolean;
+  canBeChosen(obj, by: PlayerId): boolean;  // ジャストダイバーなど
+  canCast(card, by: PlayerId): boolean;     // ドルファディロム: 多色でない呪文は唱えられない
+  canPlayFrom(card, zone, kind): boolean;   // マナから召喚、墓地から唱える
+}
+```
+
+- 状態は `copy-on-write` で不変なので、`WeakMap<GameState, View>` でメモ化できる。探索AI・確率調査の速度に効く。
+- 適用順は固定する: ①能力の付与/剥奪 → ②特性の変更(文明・種族・コスト) → ③パワーの設定 → ④パワーの加減。同じ層の中は発生順。層の依存関係(「〜を持つクリーチャーのパワー」など)が必要なカードを入れたら、その時に見直す。
+- UIはこの `View` を直接使って、カードのコストやパワーの表示、選べる対象の強調表示をする。
+
+### 7.3 コストの決定
+
+1. 表記コスト(両面なら選んだ面)
+2. 軽減/増加を適用: カイザー(コスト10以上のクリーチャーを-4)、シンパシー(マナの枚数分)、**ハイパーエナジー**(プレイヤーが選ぶ軽減。コストが互いに異なるクリーチャーをタップ、1体につき-2)
+3. 0未満にならない
+4. 支払い: 文明ごとに1枚+残りは数値(spec 3.4。割り当て問題として自動)
+
+ハイパーエナジーのように**プレイヤーの選択を要する軽減**は、`PLAY_CARD.extra` で事前に指定する。UIはドロップ後に選択を集め、1つの Action として送る(11.5)。
+
+---
+
+## 8. 置換効果
+
+### 8.1 パイプライン
+
+```ts
+function perform(s, proposal: Proposal): { s, events } {
+  // proposal: 「このイベントを起こそうとしている」。まだ状態は変わっていない
+  if (!proposal.replaced) {
+    const apps = findReplacements(s, proposal);                 // 派生ビューから、今この出来事に適用できる置換効果
+    if (apps.length) {
+      const chosen = apps.length == 1 ? apps[0] : askOrder(apps); // ターンプレイヤー優先 → 同じプレイヤー内は本人が選ぶ(101.5b)
+      if (chosen.optional && !askYesNo(chosen)) → そのまま実行
+      else proposal = { ...apply(chosen, proposal), replaced: true };  // 置換後の出来事は再置換しない(101.5)
+    }
+  }
+  return execute(s, proposal);                                  // 実行 → 確定イベント発行 → 収集(5.1)
+}
+```
+
+- 置換が適用できるかは**提案の時点**で判定し、**1つの出来事に1回だけ**。置換後の出来事には `replaced` を立て、連鎖させない(ジャオウガの身代わりにヨビニオン・トライブの置換は使えない)。
+- 複数枚をまとめて動かす場合(全体破壊)は、1枚ずつ置換を判定する。複数枚ドローは1枚ずつ(114.4a)。
+- 置換が適用された出来事は、**元の出来事としては起きなかった**ことになる。ヨビニオン・トライブが「破壊されるかわりにマナゾーンへ」なら、「破壊された時」の誘発は起きず、「マナゾーンに置かれた」出来事が起きる。
+
+### 8.2 28枚のうち置換を使うもの
+
+| カード | 置換の内容 | 実装 |
+|---|---|---|
+| ヨビニオン・トライブ | 破壊される時、墓地のかわりにマナゾーンに置く | `replace(match: moved(battle→grave, cause=destroy, self), apply: changeDest(mana))` |
+| EXライフ(キーナリー、ザーディクリカ、ドルファディロム) | 離れる時、かわりにEXのシールドを墓地に置く。出る時、山札の上をシールドにする | `replace(match: moved(from=battle, self), apply: swap → move(exShield → grave))`。ドルファディロムは「EXシールドが離れた」を `moved(from=shield, flag=exLife)` で誘発させる |
+| ジャオウガ | ゲームに負ける時/離れる時、かわりに自分の表向きのカード3枚を破壊してもよい | `replace(match: gameLoss(self) or moved(from=battle,self), optional, apply: …)`。身代わりの「破壊」自体はさらに置換できない(連鎖禁止) |
+| キーナリー | 相手のクリーチャーが出て、その能力がトリガーする時、かわりにトリガーしない | `replace(match: abilityTriggered-proposal(controller=opponent, trigger=entered), apply: cancel)`。5.1 の `applyTriggerReplacement` |
+| ザーディクリカ/決断(墓地から) | 唱えた後、墓地に置かず山札の下に置く | 置換ではなく、プレイ手順の `after: "deckBottom"`(9章)。解決後の移動先を手続きの変数で上書きする |
+
+---
+
+## 9. プレイ手順(召喚・詠唱・踏み倒し・進化・侵略)
+
+`proc:"play"` として実装する。
+
+```
+stage 0  宣言      : カードを「プレイ中」に置く(公開)。from = hand / mana / grave / 効果指定。ツインパクトは面を決める
+stage 1  進化先    : 進化なら重ねる対象を選ぶ(山のpid)。S-MAX進化は不要
+stage 2  コスト    : 6〜7章の手順。ハイパーエナジー等の選択は extra から。free なら 0
+stage 3  支払い    : マナを割り当ててタップ(自動。無料なら省略)
+stage 4  実行      : creature → move(→battle) → entered(via=summon|free|evolve) [+ evolved]
+                      spell    → cast イベント → 効果フレームを積む → 終わったら move(→grave | after指定の先)
+stage 5  settle    : チェックポイント(5.3)
+```
+
+- **踏み倒し**は stage 2〜3 を飛ばすだけで、同じ手続き(`via=free`)。ザーディクリカの無料詠唱、カイザーの無料召喚、ボスカツの手札から出す、スカイソードのマナから出す、すべて同じ。
+- 「マナをタップせずに」(カイザーの条件): `playedWithoutTapping` フラグを `entered` / `cast` イベントに付ける。コスト軽減で0になった場合は**払ったので該当しない**など、細部は要確認(L5)。
+- **侵略**(デッドダムド): `attackDeclared` を監視する `trigger`(`watch: [battle, hand, grave, mana]`、`optional`)の効果が `play(card, from: 今いるゾーン, onto: 攻撃クリーチャーの山)` を起動する。バトルゾーンからの移動は「出た」扱いにならない(decks.md)ので、`entered` は発行せず `evolved` だけ発行する。
+- **S-MAX進化**(ジャオウガ): stage 1 を省略して山札を作る。
+
+---
+
+## 10. 攻撃・バトル・ブレイクの手順
+
+design.md 5.2 を、イベントとプールを使った形に書き直す。
+
+```
+proc:"attack"
+  A0 宣言     : 攻撃クリーチャーをタップ → emit attackDeclared → settle                  // 「攻撃する時」の誘発、侵略
+  A1 ブロック  : 相手に blocker 候補があれば pending(pick 1 or none)。ブロックなら blocked → settle
+  A2 対象別    : creature / blocker → battle(パワー比較。同値は相打ち。勝敗は SBA で破壊)→ battleEnded → settle
+                 player → proc:"breakShields"(ブレイカー数)
+  A3 終了      : 攻撃終了。settle
+
+proc:"breakShields"
+  B0 ブレイク   : 対象のシールドを選ぶ(攻撃側が選ぶ。裏向き)。moved(shield→"手札に加わる前の領域")
+  B1 宣言       : 持ち主に triggerDeclare(S・トリガー/G・ストライクの宣言)。宣言したものは pool に shieldTrigger=true で入る
+  B2 手札へ     : 宣言が全部終わってから全カードを手札に加える(112.3a)
+  B3 settle     : S・トリガー層を先に解決(5.2)。解決中にブレイクされたものは新しいbatchなので先に解決される
+  B4 判定       : シールド0枚でダイレクトアタック成立なら勝利
+```
+
+- 革命2(ドギラゴン): 「シールドゾーンから手札に加えるこのクリーチャーに S・トリガーを与える。シールド枚数はブレイク後に数える」→ B1 の宣言判定で `View.has(card, shieldTrigger)` を**ブレイク後の枚数で**評価する。
+- G・ストライク: B1 の宣言枠に同居する。相手に見せる処理は `revealed` イベントで表す。
+
+---
+
+## 11. UI操作の設計(クリック/ドラッグ)
+
+### 11.1 方針
+
+- UIは**入力を Action に変換するだけ**で、ルール判定をしない。判定は `legalActions` / `validate` / `describeInput`(エンジン)に頼る。
+- **多段階の入力は、新しい情報が現れない限りUI側で集めて、最後に1つの Action として送る**。これでキャンセルが自由になり、エンジンに「途中状態」を持たせずに済む。
+  - UIで集める: 攻撃の対象、ハイパーエナジーのタップ対象、手動マナ選択。
+  - pending で聞く: 効果の解決中の選択(対象・選択肢・割り振り・順序・任意の確認)、割り込み(ブロック、S・トリガー宣言)。
+- 人間の入力は常に `pending.player` が自分の時だけ受け付ける。CPUの番では「考え中」(design 9章)。
+
+### 11.2 入力形式は7種類
+
+エンジンの pending の種類(目的)は多いが、**入力の形は7種類に正規化**する。`describeInput(pending)` がこれを返し、UIは7種のウィジェットだけを実装する。
+
+| 入力形式 | 内容 | 使う場面 | UIの操作 |
+|---|---|---|---|
+| `pick` | 候補からmin〜max個を選ぶ(0個もあり) | 対象選択、ブロック、捨てる札、残すシールド3枚、S・トリガー宣言 | 候補を強調 → クリックで選択/解除 → 確定ボタン。1個のみで確定不要なら即確定 |
+| `assign` | 項目を枠(上限つき)に割り振る | デドダム(手札/マナ/墓地)、ドンドン火噴くナウ | 札を枠へドラッグ。クリックで巡回でも可 |
+| `option` | 選択肢の一覧から選ぶ(回数・重複可) | 「2回選ぶ」呪文、ブレイン・スラッシュ、デッドダムド | リスト。重複可なら「+」で回数を増やす。allIf が成立していれば「全部使う」を出す |
+| `yesno` | 〜してもよい | 任意の誘発、ヨビニオン、置換の任意 | 2ボタン |
+| `order` | 待機プールから次に解決するものを選ぶ | 同時誘発(5.2) | 一覧から選ぶ(ドラッグ並べ替えはクリックの簡易操作) |
+| `payment` | マナの割り当て | 手動支払いを使う場合のみ | マナをクリック(自動が既定) |
+| `ack` | 内容の確認だけ | 公開した札の確認(アクアン、ヨビニオンのめくり) | クリックで進む(自動で閉じる設定も) |
+
+- 自動化: 候補が1つだけ・選べる数と候補数が等しい場合は、pending を出さずに自動で選ぶ(設定 `autoSingle`)。`order` で候補が1つの時も同様。
+- 隠し情報: 自分しか見えない公開(デドダムの3枚など)は、`describeInput` が**回答者にだけ**中身を渡す。`toPlayerView` が pending を加工する(CPUの `InfoPolicy` もここで効く)。
+
+### 11.3 ドラッグ&ドロップ → Action 対応
+
+| ドラッグ元 → ドロップ先 | 意味 | 生成する Action |
+|---|---|---|
+| 手札の札 → マナゾーン | マナチャージ | `CHARGE_MANA` |
+| 手札のクリーチャー → バトルゾーン | 召喚 | `PLAY_CARD`(進化は重ねる山の上にドロップ。ハイパーエナジー対象はドロップ後に選択) |
+| 手札の呪文 → バトルゾーン(または盤面中央) | 詠唱 | `PLAY_CARD`(対象・選択肢は解決時に pending) |
+| ツインパクト → 面の選択 | クリーチャー面/呪文面 | ドロップ後に面を選ぶ小さなメニュー → `PLAY_CARD.face` |
+| マナ/墓地の札 → バトルゾーン | マナ/墓地からの召喚・詠唱(許可があるカードのみ) | `PLAY_CARD.from` |
+| 自分のクリーチャー → 相手のクリーチャー | 攻撃(クリーチャー) | `ATTACK` |
+| 自分のクリーチャー → 相手のシールド/プレイヤー | 攻撃(プレイヤー) | `ATTACK` |
+| 札 → 枠(assign) | 割り振り | `ANSWER(assign)` |
+
+- ドロップ先の判定: `legalActions` から**ドロップ先マップ**(どの札をどこに落とせるか)を作り、ドラッグ開始時に落とせる場所を強調する。不正な場所では元に戻す。
+- 全操作に**クリックでの代替**を用意する(ドラッグ不可の環境と、将来のスマホ対応のため。design 9章)。「札をクリック → 強調された行き先をクリック」。
+- 攻撃の矢印表示、ホバーでカード全文表示は後回し(動作の確認が先)。
+
+### 11.4 進行の見せ方
+
+- エンジンの状態は `step` の直後に確定する。**アニメーションは返ってきた Event を順番に再生するだけ**にして、論理状態と表示状態を分ける。
+- 「誘発した能力」を画面脇に**待機プール**として表示し、解決中のものを強調する。順序の選択(`order`)はこの一覧で行う。
+- 対戦ログは**因果ツリー**(「ザーディクリカが出た → 出た時 → 呪文を踏み倒し → …」)で見られるようにする。「なぜ今これが起きたか」が追えることが、効果の不具合を見つける一番の近道になる。
+
+### 11.5 取り消し(Undo)
+
+- 手を確定する前の取り消し: UIで集めている途中(11.1)は自由にキャンセルできる。
+- 確定後の取り消し: 人間 vs CPU では、**情報が公開されていない手の直前**まで巻き戻す「1手戻す」を設定で許可する(練習用)。実装は `GameState` のスナップショット列(状態がJSONでコピーオンライトなので安価)。観戦・バッチでは無効。
+
+---
+
+## 12. AI・シミュレータとの接続
+
+| 項目 | 設計 |
+|---|---|
+| 合法手の列挙 | `legalActions(state)` は `state.pending` のみを見る。`pick` は組み合わせが爆発するので、`enumerateAnswers(spec, limit)` で上限つき列挙(多い時は代表サンプリング) |
+| 検証 | `validate(state, action)` は列挙せずに正しさだけ判定する。UIの確定ボタンの有効/無効に使う |
+| 順序の分岐を減らす | `order` が同値(順序で結果が変わらない)なら1手に正規化する。判定ができない間は、AIの既定を「左から」にする |
+| ソリティア調査 | 相手の盤面がない前提で、`select` の対象が空なら自動で飛ばす。相手が選ぶ pending(ティンパニ等)は自動回答 |
+| 履歴調査 | イベントログ(第4章の `moved` / `cast` / `summoned` …)から `HistoryKey` を作る。**使用履歴は追加の記録処理を要さない** |
+| 速度 | 派生ビューのメモ化、能力の索引、フレームの軽量コピー。ベンチマークをフェーズ2の完了条件に入れる(1試合の `step` 回数と所要時間) |
+
+---
+
+## 13. テスト基盤(効果のテストを最初に作る)
+
+### 13.1 シナリオDSL
+
+カード効果は、**状態を与え、行動列を流し、結果を検証する**形で書く。
+
+```ts
+scenario("デドダム: 出た時に3枚を割り振る", {
+  p0: { hand: ["デドダム"], mana: ["自然","水","闇"], deck: ["A","B","C",/*…*/] },
+  p1: {},
+})
+  .play("デドダム")
+  .expectPending("assign", { items: ["A","B","C"] })
+  .answer({ hand: ["B"], mana: ["A"], grave: ["C"] })
+  .expect(p0.hand).toContain("B").expect(p0.mana.count).toBe(4)...
+```
+
+- 28枚それぞれに最低1つ。decks.md の要約と、公式Q&A・裁定メモの注意点(ヨビニオンの空振り、キーナリーが止めるのは自身の「出た時」のみ、置換は連鎖しない …)をテスト化する。
+- **「裁定台帳」**(第15章)の各項目は、確認が取れた時点でテストに固定する。未確認のものは `it.todo` として残す。
+
+### 13.2 その他
+
+| 種類 | 内容 |
+|---|---|
+| 不変条件 | 任意の時点でカード枚数保存・uid重複なし・`pending` が1つ・プールの項目が全て有効 |
+| 決定性 | 同じシード・同じ Action 列で全イベント列が一致 |
+| ファジング | ランダムAI同士で数千試合。`RuleLoopError` や不変条件違反がないこと |
+| 因果ツリー | 全イベントに `causedBy` が付いていること |
+| 性能 | 1試合あたりの時間の上限(フェーズ2で測定) |
+
+---
+
+## 14. 28枚のカバレッジ表
+
+必要な仕組みの記号: **P**=置換 / **S**=S・トリガー・G・ストライク(10章)/ **M**=N回選ぶ(modes)/ **A**=割り振り(assign)/ **T**=対象選択(相手・選ばれない含む)/ **F**=踏み倒し(9章)/ **Y**=ヨビニオン(revealUntil)/ **C**=ターン内カウンタ(`turnLog`)/ **X**=継続効果(7章)/ **K**=コスト決定(7.3)/ **E**=EXライフ・シールド管理 / **V**=進化・侵略(pile)/ **W**=他ゾーン監視(`watch`)/ **O**=能力コピー / **Z**=ターンスキップ
+
+| カード | 仕組み | 段階 |
+|---|---|---|
+| フェアリー・ライフ / Re:ライフ / オリジナル・ライフ | S(ライフのみ)・ブースト。Re:ライフは G・ストライク+攻撃不可(X) | 1〜2 |
+| ワクムテラス/オリジナル・ライフ | ツインパクト(面選択) | 1 |
+| 天災 デドダム | A | 1 |
+| ヨビニオン・マルル | Y, C | 2 |
+| ヨビニオン・トライブ | Y, P, マナから召喚(F) | 3 |
+| ティンパニ=シンバリー | Y, C, T(相手が選ぶ), ブロッカー | 2 |
+| 修羅の死神フミシュナ/「この先は修羅の道ぞ」 | M, T, C(1ターンに1回), S | 2 |
+| 絶望と反魂と滅殺の決断 | M, T, X(-4000, パワー0で破壊), F(墓地から唱える・山札の下) | 2 |
+| 流星のガイアッシュ・カイザー | K(軽減), X(出たターンに攻撃できない), F(相手のターン終了時の無料召喚) | 3 |
+| CRYMAX ジャオウガ | V(山札なしのS-MAX進化), P(負ける/離れる), T(各プレイヤーが3枚を選ぶ) | 3 |
+| 魔誕の斬将オルゲイト | K(ハイパーエナジー), X(ジャストダイバー), T, O | 4 |
+| 終末の監視者 ジ・ウォッチ | Z, T, `entered via=summon`, `cast` | 4 |
+| 逆転の剣スカイソード | S, T, F(マナから、条件つき) | 2 |
+| 終末縫合王 ザ=キラー・キーナリー | E, P(トリガー抑制), T, F(墓地から、コスト条件) | 3 |
+| 九番龍 ジゴクバンカー | K(シンパシー), X(マッハファイター), ブースト | 2 |
+| フェアリー・ミラクル | ブースト+条件(全文明) | 1 |
+| アクアン | revealUntil系(上5枚の仕分け) | 1 |
+| 王道の革命 ドギラゴン | S(革命2: 付与), X(革命0), ブースト, マナから戻す | 3 |
+| 漢気の2号 ボスカツ | T(ランダム), F(手札から、捨てたカードの文明) | 2 |
+| 魔誕と光喜と…の決断 | M(allIf), T(エレメント) | 2 |
+| ドラゴンズ・サイン | S, F, X(ブロッカー付与・期限つき) | 2 |
+| ドンドン火噴くナウ | S, A, T(墓地に置いたカードのコスト以下) | 2 |
+| ブレイン・スラッシュ | S, M(allIf), F(墓地から) | 2 |
+| 龍風混成 ザーディクリカ | E, F(手札/墓地から無料詠唱+山札の下), C(そのターン呪文を唱えた) | 3 |
+| ロスト・Re:ソウル | G・ストライク(S), 全捨て | 1〜2 |
+| 聖魔連結王 ドルファディロム | E, X(呪文制限), バッチ破壊, W(EXシールド離脱) | 3 |
+| SSS級天災 デッドダムド | V(侵略), W, M(3択) | 3 |
+
+(段階は decks.md 4.2 の第1〜4段階)
+
+---
+
+## 15. 実装順序(垂直スライス)と要確認ルール
+
+### 15.1 スライス
+
+最初に「イベント → プール → VM → pending → UI」を**細く最後まで通す**。全部の機能を横に広げる前に、縦に貫通させる。
+
+| スライス | 内容 | 完了条件 |
+|---|---|---|
+| S0 | 原始操作(move/draw/tap)+イベント+VM+`pending`+シナリオDSL。カード: フェアリー・ライフ、デドダム | 2枚のシナリオテストが通る。UI(最小)で `assign` ウィジェットが動く |
+| S1 | 誘発・プール・`order`・`nthThisTurn`・`limit`。カード: マルル、シンバリー、ブロッカー、ヨビニオン | 2体目が出た時の2つの誘発の順序を人間が選べる |
+| S2 | 攻撃・ブレイク・S・トリガー宣言・G・ストライク。カード: フェアリー・ライフ(S)、Re:ライフ、ロスト | S・トリガーが複数同時に出る場面が正しく順序づけされる |
+| S3 | `modes`・`select`・相手の選択。カード: フミシュナ、決断、ブレイン・スラッシュ | 「2回選ぶ」と「全部使う」が UI で操作できる |
+| S4 | 置換パイプライン+EXライフ+トリガー抑制。カード: トライブ、キーナリー、ジャオウガ | 置換は連鎖しない、のテストが通る |
+| S5 | 踏み倒し・進化・侵略・コスト決定。カード: ザーディクリカ、デッドダムド、ハイパーエナジー、カイザー | 28枚のうち大半が動く |
+| S6 | 能力コピー、ターンスキップ。カード: オルゲイト、ジ・ウォッチ | 28枚すべてが動く |
+
+(実装フェーズ表は design.md 第13章に反映する)
+
+### 15.2 要確認ルール台帳(原文・公式Q&Aで確認して、テストに固定する)
+
+| ID | 内容 | 現在の扱い |
+|---|---|---|
+| L1 | 通常の誘発能力で、新しく誘発したものと、すでに待機していたもののどちらを先に解決するか(S・トリガーは新しい方が先と明記) | プール全体から毎回ターンプレイヤー優先で選び直す。`WaitingPolicy` で差し替え可能 |
+| L2 | 状況起因処理のタイミング(効果の途中か、効果の後か) | 途中でも優先して処理(111.2d)。`sbaTiming` で切替 |
+| L3 | 進化したときのタップ状態・継続効果・召喚酔いの引き継ぎ | タップと召喚酔いは進化元から引き継ぎ、継続効果は引き継がない(新しいオブジェクト)。要確認 |
+| L4 | オルゲイトのコピー: 「このクリーチャー」の参照先、処理者、墓地/手札からの詠唱の扱い | 処理者はオルゲイトの持ち主。参照先は元のクリーチャー。`copyContext` で切替 |
+| L5 | カイザー「マナをタップせずに」の範囲(コスト軽減で0になった場合、踏み倒し) | 実際にマナをタップしていなければ該当 |
+| L6 | ジ・ウォッチ「ターンの残りをとばす」の範囲(ターン終了時の誘発は起きるか、誰のターンでも使えるか) | 自分のターンのみ有効。ターン終了時の誘発は起こす。要確認 |
+| L7 | 無限ループの扱い | 公式規定が見つからないため、上限を超えたら `RuleLoopError` |
+| L8 | 5色の決断/ブレイン・スラッシュの「全部使える」条件の判定時点と宣言の扱い | 解決の開始時に判定し、`option` ウィジェットで明示的に選ぶ |
+| L9 | 山札切れの判定時点(ドローの最中に0枚になった場合) | SBAで判定 |
+| L10 | 同時に離れたクリーチャーの「離れた時」の相互参照 | バッチ前の状態を `lki` として全員に見せる |
+
+---
+
+## 16. 設計上の決定事項(追加)
+
+| ID | 決定 | 理由 |
+|---|---|---|
+| D13 | 能力はASTで表し、インタプリタ(VM)で実行する。カード固有コードは最後の手段 | 能力をコピーする(オルゲイト)・列挙する・検証するにはデータが必要 |
+| D14 | すべての状態変化は原始操作を通し、置換 → 実行 → イベント → 収集の順で処理 | 置換・誘発・ログ・履歴調査の一元化 |
+| D15 | 誘発は待機プールに入れ、チェックポイントでのみ解決する(プール全体から毎回選び直す) | 101.4a/101.4c を構造で保証 |
+| D16 | ターン進行・プレイ・攻撃も `cont` スタックのフレームとして書く | 割り込みの入れ子を同じ仕組みで扱う |
+| D17 | メインステップの行動待ちも `pending` にし、Action は `ANSWER` に統合 | UI/AIの経路を1本にする |
+| D18 | 入力形式を7種に正規化し、UIは7ウィジェットだけを実装する | カード数が増えてもUIが増えない |
+| D19 | 多段階の入力はUIで集めて1つの Action として送る(新しい情報が出る場合のみ pending) | キャンセルとUndoを簡単にする |
+| D20 | オブジェクト参照は `(uid, ep)`、バトルゾーンは `Permanent`(山) | 別のゾーンに移ったカードは別物(400.5)、進化の山を表す |
+| D21 | 継続効果は派生ビュー+生成型は対象を固定(110.2e) | 解除忘れ防止とルール準拠 |
