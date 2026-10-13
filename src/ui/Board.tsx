@@ -190,7 +190,7 @@ export function Board(b: BoardProps) {
   const renderMana = (p: PlayerId, mine: boolean) => {
     const z = s.players[p];
     return (
-      <div className={zcls('zone:mana') + ' grow'} {...(mine ? zoneProps('zone:mana') : {})} style={{ flex: 1 }}>
+      <div className={(mine ? zcls('zone:mana') : 'zone') + ' grow'} {...(mine ? zoneProps('zone:mana') : {})} style={{ flex: 1 }}>
         <div className="zone-title">
           マナゾーン {z.mana.length}枚(未使用 {z.mana.filter((u) => !s.cards[u].tapped).length}) {zoneTools(p, 'mana')}
         </div>
@@ -222,7 +222,7 @@ export function Board(b: BoardProps) {
   const renderBattle = (p: PlayerId, mine: boolean) => {
     const z = s.players[p];
     return (
-      <div className={zcls('zone:battle') + ' grow'} {...(mine ? zoneProps('zone:battle') : {})} style={{ flex: 3 }}>
+      <div className={(mine ? zcls('zone:battle') : 'zone') + ' grow'} {...(mine ? zoneProps('zone:battle') : {})} style={{ flex: 3 }}>
         <div className="zone-title">バトルゾーン {z.battle.length}体</div>
         <div className="cards">
           {z.battle.map((perm) => {

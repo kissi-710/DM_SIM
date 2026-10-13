@@ -160,6 +160,8 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [showOpp, setShowOpp] = useState(g.me === null);
   const [recText, setRecText] = useState<string | null>(null);
   const [manualPay, setManualPay] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [sideOpen, setSideOpen] = useState(() => window.innerWidth >= 1200);
   // 直近の1手で動いたカードを強調する(イベントの再生。design 9)
   const flash = useMemo(() => {
     const set = new Set<number>();
@@ -204,8 +206,25 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
 
   const rec = () => JSON.stringify(makeRecord(setup, session), null, 1);
 
+  // 選択中のカード(パネルに名前と全文を出す)
+  const selUid = useMemo(() => {
+    if (!selected) return null;
+    const [kind, id] = selected.split(':');
+    if (kind === 'pile') return permByPid(s, Number(id))?.perm.cards[0] ?? null;
+    return Number(id);
+  }, [selected, s]);
+  const selDef = selUid !== null && s.cards[selUid] ? reg.defs[s.cards[selUid].defId] : null;
+  const hint =
+    s.step === 'mana'
+      ? '手札を1枚選んでマナチャージ(ドラッグでも可)'
+      : s.step === 'main'
+        ? '手札を選んで召喚・呪文。クリーチャーを選んで攻撃。'
+        : 'クリーチャーを選んで攻撃。';
+  const cpuOnly = setup.seats.every((x) => x.kind === 'cpu');
+  const showHuman = humanTurn && pend!.why !== 'turnAction';
+
   return (
-    <div className="game">
+    <div className={'game' + (sideOpen ? '' : ' side-closed')}>
       <div className="game-head">
         <button onClick={onExit}>← メニュー</button>
         <span className="status-chip">
@@ -218,117 +237,168 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             {session.thinking && <span className="thinking" />}
           </span>
         )}
-        <span className="muted">シード {setup.seed}</span>
         <span style={{ flex: 1 }} />
-        {setup.allowUndo && (
-          <button disabled={!g.canUndo || !humanTurn} onClick={g.undo} title="1手戻す(練習用。情報が公開された後は戻せません)">
-            ↶ 1手戻す
-          </button>
-        )}
-        {g.me !== null && (
-          <label>
-            <input type="checkbox" checked={peek} onChange={(e) => setPeek(e.target.checked)} /> 自分のシールドを見る
-          </label>
-        )}
-        {g.me !== null && (
-          <label>
-            <input type="checkbox" checked={manualPay} onChange={(e) => setManualPay(e.target.checked)} /> マナを手動で選ぶ
-          </label>
-        )}
-        <label>
-          <input type="checkbox" checked={showOpp} onChange={(e) => setShowOpp(e.target.checked)} /> 相手の手札を見る
-        </label>
-        {setup.seats.every((x) => x.kind === 'cpu') && (
+        {cpuOnly && (
           <>
             <button onClick={() => g.setPaused(!g.paused)}>{g.paused ? '▶ 再開' : '⏸ 一時停止'}</button>
             <button disabled={!g.paused} onClick={g.stepOnce}>
               ⏭ 1手進める
             </button>
-            <label>
+            <label className="speed">
               速度
               <input type="range" min={0} max={1500} step={50} value={1500 - g.speed} onChange={(e) => g.setSpeed(1500 - Number(e.target.value))} />
             </label>
           </>
         )}
-        <button onClick={() => setRecText(rec())}>棋譜</button>
-      </div>
-
-      <Board
-        s={s}
-        me={g.me}
-        legal={legal}
-        interactive={interactive}
-        onAction={act}
-        onHover={setHover}
-        peek={peek}
-        showOppHand={showOpp}
-        selected={selected}
-        onSelect={setSelected}
-        flash={flash}
-        manualPay={manualPay}
-      />
-
-      <div className="side">
-        <div className="box">
-          <h3>カードの詳細</h3>
-          <CardDetail s={s} uid={hover} />
+        {setup.allowUndo && (
+          <button disabled={!g.canUndo || !humanTurn} onClick={g.undo} title="1手戻す(練習用。情報が公開された後は戻せません)">
+            ↶ 1手戻す
+          </button>
+        )}
+        <div className="pop-anchor">
+          <button className={menuOpen ? 'on' : ''} onClick={() => setMenuOpen((v) => !v)}>
+            ⚙ 表示
+          </button>
+          {menuOpen && (
+            <div className="popover">
+              {g.me !== null && (
+                <label className="check">
+                  <input type="checkbox" checked={peek} onChange={(e) => setPeek(e.target.checked)} /> 自分のシールドを見る
+                </label>
+              )}
+              {g.me !== null && (
+                <label className="check">
+                  <input type="checkbox" checked={manualPay} onChange={(e) => setManualPay(e.target.checked)} /> マナを手動で選んで支払う
+                </label>
+              )}
+              <label className="check">
+                <input type="checkbox" checked={showOpp} onChange={(e) => setShowOpp(e.target.checked)} /> 相手の手札を見る
+              </label>
+              <div className="muted" style={{ fontSize: 12 }}>
+                シード {setup.seed}
+              </div>
+            </div>
+          )}
         </div>
-        <PoolPanel s={s} />
-        <LogPanel s={s} log={session.log} me={g.me} />
+        <button onClick={() => setRecText(rec())}>棋譜</button>
+        <button className={sideOpen ? 'on' : ''} onClick={() => setSideOpen((v) => !v)} title="カードの詳細・待機中の能力・ログ">
+          ログ・詳細
+        </button>
       </div>
 
-      <div className="footer">
-        {session.error && <div className="toast">{session.error}</div>}
-        {s.winner !== null ? (
-          <div className="row">
-            <strong style={{ fontSize: 16 }}>
-              {s.winner === 'draw'
-                ? '引き分け'
-                : g.me === null
-                  ? `プレイヤー${(s.winner as number) + 1}の勝ち`
-                  : s.winner === g.me
-                    ? 'あなたの勝ち!'
-                    : 'あなたの負け…'}
-            </strong>
-            <span className="muted">({s.loseReason})</span>
-            <button className="primary" onClick={onRematch}>
-              もう一度
-            </button>
-            <button onClick={() => setRecText(rec())}>棋譜を保存</button>
-            <button onClick={onExit}>メニューへ</button>
-          </div>
-        ) : humanTurn && pend!.why !== 'turnAction' ? (
-          <InputWidget s={s} pending={pend!} me={g.me} onHover={setHover} onAnswer={(value) => g.perform({ type: 'ANSWER', id: pend!.id, value })} />
-        ) : interactive ? (
-          <div className="row">
-            <span className="muted">
-              {s.step === 'mana'
-                ? '手札を1枚マナゾーンにドラッグ(またはクリックして行き先を選ぶ)してマナチャージ。'
-                : s.step === 'main'
-                  ? '手札をバトルゾーンにドラッグして召喚・唱える。クリーチャーを相手のクリーチャー/シールドにドラッグして攻撃。'
-                  : 'クリーチャーをドラッグして攻撃。'}
-            </span>
-            {selActs.map((d, i) => (
-              <button key={i} className="choice on" onClick={() => act(d.action)}>
-                {d.label}
-              </button>
-            ))}
-            <span style={{ flex: 1 }} />
-            {stepActs.skipMana && <button onClick={() => act(stepActs.skipMana!)}>マナチャージしない</button>}
-            {stepActs.endMain && <button onClick={() => act(stepActs.endMain!)}>メインを終える</button>}
-            {stepActs.endTurn && (
-              <button className="primary" onClick={() => act(stepActs.endTurn!)}>
-                ターン終了
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="muted">
-            {pend ? `${activeLabel}が考えています…` : ''}
+      <div className="stage">
+        <Board
+          s={s}
+          me={g.me}
+          legal={legal}
+          interactive={interactive}
+          onAction={act}
+          onHover={setHover}
+          peek={peek}
+          showOppHand={showOpp}
+          selected={selected}
+          onSelect={setSelected}
+          flash={flash}
+          manualPay={manualPay}
+        />
+
+        {interactive && <div className="dock-space" />}
+
+        {/* CPU が考えている間の表示 */}
+        {!interactive && !showHuman && s.winner === null && pend && (
+          <div className="thinking-pill">
+            {activeLabel}が考えています…
             {session.thinking && <span className="thinking" />}
           </div>
         )}
+
+        {/* 選んだカードの行き先(操作パネル) */}
+        {interactive && selected && (
+          <div className="action-panel">
+            <div className="ap-head">
+              <strong>{selDef?.name ?? 'カード'}</strong>
+              <button className="small" onClick={() => setSelected(null)} aria-label="閉じる">
+                ✕
+              </button>
+            </div>
+            {selDef && <div className="ap-text">{selDef.text}</div>}
+            {selActs.length > 0 ? (
+              <div className="ap-actions">
+                {selActs.map((d, i) => (
+                  <button key={i} className="choice big" onClick={() => act(d.action)}>
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="muted">このカードで今できる操作はありません。</div>
+            )}
+          </div>
+        )}
+
+        {/* ターン操作(常に右下) */}
+        {interactive && (
+          <div className="dock">
+            <div className="dock-hint">{hint}</div>
+            <div className="dock-buttons">
+              {stepActs.skipMana && <button onClick={() => act(stepActs.skipMana!)}>マナチャージしない</button>}
+              {stepActs.endMain && <button onClick={() => act(stepActs.endMain!)}>メインを終える</button>}
+              {stepActs.endTurn && (
+                <button className="primary" onClick={() => act(stepActs.endTurn!)}>
+                  ターン終了
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 入力(選ぶ・答える)は盤面の中央にパネルで出す */}
+        {showHuman && s.winner === null && (
+          <div className="input-layer">
+            <div className="input-panel">
+              <InputWidget s={s} pending={pend!} me={g.me} onHover={setHover} onAnswer={(value) => g.perform({ type: 'ANSWER', id: pend!.id, value })} />
+            </div>
+          </div>
+        )}
+
+        {/* 勝敗 */}
+        {s.winner !== null && (
+          <div className="input-layer">
+            <div className="input-panel result">
+              <h2>
+                {s.winner === 'draw'
+                  ? '引き分け'
+                  : g.me === null
+                    ? `プレイヤー${(s.winner as number) + 1}の勝ち`
+                    : s.winner === g.me
+                      ? 'あなたの勝ち!'
+                      : 'あなたの負け…'}
+              </h2>
+              <p className="muted">({s.loseReason})</p>
+              <div className="row" style={{ justifyContent: 'center' }}>
+                <button className="primary" onClick={onRematch}>
+                  もう一度
+                </button>
+                <button onClick={() => setRecText(rec())}>棋譜を保存</button>
+                <button onClick={onExit}>メニューへ</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {session.error && <div className="toast">{session.error}</div>}
       </div>
+
+      {sideOpen && (
+        <div className="side">
+          <div className="box">
+            <h3>カードの詳細</h3>
+            <CardDetail s={s} uid={hover} />
+          </div>
+          <PoolPanel s={s} />
+          <LogPanel s={s} log={session.log} me={g.me} />
+        </div>
+      )}
 
       {recText !== null && (
         <div className="modal-back" onClick={() => setRecText(null)}>
