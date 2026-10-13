@@ -24,7 +24,10 @@ describe('一人回し(手動)の操作', () => {
     expect(s.players[0].hand.length).toBe(7);
     const u = s.players[0].hand[0];
     s = manualMove(CARD_DB, s, u, 'mana').state;
+    const was = s.cards[u].tapped; // 多色カードはタップ状態でマナゾーンに置かれる
     s = manualToggleTap(CARD_DB, s, u).state;
+    expect(s.cards[u].tapped).toBe(!was);
+    if (!s.cards[u].tapped) s = manualToggleTap(CARD_DB, s, u).state;
     expect(s.cards[u].tapped).toBe(true);
     s = manualUntapAll(s, 0, 'mana');
     expect(s.cards[u].tapped).toBe(false);
