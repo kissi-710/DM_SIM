@@ -42,20 +42,20 @@
 - [x] M1-11 シールドブレイク(W/T・ブレイカー)、残り枚数不足の処理、ダイレクトアタックの勝利(spec 3.7)
 - [x] M1-12 山札0枚の敗北、ドロー時の空山札(spec 3.7)
 - [ ] M1-13 ターン上限(暫定100)での引き分け記録(D6)
-- [ ] M1-14 `legalActions` / `validate` / `toPlayerView`(design 5)
+- [x] M1-14 `legalActions` / `validate` / `toPlayerView`(design 5)
 - [x] M1-15 不変条件(カード総数保存・uid重複なし)(design 11)
 - [x] M1-16 決定性: 同シード・同行動列で同一イベント列
 
 ## M2. 効果基盤(effects 全章 / spec 3.9〜3.13)
 
 - [x] M2-1 イベント体系: moved / entered / evolved / cast / attackDeclared / blocked / battleEnded / shieldBroken / triggerDeclared / abilityTriggered / stepStart / looked / revealed / gameLoss。全イベントに `id` と `causedBy`(effects 4.1)
-- [ ] M2-2 トリガー指定(`TriggerSpec`): on / watch / subject / turn / nthThisTurn / limit / if / ifAtResolve(effects 4.3)
+- [x] M2-2 トリガー指定(`TriggerSpec`): on / watch / subject / turn / nthThisTurn / limit / if / ifAtResolve(effects 4.3)
 - [x] M2-3 待機プールとチェックポイント(`settle`)、`pickNext`(S・トリガー最優先 → ターンプレイヤー → 非ターンプレイヤー、同一プレイヤー内は本人が選ぶ)(effects 5, spec 3.10)
 - [x] M2-4 状況起因処理(パワー0以下の破壊・バトル敗北・山札切れ・S-MAX進化の重複解消)(effects 5.4)
 - [x] M2-5 効果インタプリタ(VM): act / select / may / if / each / repeat / modes / custom。フレームはJSON(`pc`・`vars`)で再開可能(effects 6)
-- [ ] M2-6 原始操作: move / draw / lookTop / revealUntil / shuffle / bottom / assign / tap / untap / addShield / addEffect / put / summon / castFree / skipRestOfTurn / copyAbility(effects 6.3)
-- [ ] M2-7 セレクタ・条件式・式(Cond / Expr)とカード条件の共有部品(effects 6.4)
-- [ ] M2-8 選択の仕様: 解決時に選ぶ・対象不足時の縮退・相手が選ぶ・ランダム(見ずに選ぶ)(effects 6.2, spec 3.12)
+- [x] M2-6 原始操作: move / draw / lookTop / revealUntil / shuffle / bottom / assign / tap / untap / addShield / addEffect / put / summon / castFree / skipRestOfTurn / copyAbility(effects 6.3)
+- [x] M2-7 セレクタ・条件式・式(Cond / Expr)とカード条件の共有部品(effects 6.4)
+- [x] M2-8 選択の仕様: 解決時に選ぶ・対象不足時の縮退・相手が選ぶ・ランダム(見ずに選ぶ)(effects 6.2, spec 3.12)
 - [x] M2-9 置換効果パイプライン: 1出来事に1回・連鎖しない・任意/強制・複数時の選択・トリガー抑制(effects 8, spec 3.11)
 - [x] M2-10 継続効果: 常在型(派生ビュー)と生成型(対象固定・期限)(effects 7)
 - [x] M2-11 派生ビュー(`derive`): cost / power / civs / has / canAttack / canBlock / canBeChosen / canCast / canPlayFrom(effects 7.2)
@@ -110,22 +110,22 @@
 
 ## M4. AI(spec 5.3 / design 7)
 
-- [ ] M4-1 `Agent` インターフェースと `PlayerView`(design 7.1)
-- [ ] M4-2 L0 ランダムAI(合法手から一様)
-- [ ] M4-3 L1 ルールベースAI(マナを余らせない・高コストから召喚・安全な攻撃・ブロッカー温存)
-- [ ] M4-4 `InfoPolicy`: 公平 / 部分開示 / 決め打ち / 全開示、相手デッキリストの既知/未知(spec 5.3, design 7.3)
-- [ ] M4-5 L2 モンテカルロ探索(決定化+プレイアウト、反復回数と時間の両方の上限)(design 7.3)
-- [ ] M4-6 Web Worker 化(UIが固まらない)(design 7.4)
-- [ ] M4-7 AI回帰: L1 が L0 に統計的に勝ち越す(design 11)
+- [x] M4-1 `Agent` インターフェースと `PlayerView`(design 7.1)
+- [x] M4-2 L0 ランダムAI(合法手から一様)
+- [x] M4-3 L1 ルールベースAI(マナを余らせない・高コストから召喚・安全な攻撃・ブロッカー温存)
+- [x] M4-4 `InfoPolicy`: 公平 / 部分開示 / 決め打ち / 全開示、相手デッキリストの既知/未知(spec 5.3, design 7.3)
+- [x] M4-5 L2 モンテカルロ探索(決定化+プレイアウト、反復回数と時間の両方の上限)(design 7.3)
+- [x] M4-6 Web Worker 化(UIが固まらない)(design 7.4)
+- [x] M4-7 AI回帰: L1 が L0 に統計的に勝ち越す(design 11)
 - [ ] M4-8 L2 が L1 に勝ち越すことの計測と記録
 
 ## M5. シミュレーション(spec 6・7 / design 8)
 
 バッチ対戦:
-- [ ] M5-1 `runMatches`(試合ごとのシード派生・先攻の固定/交互/ランダム・再現性)
-- [ ] M5-2 集計: 勝敗・勝率と95%信頼区間・引き分け・平均ターン・先攻/後攻別勝率
-- [ ] M5-3 情報条件の比較出力(公平/部分開示/全開示)
-- [ ] M5-4 CLI `npm run batch -- --deckA ... --deckB ... --games N --seed S`
+- [x] M5-1 `runMatches`(試合ごとのシード派生・先攻の固定/交互/ランダム・再現性)
+- [x] M5-2 集計: 勝敗・勝率と95%信頼区間・引き分け・平均ターン・先攻/後攻別勝率
+- [x] M5-3 情報条件の比較出力(公平/部分開示/全開示)
+- [x] M5-4 CLI `npm run batch -- --deckA ... --deckB ... --games N --seed S`
 - [ ] M5-5 カード単体の強さの測定(1枚入れ替え時の勝率差)(spec 7.2 後続)
 
 ソリティア調査:

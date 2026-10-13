@@ -1,9 +1,10 @@
-// 1試合を最後まで進める(Node・ブラウザ共通)。
-import { createGame, legalActions, step, registryOf } from '../engine/engine';
-import type { Action, CardDB, Ev, GameConfig, GameState, PlayerId } from '../engine/types';
-import type { Registry } from '../engine/registry';
-import type { Agent } from '../ai/types';
+// 1試合を最後まで進める(Node・ブラウザ・Worker 共通)。
+import { createGame, legalActions, registryOf, step } from '../engine/engine';
 import { hashSeed } from '../engine/state';
+import type { Registry } from '../engine/registry';
+import type { Action, CardDB, Ev, GameConfig, GameState, PlayerId } from '../engine/types';
+import { FAIR, toPlayerView } from '../engine/view';
+import type { Agent } from '../ai/types';
 
 export function mulberry(seed: number): () => number {
   let a = seed | 0;
@@ -29,14 +30,21 @@ export interface PlayOpts {
   seed: number | string;
   first?: PlayerId | 'random';
   cfg?: Partial<GameConfig>;
-  /** 検証用: 各手のあとに呼ばれる */
+  /** 各手のあとに呼ばれる(検証・観戦用) */
   onStep?: (state: GameState, action: Action, events: Ev[]) => void;
   maxSteps?: number;
+  /** 構築制限を検査するか(既定は検査しない) */
+  strict?: boolean;
+}
+
+function viewFor(s: GameState, who: PlayerId, ag: Agent, reg: Registry): GameState {
+  if (ag.needsView === false) return s;
+  return toPlayerView(s, who, ag.policy ?? FAIR, reg);
 }
 
 export function playGameSync(db: CardDB | Registry, agents: [Agent, Agent], opts: PlayOpts): PlayResult {
   const reg = registryOf(db);
-  const { state: s0 } = createGame(reg, { decks: opts.decks, seed: opts.seed, first: opts.first ?? 'random', cfg: opts.cfg });
+  const { state: s0 } = createGame(reg, { decks: opts.decks, seed: opts.seed, first: opts.first ?? 'random', cfg: opts.cfg, strict: opts.strict });
   let s = s0;
   const rng = mulberry(hashSeed(opts.seed) ^ 0x9e3779b9);
   const actions: Action[] = [];
@@ -46,8 +54,32 @@ export function playGameSync(db: CardDB | Registry, agents: [Agent, Agent], opts
     const legal = legalActions(s, reg);
     if (legal.length === 0) throw new Error('合法手がありません: ' + JSON.stringify(s.pending));
     const who = s.pending!.player;
-    const a = agents[who].chooseAction(s, legal, { rand: rng, reg });
+    const ag = agents[who];
+    const a = ag.chooseAction(viewFor(s, who, ag, reg), legal, { rand: rng, reg });
     if (a instanceof Promise) throw new Error('同期実行に非同期AIは使えません');
+    const r = step(s, a, reg);
+    opts.onStep?.(r.state, a, r.events);
+    actions.push(a);
+    s = r.state;
+    steps++;
+  }
+  return { state: s, winner: s.winner, turns: s.turn, steps, actions, reason: s.loseReason };
+}
+
+export async function playGame(db: CardDB | Registry, agents: [Agent, Agent], opts: PlayOpts): Promise<PlayResult> {
+  const reg = registryOf(db);
+  const { state: s0 } = createGame(reg, { decks: opts.decks, seed: opts.seed, first: opts.first ?? 'random', cfg: opts.cfg, strict: opts.strict });
+  let s = s0;
+  const rng = mulberry(hashSeed(opts.seed) ^ 0x9e3779b9);
+  const actions: Action[] = [];
+  let steps = 0;
+  const max = opts.maxSteps ?? 20000;
+  while (s.winner === null && steps < max) {
+    const legal = legalActions(s, reg);
+    if (legal.length === 0) throw new Error('合法手がありません');
+    const who = s.pending!.player;
+    const ag = agents[who];
+    const a = await ag.chooseAction(viewFor(s, who, ag, reg), legal, { rand: rng, reg });
     const r = step(s, a, reg);
     opts.onStep?.(r.state, a, r.events);
     actions.push(a);
