@@ -20,12 +20,12 @@
 
 ## M0. プロジェクト基盤(design 12・13 フェーズ0 / overview 技術スタック)
 
-- [ ] M0-1 `package.json` / `tsconfig` / Vite + React + TypeScript の初期化
-- [ ] M0-2 Vitest の導入(`npm test`)
-- [ ] M0-3 ESLint で `src/engine` から `ui` / `react` / DOM の import を禁止(design 3)
-- [ ] M0-4 `npm run dev` / `npm run build` / `npm run preview` / `npm run batch` / `npm run prob` のスクリプト
-- [ ] M0-5 `node -v` の確認と記録(spec 9.2 Q9)
-- [ ] M0-6 README(起動方法・構成・操作)
+- [x] M0-1 `package.json` / `tsconfig` / Vite + React + TypeScript の初期化
+- [x] M0-2 Vitest の導入(`npm test`)
+- [x] M0-3 ESLint で `src/engine` から `ui` / `react` / DOM の import を禁止(design 3)
+- [x] M0-4 `npm run dev` / `npm run build` / `npm run preview` / `npm run batch` / `npm run prob` のスクリプト
+- [x] M0-5 `node -v` の確認と記録(spec 9.2 Q9)
+- [x] M0-6 README(起動方法・構成・操作)
 
 ## M1. コアルール(spec 3.1〜3.8 / design 4・5)
 
@@ -128,7 +128,7 @@
 - [x] M5-2 集計: 勝敗・勝率と95%信頼区間・引き分け・平均ターン・先攻/後攻別勝率
 - [x] M5-3 情報条件の比較出力(公平/部分開示/全開示)
 - [x] M5-4 CLI `npm run batch -- --deckA ... --deckB ... --games N --seed S`
-- [ ] M5-5 カード単体の強さの測定(1枚入れ替え時の勝率差)(spec 7.2 後続)
+- [x] M5-5 カード単体の強さの測定(1枚入れ替え時の勝率差)(spec 7.2 後続)
 
 ソリティア調査:
 - [x] M5-6 ソリティアモード(相手の手番を省略)、初期条件(初手固定・除外・山札の上の固定)、自由モード
@@ -157,7 +157,7 @@
 - [x] M6-12 試合の保存・再生(`{seed, deckA, deckB, actions[]}`)(design 10)
 - [x] M6-13 ソリティア調査画面: 条件ビルダー → 実行(進捗・キャンセル、Worker)→ 結果(確率・グラフ・パターン表)→ 再生 → エクスポート(spec 6.6)
 - [x] M6-14 バッチ結果画面(Worker 実行・進捗)
-- [ ] M6-15 カード表示はテキストのみ。`image` は任意で、無くても崩れない(D7)
+- [x] M6-15 カード表示はテキストのみ。`image` は任意で、無くても崩れない(D7)
 - [x] M6-16 同時誘発の順序設定(毎回選ぶ / 自動)(Q17)
 - [x] M6-17 レイアウトとロジックの分離・Pointer Events・ホバー前提でない操作(将来のスマホ対応)(spec 8, design 9)
 - [ ] M6-18 実機(ブラウザ)で1試合を最後まで遊べることの確認
@@ -170,12 +170,12 @@
 ## M7. 横断(非機能・品質)
 
 - [x] M7-1 再現性: すべての乱数がシード指定可能。同シード・同操作列で同結果(spec 8)
-- [ ] M7-2 性能: ランダム同士の1試合が数ms〜十数ms、確率調査1万シャッフルが数十秒〜数分(spec 8)の計測と記録
+- [x] M7-2 性能: ランダム同士の1試合が数ms〜十数ms、確率調査1万シャッフルが数十秒〜数分(spec 8)の計測と記録
 - [x] M7-3 スモークテスト: ランダムAI同士の数千試合が完走し不変条件が保たれる(design 11)
 - [x] M7-4 UI・ログは日本語(spec 8)
-- [ ] M7-5 型チェック(`tsc --noEmit`)・lint・テスト・ビルドがすべて通る
+- [x] M7-5 型チェック(`tsc --noEmit`)・lint・テスト・ビルドがすべて通る
 - [x] M7-6 デッキの localStorage 保存とJSONのインポート/エクスポート(design 10, 13 フェーズ8)
-- [ ] M7-7 公開設定(Vite の `base`、`npm run build` の成果物をそのまま配信できる)(design 12)
+- [x] M7-7 公開設定(Vite の `base`、`npm run build` の成果物をそのまま配信できる)(design 12)
 
 ---
 
@@ -194,8 +194,8 @@
 
 ## 未確定事項への対応(spec 9)
 
-- [ ] Q9〜Q15 の仮決定(spec 9.2)を実装に反映(Node LTS・自由モード・「使える/使った」・方針プレイ+探索上限・パターンの粗さ・何もしない1人回し・開示プリセット)
-- [ ] Q16〜Q18(同時誘発の順序の確認・順序の選択設定・Undo)を設定として実装
+- [x] Q9〜Q15 の仮決定(spec 9.2)を実装に反映(Node LTS・自由モード・「使える/使った」・方針プレイ+探索上限・パターンの粗さ・何もしない1人回し・開示プリセット)
+- [x] Q16〜Q18(同時誘発の順序の確認・順序の選択設定・Undo)を設定として実装
 
 ## v1 に含めない(spec 1.2。ここは完了条件に含まない)
 
