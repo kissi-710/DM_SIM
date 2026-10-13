@@ -221,6 +221,15 @@ export interface GameState {
   deckIds: [string[], string[]]; // 初期デッキ(カードID列)。決定化・開示に使う
   cfg: GameConfig;
   dirtySba: boolean;
+  /** PlayerView だけが持つ追加情報(部分開示)。engine は使わない */
+  hints?: ViewHints;
+}
+
+export interface ViewHints {
+  /** 相手の手札のうち、種類ごとの枚数(部分開示) */
+  oppHandKinds?: Record<string, number>;
+  /** 相手のデッキリストが既知か */
+  knowOppDeck?: boolean;
 }
 
 // ───────────────────────── 行動・入力 ─────────────────────────

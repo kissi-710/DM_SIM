@@ -344,14 +344,19 @@ function abilitySteps(a: Ability): StepDef[] {
 
 const cache = new WeakMap<CardDB, Registry>();
 
-export function loadRegistry(db: CardDB): Registry {
-  const hit = cache.get(db);
+export function loadRegistry(origDb: CardDB): Registry {
+  let db = origDb;
+  const hit = cache.get(origDb);
   if (hit) return hit;
   const errs = validateCardDb(db);
   if (errs.length) throw new Error('カードデータの検証エラー:\n' + errs.join('\n'));
 
   const defs: CardDB = {};
   const info: Record<string, FaceInfo[]> = {};
+  // 見えないカード('?')は、何もしないカードとして扱う(PlayerView を安全に扱えるようにする)
+  if (!db['?']) {
+    db = { ...db, '?': { id: '?', name: '(不明)', faces: [{ name: '(不明)', type: 'creature', cost: 99, civs: ['light'], power: 0, abilities: [] }] } };
+  }
   const trigIndex = new Map<string, TrigRef[]>();
   for (const [id, def] of Object.entries(db)) {
     const faces = def.faces.map(expandFace);
@@ -451,6 +456,6 @@ export function loadRegistry(db: CardDB): Registry {
       return p;
     },
   };
-  cache.set(db, reg);
+  cache.set(origDb, reg);
   return reg;
 }
