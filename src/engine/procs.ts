@@ -409,7 +409,7 @@ function runAttack(c: Ctx, f: ProcFrame): void {
         setTapped(c, blocker, true);
         v.target = { kind: 'creature', pid: bpm.perm.pid };
         v.blocked = true;
-        emit(c, 'blocked', { attacker: pm.perm.pid, blocker: bpm.perm.pid, card: blocker, owner: defender });
+        emit(c, 'blocked', { attacker: pm.perm.pid, attackerCard: pm.perm.cards[0], blocker: bpm.perm.pid, card: blocker, owner: defender });
         const ev = c.out[c.out.length - 1];
         s.batchNo++;
         collectBatch(c, [ev]);
@@ -465,6 +465,9 @@ function runAttack(c: Ctx, f: ProcFrame): void {
         defender: dPid,
         winner: winPid,
         card: winner,
+        winnerCard: winner,
+        loserCard: winner === null ? null : winner === aTop ? dTop : aTop,
+        loserOwner: winner === null ? undefined : winner === aTop ? dOwner : aOwner,
         winnerOwner: winner === null ? undefined : winner === aTop ? aOwner : dOwner,
         draw: winner === null,
       });
@@ -506,7 +509,10 @@ function runBreak(c: Ctx, f: ProcFrame): void {
       while (broken.length < n) broken.push(pool.splice(rngInt(s, pool.length), 1)[0]);
       v.broken = broken;
       s.breaking = broken.slice();
-      for (const u of broken) emit(c, 'shieldBroken', { card: u, owner: defender, by: v.pid });
+      const brokenEvs: Ev[] = [];
+      for (const u of broken) brokenEvs.push(emit(c, 'shieldBroken', { card: u, owner: defender, by: v.pid }));
+      s.batchNo++;
+      collectBatch(c, brokenEvs);
       f.stage = 1;
       return;
     }
@@ -716,7 +722,11 @@ export function runSba(c: Ctx): boolean {
   if (!s.dirtySba) return false;
   if (s.winner !== null) return false;
   // 山札が0枚のプレイヤーは敗北(104.2b)
-  const losers = ([0, 1] as PlayerId[]).filter((p) => s.players[p].deck.length === 0 && s.turn >= 1 && !(s.cfg.solitaire && p === 1));
+  // 山札が0枚の敗北は、0枚になった出来事に対して1回(置換された後は、山札が増えるまで再度は起きない)
+  for (const p of [0, 1] as PlayerId[]) if (s.players[p].deck.length > 0) delete s.usage['deckOutHandled' + p];
+  const losers = ([0, 1] as PlayerId[]).filter(
+    (p) => s.players[p].deck.length === 0 && s.turn >= 1 && !(s.cfg.solitaire && p === 1) && !s.usage['deckOutHandled' + p],
+  );
   if (losers.length) {
     for (const p of losers) {
       const sacrifice = lossReplacement(c, p);
@@ -760,8 +770,7 @@ export function runSba(c: Ctx): boolean {
 /** 「ゲームに負ける時、かわりに〜してもよい」(ジャオウガ)。置換したら true */
 function lossReplacement(c: Ctx, p: PlayerId): boolean {
   const s = c.s;
-  const key = `lossSaved${p}`;
-  if (s.usage[key] === s.turn) return false;
+  const key = `deckOutHandled${p}`;
   for (const perm of s.players[p].battle) {
     const uid = perm.cards[0];
     const info = infoOf(c, uid);
@@ -785,7 +794,7 @@ function lossReplacement(c: Ctx, p: PlayerId): boolean {
         .sort((a, b) => a.v - b.v)
         .slice(0, 3)
         .map((x) => x.u);
-      s.usage[key] = s.turn;
+      s.usage[key] = 1;
       moveCards(c, scored, { to: 'grave', cause: 'destroy', noReplace: true });
       return true;
     }

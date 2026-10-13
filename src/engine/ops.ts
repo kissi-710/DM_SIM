@@ -155,6 +155,11 @@ function suppressesTrigger(c: Ctx, ev: Ev, srcUid: number, controller: PlayerId)
 
 /** 現在のバッチで発生したイベントの誘発をまとめて収集する */
 export function collectBatch(c: Ctx, evs: Ev[]): void {
+  // 「発生源がいる間」の継続効果は、発生源がゾーンを離れたら失効する(spec 3.13-6)
+  const s = c.s;
+  if (s.effects.some((e) => e.until.kind === 'source')) {
+    s.effects = s.effects.filter((e) => e.until.kind !== 'source' || s.cards[e.until.uid].ep === e.until.ep);
+  }
   for (const ev of evs) collect(c, ev);
 }
 

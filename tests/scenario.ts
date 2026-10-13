@@ -9,11 +9,11 @@ import { defaultConfig, type Action, type Card, type Ev, type GameConfig, type G
 export const reg: Registry = loadRegistry(CARD_DB);
 
 /** 名前(の一部)かIDからカード定義IDを引く */
-export function defIdOf(name: string): string {
-  if (reg.defs[name]) return name;
-  const exact = Object.values(reg.defs).filter((d) => d.name === name || d.faces.some((f) => f.name === name));
+export function defIdOf(name: string, r: Registry = reg): string {
+  if (r.defs[name]) return name;
+  const exact = Object.values(r.defs).filter((d) => d.name === name || d.faces.some((f) => f.name === name));
   if (exact.length === 1) return exact[0].id;
-  const part = Object.values(reg.defs).filter((d) => d.name.includes(name) || d.faces.some((f) => f.name.includes(name)));
+  const part = Object.values(r.defs).filter((d) => d.name.includes(name) || d.faces.some((f) => f.name.includes(name)));
   if (part.length >= 1) return part[0].id;
   throw new Error('カードが見つかりません: ' + name);
 }
@@ -40,7 +40,7 @@ export interface Setup {
   first?: PlayerId;
 }
 
-export function buildState(setup: Setup): GameState {
+export function buildState(setup: Setup, r: Registry = reg): GameState {
   const cards: Card[] = [];
   const players: [PlayerZones, PlayerZones] = [
     { deck: [], hand: [], mana: [], shield: [], grave: [], battle: [] },
@@ -55,28 +55,28 @@ export function buildState(setup: Setup): GameState {
   const fill = (p: PlayerId, spec: ZoneSpec | undefined) => {
     const z = players[p];
     const sp = spec ?? {};
-    for (const it of sp.hand ?? []) z.hand.push(add(p, defIdOf(norm(it).c), 'hand'));
+    for (const it of sp.hand ?? []) z.hand.push(add(p, defIdOf(norm(it).c, r), 'hand'));
     for (const it of sp.mana ?? []) {
       const n = norm(it);
-      const u = add(p, defIdOf(n.c), 'mana');
+      const u = add(p, defIdOf(n.c, r), 'mana');
       cards[u].tapped = !!n.tapped;
       z.mana.push(u);
     }
-    for (const it of sp.grave ?? []) z.grave.push(add(p, defIdOf(norm(it).c), 'grave'));
+    for (const it of sp.grave ?? []) z.grave.push(add(p, defIdOf(norm(it).c, r), 'grave'));
     const sh = sp.shield ?? 5;
     if (typeof sh === 'number') for (let i = 0; i < sh; i++) z.shield.push(add(p, 'dummy', 'shield'));
-    else for (const it of sh) z.shield.push(add(p, defIdOf(norm(it).c), 'shield'));
+    else for (const it of sh) z.shield.push(add(p, defIdOf(norm(it).c, r), 'shield'));
     const dk = sp.deck ?? 20;
     if (typeof dk === 'number') for (let i = 0; i < dk; i++) z.deck.push(add(p, 'dummy', 'deck'));
-    else for (const it of dk) z.deck.push(add(p, defIdOf(norm(it).c), 'deck'));
+    else for (const it of dk) z.deck.push(add(p, defIdOf(norm(it).c, r), 'deck'));
     for (const it of sp.battle ?? []) {
       const n = norm(it);
       const pid = nextPid++;
-      const u = add(p, defIdOf(n.c), 'battle');
+      const u = add(p, defIdOf(n.c, r), 'battle');
       cards[u].pid = pid;
       const pile = [u];
       for (const un of n.under ?? []) {
-        const v = add(p, defIdOf(un), 'battle');
+        const v = add(p, defIdOf(un, r), 'battle');
         cards[v].pid = pid;
         pile.push(v);
       }
@@ -129,13 +129,15 @@ export function buildState(setup: Setup): GameState {
 export class Sim {
   s: GameState;
   events: Ev[] = [];
-  constructor(setup: Setup) {
-    this.s = buildState(setup);
+  r: Registry;
+  constructor(setup: Setup, r: Registry = reg) {
+    this.r = r;
+    this.s = buildState(setup, r);
   }
 
   // ───── 行動 ─────
   do(a: Action): this {
-    const r = engineStep(this.s, a, reg);
+    const r = engineStep(this.s, a, this.r);
     this.s = r.state;
     this.events.push(...r.events);
     const errs = checkInvariants(this.s);
@@ -144,7 +146,7 @@ export class Sim {
   }
 
   uid(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle', name: string, nth = 0): number {
-    const did = defIdOf(name);
+    const did = defIdOf(name, this.r);
     const list: number[] = zone === 'battle' ? this.s.players[p].battle.map((x) => x.cards[0]) : this.s.players[p][zone];
     const hits = list.filter((u) => this.s.cards[u].defId === did);
     if (hits.length <= nth) throw new Error(`${p}:${zone} に ${name} が(${nth + 1}枚目)ありません`);
@@ -203,7 +205,7 @@ export class Sim {
     const used = new Set<number>();
     const out: number[] = [];
     for (const n of names) {
-      const did = defIdOf(n);
+      const did = defIdOf(n, this.r);
       const u = inp.candidates.find((x) => this.s.cards[x].defId === did && !used.has(x));
       if (u === undefined) throw new Error(`候補に ${n} がありません`);
       used.add(u);
@@ -228,7 +230,7 @@ export class Sim {
     for (const [slot, names] of Object.entries(map)) {
       out[slot] = [];
       for (const n of names) {
-        const did = defIdOf(n);
+        const did = defIdOf(n, this.r);
         const u = inp.items.find((x) => this.s.cards[x].defId === did && !used.has(x));
         if (u === undefined) throw new Error(`items に ${n} がありません`);
         used.add(u);
@@ -269,11 +271,11 @@ export class Sim {
   // ───── 検証 ─────
   names(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle'): string[] {
     const list: number[] = zone === 'battle' ? this.s.players[p].battle.map((x) => x.cards[0]) : this.s.players[p][zone];
-    return list.map((u) => reg.defs[this.s.cards[u].defId].name);
+    return list.map((u) => this.r.defs[this.s.cards[u].defId].name);
   }
   count(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle', name?: string): number {
     if (!name) return zone === 'battle' ? this.s.players[p].battle.length : this.s.players[p][zone].length;
-    const did = defIdOf(name);
+    const did = defIdOf(name, this.r);
     const list: number[] = zone === 'battle' ? this.s.players[p].battle.map((x) => x.cards[0]) : this.s.players[p][zone];
     return list.filter((u) => this.s.cards[u].defId === did).length;
   }
@@ -281,10 +283,10 @@ export class Sim {
     return this.count(p, zone, name) > 0;
   }
   legal(): Action[] {
-    return legalActions(this.s, reg);
+    return legalActions(this.s, this.r);
   }
   canPlay(name: string, from: 'hand' | 'mana' | 'grave' = 'hand'): boolean {
-    const did = defIdOf(name);
+    const did = defIdOf(name, this.r);
     return this.legal().some((a) => a.type === 'PLAY_CARD' && this.s.cards[a.uid].defId === did && (a.from ?? 'hand') === from);
   }
   tappedMana(p: PlayerId): number {

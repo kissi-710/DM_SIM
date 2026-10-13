@@ -256,6 +256,12 @@ function faceHint(cc: CC, uid: number, type: Selector['type']): number | null {
 export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
   if (pat.type !== ev.type) return false;
   if (pat.self && ev.card !== cc.self) return false;
+  if (pat.role) {
+    // blocked: attacker / blocker、battleEnded: winner / loser(その能力の発生源がその役割か)
+    const want =
+      ev.type === 'blocked' ? (pat.role === 'attacker' ? ev.attackerCard : ev.card) : pat.role === 'winner' ? ev.winnerCard : ev.loserCard;
+    if (want === null || want === undefined || want !== cc.self) return false;
+  }
   const rel = (want: any, actual: PlayerId | undefined): boolean => {
     if (want === undefined || want === 'any') return true;
     if (actual === undefined) return false;
