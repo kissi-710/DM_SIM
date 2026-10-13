@@ -1,0 +1,456 @@
+// カードDBの検証・正規化・索引化・能力のコンパイル(spec 4.3 / effects 4.3, 6)。
+import type { Ability, ActDef, Cond, StepDef, TriggerSpec } from './ast';
+import type { AbilityRef, CardDB, CardDef, Face } from './types';
+
+// ───────────────────────── 命令(バイトコード) ─────────────────────────
+
+export type Instr =
+  | { o: 'act'; act: ActDef }
+  | { o: 'select'; step: Extract<StepDef, { op: 'select' }> }
+  | { o: 'may'; no: number; prompt?: string }
+  | { o: 'jmp'; to: number }
+  | { o: 'jf'; cond: Cond; to: number }
+  | { o: 'modes'; step: Extract<StepDef, { op: 'modes' }>; key: string; starts: number[]; next: number }
+  | { o: 'modesNext'; key: string; starts: number[]; end: number }
+  | { o: 'eachInit'; inVar: string; key: string }
+  | { o: 'eachNext'; as: string; inVar: string; key: string; end: number }
+  | { o: 'repeatInit'; times: any; key: string }
+  | { o: 'repeatNext'; key: string; end: number }
+  | { o: 'setIter'; which: 0 | 1 }
+  | { o: 'custom'; handler: string; args?: any };
+
+export type Program = Instr[];
+
+export interface TrigRef {
+  defId: string;
+  face: number;
+  idx: number;
+  ability: Extract<Ability, { kind: 'trigger' }>;
+}
+
+export interface FaceInfo {
+  blocker: boolean;
+  breaker: number;
+  speedAttacker: boolean;
+  machFighter: boolean;
+  exLife: boolean;
+  justDiver: boolean;
+  sympathy: boolean;
+  hyperEnergy: boolean;
+  shieldTriggers: { ability: Extract<Ability, { kind: 'keyword' }>; idx: number }[];
+  gStrike: { ability: Extract<Ability, { kind: 'keyword' }>; idx: number } | null;
+  breakers: { n: number; while?: Cond }[];
+  statics: { ability: Extract<Ability, { kind: 'static' }>; idx: number }[];
+  replaces: { ability: Extract<Ability, { kind: 'replace' }>; idx: number }[];
+  permissions: Extract<Ability, { kind: 'permission' }>[];
+  triggers: TrigRef[];
+  spell: { ability: Extract<Ability, { kind: 'spell' }>; idx: number } | null;
+  hasTriggerOrStatic: boolean;
+}
+
+export interface Registry {
+  db: CardDB;
+  defs: CardDB;
+  info: Record<string, FaceInfo[]>;
+  trigIndex: Map<string, TrigRef[]>;
+  progs: Map<string, Program>;
+  getFace(defId: string, face: number): Face;
+  getInfo(defId: string, face: number): FaceInfo;
+  program(ref: AbilityRef, noOptional?: boolean): Program;
+  ability(ref: AbilityRef): Ability;
+}
+
+// ───────────────────────── 展開(キーワード → 誘発型能力) ─────────────────────────
+
+function expandFace(face: Face): Face {
+  const out: Ability[] = [];
+  for (const a of face.abilities) {
+    out.push(a);
+    if (a.kind !== 'keyword') continue;
+    if (a.name === 'yobinion') {
+      out.push({
+        kind: 'trigger',
+        label: 'ヨビニオン',
+        optional: true,
+        spec: { on: { type: 'entered', via: 'summon' }, subject: 'self' },
+        steps: [
+          {
+            op: 'act',
+            act: {
+              revealUntil: {
+                as: '$found',
+                rest: '$rest',
+                cond: { all: [{ type: 'creature' }, { evolution: false }, { cost: { lt: { costOf: '$self' } } }] },
+              },
+            },
+          },
+          { op: 'act', act: { put: { sel: '$found' } } },
+          { op: 'act', act: { shuffleBottom: { of: '$rest' } } },
+        ],
+      });
+    } else if (a.name === 'justDiver') {
+      out.push({
+        kind: 'trigger',
+        label: 'ジャストダイバー',
+        spec: { on: { type: 'entered' }, subject: 'self' },
+        steps: [
+          {
+            op: 'act',
+            act: { addEffect: { sel: '$self', mods: [{ kind: 'cannotBeChosen' }, { kind: 'cannotBeAttacked' }], until: 'nextTurnStart' } },
+          },
+        ],
+      });
+    } else if (a.name === 'invasion') {
+      const spec: TriggerSpec = {
+        on: { type: 'attackDeclared', attackerCond: a.attacker, owner: 'self' },
+        watch: ['battle', 'hand', 'grave', 'mana'],
+        subject: 'any',
+      };
+      out.push({
+        kind: 'trigger',
+        label: a.label ?? '侵略',
+        optional: true,
+        spec,
+        steps: [{ op: 'act', act: { invade: {} } }],
+      });
+    }
+  }
+  return { ...face, abilities: out };
+}
+
+const KNOWN_ACTS = new Set([
+  'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
+  'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
+  'setVar', 'moveTop',
+]);
+const KNOWN_COND = new Set([
+  'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
+  'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
+  'turnOf', 'zoneIs', 'true',
+]);
+const KNOWN_CUSTOM = new Set<string>([]);
+const KNOWN_KEYWORD = new Set([
+  'blocker', 'breaker', 'shieldTrigger', 'gStrike', 'speedAttacker', 'machFighter', 'exLife', 'justDiver',
+  'sympathy', 'hyperEnergy', 'yobinion', 'invasion',
+]);
+
+function checkCond(c: any, where: string, errs: string[]) {
+  if (c == null) return;
+  const keys = Object.keys(c).filter((k) => KNOWN_COND.has(k) || !['gte', 'lte', 'eq'].includes(k));
+  if (keys.length === 0) errs.push(`${where}: 条件が空です`);
+  for (const k of keys) {
+    if (!KNOWN_COND.has(k)) errs.push(`${where}: 未知の条件 '${k}'`);
+  }
+  if (c.all) c.all.forEach((x: Cond) => checkCond(x, where, errs));
+  if (c.any) c.any.forEach((x: Cond) => checkCond(x, where, errs));
+  if (c.not) checkCond(c.not, where, errs);
+}
+
+function checkSteps(steps: StepDef[] | undefined, where: string, errs: string[]) {
+  if (!steps) return;
+  for (const st of steps) {
+    switch (st.op) {
+      case 'act': {
+        const ks = Object.keys(st.act);
+        if (ks.length !== 1) errs.push(`${where}: act は1キー(${ks.join(',')})`);
+        for (const k of ks) if (!KNOWN_ACTS.has(k)) errs.push(`${where}: 未対応の原始操作 '${k}'`);
+        break;
+      }
+      case 'select':
+        if (!st.as) errs.push(`${where}: select に as がありません`);
+        if ((st.from as any).where) checkCond((st.from as any).where, where, errs);
+        break;
+      case 'may':
+        checkSteps(st.then, where, errs);
+        checkSteps(st.else, where, errs);
+        break;
+      case 'if':
+        checkCond(st.cond, where, errs);
+        checkSteps(st.then, where, errs);
+        checkSteps(st.else, where, errs);
+        break;
+      case 'each':
+      case 'repeat':
+      case 'forPlayers':
+        checkSteps(st.body, where, errs);
+        break;
+      case 'modes':
+        if (!st.options?.length) errs.push(`${where}: modes に options がありません`);
+        for (const o of st.options ?? []) checkSteps(o.steps, where, errs);
+        if (st.allIf) checkCond(st.allIf, where, errs);
+        break;
+      case 'custom':
+        if (!KNOWN_CUSTOM.has(st.handler)) errs.push(`${where}: 未対応の custom '${st.handler}'`);
+        break;
+      default:
+        errs.push(`${where}: 未知のステップ '${(st as any).op}'`);
+    }
+  }
+}
+
+/** カードDBを検証する。エラー文字列の配列を返す(空なら正常)。 */
+export function validateCardDb(db: CardDB): string[] {
+  const errs: string[] = [];
+  for (const [id, def] of Object.entries(db)) {
+    const w0 = `[${id}]`;
+    if (def.id !== id) errs.push(`${w0}: id が一致しません`);
+    if (!def.name) errs.push(`${w0}: name がありません`);
+    if (!def.faces?.length) errs.push(`${w0}: faces がありません`);
+    def.faces?.forEach((f, fi) => {
+      const w = `${w0}面${fi}(${f.name})`;
+      if (!['creature', 'spell', 'evolution', 'smaxEvolution'].includes(f.type)) errs.push(`${w}: 未知の種類 ${f.type}`);
+      if (typeof f.cost !== 'number') errs.push(`${w}: cost がありません`);
+      if (!f.civs?.length) errs.push(`${w}: civs がありません`);
+      if (f.type !== 'spell' && typeof f.power !== 'number') errs.push(`${w}: power がありません`);
+      if (f.type === 'evolution' && !f.evolveFrom) errs.push(`${w}: 進化には evolveFrom が必要です`);
+      f.abilities?.forEach((a, ai) => {
+        const wa = `${w}能力${ai}`;
+        switch (a.kind) {
+          case 'keyword':
+            if (!KNOWN_KEYWORD.has(a.name)) errs.push(`${wa}: 未知のキーワード '${a.name}'`);
+            checkSteps(a.steps, wa, errs);
+            break;
+          case 'trigger':
+            if (!a.spec?.on) errs.push(`${wa}: trigger に spec.on がありません`);
+            checkSteps(a.steps, wa, errs);
+            break;
+          case 'spell':
+            checkSteps(a.steps, wa, errs);
+            break;
+          case 'static':
+          case 'replace':
+          case 'permission':
+            break;
+          default:
+            errs.push(`${wa}: 未知の能力 kind '${(a as any).kind}'`);
+        }
+      });
+    });
+  }
+  return errs;
+}
+
+// ───────────────────────── コンパイル ─────────────────────────
+
+let uniq = 0;
+
+function compileSteps(steps: StepDef[], out: Instr[]): void {
+  for (const st of steps) {
+    switch (st.op) {
+      case 'act':
+        out.push({ o: 'act', act: st.act });
+        break;
+      case 'select':
+        out.push({ o: 'select', step: st });
+        break;
+      case 'custom':
+        out.push({ o: 'custom', handler: st.handler, args: st.args });
+        break;
+      case 'may': {
+        const m: Instr = { o: 'may', no: -1, prompt: st.prompt };
+        out.push(m);
+        compileSteps(st.then, out);
+        if (st.else?.length) {
+          const j: Instr = { o: 'jmp', to: -1 };
+          out.push(j);
+          m.no = out.length;
+          compileSteps(st.else, out);
+          j.to = out.length;
+        } else {
+          m.no = out.length;
+        }
+        break;
+      }
+      case 'if': {
+        const j: Instr = { o: 'jf', cond: st.cond, to: -1 };
+        out.push(j);
+        compileSteps(st.then, out);
+        if (st.else?.length) {
+          const j2: Instr = { o: 'jmp', to: -1 };
+          out.push(j2);
+          j.to = out.length;
+          compileSteps(st.else, out);
+          j2.to = out.length;
+        } else {
+          j.to = out.length;
+        }
+        break;
+      }
+      case 'modes': {
+        const key = `$m${++uniq}`;
+        const starts: number[] = [];
+        const head: Instr = { o: 'modes', step: st, key, starts, next: -1 };
+        out.push(head);
+        const nextI: Instr = { o: 'modesNext', key, starts, end: -1 };
+        head.next = out.length;
+        out.push(nextI);
+        const nextPc = head.next;
+        const endJumps: Instr[] = [];
+        // 各選択肢の本体 → 末尾で modesNext に戻る
+        for (const opt of st.options) {
+          starts.push(out.length);
+          compileSteps(opt.steps, out);
+          out.push({ o: 'jmp', to: nextPc });
+        }
+        nextI.end = out.length;
+        void endJumps;
+        break;
+      }
+      case 'each': {
+        const key = `$e${++uniq}`;
+        out.push({ o: 'eachInit', inVar: st.in, key });
+        const nextPc = out.length;
+        const nx: Instr = { o: 'eachNext', as: st.as, inVar: st.in, key, end: -1 };
+        out.push(nx);
+        compileSteps(st.body, out);
+        out.push({ o: 'jmp', to: nextPc });
+        nx.end = out.length;
+        break;
+      }
+      case 'repeat': {
+        const key = `$r${++uniq}`;
+        out.push({ o: 'repeatInit', times: st.times, key });
+        const nextPc = out.length;
+        const nx: Instr = { o: 'repeatNext', key, end: -1 };
+        out.push(nx);
+        compileSteps(st.body, out);
+        out.push({ o: 'jmp', to: nextPc });
+        nx.end = out.length;
+        break;
+      }
+      case 'forPlayers':
+        out.push({ o: 'setIter', which: 0 });
+        compileSteps(st.body, out);
+        out.push({ o: 'setIter', which: 1 });
+        compileSteps(st.body, out);
+        break;
+    }
+  }
+}
+
+function abilitySteps(a: Ability): StepDef[] {
+  switch (a.kind) {
+    case 'trigger':
+    case 'spell':
+      return a.steps;
+    case 'keyword':
+      return a.steps ?? [];
+    default:
+      return [];
+  }
+}
+
+// ───────────────────────── レジストリ ─────────────────────────
+
+const cache = new WeakMap<CardDB, Registry>();
+
+export function loadRegistry(db: CardDB): Registry {
+  const hit = cache.get(db);
+  if (hit) return hit;
+  const errs = validateCardDb(db);
+  if (errs.length) throw new Error('カードデータの検証エラー:\n' + errs.join('\n'));
+
+  const defs: CardDB = {};
+  const info: Record<string, FaceInfo[]> = {};
+  const trigIndex = new Map<string, TrigRef[]>();
+  for (const [id, def] of Object.entries(db)) {
+    const faces = def.faces.map(expandFace);
+    const nd: CardDef = { ...def, faces };
+    defs[id] = nd;
+    info[id] = faces.map((f, fi) => {
+      const fi_: FaceInfo = {
+        blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false,
+        sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], statics: [],
+        replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
+      };
+      f.abilities.forEach((a, idx) => {
+        switch (a.kind) {
+          case 'keyword':
+            if (a.name === 'blocker') fi_.blocker = true;
+            else if (a.name === 'breaker') {
+              fi_.breakers.push({ n: a.n ?? 2, while: a.while });
+              fi_.breaker = Math.max(fi_.breaker, a.n ?? 2);
+            } else if (a.name === 'speedAttacker') fi_.speedAttacker = true;
+            else if (a.name === 'machFighter') fi_.machFighter = true;
+            else if (a.name === 'exLife') fi_.exLife = true;
+            else if (a.name === 'justDiver') fi_.justDiver = true;
+            else if (a.name === 'sympathy') fi_.sympathy = true;
+            else if (a.name === 'hyperEnergy') fi_.hyperEnergy = true;
+            else if (a.name === 'shieldTrigger') fi_.shieldTriggers.push({ ability: a, idx });
+            else if (a.name === 'gStrike') fi_.gStrike = { ability: a, idx };
+            break;
+          case 'trigger': {
+            const ref: TrigRef = { defId: id, face: fi, idx, ability: a };
+            fi_.triggers.push(ref);
+            fi_.hasTriggerOrStatic = true;
+            const ons = Array.isArray(a.spec.on) ? a.spec.on : [a.spec.on];
+            for (const on of ons) {
+              const l = trigIndex.get(on.type) ?? [];
+              l.push(ref);
+              trigIndex.set(on.type, l);
+            }
+            break;
+          }
+          case 'static':
+            fi_.statics.push({ ability: a, idx });
+            fi_.hasTriggerOrStatic = true;
+            break;
+          case 'replace':
+            fi_.replaces.push({ ability: a, idx });
+            fi_.hasTriggerOrStatic = true;
+            break;
+          case 'permission':
+            fi_.permissions.push(a);
+            break;
+          case 'spell':
+            fi_.spell = { ability: a, idx };
+            break;
+        }
+      });
+      return fi_;
+    });
+  }
+
+  const progs = new Map<string, Program>();
+  const reg: Registry = {
+    db,
+    defs,
+    info,
+    trigIndex,
+    progs,
+    getFace(defId, face) {
+      const d = defs[defId];
+      if (!d) throw new Error(`未知のカード: ${defId}`);
+      return d.faces[face] ?? d.faces[0];
+    },
+    getInfo(defId, face) {
+      const i = info[defId];
+      if (!i) throw new Error(`未知のカード: ${defId}`);
+      return i[face] ?? i[0];
+    },
+    ability(ref) {
+      return reg.getFace(ref.defId, ref.face).abilities[ref.idx];
+    },
+    program(ref, noOptional = false) {
+      const key = `${ref.defId}:${ref.face}:${ref.idx}:${noOptional ? 1 : 0}`;
+      let p = progs.get(key);
+      if (!p) {
+        const a = reg.ability(ref);
+        p = [];
+        const optional = a.kind === 'trigger' && a.optional && !noOptional;
+        if (optional) {
+          const m: Instr = { o: 'may', no: -1, prompt: (a as any).label };
+          p.push(m);
+          compileSteps(abilitySteps(a), p);
+          m.no = p.length;
+        } else {
+          compileSteps(abilitySteps(a), p);
+        }
+        progs.set(key, p);
+      }
+      return p;
+    },
+  };
+  cache.set(db, reg);
+  return reg;
+}
