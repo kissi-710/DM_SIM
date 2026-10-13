@@ -62,7 +62,7 @@ function playScore(view: GameState, reg: Registry, a: Extract<Action, { type: 'P
   return v;
 }
 
-function chooseTurnAction(view: GameState, legal: Action[], ctx: AgentCtx): Action {
+export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<AgentCtx, 'reg' | 'rand'>): Action {
   const reg = ctx.reg;
   const me = view.pending!.player;
   const opp = (1 - me) as PlayerId;
