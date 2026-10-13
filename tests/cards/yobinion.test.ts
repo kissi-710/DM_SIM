@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Sim, mana } from '../scenario';
+import { FAIR, toPlayerView } from '../../src/engine/view';
+import { reg, Sim, mana } from '../scenario';
 
 const N = 'フェアリー・ライフ';
 const W = 'アクアン';
@@ -55,6 +56,29 @@ describe('A5 ヨビニオン・マルル', () => {
     // 残るヨビニオンは断る
     expect(sim.pending.why).toBe('may');
     sim.no();
+  });
+  it('2体目の能力は、上1枚を見てから手札かマナかを選べる(選ぶ時点で中身が見え、まだ山札にある)', () => {
+    const sim = new Sim({
+      p0: { hand: ['ヨビニオン・トライブ', 'ヨビニオン・トライブ'], mana: mana(8), battle: ['ヨビニオン・マルル'], deck: [W, D, 'ダミー'] },
+    });
+    sim.play('ヨビニオン・トライブ');
+    sim.no();
+    sim.play('ヨビニオン・トライブ');
+    sim.order('2体目');
+    expect(sim.pending.why).toBe('modes');
+    const inp: any = sim.pending.input;
+    // 見たカードが選択肢と一緒に示される(山札の一番上のカード)
+    const top = sim.s.players[0].deck[0];
+    expect(inp.seen).toEqual([top]);
+    expect(sim.s.cards[top].zone).toBe('deck');
+    // 選ぶ本人の視点では中身が見え、相手からは見えない
+    const mine = toPlayerView(sim.s, 0, FAIR, reg);
+    const theirs = toPlayerView(sim.s, 1, FAIR, reg);
+    expect(mine.cards[top].defId).toBe(sim.s.cards[top].defId);
+    expect(theirs.cards[top].defId).toBe('?');
+    // 見た後に、見たカードを選んだ行き先へ置ける
+    sim.option(0); // 手札に加える
+    expect(sim.has(0, 'hand', W)).toBe(true);
   });
   it('同時誘発の順序を自動(左から)にできる', () => {
     const sim = new Sim({

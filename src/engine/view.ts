@@ -93,7 +93,15 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
     const inp: any = p.input;
     // order の candidates は能力のIDなので、カードを指す形式だけを対象にする
     const show: number[] =
-      inp.shape === 'pick' ? inp.candidates : inp.shape === 'assign' ? inp.items : inp.shape === 'ack' ? inp.shown : [];
+      inp.shape === 'pick'
+        ? inp.candidates
+        : inp.shape === 'assign'
+          ? inp.items
+          : inp.shape === 'ack'
+            ? inp.shown
+            : inp.shape === 'option'
+              ? inp.seen ?? []
+              : [];
     for (const u of show) v.cards[u].defId = state.cards[u].defId;
   }
   // イベントに残る最後の情報(lki)から、隠れたカードが漏れないようにする

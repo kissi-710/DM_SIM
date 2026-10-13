@@ -110,7 +110,9 @@ export function describeEvent(s: GameState, e: Ev, me: number | null): string | 
     case 'chosen':
       return `${(e.cards as number[]).map(N).join('、')} が選ばれた`;
     case 'looked':
-      return e.to === me || me === null ? `山札の上${(e.cards as number[]).length}枚を見た` : `${P(e.to)}は山札の上${(e.cards as number[]).length}枚を見た`;
+      return e.to === me || me === null
+        ? `山札の上${(e.cards as number[]).length}枚を見た: ${(e.cards as number[]).map(N).join('、')}`
+        : `${P(e.to)}は山札の上${(e.cards as number[]).length}枚を見た`;
     case 'revealed':
       return `公開: ${(e.cards as number[]).map(N).join('、')}`;
     case 'skipTurn':

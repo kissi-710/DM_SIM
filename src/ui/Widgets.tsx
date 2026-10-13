@@ -171,7 +171,7 @@ export function AssignWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
 }
 
 // ── option: 選択肢(回数・重複可・「全部使う」) ──
-export function OptionWidget({ spec, onAnswer }: Props & { spec: Extract<InputSpec, { shape: 'option' }> }) {
+export function OptionWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extract<InputSpec, { shape: 'option' }> }) {
   const [sel, setSel] = useState<number[]>([]);
   const add = (i: number) => {
     setSel((cur) => {
@@ -188,6 +188,16 @@ export function OptionWidget({ spec, onAnswer }: Props & { spec: Extract<InputSp
   }, [sel]);
   return (
     <>
+      {spec.seen && spec.seen.length > 0 && (
+        <>
+          <div className="muted">見たカード</div>
+          <div className="cards">
+            {spec.seen.map((u) => (
+              <CardView key={u} s={s} uid={u} small onHover={onHover} />
+            ))}
+          </div>
+        </>
+      )}
       <div className="col">
         {spec.options.map((label, i) => (
           <div key={i} className="row">

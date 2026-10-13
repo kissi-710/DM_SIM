@@ -76,6 +76,8 @@ export function runEffect(c: Ctx, f: EffectFrame): boolean {
       const st = ins.step;
       const all = st.allIf ? evalCond(cc, st.allIf) : false;
       const who: PlayerId = st.who === 'opponent' ? opponentOf(f.controller) : f.controller;
+      // 見てから選べるように、この能力で見て、まだ山札にあるカードを示す
+      const seen = who === f.controller ? ((f.vars[':seen'] as number[] | undefined) ?? []).filter((u) => c.s.cards[u].zone === 'deck') : [];
       const ans = ask<number[]>(c, {
         player: who,
         why: 'modes',
@@ -85,6 +87,7 @@ export function runEffect(c: Ctx, f: EffectFrame): boolean {
           pick: st.pick,
           repeat: !!st.repeat,
           allIf: all,
+          ...(seen.length > 0 ? { seen } : {}),
         },
         source: f.source,
         prompt: `${sourceName(c, f)}: 選択肢を選んでください`,
@@ -244,6 +247,8 @@ function execAct(c: Ctx, f: EffectFrame, cc: CC, act: ActDef): void {
       const n = evalExpr(cc, a.n);
       const top = s.players[who].deck.slice(0, n);
       f.vars[a.as] = top.map((u) => ref(c, u));
+      // この能力で見たカード。後の選択肢(modes)で、選ぶ人に見せる(マルル: 見てから選ぶ)
+      f.vars[':seen'] = [...((f.vars[':seen'] as number[] | undefined) ?? []), ...top];
       emit(c, 'looked', { cards: top, to: who, from: 'deck' });
       return;
     }

@@ -258,7 +258,7 @@ export type AnswerValue = number[] | Record<string, number[]> | boolean | number
 export type InputSpec =
   | { shape: 'pick'; candidates: number[]; min: number; max: number }
   | { shape: 'assign'; items: number[]; slots: { id: string; to: ZoneName; count: number; label: string }[] }
-  | { shape: 'option'; options: string[]; pick: number; repeat: boolean; allIf: boolean }
+  | { shape: 'option'; options: string[]; pick: number; repeat: boolean; allIf: boolean; /** 選ぶ前に見たカード(山札の上など)。選ぶ人には中身が見える */ seen?: number[] }
   | { shape: 'yesno' }
   | { shape: 'order'; candidates: number[]; labels: string[] }
   | { shape: 'payment'; need: number; mana: number[] }
