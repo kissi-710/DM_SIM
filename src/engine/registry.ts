@@ -88,18 +88,6 @@ function expandFace(face: Face): Face {
           { op: 'act', act: { shuffleBottom: { of: '$rest' } } },
         ],
       });
-    } else if (a.name === 'justDiver') {
-      out.push({
-        kind: 'trigger',
-        label: 'ジャストダイバー',
-        spec: { on: { type: 'entered' }, subject: 'self' },
-        steps: [
-          {
-            op: 'act',
-            act: { addEffect: { sel: '$self', mods: [{ kind: 'cannotBeChosen' }, { kind: 'cannotBeAttacked' }], until: 'nextTurnStart' } },
-          },
-        ],
-      });
     } else if (a.name === 'invasion') {
       const spec: TriggerSpec = {
         on: { type: 'attackDeclared', attackerCond: a.attacker, owner: 'self' },
