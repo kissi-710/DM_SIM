@@ -188,6 +188,8 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       // 「次の自分のターンのはじめまで」の期限切れ
       s.effects = s.effects.filter((e) => !(e.until.kind === 'untilTurnStart' && e.until.player === P && s.turn > e.until.afterTurn));
       emit(c, 'stepStart', { step: 'start', player: P });
+      s.batchNo++;
+      collectBatch(c, [c.out[c.out.length - 1]]);
       f.stage = 1;
       pushProc(c, 'settle');
       return;
@@ -217,6 +219,8 @@ function runTurn(c: Ctx, f: ProcFrame): void {
     }
     case 3: {
       emit(c, 'stepStart', { step: 'end', player: P });
+      s.batchNo++;
+      collectBatch(c, [c.out[c.out.length - 1]]);
       f.stage = 4;
       pushProc(c, 'settle');
       return;
