@@ -392,7 +392,9 @@ function runAttack(c: Ctx, f: ProcFrame): void {
         return;
       }
       const defender = opponentOf(pm.owner);
-      const cands = s.players[defender].battle.filter((p) => canBlock(c, p)).map((p) => p.cards[0]);
+      // 攻撃されているクリーチャー自身は、ブロッカーとして選べない(総合ルール 507.1a)
+      const attacked = v.target.kind === 'creature' ? v.target.pid : -1;
+      const cands = s.players[defender].battle.filter((p) => p.pid !== attacked && canBlock(c, p)).map((p) => p.cards[0]);
       let blocker: number | null = null;
       if (cands.length > 0) {
         const ans = ask<number[]>(c, {

@@ -397,9 +397,9 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
     base = perm.cards.slice();
     perm.cards.unshift(uid);
     card.pid = perm.pid;
-    // L3: タップと召喚酔いは引き継ぎ、継続効果は引き継がない(新しいオブジェクト)。出たターンを更新
+    // L3(総合ルール 801.2 で確認済み): 進化しても同一のクリーチャーとして扱い、タップ・召喚酔い・
+    // 適用されている継続効果は進化後も続く。出たターンだけ更新する
     perm.enteredTurn = s.turn;
-    s.effects = s.effects.filter((e) => e.pid !== perm.pid);
   } else {
     perm = {
       pid: s.nextPid++,
