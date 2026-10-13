@@ -44,6 +44,7 @@ export function SimView() {
   const [replay, setReplay] = useState<{ title: string; states: GameState[]; events: Ev[][] } | null>(null);
   const [filterIn, setFilterIn] = useState('');
   const [filterOut, setFilterOut] = useState('');
+  const [filterHand, setFilterHand] = useState('');
   const job = useRef<RunningJob<any> | null>(null);
 
   const list = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
@@ -93,14 +94,16 @@ export function SimView() {
     if (!pats) return [];
     const inc = list(filterIn);
     const exc = list(filterOut);
+    const hand = list(filterHand);
     return pats.patterns.filter((p) => {
-      const text = p.key + ' ' + Object.keys(p.handFreq).join(' ');
       const playText = p.key;
       if (inc.some((n) => !playText.includes(n))) return false;
-      if (exc.some((n) => text.includes(n) && playText.includes(n))) return false;
+      if (exc.some((n) => playText.includes(n))) return false;
+      // 初手の条件: そのカードが初手にある試行で作れたパターンだけ(必要条件の絞り込み)
+      if (hand.some((n) => !Object.keys(p.handFreq).some((k) => k.includes(n)))) return false;
       return true;
     });
-  }, [pats, filterIn, filterOut]);
+  }, [pats, filterIn, filterOut, filterHand]);
 
   const deckNames = useMemo(() => {
     const names = new Set<string>();
@@ -279,6 +282,11 @@ export function SimView() {
                 含まない
                 <input list="deck-names" value={filterOut} onChange={(e) => setFilterOut(e.target.value)} placeholder="カード名" />
               </label>
+              <label>
+                初手に
+                <input list="deck-names" value={filterHand} onChange={(e) => setFilterHand(e.target.value)} placeholder="カード名" />
+                がある
+              </label>
               <button onClick={() => downloadText('patterns.json', JSON.stringify(pats, null, 2))}>JSON</button>
               <button onClick={() => downloadText('patterns.csv', patternsToCsv(pats))}>CSV</button>
             </div>
@@ -374,6 +382,20 @@ function ProbResultView({ r, goal }: { r: ProbResult; goal: Goal }) {
               <div className="col-bar" key={t}>
                 <span>{pct(v)}</span>
                 <div style={{ height: `${(v / max) * 100}%` }} />
+                <span className="muted">{t}T</span>
+              </div>
+            ),
+          )}
+        </div>
+      </div>
+      <div>
+        <div className="muted">何ターン目に初めて達成したか(分布・方針プレイ)</div>
+        <div className="chart">
+          {r.policy.turnDist.map((v, t) =>
+            t === 0 ? null : (
+              <div className="col-bar" key={t}>
+                <span>{pct(v)}</span>
+                <div style={{ height: `${(v / Math.max(0.0001, ...r.policy.turnDist)) * 100}%` }} />
                 <span className="muted">{t}T</span>
               </div>
             ),

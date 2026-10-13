@@ -624,7 +624,15 @@ function runSettle(c: Ctx, f: ProcFrame): void {
     return;
   }
   let chosen: PoolEntry;
-  if (pick.entries.length === 1 || s.cfg.autoOrder[pick.player]) chosen = pick.entries[0];
+  // 同じ能力(同じカード・同じ能力)ばかりなら、順序で結果が変わらないので質問しない(effects 12)
+  const same = pick.entries.every(
+    (e) =>
+      e.kind === pick.entries[0].kind &&
+      e.controller === pick.entries[0].controller &&
+      e.lki.defId === pick.entries[0].lki.defId &&
+      JSON.stringify(e.ability) === JSON.stringify(pick.entries[0].ability),
+  );
+  if (pick.entries.length === 1 || same || s.cfg.autoOrder[pick.player]) chosen = pick.entries[0];
   else {
     const id = ask<number>(c, {
       player: pick.player,
