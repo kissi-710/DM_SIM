@@ -113,7 +113,6 @@ export function Board(b: BoardProps) {
 
   const zoneProps = (key: string) => ({
     'data-drop': key,
-    className: undefined as string | undefined,
     onClick: () => {
       if (activeKey && liveDrops.has(key)) exec(activeKey, key);
     },
