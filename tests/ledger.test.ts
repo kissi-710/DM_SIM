@@ -77,8 +77,8 @@ describe('L2 状況起因処理のタイミング(sbaTiming)', () => {
   });
 });
 
-describe('L3 進化時の引き継ぎ(総合ルール 801.2 で確認済み)', () => {
-  it('タップ・召喚酔い・適用中の継続効果は、進化後も続く', () => {
+describe('L3 進化時の引き継ぎ(総合ルール 801.2 / 801.3 で確認済み)', () => {
+  it('タップ・適用中の継続効果は進化後も続く。進化クリーチャーは召喚酔いしない', () => {
     const sim = new Sim({
       p0: { hand: ['SSS級天災 デッドダムド'], mana: [W, W, W, D, D, N, N, N], battle: [{ c: '天災 デドダム', tapped: true, sick: true }] },
       p1: { battle: ['ヨビニオン・マルル'] },
@@ -89,8 +89,33 @@ describe('L3 進化時の引き継ぎ(総合ルール 801.2 で確認済み)', (
     sim.option(0);
     const perm = sim.s.players[0].battle[0];
     expect(perm.tapped).toBe(true);
-    expect(perm.sick).toBe(true);
     expect(sim.s.effects.filter((e) => e.pid === pid).length).toBe(1);
+  });
+  it('召喚酔い中のクリーチャーの上に進化したクリーチャーは、そのターンに攻撃できる(801.3)', () => {
+    const sim = new Sim({
+      p0: { hand: ['SSS級天災 デッドダムド'], mana: [W, W, W, D, D, N, N, N], battle: [{ c: '天災 デドダム', sick: true }] },
+      p1: { battle: ['ヨビニオン・マルル'], shield: 5 },
+    });
+    const pid = sim.pid(0, '天災 デドダム');
+    sim.play('SSS級天災 デッドダムド', { extra: { onto: pid } });
+    sim.option(0);
+    sim.drain();
+    const perm = sim.s.players[0].battle[0];
+    expect(perm.cards.length).toBe(2);
+    expect(perm.tapped).toBe(false);
+    sim.endMain();
+    expect(sim.legal().some((a) => a.type === 'ATTACK' && a.target.kind === 'player')).toBe(true);
+  });
+  it('進化元がタップ状態なら、進化クリーチャーもタップのままなので攻撃できない(801.2)', () => {
+    const sim = new Sim({
+      p0: { hand: ['SSS級天災 デッドダムド'], mana: [W, W, W, D, D, N, N, N], battle: [{ c: '天災 デドダム', tapped: true }] },
+      p1: { battle: ['ヨビニオン・マルル'], shield: 5 },
+    });
+    sim.play('SSS級天災 デッドダムド', { extra: { onto: sim.pid(0, '天災 デドダム') } });
+    sim.option(0);
+    sim.drain();
+    sim.endMain();
+    expect(sim.legal().some((a) => a.type === 'ATTACK')).toBe(false);
   });
 });
 

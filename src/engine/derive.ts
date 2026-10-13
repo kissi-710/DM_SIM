@@ -154,6 +154,17 @@ function playerAttackBlockedByEntry(c: Ctx, perm: Permanent, owner: PlayerId): b
   return false;
 }
 
+/**
+ * 召喚酔いか(総合ルール 301.5 / 801.3)。進化クリーチャー(S-MAX進化を含む)は召喚酔いしない。
+ * `perm.sick` は「そのターンの開始時からバトルゾーンにいない」ことの記録で、進化クリーチャーの下の
+ * カードが再構築で残った時(801.4c)のために、進化中も保持する。
+ */
+export function isSick(c: Ctx, perm: Permanent): boolean {
+  if (!perm.sick) return false;
+  const t = charsOf(c, perm.cards[0], -1).type;
+  return t !== 'evolution' && t !== 'smaxEvolution';
+}
+
 export function canAttack(c: Ctx, perm: Permanent, target: { kind: 'player' } | { kind: 'creature'; pid: number }): boolean {
   const s = c.s;
   const uid = perm.cards[0];
@@ -162,7 +173,7 @@ export function canAttack(c: Ctx, perm: Permanent, target: { kind: 'player' } | 
   if (hasEffect(c, perm.pid, 'cannotAttack')) return false;
   const speed = hasKeyword(c, perm, 'speedAttacker');
   const mach = hasKeyword(c, perm, 'machFighter');
-  const sick = perm.sick;
+  const sick = isSick(c, perm);
   if (sick && !speed && !mach) return false;
   if (target.kind === 'player') {
     if (sick && !speed) return false; // マッハファイターは出たターン、プレイヤーを攻撃できない

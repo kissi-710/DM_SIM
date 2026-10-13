@@ -1,6 +1,6 @@
 // 合法手の列挙と検証(design 5 / effects 12)。
 import { canAttack } from './derive';
-import { charsOf, costOf, hasKeyword } from './derive';
+import { charsOf, costOf, hasKeyword, isSick } from './derive';
 import { evalCond, mkCC } from './cond';
 import { planPlay } from './procs';
 import type { Registry } from './registry';
@@ -124,9 +124,9 @@ function extraVariants(c: Ctx, player: PlayerId, uid: number, from: ZoneName, fi
     }
     // 各コストから、価値の低いもの(召喚酔いのもの→パワーの低いもの)を代表にする
     const reps = [...byCost.values()].map((l) =>
-      l.slice().sort((a, b) => Number(b.sick) - Number(a.sick) || charsOf(c, a.cards[0], -1).power - charsOf(c, b.cards[0], -1).power)[0],
+      l.slice().sort((a, b) => Number(isSick(c, b)) - Number(isSick(c, a)) || charsOf(c, a.cards[0], -1).power - charsOf(c, b.cards[0], -1).power)[0],
     );
-    reps.sort((a, b) => Number(b.sick) - Number(a.sick) || charsOf(c, a.cards[0], -1).power - charsOf(c, b.cards[0], -1).power);
+    reps.sort((a, b) => Number(isSick(c, b)) - Number(isSick(c, a)) || charsOf(c, a.cards[0], -1).power - charsOf(c, b.cards[0], -1).power);
     const base = costOf(c, uid, fi, {});
     for (let j = 0; j <= reps.length; j++) {
       if (j > 0 && base - 2 * (j - 1) <= 0) break;
