@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 // 公開先のパスに合わせて base を変える(例: GitHub Pages なら '/DM_SIM/')。
