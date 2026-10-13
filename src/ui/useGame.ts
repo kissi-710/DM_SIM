@@ -52,6 +52,8 @@ function configOf(setup: GameSetup): Partial<GameConfig> {
 export interface Session {
   state: GameState;
   log: Ev[];
+  /** 直近の1手で発生したイベント(動いたカードの強調に使う) */
+  last: Ev[];
   actions: Action[];
   thinking: boolean;
   error: string | null;
@@ -85,7 +87,7 @@ export function useGame(setup: GameSetup) {
       cfg: configOf(setup),
       strict: setup.strict,
     });
-    return { state: g.state, log: g.events, actions: [], thinking: false, error: null };
+    return { state: g.state, log: g.events, last: [], actions: [], thinking: false, error: null };
   });
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(setup.cpuDelayMs);
@@ -114,7 +116,7 @@ export function useGame(setup: GameSetup) {
           snapshots.current = [];
         }
         stamp.current++;
-        setSession({ state: r.state, log: cur.log.concat(r.events), actions: cur.actions.concat(a), thinking: false, error: null });
+        setSession({ state: r.state, log: cur.log.concat(r.events), last: r.events, actions: cur.actions.concat(a), thinking: false, error: null });
       } catch (e: any) {
         setSession({ ...cur, error: String(e?.message ?? e) });
       }
@@ -127,7 +129,7 @@ export function useGame(setup: GameSetup) {
     if (!snap) return;
     const cur = sessionRef.current;
     stamp.current++;
-    setSession({ state: snap.state, log: cur.log.slice(0, snap.logLen), actions: cur.actions.slice(0, snap.actionsLen), thinking: false, error: null });
+    setSession({ state: snap.state, log: cur.log.slice(0, snap.logLen), last: [], actions: cur.actions.slice(0, snap.actionsLen), thinking: false, error: null });
   }, []);
 
   // CPU の手番

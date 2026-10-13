@@ -159,6 +159,15 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [peek, setPeek] = useState(false);
   const [showOpp, setShowOpp] = useState(g.me === null);
   const [recText, setRecText] = useState<string | null>(null);
+  const [manualPay, setManualPay] = useState(false);
+  // 直近の1手で動いたカードを強調する(イベントの再生。design 9)
+  const flash = useMemo(() => {
+    const set = new Set<number>();
+    for (const e of session.last) {
+      if (['moved', 'entered', 'cast', 'attackDeclared', 'evolved', 'blocked'].includes(e.type) && typeof e.card === 'number') set.add(e.card);
+    }
+    return set;
+  }, [session.last]);
 
   const pend = s.pending;
   const viewer: PlayerId = g.me ?? (pend && setup.seats[pend.player].kind === 'human' ? pend.player : 0);
@@ -221,6 +230,11 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             <input type="checkbox" checked={peek} onChange={(e) => setPeek(e.target.checked)} /> 自分のシールドを見る
           </label>
         )}
+        {g.me !== null && (
+          <label>
+            <input type="checkbox" checked={manualPay} onChange={(e) => setManualPay(e.target.checked)} /> マナを手動で選ぶ
+          </label>
+        )}
         <label>
           <input type="checkbox" checked={showOpp} onChange={(e) => setShowOpp(e.target.checked)} /> 相手の手札を見る
         </label>
@@ -250,6 +264,8 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         showOppHand={showOpp}
         selected={selected}
         onSelect={setSelected}
+        flash={flash}
+        manualPay={manualPay}
       />
 
       <div className="side">

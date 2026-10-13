@@ -19,6 +19,8 @@ export interface CardProps {
   target?: boolean;
   draggable?: boolean;
   dim?: boolean;
+  /** 直近のイベントで動いたカード(強調表示) */
+  flash?: boolean;
   badge?: ReactNode;
   onClick?: () => void;
   onPointerDown?: (e: PointerEvent) => void;
@@ -46,6 +48,7 @@ export function CardView(p: CardProps) {
   if (p.target) cls.push('target');
   if (p.draggable) cls.push('draggable');
   if (p.dim) cls.push('dim');
+  if (p.flash) cls.push('flash');
   if (p.sick) cls.push('sick');
   if (card?.ex) cls.push('ex');
   const handlers = {

@@ -471,6 +471,17 @@ th {
 .card.dim {
   opacity: 0.55;
 }
+.card.flash {
+  animation: flash 1.6s ease-out;
+}
+@keyframes flash {
+  0% {
+    box-shadow: 0 0 0 4px var(--accent2), 0 0 22px var(--accent2);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
 .card .badge {
   position: absolute;
   top: 24px;

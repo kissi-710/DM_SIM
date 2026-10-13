@@ -3,6 +3,9 @@
 // ルール判定はせず、legalActions から作る「ドロップ先マップ」だけを使う(effects 11.3)。
 import { useMemo, useState } from 'react';
 import { CardView } from './CardView';
+import { PaymentWidget } from './Widgets';
+import { planPlay } from '../engine/procs';
+import { mkCtx } from '../engine/state';
 import { cardName, reg } from './format';
 import { useDrag } from './useDrag';
 import type { Action, GameState, PlayerId } from '../engine/types';
@@ -77,6 +80,10 @@ interface BoardProps {
   /** 選択中のカード(外に出して、フッターで行き先ボタンを出す) */
   selected: string | null;
   onSelect: (key: string | null) => void;
+  /** 直近のイベントで動いたカード(強調表示) */
+  flash?: Set<number>;
+  /** マナを手動で選んで支払う(spec 3.4) */
+  manualPay?: boolean;
 }
 
 export function Board(b: BoardProps) {
@@ -85,6 +92,23 @@ export function Board(b: BoardProps) {
   const opp: PlayerId = viewer === 0 ? 1 : 0;
   const dropMap = useMemo(() => (interactive ? buildDropMap(s, b.legal) : new Map<string, Drop[]>()), [s, b.legal, interactive]);
   const [chooser, setChooser] = useState<Drop[] | null>(null);
+  const [payFor, setPayFor] = useState<Drop | null>(null);
+  const [payErr, setPayErr] = useState<string | null>(null);
+  const flashOf = (u: number) => !!b.flash?.has(u);
+  /** 行動を実行する。手動支払いが有効なら、先にマナの選択を挟む */
+  const act = (d: Drop) => {
+    b.onSelect(null);
+    if (b.manualPay && d.action.type === 'PLAY_CARD') {
+      const a = d.action;
+      const plan = planPlay(mkCtx(s, reg), viewer, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
+      if (plan.ok && plan.need > 0) {
+        setPayErr(null);
+        setPayFor(d);
+        return;
+      }
+    }
+    b.onAction(d.action);
+  };
   // ゾーンの折りたたみと一覧(reference_duel-hub 2.5)
   const [fold, setFold] = useState<Record<string, boolean>>({});
   const [listOf, setListOf] = useState<{ p: PlayerId; zone: 'mana' | 'grave' | 'shield' } | null>(null);
@@ -108,10 +132,8 @@ export function Board(b: BoardProps) {
     if (!dropKey) return;
     const ds = dropsFor(src).filter((d) => d.dropKey === dropKey);
     if (ds.length === 0) return;
-    if (ds.length === 1) {
-      b.onSelect(null);
-      b.onAction(ds[0].action);
-    } else setChooser(ds);
+    if (ds.length === 1) act(ds[0]);
+    else setChooser(ds);
   };
 
   const { drag, begin } = useDrag({
@@ -150,6 +172,7 @@ export function Board(b: BoardProps) {
                 hidden={hidden}
                 small={!mine}
                 tiny={hidden}
+                flash={flashOf(u)}
                 draggable={can}
                 selected={activeKey === key}
                 dim={mine && interactive && !can}
@@ -182,6 +205,7 @@ export function Board(b: BoardProps) {
                 uid={u}
                 small
                 tapped={s.cards[u].tapped}
+                flash={flashOf(u)}
                 draggable={can}
                 selected={activeKey === key}
                 selectable={can && activeKey !== key}
@@ -223,6 +247,7 @@ export function Board(b: BoardProps) {
                   tapped={perm.tapped}
                   sick={perm.sick}
                   draggable={can}
+                  flash={flashOf(top)}
                   target={!!isTarget && !mine}
                   selected={activeKey === key}
                   selectable={can && activeKey !== key}
@@ -327,8 +352,7 @@ export function Board(b: BoardProps) {
                   className="choice"
                   onClick={() => {
                     setChooser(null);
-                    b.onSelect(null);
-                    b.onAction(d.action);
+                    act(d);
                   }}
                 >
                   {d.label}
@@ -339,6 +363,51 @@ export function Board(b: BoardProps) {
           </div>
         </div>
       )}
+      {payFor && payFor.action.type === 'PLAY_CARD' && (() => {
+        const a = payFor.action;
+        const ctx = mkCtx(s, reg);
+        const base = planPlay(ctx, viewer, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
+        const mana = s.players[viewer].mana.filter((u) => !s.cards[u].tapped && u !== a.uid);
+        return (
+          <div className="modal-back" onClick={() => setPayFor(null)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h2>支払うマナを選ぶ</h2>
+              <p className="muted">
+                {payFor.label}。文明ごとに1枚ずつ含めて {base.need} 枚をタップします(多色のマナは1つの文明としてだけ数えます)。
+              </p>
+              <PaymentWidget
+                s={s}
+                pending={{ id: 0, player: viewer, why: 'ack', input: null }}
+                me={viewer}
+                spec={{ shape: 'payment', need: base.need, mana }}
+                onHover={b.onHover}
+                onAnswer={(v) => {
+                  const pay = v as number[];
+                  const chk = planPlay(ctx, viewer, a.uid, a.from ?? 'hand', a.face ?? 0, { ...(a.extra ?? {}), pay }, false);
+                  if (!chk.ok) {
+                    setPayErr(chk.err ?? '支払えません');
+                    return;
+                  }
+                  setPayFor(null);
+                  b.onAction({ ...a, extra: { ...(a.extra ?? {}), pay } });
+                }}
+              />
+              {payErr && <div style={{ color: 'var(--bad)' }}>{payErr}</div>}
+              <div className="row" style={{ marginTop: 8 }}>
+                <button
+                  onClick={() => {
+                    setPayFor(null);
+                    b.onAction(a);
+                  }}
+                >
+                  自動で払う
+                </button>
+                <button onClick={() => setPayFor(null)}>キャンセル</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {listOf && (
         <div className="modal-back" onClick={() => setListOf(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
