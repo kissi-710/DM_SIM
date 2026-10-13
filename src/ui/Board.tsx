@@ -159,7 +159,7 @@ export function Board(b: BoardProps) {
     return (
       <div className="zone grow">
         <div className="zone-title">手札 {z.hand.length}枚</div>
-        <div className="cards">
+        <div className="cards hscroll">
           {z.hand.map((u) => {
             const key = `hand:${u}`;
             const can = mine && interactive && dropMap.has(key);
@@ -194,7 +194,7 @@ export function Board(b: BoardProps) {
         <div className="zone-title">
           マナゾーン {z.mana.length}枚(未使用 {z.mana.filter((u) => !s.cards[u].tapped).length}) {zoneTools(p, 'mana')}
         </div>
-        <div className="cards">
+        <div className="cards hscroll">
           {(fold[p + 'mana'] ? [] : z.mana).map((u) => {
             const key = `mana:${u}`;
             const can = mine && interactive && dropMap.has(key);
@@ -274,7 +274,7 @@ export function Board(b: BoardProps) {
           シールド {z.shield.length}枚 {isOppShield && live && liveDrops.has(key) ? <span className="arrow-hint">← 攻撃</span> : null}
           {zoneTools(p, 'shield')}
         </div>
-        <div className="cards">
+        <div className="cards hscroll">
           {(fold[p + 'shield'] ? [] : z.shield).map((u) => (
             <CardView key={u} s={s} uid={u} small tiny={!(mine && b.peek)} hidden={!(mine && b.peek)} onHover={mine && b.peek ? b.onHover : undefined} />
           ))}

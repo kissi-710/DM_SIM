@@ -502,6 +502,15 @@ button.on {
   gap: 5px;
   align-items: flex-start;
 }
+/* 枚数が増えても折り返さず、横にスクロールする(手札・マナ・シールド) */
+.cards.hscroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 3px 4px 5px;
+  margin: -3px -4px -5px;
+  scrollbar-width: thin;
+}
 .cards.scroll {
   max-height: 92px;
   overflow: auto;
