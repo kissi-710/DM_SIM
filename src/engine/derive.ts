@@ -224,10 +224,13 @@ export function costOf(c: Ctx, uid: number, faceIdx: number, opts: CostOpts = {}
   return Math.max(0, cost);
 }
 
-/** 実際にタップするマナの枚数(文明の数を下回らない) */
+/**
+ * 実際にタップするマナの枚数(文明の数を下回らない。spec 3.4.1 M-3・M-4)。
+ * 文明を持つカードは、コストが0に下がっても各文明のマナを1枚は払う。
+ * コストを払わずに使う場合は、呼び出し側が need を 0 にする。
+ */
 export function payNeed(cost: number, civCount: number): number {
-  if (cost <= 0) return 0;
-  return Math.max(cost, civCount);
+  return Math.max(cost, civCount, 0);
 }
 
 export function manaCivs(c: Ctx, uid: number): Civ[] {

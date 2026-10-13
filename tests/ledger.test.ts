@@ -115,18 +115,19 @@ describe('L4 オルゲイトのコピー(処理者・参照先)', () => {
 });
 
 describe('L5 カイザーの「マナをタップせずに」', () => {
-  it('コスト軽減で支払いが0になった召喚も、マナをタップしていないので該当する', () => {
+  it('コスト軽減でも、文明のマナを1枚はタップするので該当しない(spec 3.4.1 M-4)', () => {
     const sim = new Sim({
       active: 1,
       p0: { hand: ['流星のガイアッシュ・カイザー'], deck: 5 },
       p1: { hand: ['九番龍 ジゴクバンカー'], mana: mana(12), deck: 5 },
     });
-    sim.play('九番龍 ジゴクバンカー'); // シンパシーでコスト 12-12=0
+    sim.play('九番龍 ジゴクバンカー'); // シンパシーでコスト 12-12=0 → 文明の数(1)までしか下がらない
     sim.drain();
     const ev = sim.evs('entered').find((e) => e.owner === 1);
-    expect(ev?.paid).toBe(0);
+    expect(ev?.paid).toBe(1);
+    expect(sim.tappedMana(1)).toBe(1);
     sim.endTurn();
-    expect(sim.pending.why).toBe('may');
+    expect(sim.s.pending?.why).not.toBe('may');
   });
 });
 

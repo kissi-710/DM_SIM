@@ -311,6 +311,11 @@ export function moveCards(c: Ctx, uids: number[], opts: MoveOpts): MoveResult[] 
   return results;
 }
 
+/** マナゾーンに置かれる時にタップ状態か。多色カード(ツインパクトは両面の和集合)はタップして置く(spec 3.4.1 M-1)。 */
+function entersManaTapped(c: Ctx, uid: number, opts: MoveOpts): boolean {
+  return charsOf(c, uid, -1).civs.length > 1 || !!opts.tapped;
+}
+
 /** 実際の移動(置換は済んでいる)。進化の山は下のカードも一緒に動かす。 */
 function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | 'bottom' | undefined, evs: Ev[], opts: MoveOpts): MoveResult {
   const s = c.s;
@@ -336,11 +341,7 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
   card.tapped = false;
   card.ex = false;
   card.exPid = -1;
-  if (to === 'mana') {
-    // 多色カードはタップ状態でマナゾーンに置く(spec 3.3)
-    const civs = charsOf(c, uid, -1).civs;
-    card.tapped = civs.length > 1 || !!opts.tapped;
-  }
+  if (to === 'mana') card.tapped = entersManaTapped(c, uid, opts);
   card.face = 0;
   placeInZone(c, uid, to, pos);
   evs.push(
@@ -363,7 +364,7 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
     uc.zone = to;
     uc.ep++;
     uc.pid = -1;
-    uc.tapped = false;
+    uc.tapped = to === 'mana' ? entersManaTapped(c, u, opts) : false;
     uc.face = 0;
     placeInZone(c, u, to, pos);
     evs.push(emit(c, 'moved', { card: u, owner: uc.owner, from: 'battle', to, cause, kind: 'creature', ex: false, lki: usnap, underneath: true }));
