@@ -171,6 +171,9 @@ export interface MoveOpts {
   tapped?: boolean;
   /** 支払ったマナの枚数(entered イベント用) */
   paid?: number;
+  /** 軽減後のコスト・無料かどうか(entered イベントの記録用) */
+  cost?: number;
+  free?: boolean;
   /** 置換を適用しない(置換の結果の出来事) */
   noReplace?: boolean;
   /** 追加のイベント属性 */
@@ -404,7 +407,7 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   // 侵略でバトルゾーンの別の山から移動する場合は「出た」扱いにならない(decks.md)
   const fromBattle = from === 'battle';
   if (!fromBattle) {
-    evs.push(emit(c, 'entered', { card: uid, owner, via, paid: opts.paid ?? 0, pid: perm.pid, kind: 'creature', face: faceIdx }));
+    evs.push(emit(c, 'entered', { card: uid, owner, via, paid: opts.paid ?? 0, cost: opts.cost, free: !!opts.free, pid: perm.pid, kind: 'creature', face: faceIdx }));
   }
   if (opts.onto !== undefined) {
     evs.push(emit(c, 'evolved', { card: uid, owner, pid: perm.pid, base, via }));

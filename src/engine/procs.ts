@@ -271,7 +271,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       card.ep++;
       card.face = plan.face;
       s.limbo.push(uid);
-      v.plan = { kind: plan.kind, paid: plan.pay.length, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free };
+      v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free };
       v.fromZone = prevZone;
       f.stage = 1;
       return;
@@ -282,14 +282,14 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       const owner = card.owner;
       if (p.kind === 'summon') {
         const evs: Ev[] = [];
-        enterBattle(c, uid, { to: 'battle', cause: 'summon', via: 'summon', onto: p.onto ?? undefined, face: p.face, paid: p.paid }, evs);
+        enterBattle(c, uid, { to: 'battle', cause: 'summon', via: 'summon', onto: p.onto ?? undefined, face: p.face, paid: p.paid, cost: p.cost, free: p.free }, evs);
         s.batchNo++;
         collectBatch(c, evs);
         s.dirtySba = true;
         f.stage = 3;
         return;
       }
-      emit(c, 'cast', { card: uid, owner, free: p.free, paid: p.paid, face: p.face, from: v.fromZone });
+      emit(c, 'cast', { card: uid, owner, free: p.free, paid: p.paid, cost: p.cost, face: p.face, from: v.fromZone });
       const ev = c.out[c.out.length - 1];
       s.batchNo++;
       collectBatch(c, [ev]);
