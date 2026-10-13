@@ -157,7 +157,7 @@ describe('パターン調査(spec 6.5)', () => {
     const p: SolitaireParams = { deck: deckCards('maruru'), first: 0, goal, trials: 10, seed: 4, maxNodes: 5000 };
     const r = runPatterns(CARD_DB, p, { maxHistoriesPerTrial: 3 });
     const pat = r.patterns[0];
-    const states = replayPattern(CARD_DB, p, pat.sampleSeed, pat.sampleActions);
+    const { states } = replayPattern(CARD_DB, p, pat.sampleSeed, pat.sampleActions);
     expect(states.length).toBe(pat.sampleActions.length + 1);
     // どこかの時点で、マナが5枚以上
     expect(states.some((s) => s.players[0].mana.length >= 5)).toBe(true);

@@ -5,7 +5,7 @@ import { makeAgent, type AgentSpec } from '../ai';
 import { createGame, legalActions, registryOf, step } from '../engine/engine';
 import type { Registry } from '../engine/registry';
 import { hashSeed } from '../engine/state';
-import type { Action, CardDB, GameState } from '../engine/types';
+import type { Action, CardDB, Ev, GameState } from '../engine/types';
 import { FAIR, toPlayerView } from '../engine/view';
 import { goalHasNot, goalMaxTurn, GoalTracker, myTurnNo, nameMatches, type Goal } from './goal';
 import { mulberry } from './playGame';
@@ -220,7 +220,7 @@ function describeAction(reg: Registry, s: GameState, a: Action): HistoryStep | n
       if (!p || !p.input) return null;
       const inp: any = p.input;
       const src = p.source ? nameOf(p.source.uid) : '';
-      let detail = '';
+      let detail: string;
       if (inp.shape === 'yesno') detail = a.value ? 'はい' : 'いいえ';
       else if (inp.shape === 'option') detail = (a.value as number[]).map((i) => inp.options[i]).join(' + ');
       else if (inp.shape === 'pick') detail = (a.value as number[]).map(nameOf).join(', ') || 'なし';
@@ -561,13 +561,21 @@ export function runPatterns(
 }
 
 /** 代表例の再生: 各手のあとの状態を返す */
-export function replayPattern(db: CardDB | Registry, p: SolitaireParams, seed: number, actions: Action[]): GameState[] {
+export function replayPattern(
+  db: CardDB | Registry,
+  p: SolitaireParams,
+  seed: number,
+  actions: Action[],
+): { states: GameState[]; events: Ev[][] } {
   const reg = registryOf(db);
   let s = buildGame(reg, p, seed);
-  const out: GameState[] = [s];
+  const states: GameState[] = [s];
+  const events: Ev[][] = [[]];
   for (const a of actions) {
-    s = step(s, a, reg).state;
-    out.push(s);
+    const r = step(s, a, reg);
+    s = r.state;
+    states.push(s);
+    events.push(r.events);
   }
-  return out;
+  return { states, events };
 }
