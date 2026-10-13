@@ -246,6 +246,26 @@ export class Sim {
     return this.answer(inp.candidates[i]);
   }
 
+  /** turnAction になるまで、既定の答え(最小の選択・いいえ・先頭)で進める */
+  drain(max = 30): this {
+    let n = 0;
+    while (this.s.pending && this.s.pending.why !== 'turnAction' && this.s.winner === null && n++ < max) {
+      const inp: any = this.s.pending.input;
+      if (inp.shape === 'pick') this.answer(inp.candidates.slice(0, inp.min));
+      else if (inp.shape === 'yesno') this.answer(false);
+      else if (inp.shape === 'option') this.answer(Array(inp.pick).fill(0));
+      else if (inp.shape === 'order') this.answer(inp.candidates[0]);
+      else if (inp.shape === 'ack') this.answer(true);
+      else if (inp.shape === 'assign') {
+        const out: Record<string, number[]> = {};
+        const items = inp.items.slice();
+        for (const sl of inp.slots) out[sl.id] = items.splice(0, Math.min(sl.count, items.length));
+        this.answer(out);
+      }
+    }
+    return this;
+  }
+
   // ───── 検証 ─────
   names(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle'): string[] {
     const list: number[] = zone === 'battle' ? this.s.players[p].battle.map((x) => x.cards[0]) : this.s.players[p][zone];

@@ -29,44 +29,44 @@
 
 ## M1. コアルール(spec 3.1〜3.8 / design 4・5)
 
-- [ ] M1-1 型定義: `GameState` / `Card` / `Permanent` / `Action` / `Pending` / `Event` / `Frame`(design 4, effects 3)
-- [ ] M1-2 シード付きPRNG(状態に内包)とシャッフル(D2, P3)
-- [ ] M1-3 `setup`: デッキ検証(40枚・同名4枚。自由モード可)、シャッフル、シールド5、手札5、先攻後攻(ランダム/選択)(spec 3.1・3.2)
-- [ ] M1-4 ターン進行: アンタップ → ドロー(先攻1ターン目なし)→ マナチャージ → メイン → 攻撃 → 終了(spec 3.3)
-- [ ] M1-5 コスト支払い: 文明ごとに1枚+残りは数値、多色マナは1文明扱い、自動割り当て(spec 3.4, D4)
-- [ ] M1-6 多色カードはタップ状態でマナゾーンに置く(spec 3.3 ③)
+- [x] M1-1 型定義: `GameState` / `Card` / `Permanent` / `Action` / `Pending` / `Event` / `Frame`(design 4, effects 3)
+- [x] M1-2 シード付きPRNG(状態に内包)とシャッフル(D2, P3)
+- [x] M1-3 `setup`: デッキ検証(40枚・同名4枚。自由モード可)、シャッフル、シールド5、手札5、先攻後攻(ランダム/選択)(spec 3.1・3.2)
+- [x] M1-4 ターン進行: アンタップ → ドロー(先攻1ターン目なし)→ マナチャージ → メイン → 攻撃 → 終了(spec 3.3)
+- [x] M1-5 コスト支払い: 文明ごとに1枚+残りは数値、多色マナは1文明扱い、自動割り当て(spec 3.4, D4)
+- [x] M1-6 多色カードはタップ状態でマナゾーンに置く(spec 3.3 ③)
 - [ ] M1-7 召喚・呪文・ツインパクト(面選択)(spec 3.5)
-- [ ] M1-8 攻撃: 召喚酔い、タップ状態のクリーチャーのみ攻撃対象、スピードアタッカー、マッハファイター(spec 3.6)
-- [ ] M1-9 ブロッカー(攻撃対象の変更)(spec 3.6)
-- [ ] M1-10 バトル: パワー比較・同値は相打ち(spec 3.6)
-- [ ] M1-11 シールドブレイク(W/T・ブレイカー)、残り枚数不足の処理、ダイレクトアタックの勝利(spec 3.7)
-- [ ] M1-12 山札0枚の敗北、ドロー時の空山札(spec 3.7)
+- [x] M1-8 攻撃: 召喚酔い、タップ状態のクリーチャーのみ攻撃対象、スピードアタッカー、マッハファイター(spec 3.6)
+- [x] M1-9 ブロッカー(攻撃対象の変更)(spec 3.6)
+- [x] M1-10 バトル: パワー比較・同値は相打ち(spec 3.6)
+- [x] M1-11 シールドブレイク(W/T・ブレイカー)、残り枚数不足の処理、ダイレクトアタックの勝利(spec 3.7)
+- [x] M1-12 山札0枚の敗北、ドロー時の空山札(spec 3.7)
 - [ ] M1-13 ターン上限(暫定100)での引き分け記録(D6)
 - [ ] M1-14 `legalActions` / `validate` / `toPlayerView`(design 5)
-- [ ] M1-15 不変条件(カード総数保存・uid重複なし)(design 11)
-- [ ] M1-16 決定性: 同シード・同行動列で同一イベント列
+- [x] M1-15 不変条件(カード総数保存・uid重複なし)(design 11)
+- [x] M1-16 決定性: 同シード・同行動列で同一イベント列
 
 ## M2. 効果基盤(effects 全章 / spec 3.9〜3.13)
 
-- [ ] M2-1 イベント体系: moved / entered / evolved / cast / attackDeclared / blocked / battleEnded / shieldBroken / triggerDeclared / abilityTriggered / stepStart / looked / revealed / gameLoss。全イベントに `id` と `causedBy`(effects 4.1)
+- [x] M2-1 イベント体系: moved / entered / evolved / cast / attackDeclared / blocked / battleEnded / shieldBroken / triggerDeclared / abilityTriggered / stepStart / looked / revealed / gameLoss。全イベントに `id` と `causedBy`(effects 4.1)
 - [ ] M2-2 トリガー指定(`TriggerSpec`): on / watch / subject / turn / nthThisTurn / limit / if / ifAtResolve(effects 4.3)
-- [ ] M2-3 待機プールとチェックポイント(`settle`)、`pickNext`(S・トリガー最優先 → ターンプレイヤー → 非ターンプレイヤー、同一プレイヤー内は本人が選ぶ)(effects 5, spec 3.10)
-- [ ] M2-4 状況起因処理(パワー0以下の破壊・バトル敗北・山札切れ・S-MAX進化の重複解消)(effects 5.4)
-- [ ] M2-5 効果インタプリタ(VM): act / select / may / if / each / repeat / modes / custom。フレームはJSON(`pc`・`vars`)で再開可能(effects 6)
+- [x] M2-3 待機プールとチェックポイント(`settle`)、`pickNext`(S・トリガー最優先 → ターンプレイヤー → 非ターンプレイヤー、同一プレイヤー内は本人が選ぶ)(effects 5, spec 3.10)
+- [x] M2-4 状況起因処理(パワー0以下の破壊・バトル敗北・山札切れ・S-MAX進化の重複解消)(effects 5.4)
+- [x] M2-5 効果インタプリタ(VM): act / select / may / if / each / repeat / modes / custom。フレームはJSON(`pc`・`vars`)で再開可能(effects 6)
 - [ ] M2-6 原始操作: move / draw / lookTop / revealUntil / shuffle / bottom / assign / tap / untap / addShield / addEffect / put / summon / castFree / skipRestOfTurn / copyAbility(effects 6.3)
 - [ ] M2-7 セレクタ・条件式・式(Cond / Expr)とカード条件の共有部品(effects 6.4)
 - [ ] M2-8 選択の仕様: 解決時に選ぶ・対象不足時の縮退・相手が選ぶ・ランダム(見ずに選ぶ)(effects 6.2, spec 3.12)
-- [ ] M2-9 置換効果パイプライン: 1出来事に1回・連鎖しない・任意/強制・複数時の選択・トリガー抑制(effects 8, spec 3.11)
-- [ ] M2-10 継続効果: 常在型(派生ビュー)と生成型(対象固定・期限)(effects 7)
-- [ ] M2-11 派生ビュー(`derive`): cost / power / civs / has / canAttack / canBlock / canBeChosen / canCast / canPlayFrom(effects 7.2)
-- [ ] M2-12 コスト決定: 軽減(カイザー)・シンパシー・ハイパーエナジー(effects 7.3)
-- [ ] M2-13 プレイ手順(`play`): 宣言 → 進化先 → コスト → 支払い → 実行 → settle。踏み倒し・マナ/墓地からのプレイ・唱えた後の移動先(effects 9)
-- [ ] M2-14 進化・S-MAX進化・侵略(別ゾーンからの重ね)・`Permanent`(山)(effects 9, D20)
-- [ ] M2-15 攻撃・ブレイクの手続きフレーム、S・トリガー/G・ストライクの宣言と解決順(effects 10, spec 3.8)
-- [ ] M2-16 EXライフ(シールド管理・身代わり)(effects 8.2)
-- [ ] M2-17 実行ループの暴走防止(`RuleLoopError`)(effects 6.5, L7)
-- [ ] M2-18 カードJSONのスキーマ検証とローダー。未対応能力・未知のkind・存在しないカードIDは起動時エラー(spec 4.3)
-- [ ] M2-19 シナリオテストDSL(effects 13.1)
+- [x] M2-9 置換効果パイプライン: 1出来事に1回・連鎖しない・任意/強制・複数時の選択・トリガー抑制(effects 8, spec 3.11)
+- [x] M2-10 継続効果: 常在型(派生ビュー)と生成型(対象固定・期限)(effects 7)
+- [x] M2-11 派生ビュー(`derive`): cost / power / civs / has / canAttack / canBlock / canBeChosen / canCast / canPlayFrom(effects 7.2)
+- [x] M2-12 コスト決定: 軽減(カイザー)・シンパシー・ハイパーエナジー(effects 7.3)
+- [x] M2-13 プレイ手順(`play`): 宣言 → 進化先 → コスト → 支払い → 実行 → settle。踏み倒し・マナ/墓地からのプレイ・唱えた後の移動先(effects 9)
+- [x] M2-14 進化・S-MAX進化・侵略(別ゾーンからの重ね)・`Permanent`(山)(effects 9, D20)
+- [x] M2-15 攻撃・ブレイクの手続きフレーム、S・トリガー/G・ストライクの宣言と解決順(effects 10, spec 3.8)
+- [x] M2-16 EXライフ(シールド管理・身代わり)(effects 8.2)
+- [x] M2-17 実行ループの暴走防止(`RuleLoopError`)(effects 6.5, L7)
+- [x] M2-18 カードJSONのスキーマ検証とローダー。未対応能力・未知のkind・存在しないカードIDは起動時エラー(spec 4.3)
+- [x] M2-19 シナリオテストDSL(effects 13.1)
 - [ ] M2-20 因果ツリー(`causedBy`)と性能計測(effects 13.2)
 
 ## M3. カード(decks.md の全28種。`tests/cards/` にシナリオテスト)
@@ -81,31 +81,31 @@
 - [x] A7 ティンパニ=シンバリー
 - [x] A8 修羅の死神フミシュナ / 「この先は修羅の道ぞ」
 - [x] A9 絶望と反魂と滅殺の決断
-- [ ] A10 流星のガイアッシュ・カイザー
-- [ ] A11 CRYMAX ジャオウガ
-- [ ] A12 魔誕の斬将オルゲイト
-- [ ] A13 終末の監視者 ジ・ウォッチ
-- [ ] A14 逆転の剣スカイソード
-- [ ] A15 終末縫合王 ザ=キラー・キーナリー
+- [x] A10 流星のガイアッシュ・カイザー
+- [x] A11 CRYMAX ジャオウガ
+- [x] A12 魔誕の斬将オルゲイト
+- [x] A13 終末の監視者 ジ・ウォッチ
+- [x] A14 逆転の剣スカイソード
+- [x] A15 終末縫合王 ザ=キラー・キーナリー
 - [x] A16 九番龍 ジゴクバンカー Par459
 
 デッキB(5cザーディ):
 - [x] B1 フェアリー・ミラクル
 - [x] B3 アクアン
-- [ ] B4 王道の革命 ドギラゴン
-- [ ] B5 漢気の2号 ボスカツ
-- [ ] B6 魔誕と光喜と楽識と炎怒と哀樹の決断
-- [ ] B7 ドラゴンズ・サイン
+- [x] B4 王道の革命 ドギラゴン
+- [x] B5 漢気の2号 ボスカツ
+- [x] B6 魔誕と光喜と楽識と炎怒と哀樹の決断
+- [x] B7 ドラゴンズ・サイン
 - [x] B8 ドンドン火噴くナウ
-- [ ] B9 ブレイン・スラッシュ
-- [ ] B10 龍風混成 ザーディクリカ
+- [x] B9 ブレイン・スラッシュ
+- [x] B10 龍風混成 ザーディクリカ
 - [x] B11 ロスト・Re:ソウル
-- [ ] B12 聖魔連結王 ドルファディロム
-- [ ] B13 SSS級天災 デッドダムド
+- [x] B12 聖魔連結王 ドルファディロム
+- [x] B13 SSS級天災 デッドダムド
 
 デッキ定義:
-- [ ] M3-1 2デッキ(各40枚・28種)のデッキリスト(`maruru` / `zardy`)
-- [ ] M3-2 全28種が読み込め、デッキの全能力が実装済みであることの検証テスト
+- [x] M3-1 2デッキ(各40枚・28種)のデッキリスト(`maruru` / `zardy`)
+- [x] M3-2 全28種が読み込め、デッキの全能力が実装済みであることの検証テスト
 - [ ] M3-3 公式裁定メモの注意点のテスト化(ヨビニオンの空振り / キーナリーは自身の「出た時」のみ / 置換は連鎖しない / 選択肢は上から順 / 侵略の宣言)(decks 4.3)
 
 ## M4. AI(spec 5.3 / design 7)
