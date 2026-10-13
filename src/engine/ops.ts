@@ -98,7 +98,7 @@ function tryTrigger(c: Ctx, ev: Ev, uid: number, face: number, idx: number, spec
     const used = s.usage[key];
     if (used === s.turn && (s.usage[key + '#'] ?? 0) >= spec.limit.perTurn) return;
   }
-  if (spec.if && !evalCond({ ...cc, it: ev.card ?? null, itFace: -1 }, spec.if)) return;
+  // spec.if は、誘発した時点では見ない(総合ルール 603.4: 解決の時点で条件を満たしていれば解決される)
 
   const ref: AbilityRef = { defId: card.defId, face, idx };
   // トリガー抑制(キーナリー): 置換効果の一種として処理する。

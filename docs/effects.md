@@ -184,7 +184,7 @@ interface TriggerSpec {
   turn?: "own" | "opponent" | "any"; // 誰のターンか
   nthThisTurn?: number;              // 「各ターンN体目」
   limit?: { perTurn: number };       // 「1ターンに1回」
-  if?: Cond;                         // 誘発条件(誘発の瞬間に評価)
+  if?: Cond;                         // 能力が持つ条件。総合ルール 603.4 により、誘発した時点ではなく解決の時点で評価する
   ifAtResolve?: Cond;                // 解決時にもう一度確認する条件(「〜場合」)
 }
 ```

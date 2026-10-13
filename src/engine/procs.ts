@@ -679,6 +679,16 @@ function triggerLabel(on: any): string {
 function resolveEntry(c: Ctx, e: PoolEntry): void {
   const s = c.s;
   const card = s.cards[e.source.uid];
+  // 条件を持つ誘発型能力は、解決の時点で条件を満たしていれば解決される(総合ルール 603.4。
+  // 誘発した時点で満たしているかは問わない)。満たさなければ、何も起こさず(ログにも出さず)終える
+  if (e.kind === 'ability' && e.ability) {
+    const a0 = c.reg.ability(e.ability);
+    if (a0.kind === 'trigger' && (a0.spec.if || a0.spec.ifAtResolve)) {
+      const cc0 = { ...mkCC(c, e.controller, { self: e.source.uid, selfSnap: e.lki, event: e.event }), it: e.event?.card ?? null, itFace: -1 };
+      if (a0.spec.if && !evalCond(cc0, a0.spec.if)) return;
+      if (a0.spec.ifAtResolve && !evalCond(cc0, a0.spec.ifAtResolve)) return;
+    }
+  }
   const prevCause = c.cause;
   c.cause = e.event?.id ?? null;
   const logged = emit(c, 'resolve', {
@@ -705,11 +715,7 @@ function resolveEntry(c: Ctx, e: PoolEntry): void {
   }
   const ability = e.ability!;
   const a = c.reg.ability(ability);
-  // 解決時の条件
-  if (a.kind === 'trigger' && a.spec.ifAtResolve) {
-    const cc = mkCC(c, e.controller, { self: e.source.uid, selfSnap: e.lki, event: e.event });
-    if (!evalCond({ ...cc, it: e.event?.card ?? null, itFace: -1 }, a.spec.ifAtResolve)) return;
-  }
+  void a;
   s.cont.push({
     kind: 'effect',
     id: logged.id,
