@@ -13,7 +13,6 @@ import {
   setTapped,
   shuffleDeck,
 } from './ops';
-import type { Instr } from './registry';
 import type { Ctx } from './state';
 import { nextId, opponentOf, permByPid, rngInt, shuffleInPlace, snapOf } from './state';
 import type { ContEffect, EffectFrame, EffectMod, Ev, InputSpec, ObjRef, PlayerId } from './types';

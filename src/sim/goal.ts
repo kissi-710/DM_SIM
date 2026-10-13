@@ -235,7 +235,7 @@ export class GoalTracker {
   }
 
   /** 行動を適用する直前の状態と、発生したイベントを観測する */
-  observeStep(prev: GameState, action: Action, events: Ev[]): void {
+  observeStep(prev: GameState, action: Action, _events: Ev[]): void {
     const n = myTurnNo(prev);
     if (n === null) return;
     if (action.type === 'END_TURN') {
