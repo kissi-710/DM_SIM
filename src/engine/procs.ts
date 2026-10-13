@@ -208,6 +208,8 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       if (s.skipTurn) {
         s.step = 'end';
         s.skipTurn = false;
+        // L6: 設定で、ターン終了時の誘発を起こさないこともできる
+        if (!s.cfg.skipRunsEndTriggers) f.vars.noEnd = true;
       }
       if (s.cfg.solitaire && P === 1) s.step = 'end';
       if (s.step === 'end') {
@@ -218,6 +220,11 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       return;
     }
     case 3: {
+      if (f.vars.noEnd) {
+        f.vars.noEnd = false;
+        f.stage = 4;
+        return;
+      }
       emit(c, 'stepStart', { step: 'end', player: P });
       s.batchNo++;
       collectBatch(c, [c.out[c.out.length - 1]]);

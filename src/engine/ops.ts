@@ -11,6 +11,7 @@ import {
   type InputSpec,
   NeedInput,
   type Pending,
+  type Permanent,
   type PlayerId,
   type PoolEntry,
   type ZoneName,
@@ -381,7 +382,7 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   card.ep++;
   card.face = faceIdx;
   card.tapped = false;
-  let perm;
+  let perm: Permanent;
   let base: number[] = [];
   if (opts.onto !== undefined) {
     const pm = permByPid(s, opts.onto);
@@ -390,8 +391,9 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
     base = perm.cards.slice();
     perm.cards.unshift(uid);
     card.pid = perm.pid;
-    // L3: タップと召喚酔いは引き継ぎ、新しいオブジェクトとして出たターンを更新
+    // L3: タップと召喚酔いは引き継ぎ、継続効果は引き継がない(新しいオブジェクト)。出たターンを更新
     perm.enteredTurn = s.turn;
+    s.effects = s.effects.filter((e) => e.pid !== perm.pid);
   } else {
     perm = {
       pid: s.nextPid++,
