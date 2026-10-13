@@ -4,6 +4,7 @@ import { CARD_DB, DECK_PRESETS, deckCards } from '../cards';
 import type { AgentKind } from '../ai';
 import type { InfoPolicy, InfoPreset } from '../engine/view';
 import { formatStats, runMatches, type FirstMode } from '../sim/batch';
+import { measureCardStrength } from '../sim/strength';
 
 function parseArgs(argv: string[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -40,6 +41,7 @@ function usage(): never {
   --seed <n>       シード  既定 1
   --first <m>      fixed / alternate / random  既定 alternate
   --iterations <n> mcts の反復回数  --ms <n> mcts の時間上限
+  --strength       カード単体の強さ(1枚を入れ替えた時の勝率差)を測る(デッキA vs デッキB、ルールベース同士)
   --json           JSONで出力`);
   process.exit(0);
 }
@@ -52,6 +54,21 @@ const games = Number(args.games ?? 1000);
 const seed = Number(args.seed ?? 1);
 const kindA = (args.agentA ?? 'random') as AgentKind;
 const kindB = (args.agentB ?? 'random') as AgentKind;
+
+if (args.strength) {
+  const res = measureCardStrength(CARD_DB, {
+    deck: deckCards(deckA),
+    opponent: deckCards(deckB),
+    agent: { kind: 'rule' },
+    games,
+    seed,
+  });
+  console.log(`■ カード単体の強さ: ${deckA} vs ${deckB}(ルールベース同士・各${games}試合)`);
+  for (const r of res) {
+    console.log(`  ${(r.delta * 100).toFixed(1).padStart(6)}pt  ${r.name} ×${r.copies}  (95%信頼区間 ${(r.ci95[0] * 100).toFixed(1)} 〜 ${(r.ci95[1] * 100).toFixed(1)})`);
+  }
+  process.exit(0);
+}
 
 const stats = runMatches(CARD_DB, {
   deckA: deckCards(deckA),

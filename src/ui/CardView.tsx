@@ -89,9 +89,12 @@ export function CardView(p: CardProps) {
       if (hasKeyword(c, pm.perm, 'machFighter')) keywords.push('マッハ');
     }
   }
+  const imgStyle: CSSProperties | undefined = def.image
+    ? { backgroundImage: `linear-gradient(rgba(10,14,22,0.55), rgba(10,14,22,0.85)), url(${def.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : undefined;
   const typeLabel = face.type === 'spell' ? '呪文' : face.type === 'evolution' ? '進化' : face.type === 'smaxEvolution' ? 'S-MAX進化' : 'クリーチャー';
   return (
-    <div className={cls.join(' ')} title={def.name} {...handlers}>
+    <div className={cls.join(' ')} title={def.name} {...handlers} style={{ ...imgStyle, ...p.style }}>
       <div className="civbar" style={{ background: civGradient(civs) }} />
       <div className="head">
         <span className="cost">{twin ? `${def.faces[0].cost}/${def.faces[1].cost}` : face.cost}</span>
