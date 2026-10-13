@@ -1,6 +1,6 @@
 // 効果のインタプリタ(effects 6.5)。フレームは pc と vars(JSON)だけを持ち、再開できる。
 import type { ActDef, Cond, Expr, StepDef } from './ast';
-import { type CC, evalCond, evalExpr, mkCC, selectCards, varUids } from './cond';
+import { type CC, evalCond, evalExpr, selectCards, varUids } from './cond';
 import { charsOf, infoOf } from './derive';
 import {
   addShieldFromDeck,
