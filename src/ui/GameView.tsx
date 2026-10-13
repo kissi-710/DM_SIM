@@ -1,7 +1,8 @@
 // 対戦画面: 盤面・待機プール・因果ツリーのログ・入力ウィジェット・操作ボタン。
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { costOf, effectsOnPerm, hasKeyword, powerOf, type KwName } from '../engine/derive';
 import { entryLabel } from '../engine/procs';
-import { mkCtx } from '../engine/state';
+import { mkCtx, permByPid } from '../engine/state';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { Board, selectedActions } from './Board';
 import { CardView, civGradient } from './CardView';
@@ -43,6 +44,56 @@ export function CardDetail({ s, uid }: { s: GameState; uid: number | null }) {
         </div>
       ))}
       <div style={{ fontSize: 12.5 }}>{def.text}</div>
+      <Derived s={s} uid={uid} />
+    </div>
+  );
+}
+
+const KW_LABEL: Record<string, string> = {
+  blocker: 'ブロッカー',
+  speedAttacker: 'スピードアタッカー',
+  machFighter: 'マッハファイター',
+  shieldTrigger: 'S・トリガー',
+  justDiver: 'ジャストダイバー',
+  exLife: 'EXライフ',
+};
+const EFFECT_LABEL: Record<string, string> = {
+  cannotAttack: '攻撃できない',
+  cannotBeChosen: '相手に選ばれない',
+  cannotBeAttacked: '攻撃されない',
+};
+
+/** 現在のコスト・パワー・付与された能力(画像なしなので、全文と一緒に派生値を出す) */
+function Derived({ s, uid }: { s: GameState; uid: number }) {
+  const c = mkCtx(s, reg);
+  const card = s.cards[uid];
+  const lines: string[] = [];
+  if (card.zone === 'battle') {
+    const pm = permByPid(s, card.pid);
+    if (pm && pm.perm.cards[0] === uid) {
+      lines.push(`現在のパワー: ${powerOf(c, pm.perm)}`);
+      const kws = (['blocker', 'speedAttacker', 'machFighter', 'shieldTrigger', 'justDiver', 'exLife'] as KwName[]).filter((k) => hasKeyword(c, pm.perm, k));
+      if (kws.length) lines.push('持っている能力: ' + kws.map((k) => KW_LABEL[k]).join('、'));
+      for (const e of effectsOnPerm(c, pm.perm.pid)) {
+        if (e.mod.kind === 'powerAdd') lines.push(`パワー ${e.mod.n > 0 ? '+' : ''}${e.mod.n}(${e.until.kind === 'endOfTurn' ? 'このターン中' : '次の自分のターンのはじめまで'})`);
+        else if (e.mod.kind === 'grant') lines.push(`${KW_LABEL[e.mod.keyword] ?? e.mod.keyword} を得ている`);
+        else lines.push(EFFECT_LABEL[e.mod.kind] ?? e.mod.kind);
+      }
+      lines.push(`${pm.perm.tapped ? 'タップ' : 'アンタップ'}状態${pm.perm.sick ? '(召喚酔い)' : ''}${pm.perm.cards.length > 1 ? ' / 進化元 ' + (pm.perm.cards.length - 1) + '枚' : ''}`);
+    }
+  } else if (card.zone === 'hand' || card.zone === 'mana' || card.zone === 'grave') {
+    const def = reg.defs[card.defId];
+    def.faces.forEach((f, i) => {
+      const now = costOf(c, uid, i, {});
+      lines.push(`${def.faces.length > 1 ? f.name + ': ' : ''}現在のコスト ${now}${now !== f.cost ? `(表記 ${f.cost})` : ''}`);
+    });
+  }
+  if (lines.length === 0) return null;
+  return (
+    <div className="panel" style={{ padding: 6, fontSize: 12.5 }}>
+      {lines.map((l, i) => (
+        <div key={i}>{l}</div>
+      ))}
     </div>
   );
 }
@@ -52,7 +103,9 @@ function LogTree({ nodes, depth = 0 }: { nodes: LogNode[]; depth?: number }) {
     <>
       {nodes.map((n) => (
         <div key={n.id} className={depth > 0 ? 'log-node' : ''}>
-          <div className={n.heading ? 'log-heading' : 'log-line'}>{n.text}</div>
+          <div className={n.heading ? 'log-heading' : 'log-line'}>
+            {n.tag && <span className={'tag' + (n.tag === '自動' ? ' auto' : '')}>{n.tag}</span>} {n.text}
+          </div>
           {n.children.length > 0 && <LogTree nodes={n.children} depth={depth + 1} />}
         </div>
       ))}

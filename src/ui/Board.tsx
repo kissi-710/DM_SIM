@@ -85,6 +85,19 @@ export function Board(b: BoardProps) {
   const opp: PlayerId = viewer === 0 ? 1 : 0;
   const dropMap = useMemo(() => (interactive ? buildDropMap(s, b.legal) : new Map<string, Drop[]>()), [s, b.legal, interactive]);
   const [chooser, setChooser] = useState<Drop[] | null>(null);
+  // ゾーンの折りたたみと一覧(reference_duel-hub 2.5)
+  const [fold, setFold] = useState<Record<string, boolean>>({});
+  const [listOf, setListOf] = useState<{ p: PlayerId; zone: 'mana' | 'grave' | 'shield' } | null>(null);
+  const zoneTools = (p: PlayerId, zone: 'mana' | 'grave' | 'shield') => (
+    <>
+      <button className="small" onClick={(e) => { e.stopPropagation(); setFold((f) => ({ ...f, [p + zone]: !f[p + zone] })); }}>
+        {fold[p + zone] ? '展開' : '折りたたむ'}
+      </button>
+      <button className="small" onClick={(e) => { e.stopPropagation(); setListOf({ p, zone }); }}>
+        ≡ 一覧
+      </button>
+    </>
+  );
 
   const dropsFor = (src: string | null) => (src ? dropMap.get(src) ?? [] : []);
   const activeKey = b.selected;
@@ -155,9 +168,11 @@ export function Board(b: BoardProps) {
     const z = s.players[p];
     return (
       <div className={zcls('zone:mana') + ' grow'} {...(mine ? zoneProps('zone:mana') : {})} style={{ flex: 1 }}>
-        <div className="zone-title">マナゾーン {z.mana.length}枚(未使用 {z.mana.filter((u) => !s.cards[u].tapped).length})</div>
+        <div className="zone-title">
+          マナゾーン {z.mana.length}枚(未使用 {z.mana.filter((u) => !s.cards[u].tapped).length}) {zoneTools(p, 'mana')}
+        </div>
         <div className="cards">
-          {z.mana.map((u) => {
+          {(fold[p + 'mana'] ? [] : z.mana).map((u) => {
             const key = `mana:${u}`;
             const can = mine && interactive && dropMap.has(key);
             return (
@@ -232,9 +247,10 @@ export function Board(b: BoardProps) {
       <div className={(isOppShield ? zcls(key) : 'zone') + ' '} {...(isOppShield ? zoneProps(key) : {})} style={{ minWidth: 150 }}>
         <div className="zone-title">
           シールド {z.shield.length}枚 {isOppShield && live && liveDrops.has(key) ? <span className="arrow-hint">← 攻撃</span> : null}
+          {zoneTools(p, 'shield')}
         </div>
         <div className="cards">
-          {z.shield.map((u) => (
+          {(fold[p + 'shield'] ? [] : z.shield).map((u) => (
             <CardView key={u} s={s} uid={u} small tiny={!(mine && b.peek)} hidden={!(mine && b.peek)} onHover={mine && b.peek ? b.onHover : undefined} />
           ))}
         </div>
@@ -247,10 +263,10 @@ export function Board(b: BoardProps) {
     return (
       <div className="zone" style={{ minWidth: 150, maxWidth: 360 }}>
         <div className="zone-title">
-          墓地 {z.grave.length}枚 / 山札 {z.deck.length}枚
+          墓地 {z.grave.length}枚 / 山札 {z.deck.length}枚 {zoneTools(p, 'grave')}
         </div>
         <div className="cards scroll">
-          {z.grave
+          {(fold[p + 'grave'] ? [] : z.grave)
             .slice()
             .reverse()
             .map((u) => {
@@ -319,6 +335,32 @@ export function Board(b: BoardProps) {
                 </button>
               ))}
               <button onClick={() => setChooser(null)}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {listOf && (
+        <div className="modal-back" onClick={() => setListOf(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>
+              {listOf.p === viewer ? '自分' : '相手'}の{listOf.zone === 'mana' ? 'マナゾーン' : listOf.zone === 'grave' ? '墓地' : 'シールド'}(
+              {s.players[listOf.p][listOf.zone].length}枚)
+            </h2>
+            <div className="cards">
+              {s.players[listOf.p][listOf.zone].map((u) => (
+                <CardView
+                  key={u}
+                  s={s}
+                  uid={u}
+                  tapped={false}
+                  hidden={listOf.zone === 'shield' && !(listOf.p === viewer && b.peek)}
+                  badge={listOf.zone === 'mana' && s.cards[u].tapped ? 'タップ' : undefined}
+                  onHover={b.onHover}
+                />
+              ))}
+            </div>
+            <div className="row" style={{ marginTop: 8 }}>
+              <button onClick={() => setListOf(null)}>閉じる</button>
             </div>
           </div>
         </div>

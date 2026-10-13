@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { BatchView } from './BatchView';
 import { DeckEditor } from './DeckEditor';
 import { GameView } from './GameView';
+import { ManualView } from './ManualView';
 import { ReplayScreen } from './ReplayScreen';
 import { SetupScreen } from './SetupScreen';
 import { SimView } from './SimView';
 import type { GameSetup } from './useGame';
 
-export type Screen = 'menu' | 'play-setup' | 'watch-setup' | 'game' | 'sim' | 'batch' | 'replay' | 'decks';
+export type Screen = 'menu' | 'play-setup' | 'watch-setup' | 'game' | 'sim' | 'batch' | 'replay' | 'decks' | 'manual';
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('menu');
@@ -57,6 +58,7 @@ export function App() {
       {screen === 'batch' && <BatchView />}
       {screen === 'replay' && <ReplayScreen />}
       {screen === 'decks' && <DeckEditor />}
+      {screen === 'manual' && <ManualView />}
     </div>
   );
 }
@@ -86,6 +88,10 @@ function Menu({ go }: { go: (s: Screen) => void }) {
           <button className="tile" onClick={() => go('replay')}>
             <h3>棋譜の再生</h3>
             <p>保存した試合を、シード・行動列から再現して確認します。</p>
+          </button>
+          <button className="tile" onClick={() => go('manual')}>
+            <h3>一人回し(手動)</h3>
+            <p>カードを自由に動かして回す練習用。効果は自分で処理します。</p>
           </button>
           <button className="tile" onClick={() => go('decks')}>
             <h3>デッキ編集</h3>

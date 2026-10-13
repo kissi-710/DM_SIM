@@ -130,7 +130,8 @@ export interface LogNode {
   children: LogNode[];
   turn: number;
   heading?: boolean;
-  auto?: boolean;
+  /** 自動(能力の解決など)/ 手動(プレイヤーの操作) */
+  tag?: '自動' | '手動';
 }
 
 /** 因果ツリー: causedBy を辿り、「なぜ今これが起きたか」が分かる形にする */
@@ -140,7 +141,15 @@ export function buildLogTree(s: GameState, evs: Ev[], me: number | null): LogNod
   for (const e of evs) {
     const text = describeEvent(s, e, me);
     if (text === null) continue;
-    const n: LogNode = { id: e.id, text, children: [], turn: e.turn, heading: e.type === 'stepStart' && e.step === 'start' };
+    const manual = e.type === 'cast' || e.type === 'attackDeclared' || (e.type === 'entered' && e.via === 'summon') || (e.type === 'moved' && e.cause === 'charge');
+    const n: LogNode = {
+      id: e.id,
+      text,
+      children: [],
+      turn: e.turn,
+      heading: e.type === 'stepStart' && e.step === 'start',
+      tag: e.type === 'resolve' ? '自動' : manual ? '手動' : undefined,
+    };
     nodes.set(e.id, n);
     const parent = e.causedBy != null ? nodes.get(e.causedBy) : undefined;
     if (parent && e.type !== 'stepStart') parent.children.push(n);
