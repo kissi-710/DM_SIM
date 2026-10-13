@@ -144,6 +144,22 @@ describe('L5 カイザーの「マナをタップせずに」', () => {
   });
 });
 
+describe('L5 カイザーが召喚できるゾーン(公式テキスト・総合ルール 110.4d)', () => {
+  it('実行できるゾーン(手札)にある時だけ働き、墓地やマナゾーンでは働かない', () => {
+    for (const zone of ['grave', 'mana'] as const) {
+      const sim = new Sim({
+        active: 1,
+        p0: zone === 'grave' ? { grave: ['流星のガイアッシュ・カイザー'], deck: 5 } : { mana: ['流星のガイアッシュ・カイザー'], deck: 5 },
+        p1: { deck: 5 },
+      });
+      sim.s.turnLog.push({ id: 5, causedBy: null, type: 'entered', turn: sim.s.turn, owner: 1, paid: 0, kind: 'creature', card: 1, via: 'summon' } as any);
+      sim.endTurn();
+      expect(sim.s.pending?.why).toBe('turnAction'); // 確認の質問は出ない
+      expect(sim.has(0, 'battle', '流星のガイアッシュ・カイザー')).toBe(false);
+    }
+  });
+});
+
 describe('L6 ジ・ウォッチの「ターンの残りをとばす」', () => {
   const setup = (skipRunsEndTriggers: boolean) => {
     const sim = new Sim({

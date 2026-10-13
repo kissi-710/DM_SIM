@@ -268,7 +268,7 @@
             "kind": "trigger", "optional": true, "label": "相手のターン終了時の無料召喚",
             "spec": {
               "on": { "type": "stepStart", "step": "end", "player": "opponent" },
-              "subject": "any", "watch": ["hand", "mana", "grave"],
+              "subject": "any", "watch": ["hand"],
               "if": { "all": [
                 { "any": [
                   { "logged": { "pattern": { "type": "entered", "owner": "opponent", "paid": 0 } } },
