@@ -1,0 +1,814 @@
+[
+  {
+    "id": "dummy",
+    "name": "ダミー",
+    "text": "シミュレータで相手の山札に使う何もしないカード。",
+    "faces": [{ "name": "ダミー", "type": "creature", "cost": 99, "civs": ["light"], "power": 1000, "races": [], "abilities": [] }]
+  },
+  {
+    "id": "dmrp01-093",
+    "name": "フェアリー・ライフ",
+    "text": "S・トリガー。山札の上1枚をマナゾーンに置く。",
+    "faces": [
+      {
+        "name": "フェアリー・ライフ", "type": "spell", "cost": 2, "civs": ["nature"],
+        "abilities": [
+          { "kind": "keyword", "name": "shieldTrigger" },
+          { "kind": "spell", "steps": [{ "op": "act", "act": { "moveTop": { "n": 1, "to": "mana", "cause": "boost" } } }] }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm23ex2-107",
+    "name": "フェアリー・Re:ライフ",
+    "text": "G・ストライク(シールドから手札に加える時、相手に見せれば相手のクリーチャー1体を選び、そのターン中攻撃できなくしてもよい)。山札の上1枚をマナゾーンに置く。",
+    "faces": [
+      {
+        "name": "フェアリー・Re:ライフ", "type": "spell", "cost": 2, "civs": ["nature"],
+        "abilities": [
+          {
+            "kind": "keyword", "name": "gStrike",
+            "steps": [
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 0, "max": 1, "prompt": "攻撃できなくするクリーチャーを選んでください" },
+              { "op": "act", "act": { "addEffect": { "sel": "$t", "mods": [{ "kind": "cannotAttack" }], "until": "endOfTurn" } } }
+            ]
+          },
+          { "kind": "spell", "steps": [{ "op": "act", "act": { "moveTop": { "n": 1, "to": "mana", "cause": "boost" } } }] }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24ex2-096",
+    "name": "蒼狼の豊穣 ワクムテラス / オリジナル・ライフ",
+    "text": "【クリーチャー面】出た時、カードを2枚引く。【呪文面】山札の上1枚をマナゾーンに置く。",
+    "faces": [
+      {
+        "name": "蒼狼の豊穣 ワクムテラス", "type": "creature", "cost": 4, "civs": ["water"], "power": 3000, "races": ["サイバーロード"],
+        "abilities": [
+          { "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" }, "steps": [{ "op": "act", "act": { "draw": 2 } }] }
+        ]
+      },
+      {
+        "name": "オリジナル・ライフ", "type": "spell", "cost": 2, "civs": ["nature"],
+        "abilities": [{ "kind": "spell", "steps": [{ "op": "act", "act": { "moveTop": { "n": 1, "to": "mana", "cause": "boost" } } }] }]
+      }
+    ]
+  },
+  {
+    "id": "dm23bd1-014",
+    "name": "天災 デドダム",
+    "text": "出た時、山札の上から3枚を見る。1枚を手札、別の1枚をマナゾーン、残りの1枚を墓地に置く。",
+    "faces": [
+      {
+        "name": "天災 デドダム", "type": "creature", "cost": 3, "civs": ["water", "darkness", "nature"], "power": 3000,
+        "races": ["トリニティ・コマンド", "侵略者"],
+        "abilities": [
+          {
+            "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "act", "act": { "lookTop": { "n": 3, "as": "$top" } } },
+              {
+                "op": "act",
+                "act": {
+                  "assign": {
+                    "items": "$top",
+                    "slots": [
+                      { "id": "hand", "to": "hand", "count": 1, "label": "手札" },
+                      { "id": "mana", "to": "mana", "count": 1, "label": "マナゾーン" },
+                      { "id": "grave", "to": "grave", "count": 1, "label": "墓地", "cause": "trash" }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24rp3-S10",
+    "name": "ヨビニオン・マルル",
+    "text": "ヨビニオン。各ターン、自分の2体目のクリーチャーが出た時、山札の上1枚を見て、手札に加えるか、タップしてマナゾーンに置く。",
+    "faces": [
+      {
+        "name": "ヨビニオン・マルル", "type": "creature", "cost": 4, "civs": ["nature"], "power": 5000, "races": ["スノーフェアリー"],
+        "abilities": [
+          { "kind": "keyword", "name": "yobinion" },
+          {
+            "kind": "trigger", "label": "2体目が出た時",
+            "spec": { "on": { "type": "entered", "owner": "self", "kind": "creature" }, "subject": "any", "nthThisTurn": 2 },
+            "steps": [
+              { "op": "act", "act": { "lookTop": { "n": 1, "as": "$c" } } },
+              {
+                "op": "modes", "pick": 1,
+                "options": [
+                  { "label": "手札に加える", "steps": [{ "op": "act", "act": { "move": { "sel": "$c", "to": "hand", "cause": "effect" } } }] },
+                  { "label": "タップしてマナゾーンに置く", "steps": [{ "op": "act", "act": { "move": { "sel": "$c", "to": "mana", "cause": "boost", "tapped": true } } }] }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24rp3-027",
+    "name": "ヨビニオン・トライブ",
+    "text": "マナゾーンから召喚してもよい。ヨビニオン。破壊される時、墓地に置くかわりにマナゾーンに置く。",
+    "faces": [
+      {
+        "name": "ヨビニオン・トライブ", "type": "creature", "cost": 4, "civs": ["nature"], "power": 4000, "races": ["ビーストフォーク"],
+        "abilities": [
+          { "kind": "permission", "play": "summon", "from": "mana" },
+          { "kind": "keyword", "name": "yobinion" },
+          { "kind": "replace", "label": "破壊されるかわりにマナゾーンに置く", "match": { "type": "moved", "from": "battle", "cause": "destroy" }, "apply": { "type": "changeDest", "to": "mana" } }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24rp3-020",
+    "name": "ティンパニ=シンバリー",
+    "text": "ブロッカー。ヨビニオン。各ターン、自分の2体目のクリーチャーが出た時、このクリーチャーを破壊してもよい。そうした場合、相手は自身のクリーチャーを1体選んで破壊する。",
+    "faces": [
+      {
+        "name": "ティンパニ=シンバリー", "type": "creature", "cost": 4, "civs": ["darkness"], "power": 4000, "races": ["アビスロイヤル"],
+        "abilities": [
+          { "kind": "keyword", "name": "blocker" },
+          { "kind": "keyword", "name": "yobinion" },
+          {
+            "kind": "trigger", "optional": true, "label": "2体目が出た時",
+            "spec": { "on": { "type": "entered", "owner": "self", "kind": "creature" }, "subject": "any", "nthThisTurn": 2 },
+            "steps": [
+              { "op": "act", "act": { "move": { "sel": "$self", "to": "grave", "cause": "destroy", "as": "$d" } } },
+              {
+                "op": "if", "cond": { "nonEmpty": "$d" },
+                "then": [
+                  { "op": "select", "as": "$v", "who": "opponent", "from": { "zone": "battle", "owner": "opponent", "type": "creature" }, "min": 1, "max": 1, "prompt": "破壊される自分のクリーチャーを選んでください" },
+                  { "op": "act", "act": { "move": { "sel": "$v", "to": "grave", "cause": "destroy" } } }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24bd4-007",
+    "name": "修羅の死神フミシュナ / 「この先は修羅の道ぞ」",
+    "text": "【クリーチャー面】ブロッカー。出た時、相手の手札を1枚見ずに選び、捨てさせる。相手が自分の手札を捨てた時、1ターンに1回、カードを1枚引いてもよい。【呪文面】S・トリガー。次の2つから2回選ぶ(同じものを2回でも可): カードを1枚引く / 相手のクリーチャー1体を持ち主の手札に戻す。",
+    "faces": [
+      {
+        "name": "修羅の死神フミシュナ", "type": "creature", "cost": 4, "civs": ["darkness"], "power": 4000, "races": ["デーモン・コマンド"],
+        "abilities": [
+          { "kind": "keyword", "name": "blocker" },
+          {
+            "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$d", "from": { "zone": "hand", "owner": "opponent" }, "min": 1, "max": 1, "random": true },
+              { "op": "act", "act": { "move": { "sel": "$d", "to": "grave", "cause": "discard" } } }
+            ]
+          },
+          {
+            "kind": "trigger", "optional": true, "label": "相手が手札を捨てた時",
+            "spec": { "on": { "type": "moved", "from": "hand", "to": "grave", "cause": "discard", "owner": "opponent" }, "subject": "any", "limit": { "perTurn": 1 } },
+            "steps": [{ "op": "act", "act": { "draw": 1 } }]
+          }
+        ]
+      },
+      {
+        "name": "「この先は修羅の道ぞ」", "type": "spell", "cost": 5, "civs": ["water"],
+        "abilities": [
+          { "kind": "keyword", "name": "shieldTrigger" },
+          {
+            "kind": "spell",
+            "steps": [
+              {
+                "op": "modes", "pick": 2, "repeat": true,
+                "options": [
+                  { "label": "カードを1枚引く", "steps": [{ "op": "act", "act": { "draw": 1 } }] },
+                  {
+                    "label": "相手のクリーチャー1体を持ち主の手札に戻す",
+                    "steps": [
+                      { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
+                      { "op": "act", "act": { "move": { "sel": "$t", "to": "hand", "cause": "bounce" } } }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm23bd3-003",
+    "name": "絶望と反魂と滅殺の決断",
+    "text": "自分の墓地から唱えてもよい(唱えた後は山札の下に置く)。次の3つから2回選ぶ(同じものを2回でも可): 相手は手札を1枚選んで捨てる / 自分の墓地からコスト4以下の闇のクリーチャーを出す / 相手のクリーチャー1体のパワーを-4000する。",
+    "faces": [
+      {
+        "name": "絶望と反魂と滅殺の決断", "type": "spell", "cost": 5, "civs": ["darkness"],
+        "abilities": [
+          { "kind": "permission", "play": "cast", "from": "grave", "after": "deckBottom" },
+          {
+            "kind": "spell",
+            "steps": [
+              {
+                "op": "modes", "pick": 2, "repeat": true,
+                "options": [
+                  {
+                    "label": "相手は自分の手札を1枚選んで捨てる",
+                    "steps": [
+                      { "op": "select", "as": "$x", "who": "opponent", "from": { "zone": "hand", "owner": "opponent" }, "min": 1, "max": 1, "prompt": "捨てる手札を選んでください" },
+                      { "op": "act", "act": { "move": { "sel": "$x", "to": "grave", "cause": "discard" } } }
+                    ]
+                  },
+                  {
+                    "label": "墓地からコスト4以下の闇のクリーチャーを出す",
+                    "steps": [
+                      { "op": "select", "as": "$g", "from": { "zone": "grave", "owner": "self", "type": "creature", "where": { "all": [{ "civ": "darkness" }, { "cost": { "lte": 4 } }, { "evolution": false }] } }, "min": 1, "max": 1 },
+                      { "op": "act", "act": { "put": { "sel": "$g" } } }
+                    ]
+                  },
+                  {
+                    "label": "相手のクリーチャー1体のパワーを-4000する",
+                    "steps": [
+                      { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
+                      { "op": "act", "act": { "addEffect": { "sel": "$t", "mods": [{ "kind": "powerAdd", "n": -4000 }], "until": "endOfTurn" } } }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dmex17-021",
+    "name": "流星のガイアッシュ・カイザー",
+    "text": "W・ブレイカー。出た時、カードを2枚引く。自分のコスト10以上のクリーチャーを召喚するコストが4少なくなる。相手のクリーチャーは出たターンに自分を攻撃できない。相手のターン終了時、相手がそのターン中にマナをタップせずに呪文を唱えた、またはクリーチャーを出していた場合、このカードがバトルゾーンになければ、コストを支払わずに召喚してもよい。",
+    "faces": [
+      {
+        "name": "流星のガイアッシュ・カイザー", "type": "creature", "cost": 6, "civs": ["water", "nature"], "power": 8000,
+        "races": ["ブルー・コマンド・ドラゴン", "グリーン・コマンド・ドラゴン", "ハンター"],
+        "abilities": [
+          { "kind": "keyword", "name": "breaker", "n": 2 },
+          { "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" }, "steps": [{ "op": "act", "act": { "draw": 2 } }] },
+          { "kind": "static", "mod": { "type": "costDelta", "delta": -4, "cond": { "all": [{ "type": "creature" }, { "cost": { "gte": 10 } }] } } },
+          { "kind": "static", "mod": { "type": "cannotAttackPlayerWhenEntered" } },
+          {
+            "kind": "trigger", "optional": true, "label": "相手のターン終了時の無料召喚",
+            "spec": {
+              "on": { "type": "stepStart", "step": "end", "player": "opponent" },
+              "subject": "any", "watch": ["hand", "mana", "grave"],
+              "if": { "all": [
+                { "any": [
+                  { "logged": { "pattern": { "type": "entered", "owner": "opponent", "paid": 0 } } },
+                  { "logged": { "pattern": { "type": "cast", "owner": "opponent", "paid": 0 } } }
+                ] },
+                { "notInBattle": true }
+              ] },
+              "ifAtResolve": { "notInBattle": true }
+            },
+            "steps": [{ "op": "act", "act": { "summon": { "sel": "$self" } } }]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm23bd3-002",
+    "name": "CRYMAX ジャオウガ",
+    "text": "鬼S-MAX進化(進化元不要)。自分がゲームに負ける時、またはこのクリーチャーが離れる時、かわりに自分の表向きのカード3枚を破壊してもよい。T・ブレイカー。出た時、各プレイヤーは自分のシールドゾーンから3枚を選び、残りを墓地に置く。攻撃する時、相手のクリーチャー1体を選んで破壊し、その後、相手の手札を2枚見ずに選んで捨てさせる。",
+    "faces": [
+      {
+        "name": "CRYMAX ジャオウガ", "type": "smaxEvolution", "cost": 7, "civs": ["darkness"], "power": 13000, "races": ["デモニオ", "鬼レクスターズ"],
+        "abilities": [
+          { "kind": "keyword", "name": "breaker", "n": 3 },
+          { "kind": "replace", "label": "ゲームに負ける時、かわりに表向きのカード3枚を破壊する", "optional": true, "match": { "type": "gameLoss", "player": "self" }, "apply": { "type": "smaxSacrifice" } },
+          { "kind": "replace", "label": "離れる時、かわりに表向きのカード3枚を破壊する", "optional": true, "match": { "type": "moved", "from": "battle" }, "apply": { "type": "smaxSacrifice" } },
+          {
+            "kind": "trigger", "label": "出た時: シールドを3枚だけ残す", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              {
+                "op": "forPlayers",
+                "body": [
+                  { "op": "select", "as": "$keep", "who": "iter", "from": { "zone": "shield", "owner": "iter" }, "min": 3, "max": 3, "prompt": "残すシールドを3枚選んでください(裏向き)" },
+                  { "op": "act", "act": { "move": { "sel": { "zone": "shield", "owner": "iter", "except": "$keep" }, "to": "grave", "cause": "trash" } } }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "trigger", "spec": { "on": { "type": "attackDeclared" }, "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
+              { "op": "act", "act": { "move": { "sel": "$t", "to": "grave", "cause": "destroy" } } },
+              { "op": "select", "as": "$d", "from": { "zone": "hand", "owner": "opponent" }, "min": 2, "max": 2, "random": true },
+              { "op": "act", "act": { "move": { "sel": "$d", "to": "grave", "cause": "discard" } } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24rp4-S02",
+    "name": "魔誕の斬将オルゲイト",
+    "text": "ハイパーエナジー。ブロッカー。W・ブレイカー。ジャストダイバー。出た時、相手のクリーチャー1体を持ち主の手札に戻してもよい。相手のターン中に相手のクリーチャーが出てその能力がトリガーした時、自分もその能力を使ってもよい。",
+    "faces": [
+      {
+        "name": "魔誕の斬将オルゲイト", "type": "creature", "cost": 7, "civs": ["water"], "power": 7000, "races": ["デーモン・コマンド"],
+        "abilities": [
+          { "kind": "keyword", "name": "hyperEnergy" },
+          { "kind": "keyword", "name": "blocker" },
+          { "kind": "keyword", "name": "breaker", "n": 2 },
+          { "kind": "keyword", "name": "justDiver" },
+          {
+            "kind": "trigger", "optional": true, "label": "相手のクリーチャーを手札に戻す", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
+              { "op": "act", "act": { "move": { "sel": "$t", "to": "hand", "cause": "bounce" } } }
+            ]
+          },
+          {
+            "kind": "trigger", "optional": true, "label": "相手の「出た時」能力をコピーする",
+            "spec": { "on": { "type": "abilityTriggered", "controller": "opponent", "causeType": "entered" }, "subject": "any", "turn": "opponent" },
+            "steps": [{ "op": "act", "act": { "copyTrigger": {} } }]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24rp2-TR03",
+    "name": "終末の監視者 ジ・ウォッチ",
+    "text": "T・ブレイカー。召喚によって出た時、または攻撃する時、クリーチャーを2体まで選び、持ち主の手札に戻す。相手のクリーチャーが出た時、または相手が呪文を唱えた時、ターンの残りをとばしてもよい。",
+    "faces": [
+      {
+        "name": "終末の監視者 ジ・ウォッチ", "type": "creature", "cost": 10, "civs": ["water"], "power": 12000, "races": ["アウトレイジMAX"],
+        "abilities": [
+          { "kind": "keyword", "name": "breaker", "n": 3 },
+          {
+            "kind": "trigger", "label": "クリーチャーを2体まで手札に戻す",
+            "spec": { "on": [{ "type": "entered", "via": "summon" }, { "type": "attackDeclared" }], "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "any", "type": "creature", "chooseable": true }, "min": 0, "max": 2 },
+              { "op": "act", "act": { "move": { "sel": "$t", "to": "hand", "cause": "bounce" } } }
+            ]
+          },
+          {
+            "kind": "trigger", "optional": true, "label": "ターンの残りをとばす",
+            "spec": { "on": [{ "type": "entered", "owner": "opponent" }, { "type": "cast", "owner": "opponent" }], "subject": "any" },
+            "steps": [{ "op": "act", "act": { "skipRestOfTurn": true } }]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24rp3-025",
+    "name": "逆転の剣スカイソード",
+    "text": "S・トリガー。出た時、相手のクリーチャー1体を選び、持ち主のマナゾーンに置いてもよい。その後、自分のマナゾーンのカードの枚数より小さいコストのクリーチャーを1体、自分のマナゾーンから出してもよい。",
+    "faces": [
+      {
+        "name": "逆転の剣スカイソード", "type": "creature", "cost": 10, "civs": ["nature"], "power": 5000, "races": ["ビーストフォーク"],
+        "abilities": [
+          { "kind": "keyword", "name": "shieldTrigger" },
+          {
+            "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              {
+                "op": "may", "prompt": "相手のクリーチャーをマナゾーンに置きますか?",
+                "then": [
+                  { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
+                  { "op": "act", "act": { "move": { "sel": "$t", "to": "mana", "cause": "manaPlace" } } }
+                ]
+              },
+              {
+                "op": "may", "prompt": "マナゾーンからクリーチャーを出しますか?",
+                "then": [
+                  { "op": "select", "as": "$c", "from": { "zone": "mana", "owner": "self", "type": "creature", "where": { "all": [{ "evolution": false }, { "cost": { "lt": { "count": { "zone": "mana", "owner": "self" } } } }] } }, "min": 1, "max": 1 },
+                  { "op": "act", "act": { "put": { "sel": "$c" } } }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm23bd1-007",
+    "name": "終末縫合王 ザ=キラー・キーナリー",
+    "text": "EXライフ。T・ブレイカー。出た時、相手のクリーチャー1体を選び、持ち主の手札に戻してもよい。その後、選んだクリーチャーのコスト以下のクリーチャーを1体、自分の墓地から出す。相手のクリーチャーが出てその能力がトリガーする時、かわりにその能力はトリガーしない。",
+    "faces": [
+      {
+        "name": "終末縫合王 ザ=キラー・キーナリー", "type": "creature", "cost": 10, "civs": ["water", "darkness", "nature"], "power": 15000,
+        "races": ["ディスペクター", "ジュラシック・コマンド・ドラゴン", "ドラゴン・ゾンビ"],
+        "abilities": [
+          { "kind": "keyword", "name": "exLife" },
+          { "kind": "keyword", "name": "breaker", "n": 3 },
+          {
+            "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1, "prompt": "選ぶ相手のクリーチャー(戻してもよい)" },
+              { "op": "may", "prompt": "選んだクリーチャーを持ち主の手札に戻しますか?", "then": [{ "op": "act", "act": { "move": { "sel": "$t", "to": "hand", "cause": "bounce" } } }] },
+              { "op": "select", "as": "$g", "from": { "zone": "grave", "owner": "self", "type": "creature", "where": { "all": [{ "evolution": false }, { "cost": { "lte": { "costOf": "$t" } } }] } }, "min": 1, "max": 1, "prompt": "墓地から出すクリーチャーを選んでください" },
+              { "op": "act", "act": { "put": { "sel": "$g" } } }
+            ]
+          },
+          { "kind": "replace", "label": "相手のクリーチャーの「出た時」はトリガーしない", "match": { "type": "abilityTriggered", "causeType": "entered", "controller": "opponent" }, "apply": { "type": "cancelTrigger" } }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24rp3-008",
+    "name": "九番龍 ジゴクバンカー Par459",
+    "text": "シンパシー(自分のマナゾーンのカード1枚につき、召喚コストが1少なくなる)。マッハファイター。W・ブレイカー。出た時、山札の上1枚をマナゾーンに置く。その後、自分のマナゾーンからカード1枚を手札に戻してもよい。",
+    "faces": [
+      {
+        "name": "九番龍 ジゴクバンカー Par459", "type": "creature", "cost": 12, "civs": ["nature"], "power": 10000, "races": ["ジャイアント・ドラゴン"],
+        "abilities": [
+          { "kind": "keyword", "name": "sympathy" },
+          { "kind": "keyword", "name": "machFighter" },
+          { "kind": "keyword", "name": "breaker", "n": 2 },
+          {
+            "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "act", "act": { "moveTop": { "n": 1, "to": "mana", "cause": "boost" } } },
+              {
+                "op": "may", "prompt": "マナゾーンのカードを1枚手札に戻しますか?",
+                "then": [
+                  { "op": "select", "as": "$m", "from": { "zone": "mana", "owner": "self" }, "min": 1, "max": 1 },
+                  { "op": "act", "act": { "move": { "sel": "$m", "to": "hand", "cause": "effect" } } }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dmbd01-015",
+    "name": "フェアリー・ミラクル",
+    "text": "山札の上1枚をマナゾーンに置く。その後、自分のマナゾーンにすべての文明があれば、さらにもう1枚、山札の上からマナゾーンに置く。",
+    "faces": [
+      {
+        "name": "フェアリー・ミラクル", "type": "spell", "cost": 3, "civs": ["nature"],
+        "abilities": [
+          {
+            "kind": "spell",
+            "steps": [
+              { "op": "act", "act": { "moveTop": { "n": 1, "to": "mana", "cause": "boost" } } },
+              { "op": "if", "cond": { "fiveCivs": { "zone": "mana", "owner": "self" } }, "then": [{ "op": "act", "act": { "moveTop": { "n": 1, "to": "mana", "cause": "boost" } } }] }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm23bd7-031",
+    "name": "アクアン",
+    "text": "出た時、山札の上から5枚を表向きにしてもよい。そのうち光のカードと闇のカードをすべて手札に加え、残りを墓地に置く。",
+    "faces": [
+      {
+        "name": "アクアン", "type": "creature", "cost": 4, "civs": ["water"], "power": 2000, "races": ["サイバーロード"],
+        "abilities": [
+          {
+            "kind": "trigger", "optional": true, "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "act", "act": { "lookTop": { "n": 5, "as": "$top" } } },
+              { "op": "act", "act": { "reveal": { "items": { "zone": "deck", "owner": "self", "of": "$top" } } } },
+              { "op": "act", "act": { "move": { "sel": { "zone": "deck", "owner": "self", "of": "$top", "where": { "any": [{ "civ": "light" }, { "civ": "darkness" }] } }, "to": "hand", "cause": "effect" } } },
+              { "op": "act", "act": { "move": { "sel": { "zone": "deck", "owner": "self", "of": "$top" }, "to": "grave", "cause": "trash" } } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24bd1-001",
+    "name": "王道の革命 ドギラゴン",
+    "text": "ブロッカー。スピードアタッカー。出た時、山札の上2枚をマナゾーンに置く。その後、クリーチャーを1体、自分のマナゾーンから手札に戻す。革命2: 自分のシールドが2つ以下なら、シールドゾーンから手札に加えるこのクリーチャーにS・トリガーを与える。革命0: 自分のシールドが1つもなければ、バトル中パワー+10000、バトルに勝った時アンタップする。",
+    "faces": [
+      {
+        "name": "王道の革命 ドギラゴン", "type": "creature", "cost": 5, "civs": ["light", "fire", "nature"], "power": 5000,
+        "races": ["メガ・コマンド・ドラゴン", "革命軍"],
+        "abilities": [
+          { "kind": "keyword", "name": "blocker" },
+          { "kind": "keyword", "name": "speedAttacker" },
+          { "kind": "keyword", "name": "shieldTrigger", "while": { "shields": { "lte": 2 } } },
+          { "kind": "static", "mod": { "type": "powerAdd", "n": 10000 }, "while": { "shields": { "eq": 0 } } },
+          {
+            "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "act", "act": { "moveTop": { "n": 2, "to": "mana", "cause": "boost" } } },
+              { "op": "select", "as": "$m", "from": { "zone": "mana", "owner": "self", "type": "creature" }, "min": 1, "max": 1, "prompt": "手札に戻すクリーチャーを選んでください" },
+              { "op": "act", "act": { "move": { "sel": "$m", "to": "hand", "cause": "effect" } } }
+            ]
+          },
+          {
+            "kind": "trigger", "label": "革命0: バトルに勝ったらアンタップ",
+            "spec": { "on": { "type": "battleEnded", "winner": "self" }, "subject": "self", "if": { "shields": { "eq": 0 } } },
+            "steps": [{ "op": "act", "act": { "untap": { "sel": "$self" } } }]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24bd1-016",
+    "name": "漢気の2号 ボスカツ",
+    "text": "スピードアタッカー。出た時、相手の手札を1枚見ずに選び、捨てさせる。その後、捨てさせたカードと同じ文明を持つ、コスト8以下の多色クリーチャーを自分の手札から出してもよい。",
+    "faces": [
+      {
+        "name": "漢気の2号 ボスカツ", "type": "creature", "cost": 5, "civs": ["light", "darkness", "fire"], "power": 4000,
+        "races": ["メガ・コマンド・ドラゴン", "革命軍", "ハムカツ団"],
+        "abilities": [
+          { "kind": "keyword", "name": "speedAttacker" },
+          {
+            "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$d", "from": { "zone": "hand", "owner": "opponent" }, "min": 1, "max": 1, "random": true },
+              { "op": "act", "act": { "move": { "sel": "$d", "to": "grave", "cause": "discard", "as": "$dd" } } },
+              {
+                "op": "select", "as": "$c", "from": { "zone": "hand", "owner": "self", "type": "creature", "where": { "all": [{ "multicolor": true }, { "cost": { "lte": 8 } }, { "evolution": false }, { "sameCivAs": "$dd" }] } },
+                "min": 0, "max": 1, "prompt": "手札から出す多色クリーチャーを選んでください(出さなくてもよい)"
+              },
+              { "op": "act", "act": { "put": { "sel": "$c" } } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24rp4-011",
+    "name": "魔誕と光喜と楽識と炎怒と哀樹の決断",
+    "text": "次の5つから2回選ぶ(同じものを2回でも可): 山札の上1枚をシールドにする / カードを2枚引く / 相手の手札を1枚見ずに選び、捨てさせる / 相手のコスト6以下のエレメントを1つ選び、破壊する / 山札の上1枚をマナゾーンに置き、その後マナゾーンからカード1枚を手札に戻してもよい。自分のエレメントにすべての文明がそろっていれば、2回選ぶかわりに、5つすべてを1回ずつ使ってもよい。",
+    "faces": [
+      {
+        "name": "魔誕と光喜と楽識と炎怒と哀樹の決断", "type": "spell", "cost": 5, "civs": ["light", "water", "darkness", "fire", "nature"],
+        "abilities": [
+          {
+            "kind": "spell",
+            "steps": [
+              {
+                "op": "modes", "pick": 2, "repeat": true, "allIf": { "fiveCivs": { "zone": "battle", "owner": "self", "type": "creature" } },
+                "options": [
+                  { "label": "山札の上1枚をシールドにする", "steps": [{ "op": "act", "act": { "addShield": { "n": 1 } } }] },
+                  { "label": "カードを2枚引く", "steps": [{ "op": "act", "act": { "draw": 2 } }] },
+                  {
+                    "label": "相手の手札を1枚見ずに選び、捨てさせる",
+                    "steps": [
+                      { "op": "select", "as": "$d", "from": { "zone": "hand", "owner": "opponent" }, "min": 1, "max": 1, "random": true },
+                      { "op": "act", "act": { "move": { "sel": "$d", "to": "grave", "cause": "discard" } } }
+                    ]
+                  },
+                  {
+                    "label": "相手のコスト6以下のエレメントを破壊する",
+                    "steps": [
+                      { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true, "where": { "cost": { "lte": 6 } } }, "min": 1, "max": 1 },
+                      { "op": "act", "act": { "move": { "sel": "$t", "to": "grave", "cause": "destroy" } } }
+                    ]
+                  },
+                  {
+                    "label": "山札の上1枚をマナゾーンに置き、マナゾーンから1枚を手札に戻してもよい",
+                    "steps": [
+                      { "op": "act", "act": { "moveTop": { "n": 1, "to": "mana", "cause": "boost" } } },
+                      {
+                        "op": "may", "prompt": "マナゾーンのカードを1枚手札に戻しますか?",
+                        "then": [
+                          { "op": "select", "as": "$m", "from": { "zone": "mana", "owner": "self" }, "min": 1, "max": 1 },
+                          { "op": "act", "act": { "move": { "sel": "$m", "to": "hand", "cause": "effect" } } }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "promoy21-048",
+    "name": "ドラゴンズ・サイン",
+    "text": "S・トリガー。自分の手札から、光のドラゴンで進化ではないコスト7以下のクリーチャーを1体出す。そのクリーチャーは、次の自分のターンのはじめまでブロッカーを得る。",
+    "faces": [
+      {
+        "name": "ドラゴンズ・サイン", "type": "spell", "cost": 5, "civs": ["light"],
+        "abilities": [
+          { "kind": "keyword", "name": "shieldTrigger" },
+          {
+            "kind": "spell",
+            "steps": [
+              { "op": "select", "as": "$c", "from": { "zone": "hand", "owner": "self", "type": "creature", "where": { "all": [{ "civ": "light" }, { "race": "ドラゴン" }, { "evolution": false }, { "cost": { "lte": 7 } }] } }, "min": 1, "max": 1, "prompt": "手札から出す光のドラゴンを選んでください" },
+              { "op": "act", "act": { "put": { "sel": "$c", "as": "$e" } } },
+              { "op": "act", "act": { "addEffect": { "sel": "$e", "mods": [{ "kind": "grant", "keyword": "blocker" }], "until": "nextTurnStart" } } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dmrp17-029",
+    "name": "ドンドン火噴くナウ",
+    "text": "S・トリガー。山札の上3枚を見る。1枚をマナゾーン、1枚を手札、残りの1枚を墓地に置く。こうして墓地に置いたカードのコスト以下の相手のクリーチャー1体を選び、破壊する。",
+    "faces": [
+      {
+        "name": "ドンドン火噴くナウ", "type": "spell", "cost": 5, "civs": ["water", "fire", "nature"],
+        "abilities": [
+          { "kind": "keyword", "name": "shieldTrigger" },
+          {
+            "kind": "spell",
+            "steps": [
+              { "op": "act", "act": { "lookTop": { "n": 3, "as": "$top" } } },
+              {
+                "op": "act",
+                "act": {
+                  "assign": {
+                    "items": "$top",
+                    "as": "$a",
+                    "slots": [
+                      { "id": "mana", "to": "mana", "count": 1, "label": "マナゾーン" },
+                      { "id": "hand", "to": "hand", "count": 1, "label": "手札" },
+                      { "id": "grave", "to": "grave", "count": 1, "label": "墓地", "cause": "trash" }
+                    ]
+                  }
+                }
+              },
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true, "where": { "cost": { "lte": { "costOf": "$a.grave" } } } }, "min": 1, "max": 1 },
+              { "op": "act", "act": { "move": { "sel": "$t", "to": "grave", "cause": "destroy" } } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24ex2-Cho033",
+    "name": "ブレイン・スラッシュ",
+    "text": "S・トリガー。次のいずれか1つを選ぶ: カードを3枚引き、その後自分の手札を1枚捨てる / コスト8以下のクリーチャーを1体、自分の墓地から出す。自分のクリーチャーに水と闇がそろっていれば、両方を選んでもよい(上から順に処理)。",
+    "faces": [
+      {
+        "name": "ブレイン・スラッシュ", "type": "spell", "cost": 6, "civs": ["water", "darkness"],
+        "abilities": [
+          { "kind": "keyword", "name": "shieldTrigger" },
+          {
+            "kind": "spell",
+            "steps": [
+              {
+                "op": "modes", "pick": 1, "allIf": { "civsPresent": { "sel": { "zone": "battle", "owner": "self", "type": "creature" }, "civs": ["water", "darkness"] } },
+                "options": [
+                  {
+                    "label": "カードを3枚引き、その後自分の手札を1枚捨てる",
+                    "steps": [
+                      { "op": "act", "act": { "draw": 3 } },
+                      { "op": "select", "as": "$x", "from": { "zone": "hand", "owner": "self" }, "min": 1, "max": 1, "prompt": "捨てる手札を選んでください" },
+                      { "op": "act", "act": { "move": { "sel": "$x", "to": "grave", "cause": "discard" } } }
+                    ]
+                  },
+                  {
+                    "label": "コスト8以下のクリーチャーを自分の墓地から出す",
+                    "steps": [
+                      { "op": "select", "as": "$g", "from": { "zone": "grave", "owner": "self", "type": "creature", "where": { "all": [{ "cost": { "lte": 8 } }, { "evolution": false }] } }, "min": 1, "max": 1 },
+                      { "op": "act", "act": { "put": { "sel": "$g" } } }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dmrp17-s07",
+    "name": "龍風混成 ザーディクリカ",
+    "text": "EXライフ。W・ブレイカー。出た時、コスト7以下の呪文を1枚、自分の手札または墓地からコストを支払わずに唱えてもよい(唱えた後は山札の下に置く)。自分のターン終了時、そのターンに自分が呪文を唱えていれば、相手のパワー5500以下のクリーチャーを1体破壊し、その後カードを1枚引いてもよい。",
+    "faces": [
+      {
+        "name": "龍風混成 ザーディクリカ", "type": "creature", "cost": 7, "civs": ["light", "water", "fire"], "power": 6000,
+        "races": ["ディスペクター", "クリスタル・コマンド・ドラゴン", "エンジェル・コマンド", "メルト・ウォリアー"],
+        "abilities": [
+          { "kind": "keyword", "name": "exLife" },
+          { "kind": "keyword", "name": "breaker", "n": 2 },
+          {
+            "kind": "trigger", "optional": true, "label": "呪文を無料で唱える", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$s", "from": { "zone": ["hand", "grave"], "owner": "self", "type": "spell", "where": { "cost": { "lte": 7 } } }, "min": 1, "max": 1, "prompt": "コストを支払わずに唱える呪文を選んでください" },
+              { "op": "act", "act": { "castFree": { "sel": "$s", "after": "deckBottom" } } }
+            ]
+          },
+          {
+            "kind": "trigger", "label": "ターン終了時: 呪文を唱えていれば破壊",
+            "spec": { "on": { "type": "stepStart", "step": "end", "player": "self" }, "subject": "any", "if": { "logged": { "pattern": { "type": "cast", "owner": "self" } } } },
+            "steps": [
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true, "where": { "power": { "lte": 5500 } } }, "min": 1, "max": 1 },
+              { "op": "act", "act": { "move": { "sel": "$t", "to": "grave", "cause": "destroy" } } },
+              { "op": "may", "prompt": "カードを1枚引きますか?", "then": [{ "op": "act", "act": { "draw": 1 } }] }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dmrp20-017",
+    "name": "ロスト・Re:ソウル",
+    "text": "G・ストライク(シールドゾーンから手札に加える時、相手に見せれば、相手のクリーチャー1体を選び、そのターン中攻撃できなくしてもよい)。相手は自分の手札をすべて捨てる。",
+    "faces": [
+      {
+        "name": "ロスト・Re:ソウル", "type": "spell", "cost": 7, "civs": ["darkness"],
+        "abilities": [
+          {
+            "kind": "keyword", "name": "gStrike",
+            "steps": [
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 0, "max": 1, "prompt": "攻撃できなくするクリーチャーを選んでください" },
+              { "op": "act", "act": { "addEffect": { "sel": "$t", "mods": [{ "kind": "cannotAttack" }], "until": "endOfTurn" } } }
+            ]
+          },
+          {
+            "kind": "spell",
+            "steps": [{ "op": "act", "act": { "move": { "sel": { "zone": "hand", "owner": "opponent" }, "to": "grave", "cause": "discard" } } }]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dmrp17-km2",
+    "name": "聖魔連結王 ドルファディロム",
+    "text": "EXライフ。スピードアタッカー。T・ブレイカー。このクリーチャーが出た時、またはEXライフのシールドが自分のシールドゾーンを離れた時、相手の多色でないクリーチャーをすべて破壊する。相手は、多色でない呪文を唱えられない。",
+    "faces": [
+      {
+        "name": "聖魔連結王 ドルファディロム", "type": "creature", "cost": 8, "civs": ["light", "darkness", "fire"], "power": 13500,
+        "races": ["ディスペクター", "エンジェル・コマンド", "デーモン・コマンド"],
+        "abilities": [
+          { "kind": "keyword", "name": "exLife" },
+          { "kind": "keyword", "name": "speedAttacker" },
+          { "kind": "keyword", "name": "breaker", "n": 3 },
+          {
+            "kind": "trigger", "label": "多色でないクリーチャーをすべて破壊",
+            "spec": { "on": [{ "type": "entered", "self": true }, { "type": "moved", "from": "shield", "ex": true, "owner": "self" }], "subject": "any" },
+            "steps": [
+              { "op": "act", "act": { "move": { "sel": { "zone": "battle", "owner": "opponent", "type": "creature", "where": { "multicolor": false } }, "to": "grave", "cause": "destroy" } } }
+            ]
+          },
+          { "kind": "static", "mod": { "type": "cannotCast", "cond": { "all": [{ "type": "spell" }, { "multicolor": false }] } } }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm23bd3-001",
+    "name": "SSS級天災 デッドダムド",
+    "text": "進化: 自分の水・闇・自然のクリーチャー1体の上に置く。SSS級侵略[天災]: 自分の水・闇・自然のコマンドが攻撃する時、このカードをバトルゾーン・手札・墓地・マナゾーンから、その攻撃しているクリーチャーの上に重ねてもよい。W・ブレイカー。別のクリーチャーの上に重ねた時、相手のクリーチャー1体を選び、破壊する/マナゾーンに置く/手札に戻す、のいずれかを行う。",
+    "faces": [
+      {
+        "name": "SSS級天災 デッドダムド", "type": "evolution", "cost": 8, "civs": ["water", "darkness", "nature"], "power": 11000,
+        "races": ["トリニティ・コマンド", "S級侵略者"],
+        "evolveFrom": { "all": [{ "type": "creature" }, { "any": [{ "civ": "water" }, { "civ": "darkness" }, { "civ": "nature" }] }] },
+        "abilities": [
+          { "kind": "keyword", "name": "breaker", "n": 2 },
+          {
+            "kind": "keyword", "name": "invasion", "label": "SSS級侵略[天災]",
+            "attacker": { "all": [{ "any": [{ "civ": "water" }, { "civ": "darkness" }, { "civ": "nature" }] }, { "race": "コマンド" }] }
+          },
+          {
+            "kind": "trigger", "label": "重なった時", "spec": { "on": { "type": "evolved" }, "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
+              {
+                "op": "modes", "pick": 1,
+                "options": [
+                  { "label": "破壊する", "steps": [{ "op": "act", "act": { "move": { "sel": "$t", "to": "grave", "cause": "destroy" } } }] },
+                  { "label": "マナゾーンに置く", "steps": [{ "op": "act", "act": { "move": { "sel": "$t", "to": "mana", "cause": "manaPlace" } } }] },
+                  { "label": "手札に戻す", "steps": [{ "op": "act", "act": { "move": { "sel": "$t", "to": "hand", "cause": "bounce" } } }] }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
