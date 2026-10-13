@@ -4,7 +4,7 @@ import { costOf, effectsOnPerm, hasKeyword, powerOf, type KwName } from '../engi
 import { entryLabel } from '../engine/procs';
 import { mkCtx, permByPid } from '../engine/state';
 import type { Action, GameState, PlayerId } from '../engine/types';
-import { Board, selectedActions } from './Board';
+import { Board, buildDropMap, selectedActions } from './Board';
 import { CardView, civGradient } from './CardView';
 import { buildLogTree, CIV_NAME, reg, type LogNode } from './format';
 import { InputWidget } from './Widgets';
@@ -150,6 +150,74 @@ export function LogPanel({ s, log, me }: { s: GameState; log: Session['log']; me
   );
 }
 
+const SHORTCUTS: Array<[string, string]> = [
+  ['← →', '自分の動かせるカードを順に選ぶ'],
+  ['1 〜 9', '操作パネル・選択肢・候補カードの上から N 番目を選ぶ'],
+  ['Enter', '操作が1つならそれを実行 / 入力パネルの「確定」「はい」'],
+  ['M', 'マナチャージしない / メインを終える'],
+  ['E', 'ターン終了'],
+  ['Z', '1手戻す(練習用設定のとき)'],
+  ['Y / N', 'はい / いいえ'],
+  ['Esc', '選択やダイアログを閉じる'],
+  ['L', 'ログ・詳細の表示/非表示'],
+  ['O', '表示設定を開く'],
+  ['Space', '観戦: 一時停止 / 再開'],
+  ['N', '観戦: 一時停止中に1手進める'],
+  ['R', '勝敗が出たら「もう一度」'],
+  ['? / H', 'このヘルプ'],
+];
+
+const TIPS = [
+  'カードをクリックすると、できる操作が右下のパネルに出ます。ドラッグしても同じ操作ができます。',
+  '← → キーで手札やクリーチャーを順に選べます。数字キーで操作パネルの上から選べます。',
+  '「E」キーでターン終了、「M」キーでマナチャージを飛ばす・メインを終える。',
+  'カードにマウスを乗せると、右の「ログ・詳細」に現在のコストやパワーが出ます。',
+  '手札やマナが増えたら、横にスクロールできます(トラックパッドや Shift+ホイール)。',
+  '「⚙ 表示」で、マナを手動で選んで支払う設定や、自分のシールドを見る設定ができます。',
+  '練習用設定なら「↶ 1手戻す」(または Z)でやり直せます。',
+  'ログの「自動」「手動」タグで、効果の自動解決とプレイヤーの操作を見分けられます。',
+];
+
+function HelpPanel({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal help" onClick={(e) => e.stopPropagation()}>
+        <h2>操作ヘルプ</h2>
+        <div className="help-grid">
+          <div>
+            <h3>ショートカットキー</h3>
+            <table>
+              <tbody>
+                {SHORTCUTS.map(([key, what]) => (
+                  <tr key={key}>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <span className="kbd">{key}</span>
+                    </td>
+                    <td>{what}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h3>Tips</h3>
+            <ul className="tips">
+              {TIPS.map((x, i) => (
+                <li key={i}>{x}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="row" style={{ marginTop: 8 }}>
+          <button className="primary" onClick={onClose}>
+            閉じる(Esc)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExit: () => void; onRematch: () => void }) {
   const g = useGame(setup);
   const { session } = g;
@@ -161,6 +229,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [recText, setRecText] = useState<string | null>(null);
   const [manualPay, setManualPay] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [sideOpen, setSideOpen] = useState(() => window.innerWidth >= 1200);
   // 直近の1手で動いたカードを強調する(イベントの再生。design 9)
   const flash = useMemo(() => {
@@ -223,6 +292,156 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const cpuOnly = setup.seats.every((x) => x.kind === 'cpu');
   const showHuman = humanTurn && pend!.why !== 'turnAction';
 
+  // ── ショートカットキー ──
+  // 選べるカードの並び(←→で順に選ぶ)
+  const cycleKeys = useMemo(() => {
+    if (!interactive) return [] as string[];
+    const dm = buildDropMap(s, legal);
+    const p = s.players[viewer];
+    const keys = [
+      ...p.hand.map((u) => `hand:${u}`),
+      ...p.mana.map((u) => `mana:${u}`),
+      ...p.battle.map((x) => `pile:${x.pid}`),
+      ...p.grave.map((u) => `grave:${u}`),
+    ];
+    return keys.filter((k) => dm.has(k));
+  }, [interactive, s, legal, viewer]);
+
+  useEffect(() => {
+    const clickNth = (sel: string, n: number) => {
+      const el = document.querySelectorAll<HTMLElement>(sel)[n];
+      if (!el || (el as HTMLButtonElement).disabled) return false;
+      el.click();
+      return true;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || (t.tagName === 'INPUT' && !['checkbox', 'range'].includes((t as HTMLInputElement).type)))) return;
+      const k = e.key;
+      const digit = /^[1-9]$/.test(k) ? Number(k) - 1 : -1;
+      const done = () => e.preventDefault();
+
+      // 盤面のダイアログ(行き先の選択・マナの支払い・一覧・棋譜・ヘルプ)が開いているとき
+      const back = document.querySelector<HTMLElement>('.modal-back');
+      if (back) {
+        if (k === 'Escape') {
+          back.click();
+          return done();
+        }
+        if (digit >= 0 && clickNth('.modal-back .choice', digit)) return done();
+        if (k === 'Enter' && clickNth('.modal-back button.primary', 0)) return done();
+        return;
+      }
+      if (k === 'Escape') {
+        if (menuOpen) setMenuOpen(false);
+        else if (selected) setSelected(null);
+        else return;
+        return done();
+      }
+      if (k === '?' || (k === '/' && e.shiftKey) || k === 'h' || k === 'H') {
+        setHelpOpen(true);
+        return done();
+      }
+      if (k === 'l' || k === 'L') {
+        setSideOpen((v) => !v);
+        return done();
+      }
+      if (k === 'o' || k === 'O') {
+        setMenuOpen((v) => !v);
+        return done();
+      }
+      if (s.winner !== null) {
+        if (k === 'r' || k === 'R') {
+          onRematch();
+          return done();
+        }
+        return;
+      }
+      // 入力パネル(選ぶ・答える)
+      if (showHuman) {
+        const shape = (pend!.input as { shape: string } | null)?.shape;
+        if (shape === 'yesno' && (k === 'y' || k === 'Y' || k === 'Enter')) {
+          g.perform({ type: 'ANSWER', id: pend!.id, value: true });
+          return done();
+        }
+        if (shape === 'yesno' && (k === 'n' || k === 'N')) {
+          g.perform({ type: 'ANSWER', id: pend!.id, value: false });
+          return done();
+        }
+        if (digit >= 0) {
+          const sel = shape === 'option' || shape === 'order' ? '.input-panel .choice' : '.input-panel .cards .card';
+          if (clickNth(sel, digit)) return done();
+        }
+        if (k === 'Enter' || k === ' ') {
+          if (clickNth('.input-panel button.primary', 0)) return done();
+        }
+        return;
+      }
+      // CPU 同士の観戦
+      if (cpuOnly) {
+        if (k === ' ') {
+          g.setPaused(!g.paused);
+          return done();
+        }
+        if ((k === 'n' || k === 'N' || k === 'ArrowRight') && g.paused) {
+          g.stepOnce();
+          return done();
+        }
+        return;
+      }
+      if ((k === 'z' || k === 'Z') && setup.allowUndo && g.canUndo && humanTurn) {
+        g.undo();
+        return done();
+      }
+      if (!interactive) return;
+      // 自分の行動
+      if (digit >= 0 && selActs[digit]) {
+        act(selActs[digit].action);
+        return done();
+      }
+      if (k === 'Enter' && selActs.length === 1) {
+        act(selActs[0].action);
+        return done();
+      }
+      if ((k === 'ArrowRight' || k === 'ArrowLeft') && cycleKeys.length > 0) {
+        const i = selected ? cycleKeys.indexOf(selected) : -1;
+        const n = cycleKeys.length;
+        const next = i < 0 ? (k === 'ArrowRight' ? 0 : n - 1) : (i + (k === 'ArrowRight' ? 1 : n - 1)) % n;
+        setSelected(cycleKeys[next]);
+        return done();
+      }
+      if ((k === 'm' || k === 'M') && (stepActs.skipMana || stepActs.endMain)) {
+        act((stepActs.skipMana ?? stepActs.endMain)!);
+        return done();
+      }
+      if ((k === 'e' || k === 'E') && stepActs.endTurn) {
+        act(stepActs.endTurn);
+        return done();
+      }
+    };
+    // ボタンをクリックしたあとにフォーカスが残ると、Enter/Space でそのボタンが再度押されてしまう
+    const onClick = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null;
+      const b = el?.closest('button');
+      if (b) setTimeout(() => b.blur(), 0);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('click', onClick);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('click', onClick);
+    };
+  });
+
+  // 選んだカードが横スクロールの外にあっても見える位置へ
+  useEffect(() => {
+    if (!selected) return;
+    document.querySelector('.card.selected')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [selected]);
+
+  const tip = TIPS[Math.floor(s.turn / 2) % TIPS.length];
+
   return (
     <div className={'game' + (sideOpen ? '' : ' side-closed')}>
       <div className="game-head">
@@ -281,6 +500,9 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           )}
         </div>
         <button onClick={() => setRecText(rec())}>棋譜</button>
+        <button onClick={() => setHelpOpen(true)} title="ショートカットキーと Tips(?)">
+          ? ヘルプ
+        </button>
         <button className={sideOpen ? 'on' : ''} onClick={() => setSideOpen((v) => !v)} title="カードの詳細・待機中の能力・ログ">
           ログ・詳細
         </button>
@@ -302,13 +524,18 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           manualPay={manualPay}
         />
 
-        {interactive && <div className="dock-space" />}
+        {interactive && (
+          <div className="dock-space">
+            <span className="tip">💡 {tip}</span>
+          </div>
+        )}
 
         {/* CPU が考えている間の表示 */}
         {!interactive && !showHuman && s.winner === null && pend && (
           <div className="thinking-pill">
             {activeLabel}が考えています…
             {session.thinking && <span className="thinking" />}
+            <div className="tip">💡 {tip}</div>
           </div>
         )}
 
@@ -326,7 +553,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
               <div className="ap-actions">
                 {selActs.map((d, i) => (
                   <button key={i} className="choice big" onClick={() => act(d.action)}>
-                    {d.label}
+                    {i < 9 && <span className="kbd">{i + 1}</span>} {d.label}
                   </button>
                 ))}
               </div>
@@ -341,11 +568,19 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           <div className="dock">
             <div className="dock-hint">{hint}</div>
             <div className="dock-buttons">
-              {stepActs.skipMana && <button onClick={() => act(stepActs.skipMana!)}>マナチャージしない</button>}
-              {stepActs.endMain && <button onClick={() => act(stepActs.endMain!)}>メインを終える</button>}
+              {stepActs.skipMana && (
+                <button onClick={() => act(stepActs.skipMana!)}>
+                  マナチャージしない <span className="kbd">M</span>
+                </button>
+              )}
+              {stepActs.endMain && (
+                <button onClick={() => act(stepActs.endMain!)}>
+                  メインを終える <span className="kbd">M</span>
+                </button>
+              )}
               {stepActs.endTurn && (
                 <button className="primary" onClick={() => act(stepActs.endTurn!)}>
-                  ターン終了
+                  ターン終了 <span className="kbd">E</span>
                 </button>
               )}
             </div>
@@ -388,6 +623,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
 
         {session.error && <div className="toast">{session.error}</div>}
       </div>
+      {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
 
       {sideOpen && (
         <div className="side">

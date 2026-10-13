@@ -248,6 +248,20 @@ th {
 }
 .dock-space {
   flex: 0 0 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  max-width: calc(100% - 400px);
+  min-width: 0;
+}
+.dock-space .tip {
+  font-size: 12.5px;
+  color: var(--accent2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .dock {
   position: absolute;
@@ -360,6 +374,37 @@ th {
   padding: 4px 14px;
   font-size: 13px;
   pointer-events: none;
+}
+.thinking-pill .tip {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--accent2);
+}
+.choice.big .kbd,
+.dock-buttons .kbd {
+  margin-right: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.modal.help {
+  width: min(820px, 94vw);
+}
+.help-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+@media (max-width: 760px) {
+  .help-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.tips {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .pop-anchor {
   position: relative;
