@@ -433,8 +433,8 @@ function runEffect(s: GameState, f: Frame & {kind:"effect"}): GameState {
 
 | 種類 | 保存先 | 範囲 | 期限 | 例 |
 |---|---|---|---|---|
-| 常在型 | カードの `static` 能力(状態に書かない) | 常に再評価 | 発生源がゾーンにある間 | ガイアッシュ・カイザーのコスト軽減、ドルファディロムの呪文制限、キーナリー、ジャストダイバー(出たターン `enteredTurn` から「持ち主の次のターンのはじめ」まで。`derive.canBeChosen` / `canBeAttacked` が評価する。誘発しない) |
-| 生成型 | `state.effects[]` | **生成時の対象IDを固定**(110.2e) | `endOfTurn` / `untilNextTurnStart(player)` / `untilSourceLeaves` | パワー-4000、「攻撃できない」(G・ストライク)、ブロッカー付与(ドラゴンズ・サイン) |
+| 常在型 | カードの `static` 能力(状態に書かない) | 常に再評価 | 発生源がゾーンにある間 | ガイアッシュ・カイザーのコスト軽減、ドルファディロムの呪文制限、キーナリー |
+| 生成型 | `state.effects[]` | **生成時の対象IDを固定**(110.2e) | `endOfTurn` / `untilNextTurnStart(player)` / `untilSourceLeaves` | パワー-4000、「攻撃できない」(G・ストライク)、ブロッカー付与(ドラゴンズ・サイン)、ジャストダイバー |
 
 - 生成型の期限は、ターン進行のフレームが `stepStart` ごとに掃除する。
 - 生成型の範囲固定:「同一ターン中に後から範囲に入ったカードは影響を受けない」(110.2e)。

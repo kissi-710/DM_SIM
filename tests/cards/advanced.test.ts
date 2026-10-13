@@ -158,8 +158,8 @@ describe('A12 魔誕の斬将オルゲイト', () => {
     const pids = [sim.pid(0, 'ヨビニオン・マルル'), sim.pid(0, '天災 デドダム')];
     sim.play('魔誕の斬将オルゲイト', { extra: { tap: pids } });
     expect(sim.tappedMana(0)).toBe(3);
-    // 出た時: 任意 → 相手のクリーチャーを手札に戻す(ジャストダイバーは誘発しないので順序の選択はない)
-    expect(sim.pending.why).toBe('may');
+    // 出た時: 任意 → 相手のクリーチャーを手札に戻す(ジャストダイバーと同時に誘発するので順序を選ぶ)
+    sim.order('手札に戻す');
     sim.yes();
     expect(sim.has(1, 'hand', 'ティンパニ=シンバリー')).toBe(true);
     const pm = sim.s.players[0].battle.filter((p) => p.tapped).length;
@@ -172,32 +172,31 @@ describe('A12 魔誕の斬将オルゲイト', () => {
     const pids = [sim.pid(0, 'ヨビニオン・マルル'), sim.pid(0, 'ヨビニオン・トライブ')];
     expect(() => sim.play('魔誕の斬将オルゲイト', { extra: { tap: pids } })).toThrow();
   });
-  it('ジャストダイバー: 常在型(誘発しない)で、出てから次の自分のターンのはじめまで相手に選ばれず、攻撃されない', () => {
+  it('ジャストダイバー: 出た時、次の自分のターンのはじめまで相手に選ばれず、攻撃されない', () => {
     const sim = new Sim({
       p0: { hand: ['魔誕の斬将オルゲイト'], mana: mana(7, W) },
       p1: { battle: ['ヨビニオン・マルル'], hand: ['ヨビニオン・トライブ'], mana: mana(4) },
     });
-    const t0 = sim.s.turn;
     sim.play('魔誕の斬将オルゲイト');
-    // 出た時の能力だけが待機する(ジャストダイバーのトリガーは起きない)
-    expect(sim.pending.why).toBe('may');
+    sim.order('手札に戻す');
     sim.no();
-    // 継続効果は作られず、出た直後から常に適用されている
-    expect(sim.s.effects.length).toBe(0);
+    expect(sim.s.effects.some((e) => e.mod.kind === 'cannotBeChosen')).toBe(true);
+    sim.endTurn();
+    // 相手のターン: タップされたオルゲイトでも攻撃対象にできない
+    expect(sim.legal().some((a) => a.type === 'ATTACK' && a.target.kind === 'creature')).toBe(false);
+  });
+  it('ジャストダイバーは「出た時」にトリガーする能力なので、相手のキーナリーがいるとトリガーしない(公式Q&A 40533)', () => {
+    const sim = new Sim({
+      p0: { hand: ['魔誕の斬将オルゲイト'], mana: mana(7, W) },
+      p1: { battle: ['終末縫合王 ザ=キラー・キーナリー'] },
+    });
+    sim.play('魔誕の斬将オルゲイト');
+    sim.drain();
     const c = mkCtx(sim.s, reg);
     const pm = sim.s.players[0].battle[0];
-    expect(canBeChosen(c, pm, 1)).toBe(false);
-    expect(canBeChosen(c, pm, 0)).toBe(true); // 自分には選べる
-    sim.endTurn();
-    // 相手のターン中も続く: 選べず、攻撃対象にもできない
-    expect(sim.s.turn).toBe(t0 + 1);
-    expect(canBeChosen(mkCtx(sim.s, reg), pm, 1)).toBe(false);
-    expect(canBeAttacked(mkCtx(sim.s, reg), pm)).toBe(false);
-    // 自分のターンのはじめに終わる
-    sim.skipMana().endTurn();
-    expect(sim.s.turn).toBe(t0 + 2);
-    expect(canBeChosen(mkCtx(sim.s, reg), pm, 1)).toBe(true);
-    expect(canBeAttacked(mkCtx(sim.s, reg), pm)).toBe(true);
+    expect(sim.s.effects.some((e) => e.mod.kind === 'cannotBeChosen')).toBe(false);
+    expect(canBeChosen(c, pm, 1)).toBe(true);
+    expect(canBeAttacked(c, pm)).toBe(true);
   });
   it('相手のターン中に相手のクリーチャーが出てその能力がトリガーした時、自分もその能力を使える', () => {
     const sim = new Sim({

@@ -129,29 +129,14 @@ export function breakerCount(c: Ctx, perm: Permanent): number {
 
 // ───────────────────────── 攻撃・ブロック・選択 ─────────────────────────
 
-/**
- * ジャストダイバー(常在型。誘発しない): 出てから、持ち主の次のターンのはじめまで、
- * 相手に選ばれず、攻撃されない。ターンは交互なので、出たターンの次か次の次のターンが期限。
- */
-function justDiverActive(c: Ctx, perm: Permanent): boolean {
-  if (!hasKeyword(c, perm, 'justDiver')) return false;
-  const s = c.s;
-  const owner = s.cards[perm.cards[0]].owner;
-  const activeAt = (t: number): PlayerId => ((s.first + t - 1) % 2) as PlayerId;
-  const until = activeAt(perm.enteredTurn + 1) === owner ? perm.enteredTurn + 1 : perm.enteredTurn + 2;
-  return s.turn < until;
-}
-
 export function canBeChosen(c: Ctx, perm: Permanent, by: PlayerId): boolean {
   const owner = c.s.cards[perm.cards[0]].owner;
   if (owner === by) return true;
-  if (justDiverActive(c, perm)) return false;
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'cannotBeChosen') return false;
   return true;
 }
 
 export function canBeAttacked(c: Ctx, perm: Permanent): boolean {
-  if (justDiverActive(c, perm)) return false;
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'cannotBeAttacked') return false;
   return true;
 }
