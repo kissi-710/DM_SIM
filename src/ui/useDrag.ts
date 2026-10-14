@@ -38,6 +38,7 @@ export function useDrag(o: Opts) {
       if (!i.moved && Math.hypot(e.clientX - i.sx, e.clientY - i.sy) < THRESHOLD) return;
       if (!i.moved) {
         i.moved = true;
+        document.body.classList.add('dragging'); // ドラッグ中は、ドロップ先を隠さないよう操作パネルをしまう
         opts.current.onStart?.(i.key);
       }
       setDrag({ key: i.key, x: e.clientX, y: e.clientY, over: dropAt(e.clientX, e.clientY) });
@@ -46,6 +47,7 @@ export function useDrag(o: Opts) {
       const i = info.current;
       if (!i) return;
       info.current = null;
+      document.body.classList.remove('dragging');
       if (i.moved) {
         const target = dropAt(e.clientX, e.clientY);
         setDrag(null);
@@ -56,6 +58,7 @@ export function useDrag(o: Opts) {
     };
     const cancel = () => {
       info.current = null;
+      document.body.classList.remove('dragging');
       setDrag(null);
     };
     window.addEventListener('pointermove', move);

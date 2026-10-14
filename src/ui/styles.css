@@ -1077,3 +1077,15 @@ textarea.json {
   border-color: var(--accent2);
   cursor: default;
 }
+
+/* 選んだカードの隣に出す操作パネル */
+.action-pop {
+  position: fixed;
+  z-index: 50;
+  width: 290px;
+  max-height: 70vh;
+  overflow: auto;
+}
+body.dragging .action-pop {
+  display: none;
+}

@@ -1,5 +1,5 @@
 // 対戦画面: 盤面・待機プール・因果ツリーのログ・入力ウィジェット・操作ボタン。
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { costOf, effectsOnPerm, hasKeyword, powerOf, type KwName } from '../engine/derive';
 import { entryLabel, payChoice, planPlay } from '../engine/procs';
 import { mkCtx, permByPid } from '../engine/state';
@@ -459,6 +459,37 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     document.querySelector('.card.selected')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [selected]);
 
+  // 操作パネル: 画面が広い時は選んだカードの隣に出し、視線の往復を減らす。狭い時は右レールに出す
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  useLayoutEffect(() => {
+    if (!selected || !interactive) return setAnchor(null);
+    const el = document.querySelector<HTMLElement>('.card.selected');
+    setAnchor(el ? el.getBoundingClientRect() : null);
+  }, [selected, interactive, s]);
+  const popover = !!anchor && !!selected && interactive && window.innerWidth >= 1000;
+  const actionPanel = (
+      <div className="action-panel">
+        <div className="ap-head">
+          <strong>{selDef?.name ?? 'カード'}</strong>
+          <button className="small" onClick={() => setSelected(null)} aria-label="閉じる" title="閉じる(Esc)">
+            ✕
+          </button>
+        </div>
+        {selDef && <div className="ap-text">{selDef.text}</div>}
+        {selActs.length > 0 ? (
+          <div className="ap-actions">
+            {selActs.map((d, i) => (
+              <button key={i} className="choice big" onClick={() => act(d.action)}>
+                {i < 9 && <span className="kbd">{i + 1}</span>} {d.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="muted">このカードで今できる操作はありません。</div>
+        )}
+      </div>
+  );
+
   const tip = TIPS[Math.floor(s.turn / 2) % TIPS.length];
 
   return (
@@ -620,26 +651,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           {interactive && (
             <div className="rail-action">
               {selected ? (
-                <div className="action-panel">
-                  <div className="ap-head">
-                    <strong>{selDef?.name ?? 'カード'}</strong>
-                    <button className="small" onClick={() => setSelected(null)} aria-label="閉じる" title="閉じる(Esc)">
-                      ✕
-                    </button>
-                  </div>
-                  {selDef && <div className="ap-text">{selDef.text}</div>}
-                  {selActs.length > 0 ? (
-                    <div className="ap-actions">
-                      {selActs.map((d, i) => (
-                        <button key={i} className="choice big" onClick={() => act(d.action)}>
-                          {i < 9 && <span className="kbd">{i + 1}</span>} {d.label}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="muted">このカードで今できる操作はありません。</div>
-                  )}
-                </div>
+                !popover ? actionPanel : <div className="rail-hint">選んだカードの隣に、できる操作を出しています</div>
               ) : (
                 <div className="rail-hint">カードを選ぶと、できる操作がここに出ます</div>
               )}
@@ -681,6 +693,18 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           </div>
         )}
       </div>
+      {popover && anchor && (
+        <div
+          className="action-pop"
+          // 手札など下半分のカードは、隣のカードを隠さないよう真上に、上半分のカードは真下に出す
+          style={{
+            left: Math.max(8, Math.min(anchor.left, window.innerWidth - 300)),
+            ...(anchor.top > window.innerHeight / 2 ? { bottom: window.innerHeight - anchor.top + 8 } : { top: anchor.bottom + 8 }),
+          }}
+        >
+          {actionPanel}
+        </div>
+      )}
       {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
       {payFor &&
         (() => {
