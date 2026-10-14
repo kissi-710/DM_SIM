@@ -152,6 +152,10 @@ CPU の思考時間(待ち時間)を、使えるコア数に近い倍率で縮�
 - Windows では MSVC が無い環境のため、GNU ツールチェーンと、`libgcc_eh` の空のスタブ(`ar rcs libgcc_eh.a`、`RUSTFLAGS=-L <dir>`)で native のテストを動かしている。WASM のビルドにはリンカが要らない。
 - **main へ取り込み済み**(fast-forward)。`src/wasm/dmsim.wasm` が無ければ従来どおり TS 版で動く。CLI は `src/wasm/dmsim.wasm` があれば既定で使い、`DM_WASM=off` で TS 版に戻せる。
 
-## 4. 進め方
+## 4. その後(質の改善)
+
+Rust 版で速くなったぶんを強さに変える計画と結果は [ai-quality-plan.md](./ai-quality-plan.md)(物差し・ホライズン・価値関数の学習・ターン内の木)。探索の既定は、根をペア比較にしたまま2手目以降を木にする方式(ptree)になった。
+
+## 5. 進め方
 
 1 → 2 → 3 の順。各項目は、1つの目的ごとにコミットする(CLAUDE.md の方針)。測定は、同じ条件で前後を比べ、数値を ROADMAP とコミットメッセージに残す。
