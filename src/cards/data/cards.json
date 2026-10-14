@@ -810,5 +810,29 @@
         ]
       }
     ]
+  },
+  {
+    "id": "dm23rp1-070",
+    "name": "配球の超人 / 記録的剛球",
+    "text": "【クリーチャー面】T・ブレイカー。出た時、相手のクリーチャーを1体選び、持ち主のマナゾーンに置く。【呪文面】山札の上1枚をマナゾーンに置く。",
+    "faces": [
+      {
+        "name": "配球の超人", "type": "creature", "cost": 8, "civs": ["nature"], "power": 14000, "races": ["ジャイアント"],
+        "abilities": [
+          { "kind": "keyword", "name": "breaker", "n": 3 },
+          {
+            "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
+              { "op": "act", "act": { "move": { "sel": "$t", "to": "mana", "cause": "manaPlace" } } }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "記録的剛球", "type": "spell", "cost": 2, "civs": ["nature"],
+        "abilities": [{ "kind": "spell", "steps": [{ "op": "act", "act": { "moveTop": { "n": 1, "to": "mana", "cause": "boost" } } }] }]
+      }
+    ]
   }
 ]
