@@ -60,13 +60,7 @@ export function specLabel(spec: AgentSpec): string {
   if (t?.algo !== undefined) parts.push(`algo=${t.algo}`);
   if (t?.treeC !== undefined) parts.push(`c=${t.treeC}`);
   if (t?.treeDepth !== undefined) parts.push(`depth=${t.treeDepth}`);
-  for (const [k, v] of Object.entries(t?.weights ?? {})) {
-    if (k === 'model') continue;
-    if (k === 'lookahead') parts.push('lookahead=' + (v ? 1 : 0));
-    else if (k === 'l1') for (const [kk, vv] of Object.entries(v as object)) parts.push('rl1.' + kk + '=' + vv);
-    else parts.push(`w.${k}=${v}`);
-  }
+  for (const [k, v] of Object.entries(t?.weights ?? {})) if (k !== 'model') parts.push(`w.${k}=${v}`);
   if (t?.modelPath) parts.push(`value=${t.modelPath}`);
-  for (const [k, v] of Object.entries(spec.l1 ?? {})) parts.push('l1.' + k + '=' + v);
   return parts.length ? `${spec.kind}:${parts.join(',')}` : spec.kind;
 }
