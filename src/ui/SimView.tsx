@@ -365,7 +365,7 @@ function ProbResultView({ r, goal }: { r: ProbResult; goal: Goal }) {
         </div>
         {r.search && (
           <div className="panel">
-            <div className="muted">探索による上限(山札の並びを知っていた場合)</div>
+            <div className="muted">探索による上限(山札の並びと乱数の結果まで知っていた場合)</div>
             <div style={{ fontSize: 28, fontWeight: 700 }}>
               {pct(r.search.achieved / Math.max(1, r.trials))}
               {r.search.unknown > 0 && <span className="muted" style={{ fontSize: 16 }}> 〜 {pct(r.search.maxRate)}</span>}
