@@ -51,10 +51,10 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
   });
   it('バッチ対戦: MCTS(20反復) 対 ルールベース 6試合', () => {
     expect(match({ kind: 'mcts', iterations: 20, ms: 100000 }, { kind: 'rule' }, 6, 1)).toEqual({
-      winsA: 5,
-      winsB: 1,
+      winsA: 6,
+      winsB: 0,
       draws: 0,
-      avgTurns: 11.666666666666666,
+      avgTurns: 11.166666666666666,
       reasons: { ダイレクトアタック: 6 },
     });
   });

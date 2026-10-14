@@ -22,12 +22,10 @@ export interface MctsOpts {
   ms?: number;
   /** プレイアウトを何ターン先で打ち切るか */
   horizonTurns?: number;
-  /** 探索の定数 */
-  c?: number;
   /** L1 の手に与える事前の上乗せ(報酬の単位) */
   priorBonus?: number;
   /** 1回の探索が終わるたびに呼ばれる(計測・表示用) */
-  onSearch?: (info: { iterations: number; ms: number; timeDriven: boolean; decided: boolean; arms: number }) => void;
+  onSearch?: (info: { iterations: number; ms: number; timeDriven: boolean; decided: boolean; arms: number; rounds?: number; errors?: number }) => void;
 }
 
 /** プレイアウト用の素早い方針: ターン中の行動は L1 の手順、効果の選択は軽い規則 */
@@ -63,30 +61,35 @@ export function rolloutPick(s: GameState, legal: Action[], reg: Registry, rand: 
   }
 }
 
-/** 時間主導の探索で、反復の絶対上限(無限ループ防止) */
+/** 時間主導の探索で、反復(プレイアウト)の絶対上限(無限ループ防止) */
 const HARD_MAX_ITERATIONS = 100000;
+/** 手の比較に必要な最低ラウンド数(これ未満では判定しない) */
+const MIN_ROUNDS = 8;
 
 /**
- * 早期終了の判定: 1位と2位の差が誤差(約2.5σ)より大きければ決着、
- * または差を判定できる精度(2.5σ < 1.2pt)に達していれば、これ以上反復しても結果は変わらない。
+ * 同じ世界で比べた報酬の差 d(先頭 − 相手)の統計から、勝負がついたかを判定する。
+ * ahead: 差が誤差(約2.5σ)より大きい / precise: 差は判定できないが、これ以上反復しても精度は変わらない(2.5σ < 1.2pt) / open: まだ分からない。
+ * 手ごとに別の世界を引くと、手の差より世界のばらつきが大きくなる。同じ世界・同じ乱数で比べる(ペア比較)と、その分が打ち消される。
  */
-export function isDecided(visits: number[], total: number[], sumsq: number[], bonus: number[]): boolean {
-  let a = -1;
-  let b = -1;
-  const mean = (i: number) => total[i] / visits[i] + bonus[i];
-  for (let i = 0; i < visits.length; i++) {
-    if (!visits[i]) continue;
-    if (a < 0 || mean(i) > mean(a)) {
-      b = a;
-      a = i;
-    } else if (b < 0 || mean(i) > mean(b)) b = i;
-  }
-  if (a < 0 || b < 0) return true; // 比べる相手がいない
-  if (visits[a] < 20 || visits[b] < 10) return false;
-  const variance = (i: number) => Math.max(0.0025, sumsq[i] / visits[i] - (total[i] / visits[i]) ** 2);
-  const se = Math.sqrt(variance(a) / visits[a] + variance(b) / visits[b]);
-  const gap = mean(a) - mean(b);
-  return gap > 2.5 * se || 2.5 * se < 0.012;
+export function pairedVerdict(n: number, dsum: number, dsq: number, bonusGap: number): 'ahead' | 'precise' | 'open' {
+  if (n < MIN_ROUNDS) return 'open';
+  const mean = dsum / n;
+  const se = Math.sqrt(Math.max(0.0025, dsq / n - mean * mean) / n);
+  if (mean + bonusGap > 2.5 * se) return 'ahead';
+  if (2.5 * se < 0.012) return 'precise';
+  return 'open';
+}
+
+/** プレイアウトの乱数(1ラウンド内の全候補手で同じ列にするため、シードから作る) */
+function seededRand(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number): number {
@@ -120,68 +123,84 @@ export function makeMcts(o: MctsOpts = {}): Agent {
       // 反復回数だけを指定した時は、時間では打ち切らない(マシンの速さ・負荷に結果が左右されない)
       if (ms === undefined) ms = timeDriven ? 1500 : Infinity;
       const horizon = o.horizonTurns ?? 3;
-      const C = o.c ?? 0.5;
       const prior = o.priorBonus ?? 0.08;
       const t0 = Date.now();
       const n = legal.length;
-      const visits = new Array(n).fill(0);
-      const total = new Array(n).fill(0);
-      const sumsq = new Array(n).fill(0);
 
       // L1 が選ぶ手(事前の候補)
       const baseAct = l1.chooseAction(view, legal, ctx) as Action;
       let baseIdx = legal.findIndex((a) => JSON.stringify(a) === JSON.stringify(baseAct));
       if (baseIdx < 0) baseIdx = 0;
-
-      let it = 0;
-      let decided = false;
-      const maxIt = timeDriven ? HARD_MAX_ITERATIONS : Math.max(iterations!, n);
-      const minIt = Math.max(6 * n, 48);
       const bonus = new Array(n).fill(0);
       bonus[baseIdx] = prior;
-      while (it < maxIt && (it < n || Date.now() - t0 < ms)) {
+
+      // ペア比較: 1ラウンドで1つの世界(決定化)を作り、残っている全候補手を同じ世界・同じ乱数で評価する。
+      // 手の差が世界のばらつきに埋もれず、同じ反復数でも手の優劣が分かりやすい。
+      // 明らかに劣る手は途中で外し、残りの反復を有力な手に回す。残った手は全ラウンドで評価されているので、平均を公平に比べられる。
+      const sum = new Array(n).fill(0);
+      const sq = new Array(n).fill(0);
+      const cross = Array.from({ length: n }, () => new Array(n).fill(0)); // cross[i][j] = Σ r_i * r_j
+      let alive: number[] = Array.from({ length: n }, (_, i) => i);
+      const maxIt = timeDriven ? HARD_MAX_ITERATIONS : Math.max(iterations!, n);
+      let it = 0; // プレイアウトの回数
+      let rounds = 0;
+      let errors = 0;
+      let decided = false;
+      const mean = (k: number) => sum[k] / rounds + bonus[k];
+      // 先頭 a が b に勝っているか(同じ世界での差で判定)
+      const verdict = (a: number, b: number) => {
+        const dsum = sum[a] - sum[b];
+        const dsq = sq[a] + sq[b] - 2 * cross[a][b];
+        return pairedVerdict(rounds, dsum, dsq, bonus[a] - bonus[b]);
+      };
+
+      while (alive.length > 1 && (rounds === 0 || (it + alive.length <= maxIt && Date.now() - t0 < ms))) {
         const det = determinize(view, me, { rand: ctx.rand, reg, policy, candidateDecks: o.candidateDecks });
-        let k: number;
-        if (it < n) k = it;
-        else {
-          k = 0;
-          let bu = -Infinity;
-          for (let i = 0; i < n; i++) {
-            const mean = total[i] / visits[i] + (i === baseIdx ? prior : 0);
-            const u = mean + C * Math.sqrt(Math.log(it + 1) / visits[i]);
-            if (u > bu) {
-              bu = u;
-              k = i;
-            }
+        const seed = Math.floor(ctx.rand() * 0x7fffffff);
+        const r = new Array<number>(n).fill(NaN);
+        for (const k of alive) {
+          it++;
+          try {
+            r[k] = rollout(step(det, legal[k], reg).state, reg, me, seededRand(seed), horizon);
+          } catch {
+            errors++; // エンジンの例外は「負け」にせず、その手を候補から外す
           }
         }
-        let r: number;
-        try {
-          const s1 = step(det, legal[k], reg).state;
-          r = rollout(s1, reg, me, ctx.rand, horizon);
-        } catch {
-          r = 0;
+        const ok = alive.filter((k) => !Number.isNaN(r[k]));
+        if (ok.length < alive.length) {
+          // 例外を出した手を外す。このラウンドの結果は、残った手だけで集計する
+          alive = ok;
         }
-        visits[k]++;
-        total[k] += r;
-        sumsq[k] += r * r;
-        it++;
-        if (timeDriven && it >= minIt && it % 16 === 0 && isDecided(visits, total, sumsq, bonus)) {
+        if (alive.length === 0) break;
+        rounds++;
+        for (const i of alive) {
+          sum[i] += r[i];
+          sq[i] += r[i] * r[i];
+          for (const j of alive) cross[i][j] += r[i] * r[j];
+        }
+        if (alive.length < 2) break;
+        // 先頭の手と比べて、明らかに劣る手を外す
+        let lead = alive[0];
+        for (const k of alive) if (mean(k) > mean(lead)) lead = k;
+        alive = alive.filter((k) => k === lead || verdict(lead, k) !== 'ahead');
+        if (alive.length === 1) {
           decided = true;
           break;
         }
-      }
-      o.onSearch?.({ iterations: it, ms: Date.now() - t0, timeDriven, decided, arms: n });
-      let best = baseIdx;
-      let bm = visits[baseIdx] ? total[baseIdx] / visits[baseIdx] + prior : -1;
-      for (let i = 0; i < n; i++) {
-        if (!visits[i]) continue;
-        const m = total[i] / visits[i];
-        if (m > bm) {
-          bm = m;
-          best = i;
+        // 時間主導の時は、1位と2位が判定できる精度に達していれば打ち切る
+        if (timeDriven && rounds % 4 === 0) {
+          let second = -1;
+          for (const k of alive) if (k !== lead && (second < 0 || mean(k) > mean(second))) second = k;
+          if (second >= 0 && verdict(lead, second) !== 'open') {
+            decided = true;
+            break;
+          }
         }
       }
+      o.onSearch?.({ iterations: it, ms: Date.now() - t0, timeDriven, decided, arms: n, rounds, errors });
+      if (alive.length === 0 || rounds === 0) return legal[baseIdx];
+      let best = alive[0];
+      for (const k of alive) if (mean(k) > mean(best)) best = k;
       return legal[best];
     },
   };

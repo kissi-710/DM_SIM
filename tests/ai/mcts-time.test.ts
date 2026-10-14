@@ -1,6 +1,6 @@
 // MCTS の時間主導の探索: ms を最大の思考時間として使い、手の優劣がはっきりしたら早めに打ち切る。
 import { describe, expect, it } from 'vitest';
-import { isDecided, makeMcts } from '../../src/ai/mcts';
+import { makeMcts, pairedVerdict } from '../../src/ai/mcts';
 import { createGame, legalActions, step } from '../../src/engine/engine';
 import { deckCards } from '../../src/cards';
 import type { Action, GameState } from '../../src/engine/types';
@@ -20,29 +20,43 @@ const advanced = (seed: number, moves: number): GameState => {
 };
 const ctx = (seed = 1) => ({ rand: mulberry(seed), reg });
 
-describe('isDecided(早期終了の判定)', () => {
-  it('比べる相手がいなければ決着', () => {
-    expect(isDecided([30], [20], [14], [0])).toBe(true);
+describe('pairedVerdict(同じ世界での比較による判定)', () => {
+  it('ラウンドが少ないうちは判定しない', () => {
+    // 毎回 +0.4 の差でも、4ラウンドでは判断しない
+    expect(pairedVerdict(4, 1.6, 0.64, 0)).toBe('open');
   });
-  it('試行数が少ないうちは決着にしない', () => {
-    // 平均 0.9 と 0.1 でも、2回ずつでは判断しない
-    expect(isDecided([2, 2], [1.8, 0.2], [1.62, 0.02], [0, 0])).toBe(false);
+  it('差が誤差より十分に大きければ ahead', () => {
+    // 差の平均 0.2、ほぼ一定(20ラウンド)
+    expect(pairedVerdict(20, 4, 0.9, 0)).toBe('ahead');
   });
-  it('差が誤差より十分に大きければ決着', () => {
-    // 平均 0.8 と 0.4(各50回、分散はおよそ 0.02)
-    expect(isDecided([50, 50], [40, 20], [32.5, 8.5], [0, 0])).toBe(true);
+  it('差が小さく、誤差が大きければ open', () => {
+    // 差の平均 0.02、ばらつきが大きい(20ラウンド、分散およそ 0.1)
+    expect(pairedVerdict(20, 0.4, 2, 0)).toBe('open');
   });
-  it('差が小さく、誤差が大きければ決着にしない', () => {
-    // 平均 0.52 と 0.50(各25回、ばらつきが大きい)
-    expect(isDecided([25, 25], [13, 12.5], [8, 7.5], [0, 0])).toBe(false);
+  it('差は無いが、十分なラウンドで精度が足りていれば precise(これ以上は区別できない)', () => {
+    // 差の平均 0、各 4000 ラウンド(2.5σ が 1.2pt 未満)
+    expect(pairedVerdict(4000, 0, 4000 * 0.005, 0)).toBe('precise');
   });
-  it('差は小さいが、十分な試行で精度が足りていれば(これ以上は区別できない)決着', () => {
-    // 平均が同じで、各 4000 回(誤差 2.5σ が 1.2pt 未満)
-    expect(isDecided([4000, 4000], [2000, 2000], [1100, 1100], [0, 0])).toBe(true);
+  it('事前の上乗せ(bonusGap)を加味する', () => {
+    // 生の差は 0 だが、先頭に +0.2 → ahead
+    expect(pairedVerdict(30, 0, 1.5, 0.2)).toBe('ahead');
   });
-  it('事前の上乗せ(bonus)を加味して順位を付ける', () => {
-    // 生の平均は 0.50 と 0.52 だが、先頭の手に +0.2 → 先頭が明確に上
-    expect(isDecided([60, 60], [30, 31.2], [15, 16], [0.2, 0])).toBe(true);
+});
+
+describe('makeMcts: ペア比較', () => {
+  it('同じ入力なら同じ手(再現できる)', () => {
+    const s = advanced(11, 14);
+    const legal = legalActions(s, reg);
+    const run = () => makeMcts({ iterations: 90 }).chooseAction(s, legal, ctx(5)) as Action;
+    expect(run()).toEqual(run());
+  });
+  it('プレイアウトの回数が iterations を超えない', () => {
+    const s = advanced(11, 14);
+    const legal = legalActions(s, reg);
+    const infos: Info[] = [];
+    makeMcts({ iterations: 90, onSearch: (i) => infos.push(i) }).chooseAction(s, legal, ctx(5));
+    expect(infos[0].iterations).toBeLessThanOrEqual(Math.max(90, legal.length));
+    expect(infos[0].iterations).toBeGreaterThan(0);
   });
 });
 
@@ -62,14 +76,13 @@ describe('makeMcts: ms だけを指定した時は時間主導(反復の上限�
     expect(i.iterations > 120 || i.decided).toBe(true);
     expect(i.ms).toBeLessThan(400 + 1500); // 最大でも ms 程度(プレイアウト1回ぶんの超過は許容)
   }, 30000);
-  it('iterations も指定すれば、それが上限になる(反復主導。早期終了しない)', () => {
+  it('iterations も指定すれば、それが上限になる(反復主導)', () => {
     const s = advanced(11, 14);
     const legal = legalActions(s, reg);
     const infos: Info[] = [];
     makeMcts({ iterations: 30, ms: 60000, onSearch: (i) => infos.push(i) }).chooseAction(s, legal, ctx(1));
     expect(infos[0].timeDriven).toBe(false);
-    expect(infos[0].decided).toBe(false);
-    expect(infos[0].iterations).toBe(Math.max(30, legal.length));
+    expect(infos[0].iterations).toBeLessThanOrEqual(Math.max(30, legal.length));
   }, 30000);
   it('どちらも未指定なら、再現できる既定(120反復・反復主導)', () => {
     const s = advanced(11, 14);
@@ -77,7 +90,7 @@ describe('makeMcts: ms だけを指定した時は時間主導(反復の上限�
     const infos: Info[] = [];
     makeMcts({ onSearch: (i) => infos.push(i) }).chooseAction(s, legal, ctx(1));
     expect(infos[0].timeDriven).toBe(false);
-    expect(infos[0].iterations).toBe(Math.max(120, legal.length));
+    expect(infos[0].iterations).toBeLessThanOrEqual(Math.max(120, legal.length));
   }, 60000);
   it('実行時の budget の ms だけを渡した場合も時間主導になる', () => {
     const s = advanced(11, 14);
@@ -122,7 +135,7 @@ describe('iterations だけを指定した時は、時間で打ち切らない(�
     while (Date.now() - t0 < 50) Math.sqrt(Math.random());
     const b = ag.chooseAction(s, legal, ctx(3));
     expect(a).toEqual(b);
-    expect(infos[0].iterations).toBe(Math.max(40, legal.length));
+    expect(infos[0].iterations).toBeLessThanOrEqual(Math.max(40, legal.length));
     expect(infos[1].iterations).toBe(infos[0].iterations);
   }, 30000);
 });
