@@ -252,8 +252,11 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const interactive = turnAction && pend!.player === viewer;
   const legal = g.legal;
 
+  // ターン終了の確認: まだ出せる・チャージできるカードがあるまま終えようとした時の1回目は止める
+  const [confirmEnd, setConfirmEnd] = useState(false);
   useEffect(() => {
     setSelected(null);
+    setConfirmEnd(false);
   }, [pend?.id]);
 
   // 支払い: 払い方に選択があるときだけ、タップするマナを選ばせる(自明なら聞かずに自動で払う)
@@ -261,6 +264,10 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [payErr, setPayErr] = useState<string | null>(null);
   const act = (a: Action) => {
     setSelected(null);
+    if (a.type === 'END_TURN' && !confirmEnd && legal.some((x) => x.type === 'PLAY_CARD' || x.type === 'CHARGE_MANA')) {
+      setConfirmEnd(true);
+      return;
+    }
     if (askPay && a.type === 'PLAY_CARD' && g.me !== null && !a.extra?.pay) {
       const ch = payChoice(mkCtx(s, reg), g.me, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
       if (ch.need > 0 && !ch.obvious && ch.auto.length === ch.need) {
@@ -482,7 +489,13 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           </button>
         )}
         {setup.allowUndo && (
-          <button disabled={!g.canUndo || !humanTurn} onClick={g.undo} title="1手戻す(練習用。情報が公開された後は戻せません)">
+          <button disabled={!g.canUndo || !humanTurn} onClick={g.undo} title={
+              !humanTurn
+                ? '1手戻す: あなたの番になってから使えます'
+                : !g.canUndo
+                  ? '戻せる手がありません(CPUに手番が移った後や、シールドのブレイク・公開などで情報が出た後は、それ以前に戻せません)'
+                  : '1手戻す(Z)'
+            }>
             ↶ 1手戻す
           </button>
         )}
@@ -646,7 +659,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
               )}
               {stepActs.endTurn && (
                 <button className="primary" onClick={() => act(stepActs.endTurn!)}>
-                  ターン終了 <span className="kbd">E</span>
+                  {confirmEnd ? 'まだ出せるカードがあります。もう一度で終了' : 'ターン終了'} <span className="kbd">E</span>
                 </button>
               )}
             </div>
