@@ -4,6 +4,7 @@ import { CARD_DB } from '../cards';
 import { patternsToCsv, probToCsv, pct } from '../sim/export';
 import { describeGoal, GOAL_PRESETS, type Goal } from '../sim/goal';
 import {
+  initialProblems,
   replayPattern,
   type Pattern,
   type PatternGranularity,
@@ -68,6 +69,9 @@ export function SimView() {
     saveJson('dmsim.sim', { deckId, first, goal, trials, seed, maxNodes, agent, must, exclude, topFixed });
     try {
       const p = params();
+      // 名前の打ち間違い・デッキに無いカードは、黙って無視すると条件なしの結果が出るので、実行前に知らせる
+      const problems = initialProblems(reg, p.deck, p.initial);
+      if (problems.length) throw new Error('初期条件を確認してください: ' + problems.join(' / '));
       if (mode === 'prob') {
         job.current = runSimJob<ProbResult>({ type: 'prob', params: p }, (d, t) => setProgress([d, t]));
         setProb(await job.current.promise);

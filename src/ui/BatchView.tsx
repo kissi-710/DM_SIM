@@ -9,6 +9,9 @@ import { allDecks, findDeck } from './decks';
 import { runSimJob, type RunningJob } from './simClient';
 import { downloadText } from './util';
 
+/** カード単体の強さは、デッキの全種類ぶん対戦するので、指定の試合数をこの数までに制限する */
+const STRENGTH_MAX_GAMES = 300;
+
 function policyOf(preset: InfoPreset): InfoPolicy {
   return {
     preset,
@@ -93,7 +96,7 @@ export function BatchView() {
     setProgress([0, 1]);
     try {
       job.current = runSimJob<CardStrength[]>(
-        { type: 'strength', deck: findDeck(deckA).cards, opponent: findDeck(deckB).cards, agent: { kind: 'rule' }, games: Math.min(games, 300), seed },
+        { type: 'strength', deck: findDeck(deckA).cards, opponent: findDeck(deckB).cards, agent: { kind: 'rule' }, games: Math.min(games, STRENGTH_MAX_GAMES), seed },
         (d, t) => setProgress([d, t]),
       );
       setStrength(await job.current.promise);
@@ -174,7 +177,7 @@ export function BatchView() {
               <button className="primary" onClick={run}>
                 バッチ対戦を実行
               </button>
-              <button onClick={runStrength} title="デッキの各カードを1枚抜いた時の勝率差(Aのデッキ vs Bのデッキ、ルールベース同士)">
+              <button onClick={runStrength} title={`デッキの各カードを1枚抜いた時の勝率差(Aのデッキ vs Bのデッキ、ルールベース同士)。時間がかかるため、試合数は各${STRENGTH_MAX_GAMES}試合までに制限します`}>
                 カードの強さを測る
               </button>
             </>

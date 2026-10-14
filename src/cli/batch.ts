@@ -51,13 +51,43 @@ function usage(): never {
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) usage();
-const jobs = args.jobs ? Math.max(1, Number(args.jobs)) : undefined;
-const deckA = args.deckA ?? 'maruru';
-const deckB = args.deckB ?? 'zardy';
-const games = Number(args.games ?? 1000);
-const seed = Number(args.seed ?? 1);
-const kindA = (args.agentA ?? 'random') as AgentKind;
-const kindB = (args.agentB ?? 'random') as AgentKind;
+
+function fail(msg: string): never {
+  console.error('エラー: ' + msg);
+  process.exit(1);
+}
+
+/** 数値の引数(未指定なら既定値)。数でない・範囲外なら、黙って空の結果を出さずに止める */
+function num(name: string, dflt: number | undefined, min = 0): number | undefined {
+  const raw = args[name];
+  if (raw === undefined) return dflt;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < min) fail(`--${name} は ${min} 以上の数で指定してください(指定値: ${raw})`);
+  return n;
+}
+
+function oneOf<T extends string>(name: string, allowed: readonly T[], dflt: T | undefined): T | undefined {
+  const raw = args[name];
+  if (raw === undefined) return dflt;
+  if (!(allowed as readonly string[]).includes(raw)) fail(`--${name} は ${allowed.join(' / ')} のどれかを指定してください(指定値: ${raw})`);
+  return raw as T;
+}
+
+const deckIds = DECK_PRESETS.map((d) => d.id);
+const jobsRaw = num('jobs', undefined, 1);
+const jobs = jobsRaw === undefined ? undefined : Math.floor(jobsRaw);
+const deckA = oneOf('deckA', deckIds, 'maruru')!;
+const deckB = oneOf('deckB', deckIds, 'zardy')!;
+const games = num('games', 1000, 1)!;
+const seed = num('seed', 1, -Infinity)!;
+const kindA = oneOf('agentA', ['random', 'rule', 'mcts'] as const, 'random')! as AgentKind;
+const kindB = oneOf('agentB', ['random', 'rule', 'mcts'] as const, 'random')! as AgentKind;
+const infos = ['fair', 'partial', 'hypothesis', 'full'] as const;
+const infoA = oneOf('infoA', infos, undefined);
+const infoB = oneOf('infoB', infos, undefined);
+const first = oneOf('first', ['fixed', 'alternate', 'random'] as const, 'alternate')! as FirstMode;
+const iterations = num('iterations', undefined, 1);
+const ms = num('ms', undefined, 1);
 
 if (args.strength) {
   const res = (await runParallel(
@@ -78,11 +108,11 @@ const [stats] = (await runParallel(
       {
         deckA: deckCards(deckA),
         deckB: deckCards(deckB),
-        agentA: { kind: kindA, policy: policyOf(args.infoA), iterations: args.iterations ? Number(args.iterations) : undefined, ms: args.ms ? Number(args.ms) : undefined },
-        agentB: { kind: kindB, policy: policyOf(args.infoB), iterations: args.iterations ? Number(args.iterations) : undefined, ms: args.ms ? Number(args.ms) : undefined },
+        agentA: { kind: kindA, policy: policyOf(infoA), iterations, ms },
+        agentB: { kind: kindB, policy: policyOf(infoB), iterations, ms },
         games,
         seed,
-        first: (args.first ?? 'alternate') as FirstMode,
+        first,
       },
     ],
   },

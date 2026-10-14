@@ -42,15 +42,39 @@ export interface SolitaireParams {
 
 // ───────────────────────── 並びの作成 ─────────────────────────
 
+function resolveOne(reg: Registry, n: string): string | undefined {
+  if (reg.defs[n]) return n;
+  const hit =
+    Object.values(reg.defs).find((d) => d.name === n || d.faces.some((f) => f.name === n)) ??
+    Object.values(reg.defs).find((d) => d.id !== '?' && d.faces.some((f) => nameMatches(d, f.name, n)));
+  return hit?.id;
+}
+
 function resolveIds(reg: Registry, names: string[] | undefined): string[] {
   const out: string[] = [];
   for (const n of names ?? []) {
-    if (reg.defs[n]) out.push(n);
-    else {
-      const hit =
-        Object.values(reg.defs).find((d) => d.name === n || d.faces.some((f) => f.name === n)) ??
-        Object.values(reg.defs).find((d) => d.id !== '?' && d.faces.some((f) => nameMatches(d, f.name, n)));
-      if (hit) out.push(hit.id);
+    const id = resolveOne(reg, n);
+    if (id) out.push(id);
+  }
+  return out;
+}
+
+/**
+ * 初期条件のうち、効かないもの(該当するカードがない / このデッキに入っていない)を日本語で返す。
+ * arrangeDeck は効かない名前を無視する(落ちない)ので、入力画面・CLI がこれで利用者に知らせる。
+ */
+export function initialProblems(reg: Registry, deck: string[], init: InitialCond = {}): string[] {
+  const out: string[] = [];
+  const labels: [keyof InitialCond, string][] = [
+    ['mustHand', '初手に含める'],
+    ['mustNotHand', '初手に含めない'],
+    ['topFixed', '山札の上に固定'],
+  ];
+  for (const [key, label] of labels) {
+    for (const n of init[key] ?? []) {
+      const id = resolveOne(reg, n);
+      if (!id) out.push(`${label}: 「${n}」に一致するカードがありません`);
+      else if (!deck.includes(id)) out.push(`${label}: 「${n}」はこのデッキに入っていません`);
     }
   }
   return out;
