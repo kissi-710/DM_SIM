@@ -36,6 +36,8 @@ export interface AiTuning {
 }
 
 /** 探索の方式の既定(docs/ai-quality-plan.md §6.4 の結果で決める) */
+  /** 学習した価値関数のファイル(測定用。仕様文字列 value=<path> で指定する) */
+  modelPath?: string;
 export const DEFAULT_ALGO: NonNullable<AiTuning['algo']> = 'ptree';
 
 /** ペア比較の木(algo=ptree)の設定。それ以外は undefined */

@@ -1,6 +1,6 @@
 // 状態の複製・乱数・ゾーン操作の下請け。
 import type { Registry } from './registry';
-import type { Card, Ev, Frame, GameState, Permanent, PlayerId, PlayerZones, Snap, ZoneName } from './types';
+import type { Card, Civ, Ev, Frame, GameState, Permanent, PlayerId, PlayerZones, Snap, ZoneName } from './types';
 
 // ───────────────────────── 実行コンテキスト ─────────────────────────
 
@@ -61,10 +61,10 @@ export function hashSeed(seed: number | string): number {
 
 export function cloneJson<T>(v: T): T {
   if (v === null || typeof v !== 'object') return v;
-  if (Array.isArray(v)) return v.map(cloneJson) as any;
-  const o: any = {};
-  for (const k in v as any) o[k] = cloneJson((v as any)[k]);
-  return o;
+  if (Array.isArray(v)) return v.map(cloneJson) as unknown as T;
+  const o: Record<string, unknown> = {};
+  for (const k in v) o[k] = cloneJson((v as Record<string, unknown>)[k]);
+  return o as T;
 }
 
 function clonePlayer(p: PlayerZones): PlayerZones {
@@ -157,11 +157,11 @@ export function snapOf(c: Ctx, uid: number): Snap {
 }
 
 // 全面の文明の和集合(カード定義ごとに不変なのでキャッシュする。戻り値は書き換えない)
-const unionCache = new WeakMap<object, any[]>();
-function unionCivs(faces: { civs: string[] }[]): any[] {
+const unionCache = new WeakMap<object, Civ[]>();
+function unionCivs(faces: { civs: Civ[] }[]): Civ[] {
   let r = unionCache.get(faces);
   if (!r) {
-    const set = new Set<string>();
+    const set = new Set<Civ>();
     for (const f of faces) for (const c of f.civs) set.add(c);
     r = [...set];
     unionCache.set(faces, r);

@@ -14,7 +14,7 @@ export type { SimJob, SimOut };
 const reg = loadRegistry(CARD_DB);
 
 // Rust 版(WASM)。ビルドされていなければ何もしない(結果は TS 版と同じ)
-const wasmUrls = (import.meta as any).glob('../wasm/dmsim.wasm', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
+const wasmUrls = import.meta.glob<string>('../wasm/dmsim.wasm', { query: '?url', import: 'default', eager: true });
 const nativeReady: Promise<void> = (async () => {
   const url = Object.values(wasmUrls)[0];
   if (!url) return;

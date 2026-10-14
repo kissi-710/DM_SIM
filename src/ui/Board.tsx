@@ -54,7 +54,8 @@ export function buildDropMap(s: GameState, legal: Action[]): Map<string, Drop[]>
       if (a.target.kind === 'player') {
         add(`pile:${pid}`, { dropKey: 'zone:oppShield', action: a, label: 'プレイヤーを攻撃' });
       } else {
-        const pm = s.players[0].battle.concat(s.players[1].battle).find((p) => p.pid === (a.target as any).pid);
+        const targetPid = a.target.pid;
+        const pm = s.players[0].battle.concat(s.players[1].battle).find((p) => p.pid === targetPid);
         add(`pile:${pid}`, { dropKey: `opp-pile:${a.target.pid}`, action: a, label: `${pm ? N(pm.cards[0]) : 'クリーチャー'}を攻撃` });
       }
     }

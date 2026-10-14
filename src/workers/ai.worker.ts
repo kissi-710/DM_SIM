@@ -29,7 +29,7 @@ const trees = new Map<number, PairedTree>();
 const post = (m: AiWorkerOut) => (self as unknown as Worker).postMessage(m);
 
 // Rust 版(WASM)。ビルドされていなければ何もしない
-const wasmUrls = (import.meta as any).glob('../wasm/dmsim.wasm', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
+const wasmUrls = import.meta.glob<string>('../wasm/dmsim.wasm', { query: '?url', import: 'default', eager: true });
 const nativeReady: Promise<void> = (async () => {
   const url = Object.values(wasmUrls)[0];
   if (!url) return;

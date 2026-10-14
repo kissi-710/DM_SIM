@@ -1,5 +1,5 @@
 // 効果のインタプリタ(effects 6.5)。フレームは pc と vars(JSON)だけを持ち、再開できる。
-import type { ActDef, Cond, Expr, StepDef } from './ast';
+import type { ActDef, Cond, Expr, Selector, StepDef } from './ast';
 import { type CC, evalCond, evalExpr, selectCards, varUids } from './cond';
 import { charsOf, infoOf } from './derive';
 import {
@@ -155,9 +155,9 @@ export function runEffect(c: Ctx, f: EffectFrame): boolean {
 
 function execSelect(c: Ctx, f: EffectFrame, cc: CC, st: Extract<StepDef, { op: 'select' }>): void {
   let cand: number[];
-  const from: any = st.from;
+  const from = st.from;
   if (from && 'var' in from && !('zone' in from)) cand = varUids(cc, from.var);
-  else cand = selectCards(cc, from);
+  else cand = selectCards(cc, from as Selector);
   const chooser: PlayerId =
     st.who === 'opponent' ? opponentOf(f.controller) : st.who === 'iter' ? (f.vars.$iter ?? f.controller) : f.controller;
   const min0 = st.min === undefined ? 1 : evalExpr(cc, st.min);
@@ -192,7 +192,7 @@ function execSelect(c: Ctx, f: EffectFrame, cc: CC, st: Extract<StepDef, { op: '
 
 // ───────────────────────── 原始操作 ─────────────────────────
 
-function resolveSel(cc: CC, sel: any): number[] {
+function resolveSel(cc: CC, sel: string | Selector): number[] {
   if (typeof sel === 'string') return varUids(cc, sel);
   return selectCards(cc, sel);
 }

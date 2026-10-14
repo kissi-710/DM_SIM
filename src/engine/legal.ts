@@ -6,7 +6,7 @@ import { planPlay } from './procs';
 import type { Registry } from './registry';
 import type { Ctx } from './state';
 import { mkCtx, opponentOf } from './state';
-import type { Action, AnswerValue, GameState, InputSpec, Pending, PlayerId, PlayExtra, ZoneName } from './types';
+import type { Action, AnswerValue, GameState, InputSpec, Pending, PlayerId, PlayExtra } from './types';
 
 export const ENUM_LIMIT = 200;
 
@@ -45,7 +45,7 @@ function turnActions(c: Ctx, player: PlayerId): Action[] {
     return out;
   }
   if (s.step === 'main') {
-    for (const a of playActions(c, player)) add(a, JSON.stringify([a.type, s.cards[(a as any).uid].defId, (a as any).from, (a as any).face, (a as any).extra]));
+    for (const a of playActions(c, player)) add(a, JSON.stringify([a.type, s.cards[a.uid].defId, a.from, a.face, a.extra]));
     add({ type: 'END_MAIN' });
   }
   if (s.step === 'main' || s.step === 'attack') {
@@ -71,12 +71,12 @@ export function attackActions(c: Ctx, player: PlayerId): Action[] {
 }
 
 /** 使えるカード(召喚・詠唱)の行動を列挙する。各カードの種類・面・進化先・ハイパーエナジーの組み合わせ。 */
-export function playActions(c: Ctx, player: PlayerId): Action[] {
+export function playActions(c: Ctx, player: PlayerId): Extract<Action, { type: 'PLAY_CARD' }>[] {
   const s = c.s;
-  const out: Action[] = [];
-  const zones: ZoneName[] = ['hand', 'mana', 'grave'];
+  const out: Extract<Action, { type: 'PLAY_CARD' }>[] = [];
+  const zones = ['hand', 'mana', 'grave'] as const;
   for (const z of zones) {
-    const list = z === 'battle' ? [] : (s.players[player] as any)[z] as number[];
+    const list: number[] = s.players[player][z];
     for (const uid of list) {
       const def = c.reg.defs[s.cards[uid].defId];
       for (let fi = 0; fi < def.faces.length; fi++) {

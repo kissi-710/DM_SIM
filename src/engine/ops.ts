@@ -1,6 +1,6 @@
 // 原始操作(effects 6.3 / 8): イベント発行・誘発の収集・ゾーン移動・置換パイプライン。
 // 規約: 入力待ち(ask)は、状態を変更する前に行う。再実行しても二重に変更されない。
-import type { Ability } from './ast';
+import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
 import { charsOf, infoOf, payNeed } from './derive';
 import type { Ctx } from './state';
@@ -73,13 +73,13 @@ export function collect(c: Ctx, ev: Ev): void {
   }
 }
 
-function tryTrigger(c: Ctx, ev: Ev, uid: number, face: number, idx: number, spec: any, batch: number): void {
+function tryTrigger(c: Ctx, ev: Ev, uid: number, face: number, idx: number, spec: TriggerSpec, batch: number): void {
   const s = c.s;
   const card = s.cards[uid];
   const controller = card.owner;
   const cc = mkCC(c, controller, { self: uid, selfSnap: snapOf(c, uid), event: ev });
   const ons = Array.isArray(spec.on) ? spec.on : [spec.on];
-  if (!ons.some((p: any) => matchPattern(cc, p, ev))) return;
+  if (!ons.some((p: Pattern) => matchPattern(cc, p, ev))) return;
   if (spec.subject === 'self' && ev.card !== uid) return;
   if (spec.subject === 'other' && ev.card === uid) return;
   if (spec.turn === 'own' && s.active !== controller) return;
@@ -142,9 +142,9 @@ function suppressesTrigger(c: Ctx, ev: Ev, srcUid: number, controller: PlayerId)
         if (r.ability.apply.type !== 'cancelTrigger') continue;
         if (r.ability.while && !evalCond(mkCC(c, p, { self: uid }), r.ability.while)) continue;
         const cc = mkCC(c, p, { self: uid });
-        const pat: any = { ...r.ability.match };
+        const pat: Pattern = { ...r.ability.match };
         // match.type は abilityTriggered(元のイベント種別は causeType)
-        if (!matchPattern(cc, { ...pat, type: 'abilityTriggered' }, { ...ev, type: 'abilityTriggered', controller, cause: ev } as any)) continue;
+        if (!matchPattern(cc, { ...pat, type: 'abilityTriggered' }, { ...ev, type: 'abilityTriggered', controller, cause: ev })) continue;
         if (ev.owner !== p) return true;
       }
     }
@@ -465,7 +465,7 @@ function applyReplacements(c: Ctx, p: Proposal): void {
   for (const r of info.replaces) {
     const a = r.ability;
     if (a.while && !evalCond(mkCC(c, owner, { self: p.uid }), a.while)) continue;
-    const m: any = a.match;
+    const m = a.match;
     if (m.type !== 'moved') continue;
     if (m.from !== undefined && m.from !== p.from) continue;
     if (m.cause !== undefined && m.cause !== p.cause) continue;

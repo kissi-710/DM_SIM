@@ -33,9 +33,10 @@ export interface CardProps {
 
 export function civGradient(civs: string[]): string {
   if (civs.length === 0) return '#555';
-  if (civs.length === 1) return (CIV_COLOR as any)[civs[0]];
+  const color = (c: string): string => CIV_COLOR[c as keyof typeof CIV_COLOR] ?? '#555';
+  if (civs.length === 1) return color(civs[0]);
   const step = 100 / civs.length;
-  return `linear-gradient(90deg, ${civs.map((c, i) => `${(CIV_COLOR as any)[c]} ${i * step}% ${(i + 1) * step}%`).join(', ')})`;
+  return `linear-gradient(90deg, ${civs.map((c, i) => `${color(c)} ${i * step}% ${(i + 1) * step}%`).join(', ')})`;
 }
 
 export function CardView(p: CardProps) {

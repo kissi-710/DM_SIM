@@ -156,7 +156,8 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
         // 自分のブロッカーは、シールドが少ない時は残す
         if (hasKeyword(c, pm, 'blocker') && myShield <= 3 && score < 100) score = -1;
       } else {
-        const tp = view.players[opp].battle.find((p) => p.pid === (a.target as any).pid);
+        const targetPid = a.target.pid;
+        const tp = view.players[opp].battle.find((p) => p.pid === targetPid);
         if (tp) {
           const pt = powerOf(c, tp);
           const tcost = charsOf(c, tp.cards[0], -1).cost;

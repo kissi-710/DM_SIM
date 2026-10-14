@@ -243,7 +243,7 @@ function describeAction(reg: Registry, s: GameState, a: Action): HistoryStep | n
     case 'ANSWER': {
       const p = s.pending;
       if (!p || !p.input) return null;
-      const inp: any = p.input;
+      const inp = p.input;
       const src = p.source ? nameOf(p.source.uid) : '';
       let detail: string;
       if (inp.shape === 'yesno') detail = a.value ? 'はい' : 'いいえ';
@@ -252,7 +252,7 @@ function describeAction(reg: Registry, s: GameState, a: Action): HistoryStep | n
       else if (inp.shape === 'assign') {
         const m = a.value as Record<string, number[]>;
         detail = Object.entries(m)
-          .map(([k, v]) => `${inp.slots.find((x: any) => x.id === k)?.label ?? k}:${v.map(nameOf).join(',')}`)
+          .map(([k, v]) => `${inp.slots.find((x) => x.id === k)?.label ?? k}:${v.map(nameOf).join(',')}`)
           .join(' / ');
       } else return null;
       return { turn: mt, kind: 'choice', name: src, detail };
@@ -392,11 +392,11 @@ export function exactDrawProbability(reg: Registry, p: Pick<SolitaireParams, 'de
   const m = g.pred.card;
   const K = p.deck.filter((id) => {
     const def = reg.defs[id];
-    const c: any = m;
-    if (c.names?.length && !c.names.some((n: string) => def.faces.some((f) => nameMatches(def, f.name, n)))) return false;
+    const c = m;
+    if (c.names?.length && !c.names.some((n) => def.faces.some((f) => nameMatches(def, f.name, n)))) return false;
     const f = def.faces[0];
     if (c.type && (c.type === 'creature') !== (f.type !== 'spell')) return false;
-    if (c.civs?.length && !c.civs.some((x: string) => (f.civs as string[]).includes(x))) return false;
+    if (c.civs?.length && !c.civs.some((x) => f.civs.includes(x))) return false;
     if (c.cost) {
       if (c.cost.eq !== undefined && f.cost !== c.cost.eq) return false;
       if (c.cost.gte !== undefined && f.cost < c.cost.gte) return false;

@@ -105,7 +105,7 @@ export function ManualView() {
   }
 
   const z = groups;
-  const cardsOf = (zone: ZoneName): number[] => (zone === 'battle' ? z.battle.map((p) => p.cards[0]) : zone === 'deck' ? z.deck : (z as any)[zone]);
+  const cardsOf = (zone: ZoneName): number[] => (zone === 'battle' ? z.battle.map((p) => p.cards[0]) : zone === 'deck' ? z.deck : z[zone as 'hand' | 'mana' | 'shield' | 'grave']);
 
   const renderZone = (zone: ZoneName) => {
     const list = cardsOf(zone);

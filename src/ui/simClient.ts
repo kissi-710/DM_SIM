@@ -2,7 +2,7 @@
 // 試合・試行のシードは元のジョブと同じ並びで割り当てるので、結果は1スレッドで実行した場合と一致する。
 // キャンセルは Worker を止めて行う。
 import { CARD_DB } from '../cards';
-import { planJob, type SimJob, type SimOut } from '../sim/jobs';
+import { planJob, type JobResult, type SimJob, type SimOut } from '../sim/jobs';
 
 export interface RunningJob<T> {
   promise: Promise<T>;
@@ -19,7 +19,7 @@ export function runSimJob<T>(job: SimJob, onProgress?: (done: number, total: num
   const n = workerCount();
   // 負荷の偏りをならすため、Worker の数より細かく分けて、空いた Worker から順に渡す
   const plan = planJob({ defs: CARD_DB }, job, n * 3);
-  const results: any[] = new Array(plan.chunks.length);
+  const results: JobResult[] = new Array(plan.chunks.length);
   const doneUnits = plan.units.map(() => 0);
   const total = plan.units.reduce((a, b) => a + b, 0);
   const t0 = Date.now();
