@@ -75,3 +75,39 @@ fn legal_and_step_match_ts() {
     }
     eprintln!("{} 手が TS 版と一致しました", steps);
 }
+
+#[test]
+fn eval_round_matches_ts() {
+    use dmsim::ai::{eval_round, SearchEnv};
+    let Some((reg, root)) = load() else { return };
+    let rounds = match root.get("rounds").and_then(|r| r.as_arr()) {
+        Some(r) => r,
+        None => return,
+    };
+    let mut n = 0;
+    let mut maxdiff: f64 = 0.0;
+    for (ri, r) in rounds.iter().enumerate() {
+        let env = SearchEnv::from_json(&reg, r.get("env").unwrap()).unwrap_or_else(|e| panic!("round {}: env の読み込み失敗: {}", ri, e));
+        let alive: Vec<usize> = r.get("alive").unwrap().as_arr().unwrap().iter().map(|x| x.as_i64().unwrap() as usize).collect();
+        let seeds = r.get("seeds").unwrap().as_arr().unwrap();
+        let rows = r.get("rows").unwrap().as_arr().unwrap();
+        for (si, sd) in seeds.iter().enumerate() {
+            let got = eval_round(&reg, &env, sd.as_f64().unwrap() as u32, &alive);
+            let want = rows[si].as_arr().unwrap();
+            assert_eq!(got.len(), want.len());
+            for (k, (g, w)) in got.iter().zip(want).enumerate() {
+                match w {
+                    Json::Null => assert!(g.is_nan(), "round {} seed {} arm {}: 期待は NaN だが {}", ri, si, k, g),
+                    _ => {
+                        let wv = w.as_f64().unwrap();
+                        let d = (g - wv).abs();
+                        maxdiff = maxdiff.max(d);
+                        assert!(d < 1e-9, "round {} seed {} arm {}: {} と {} (差 {})", ri, si, k, g, wv, d);
+                    }
+                }
+                n += 1;
+            }
+        }
+    }
+    eprintln!("{} 個の報酬が一致(最大差 {:e})", n, maxdiff);
+}

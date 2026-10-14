@@ -158,7 +158,15 @@ pub fn has_keyword(e: Env, perm: &Perm, kw: Kw) -> bool {
     if e.s.effects.is_empty() {
         return false;
     }
-    let ks = sym(name);
+    let ks = match kw {
+        Kw::Blocker => s::BLOCKER,
+        Kw::SpeedAttacker => s::KW_SPEED_ATTACKER,
+        Kw::MachFighter => s::KW_MACH_FIGHTER,
+        Kw::ShieldTrigger => s::SHIELD_TRIGGER,
+        Kw::JustDiver => s::KW_JUST_DIVER,
+        Kw::ExLife => s::EX_LIFE,
+    };
+    let _ = name;
     e.s.effects.iter().any(|ef| ef.pid == perm.pid && matches!(ef.m, EffectMod::Grant(k) if k == ks))
 }
 

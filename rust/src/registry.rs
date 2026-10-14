@@ -82,8 +82,9 @@ pub struct Registry {
     pub infos: Vec<Vec<FaceInfo>>,
     pub by_id: HashMap<String, u16>,
     pub ids: Vec<String>,
+    pub id_syms: Vec<Sym>,
     /// イベントの種類 → 定義ごとの誘発能力
-    pub trig_by_def: HashMap<Sym, Vec<Vec<TrigRef>>>,
+    pub trig_by_def: Vec<Option<Vec<Vec<TrigRef>>>>,
     /// [def][face][idx] → (任意あり, 任意なし)
     progs: Vec<Vec<Vec<Option<(Program, Program)>>>>,
 }
@@ -152,7 +153,7 @@ impl Registry {
         }
         // 索引
         let mut infos = Vec::new();
-        let mut trig_by_def: HashMap<Sym, Vec<Vec<TrigRef>>> = HashMap::new();
+        let mut trig_map: HashMap<Sym, Vec<Vec<TrigRef>>> = HashMap::new();
         let nd = defs.len();
         for (di, d) in defs.iter().enumerate() {
             let mut finfo = Vec::new();
@@ -180,7 +181,7 @@ impl Registry {
                         Ability::Trigger { spec, .. } => {
                             info.triggers.push(ai);
                             for on in &spec.on {
-                                let v = trig_by_def.entry(on.ty).or_insert_with(|| vec![Vec::new(); nd]);
+                                let v = trig_map.entry(on.ty).or_insert_with(|| vec![Vec::new(); nd]);
                                 v[di].push(TrigRef { def: di as u16, face: fi as u8, idx: ai });
                             }
                         }
@@ -226,7 +227,13 @@ impl Registry {
             }
             progs.push(pf);
         }
-        Ok(Registry { defs, infos, by_id, ids, trig_by_def, progs })
+        let max_sym = trig_map.keys().map(|k| k.0 as usize).max().map_or(0, |m| m + 1);
+        let mut trig_by_def: Vec<Option<Vec<Vec<TrigRef>>>> = vec![None; max_sym];
+        for (k, v) in trig_map {
+            trig_by_def[k.0 as usize] = Some(v);
+        }
+        let id_syms: Vec<Sym> = ids.iter().map(|i| sym(i)).collect();
+        Ok(Registry { defs, infos, by_id, ids, id_syms, trig_by_def, progs })
     }
 
     pub fn def_index(&self, id: &str) -> Option<u16> {

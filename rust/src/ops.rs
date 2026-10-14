@@ -31,12 +31,14 @@ pub struct Ctx<'a> {
     pub seq0: i32,
     /// 現在の因果の元(イベント ID or フレーム ID)
     pub cause: Option<i32>,
+    /// この step のイベントを out に集めるか(プレイアウトでは不要)
+    pub keep_out: bool,
 }
 
 impl<'a> Ctx<'a> {
     pub fn new(s: State, reg: &'a Registry) -> Ctx<'a> {
         let (rng0, seq0) = (s.rng, s.seq);
-        Ctx { s, reg, out: Vec::new(), ask_idx: 0, rng0, seq0, cause: None }
+        Ctx { s, reg, out: Vec::new(), ask_idx: 0, rng0, seq0, cause: None, keep_out: true }
     }
     pub fn env(&self) -> Env<'_> {
         Env { s: &self.s, reg: self.reg }
@@ -63,16 +65,18 @@ pub fn ask(c: &mut Ctx, spec: NeedInput) -> Res<Val> {
 pub fn emit(c: &mut Ctx, ty: Sym, payload: Vec<(Sym, Val)>) -> Rc<Ev> {
     let id = c.s.next_id();
     let ev = Rc::new(Ev { id, caused_by: c.cause, ty, turn: c.s.turn, f: payload });
-    c.out.push(ev.clone());
+    if c.keep_out {
+        c.out.push(ev.clone());
+    }
     c.s.turn_log.push(ev.clone());
     ev
 }
 
 fn ability_val(reg: &Registry, a: AbilityRef) -> Val {
     Val::Obj(Rc::new(vec![
-        (sym("defId"), Val::Str(sym(&reg.ids[a.def as usize]))),
-        (sym("face"), Val::Int(a.face as i64)),
-        (sym("idx"), Val::Int(a.idx as i64)),
+        (s::DEFID, Val::Str(reg.id_syms[a.def as usize])),
+        (s::FACE, Val::Int(a.face as i64)),
+        (s::IDX, Val::Int(a.idx as i64)),
     ]))
 }
 
@@ -81,9 +85,9 @@ fn ability_val(reg: &Registry, a: AbilityRef) -> Val {
 /// イベントを監視している能力を探して、待機プールに入れる。
 pub fn collect(c: &mut Ctx, ev: &Rc<Ev>) {
     let reg = c.reg;
-    let by_def = match reg.trig_by_def.get(&ev.ty) {
-        Some(b) => b,
-        None => return,
+    let by_def = match reg.trig_by_def.get(ev.ty.0 as usize) {
+        Some(Some(b)) => b,
+        _ => return,
     };
     let batch = c.s.batch_no;
     let n = c.s.cards.len();
@@ -169,10 +173,11 @@ fn try_trigger(c: &mut Ctx, ev: &Rc<Ev>, uid: i32, face: u8, idx: u16, spec: &Tr
             return;
         }
     }
-    let key = format!("{}:{}:{}:{}", uid, ep, face, idx);
+    let key = UKey::Lim { uid, ep, face: face as i32, idx: idx as i32, hash: false };
+    let kh = UKey::Lim { uid, ep, face: face as i32, idx: idx as i32, hash: true };
     if let Some(per) = spec.limit_per_turn {
         let used = c.s.usage_get(&key);
-        if used == Some(c.s.turn as i64) && c.s.usage_get(&format!("{}#", key)).unwrap_or(0) >= per as i64 {
+        if used == Some(c.s.turn as i64) && c.s.usage_get(&kh).unwrap_or(0) >= per as i64 {
             return;
         }
     }
@@ -184,7 +189,6 @@ fn try_trigger(c: &mut Ctx, ev: &Rc<Ev>, uid: i32, face: u8, idx: u16, spec: &Tr
     }
     if spec.limit_per_turn.is_some() {
         let turn = c.s.turn as i64;
-        let kh = format!("{}#", key);
         if c.s.usage_get(&key) != Some(turn) {
             c.s.usage_set(&kh, 0);
         }

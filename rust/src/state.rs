@@ -384,7 +384,7 @@ pub fn state_from_json(reg: &Registry, j: &Json) -> R<State> {
     let mut usage = Vec::new();
     if let Json::Obj(o) = get(j, "usage")? {
         for (k, v) in o {
-            usage.push((k.clone(), v.as_i64().unwrap_or(0)));
+            usage.push((UKey::parse(k), v.as_i64().unwrap_or(0)));
         }
     }
     let cj = get(j, "cfg")?;
@@ -614,7 +614,7 @@ pub fn state_to_json(reg: &Registry, s: &State) -> Json {
         ("pool", pool),
         ("effects", effects),
         ("turnLog", Json::Arr(s.turn_log.iter().map(|e| e.to_json(&n)).collect())),
-        ("usage", Json::Obj(s.usage.iter().map(|(k, v)| (k.clone(), Json::int(*v))).collect())),
+        ("usage", Json::Obj(s.usage.iter().map(|(k, v)| (k.to_str(), Json::int(*v))).collect())),
         ("pending", s.pending.as_ref().map_or(Json::Null, pending_to_json)),
         ("rans", Json::Arr(s.rans.iter().map(|v| v.to_json(&n)).collect())),
         ("rng", Json::int(s.rng as i64)),
@@ -771,10 +771,10 @@ pub fn extra_to_val(e: &PlayExtra) -> Val {
         v.push((s::ONTO, Val::Int(o as i64)));
     }
     if let Some(t) = &e.tap {
-        v.push((sym("tap"), Val::ints(t)));
+        v.push((s::TAP, Val::ints(t)));
     }
     if let Some(p) = &e.pay {
-        v.push((sym("pay"), Val::ints(p)));
+        v.push((s::PAY, Val::ints(p)));
     }
     Val::Obj(Rc::new(v))
 }
@@ -783,8 +783,8 @@ pub fn extra_from_val(v: &Val) -> Option<PlayExtra> {
     match v {
         Val::Obj(_) => Some(PlayExtra {
             onto: v.get(s::ONTO).and_then(|x| x.as_i32()),
-            tap: v.get(sym("tap")).map(|x| x.to_i32s()),
-            pay: v.get(sym("pay")).map(|x| x.to_i32s()),
+            tap: v.get(s::TAP).map(|x| x.to_i32s()),
+            pay: v.get(s::PAY).map(|x| x.to_i32s()),
         }),
         _ => None,
     }
@@ -792,14 +792,14 @@ pub fn extra_from_val(v: &Val) -> Option<PlayExtra> {
 
 pub fn target_to_val(t: &Target) -> Val {
     match t {
-        Target::Player => Val::Obj(Rc::new(vec![(s::KIND, Val::Str(sym("player")))])),
-        Target::Creature(p) => Val::Obj(Rc::new(vec![(s::KIND, Val::Str(sym("creature"))), (s::PID, Val::Int(*p as i64))])),
+        Target::Player => Val::Obj(Rc::new(vec![(s::KIND, Val::Str(s::PLAYER))])),
+        Target::Creature(p) => Val::Obj(Rc::new(vec![(s::KIND, Val::Str(s::CREATURE)), (s::PID, Val::Int(*p as i64))])),
     }
 }
 
 pub fn target_from_val(v: &Val) -> Option<Target> {
     let kind = v.get(s::KIND)?.as_sym()?;
-    if &*kind.name() == "player" {
+    if kind == s::PLAYER {
         Some(Target::Player)
     } else {
         Some(Target::Creature(v.get(s::PID)?.as_i32()?))

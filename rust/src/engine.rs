@@ -20,19 +20,31 @@ pub fn step(reg: &Registry, state: &State, action: &Action) -> Result<StepOut, S
         return Err(format!("不正な行動: {}", err));
     }
     let mut c = Ctx::new(state.clone(), reg);
+    run_step(&mut c, action)?;
+    Ok(StepOut { state: c.s, events: c.out })
+}
+
+/// 検証せず、状態を消費して進める(プレイアウト用。行動は legal_actions から選ばれている前提。イベントは集めない)
+pub fn step_owned(reg: &Registry, state: State, action: &Action) -> Result<State, String> {
+    let mut c = Ctx::new(state, reg);
+    c.keep_out = false;
+    run_step(&mut c, action)?;
+    Ok(c.s)
+}
+
+fn run_step(c: &mut Ctx, action: &Action) -> Result<(), String> {
     if let Action::Answer { value, .. } = action {
         c.s.rans.push(value.clone());
         c.s.pending = None;
     } else {
         c.s.pending = None;
-        match apply_turn_action(&mut c, action) {
+        match apply_turn_action(c, action) {
             Ok(()) => {}
             Err(Stop::Fail(m)) => return Err(m),
             Err(Stop::Need(_)) => return Err("行動の適用中に入力待ちになりました".into()),
         }
     }
-    drive(&mut c)?;
-    Ok(StepOut { state: c.s, events: c.out })
+    drive(c)
 }
 
 fn apply_turn_action(c: &mut Ctx, a: &Action) -> Res<()> {

@@ -56,6 +56,11 @@ syms! {
     ONTO => "onto", SETTLE => "settle", SELF_VAR => "$self",
     // 使用回数のキー
     DECK_OUT => "deckOutHandled",
+    // ゾーン名・その他
+    Z_DECK => "deck", Z_HAND => "hand", Z_MANA => "mana", Z_SHIELD => "shield", Z_BATTLE => "battle", Z_GRAVE => "grave", Z_LIMBO => "limbo",
+    DEFID => "defId", IDX => "idx", TAP => "tap", PAY => "pay", TYPE => "type",
+    ALL => "all", START => "start", END => "end", DECK_BOTTOM => "deckBottom",
+    KW_SPEED_ATTACKER => "speedAttacker", KW_MACH_FIGHTER => "machFighter", KW_JUST_DIVER => "justDiver",
 }
 
 thread_local! {
@@ -161,7 +166,27 @@ impl Zone {
         }
     }
     pub fn sym(self) -> Sym {
-        sym(self.name())
+        match self {
+            Zone::Deck => s::Z_DECK,
+            Zone::Hand => s::Z_HAND,
+            Zone::Mana => s::Z_MANA,
+            Zone::Shield => s::Z_SHIELD,
+            Zone::Battle => s::Z_BATTLE,
+            Zone::Grave => s::Z_GRAVE,
+            Zone::Limbo => s::Z_LIMBO,
+        }
+    }
+    pub fn from_sym(x: Sym) -> Option<Zone> {
+        Some(match x {
+            s::Z_DECK => Zone::Deck,
+            s::Z_HAND => Zone::Hand,
+            s::Z_MANA => Zone::Mana,
+            s::Z_SHIELD => Zone::Shield,
+            s::Z_BATTLE => Zone::Battle,
+            s::Z_GRAVE => Zone::Grave,
+            s::Z_LIMBO => Zone::Limbo,
+            _ => return None,
+        })
     }
 }
 
@@ -713,6 +738,37 @@ pub struct NeedInput {
     pub source: Option<ObjRef>,
 }
 
+/// 使用回数の記録のキー(誘発の回数制限 / 山札切れの置換済み)
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum UKey {
+    /// "uid:ep:face:idx"(hash なら末尾に "#")
+    Lim { uid: i32, ep: i32, face: i32, idx: i32, hash: bool },
+    Other(String),
+}
+
+impl UKey {
+    pub fn parse(s: &str) -> UKey {
+        let (body, hash) = match s.strip_suffix('#') {
+            Some(b) => (b, true),
+            None => (s, false),
+        };
+        let parts: Vec<&str> = body.split(':').collect();
+        if parts.len() == 4 {
+            let n: Vec<Option<i32>> = parts.iter().map(|p| p.parse::<i32>().ok()).collect();
+            if n.iter().all(|x| x.is_some()) {
+                return UKey::Lim { uid: n[0].unwrap(), ep: n[1].unwrap(), face: n[2].unwrap(), idx: n[3].unwrap(), hash };
+            }
+        }
+        UKey::Other(s.to_string())
+    }
+    pub fn to_str(&self) -> String {
+        match self {
+            UKey::Lim { uid, ep, face, idx, hash } => format!("{}:{}:{}:{}{}", uid, ep, face, idx, if *hash { "#" } else { "" }),
+            UKey::Other(s) => s.clone(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct State {
     pub cards: Vec<Card>,
@@ -726,7 +782,7 @@ pub struct State {
     pub pool: Vec<PoolEntry>,
     pub effects: Vec<ContEffect>,
     pub turn_log: Vec<Rc<Ev>>,
-    pub usage: Vec<(String, i64)>,
+    pub usage: Vec<(UKey, i64)>,
     pub pending: Option<Pending>,
     pub rans: Vec<Val>,
     pub rng: i32,
@@ -761,17 +817,17 @@ impl State {
         self.seq += 1;
         self.seq
     }
-    pub fn usage_get(&self, k: &str) -> Option<i64> {
+    pub fn usage_get(&self, k: &UKey) -> Option<i64> {
         self.usage.iter().find(|(kk, _)| kk == k).map(|(_, v)| *v)
     }
-    pub fn usage_set(&mut self, k: &str, v: i64) {
+    pub fn usage_set(&mut self, k: &UKey, v: i64) {
         if let Some(e) = self.usage.iter_mut().find(|(kk, _)| kk == k) {
             e.1 = v;
         } else {
-            self.usage.push((k.to_string(), v));
+            self.usage.push((k.clone(), v));
         }
     }
-    pub fn usage_del(&mut self, k: &str) {
+    pub fn usage_del(&mut self, k: &UKey) {
         self.usage.retain(|(kk, _)| kk != k);
     }
     pub fn perm_by_pid(&self, pid: i32) -> Option<(PlayerId, usize)> {

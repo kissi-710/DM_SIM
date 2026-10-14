@@ -10,6 +10,7 @@ import { createGame, legalActions, step } from '../src/engine/engine';
 import { loadRegistry } from '../src/engine/registry';
 import { FAIR, toPlayerView } from '../src/engine/view';
 import { mulberry } from '../src/sim/playGame';
+import { evalRound, roundSeed, type SearchEnv } from '../src/ai/mcts';
 
 const out = process.argv[2] ?? 'rust/fixtures/games.json';
 const reg = loadRegistry(CARD_DB);
@@ -56,6 +57,24 @@ for (const [a, b, seed, k] of [
 ] as const) {
   games.push(play(a, b, seed, [k[0], k[1]]));
 }
+// プレイアウトの正解: 途中の局面(自分から見た PlayerView)で、手ごとの報酬を数ラウンド
+const rounds: { env: SearchEnv; seeds: number[]; alive: number[]; rows: (number | null)[][] }[] = [];
+for (const g of games) {
+  for (let i = 0; i < g.states.length - 1; i += 4) {
+    const st: any = g.states[i];
+    const legal: any[] = g.legal[i] as any[];
+    if (!st.pending || legal.length < 2) continue;
+    const me = st.pending.player;
+    const view = toPlayerView(st, me, FAIR, reg);
+    const env: SearchEnv = { view, legal, me, policy: FAIR, candidateDecks: undefined, horizon: 3 };
+    const seeds = [1, 2, 3, 4].map((r) => roundSeed(77 + i, r));
+    const alive = legal.map((_, k) => k);
+    const rows = seeds.map((sd) => evalRound(env, reg, sd, alive).map((x) => (Number.isNaN(x) ? null : x)));
+    rounds.push({ env: plain(env), seeds, alive, rows });
+    if (rounds.length >= 24) break;
+  }
+  if (rounds.length >= 24) break;
+}
 const defs = plain(reg.defs);
-writeFileSync(out, JSON.stringify({ defs, games }));
-console.log('games', games.map((g) => g.actions.length).join(','), 'bytes', JSON.stringify({ defs, games }).length);
+writeFileSync(out, JSON.stringify({ defs, games, rounds }));
+console.log('games', games.map((g) => g.actions.length).join(','), 'rounds', rounds.length);

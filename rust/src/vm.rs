@@ -370,7 +370,7 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             let rest_uids: Vec<i32> = revealed.iter().copied().filter(|u| Some(*u) != found).collect();
             let rest_refs = refs_of(c, &rest_uids);
             var_set(&mut f.vars, *rest, Val::refs(&rest_refs));
-            emit(c, s::REVEALED, vec![(s::CARDS, Val::ints(&revealed)), (s::TO, Val::Str(sym("all"))), (s::FROM, Val::zone(Zone::Deck))]);
+            emit(c, s::REVEALED, vec![(s::CARDS, Val::ints(&revealed)), (s::TO, Val::Str(s::ALL)), (s::FROM, Val::zone(Zone::Deck))]);
             Ok(())
         }
         Act::Reveal { items } => {
@@ -379,7 +379,7 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
                 resolve_sel(&cc, items)
             };
             ack_all(c, f, &uids)?;
-            emit(c, s::REVEALED, vec![(s::CARDS, Val::ints(&uids)), (s::TO, Val::Str(sym("all")))]);
+            emit(c, s::REVEALED, vec![(s::CARDS, Val::ints(&uids)), (s::TO, Val::Str(s::ALL))]);
             Ok(())
         }
         Act::ShuffleBottom { of } => {
@@ -566,11 +566,11 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             let src_uid = trig.int(s::SOURCE).unwrap_or(0) as i32;
             let ability = match trig.get(s::ABILITY) {
                 Some(v) => {
-                    let id = v.get(sym("defId")).and_then(|x| x.as_sym()).map(|x| x.name().to_string()).unwrap_or_default();
+                    let id = v.get(s::DEFID).and_then(|x| x.as_sym()).map(|x| x.name().to_string()).unwrap_or_default();
                     AbilityRef {
                         def: c.reg.def_index(&id).ok_or_else(|| Stop::Fail(format!("未知のカード: {}", id)))?,
                         face: v.get(s::FACE).and_then(|x| x.as_int()).unwrap_or(0) as u8,
-                        idx: v.get(sym("idx")).and_then(|x| x.as_int()).unwrap_or(0) as u16,
+                        idx: v.get(s::IDX).and_then(|x| x.as_int()).unwrap_or(0) as u16,
                     }
                 }
                 None => return fail("copyTrigger: ability がありません"),

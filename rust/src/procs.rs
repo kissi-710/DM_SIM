@@ -199,7 +199,7 @@ fn run_turn(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
             if c.s.turn > c.s.cfg.turn_limit {
                 c.s.winner = Winner::Draw;
                 c.s.lose_reason = Some("ターン上限".to_string());
-                emit(c, s::GAME_OVER, vec![(s::WINNER, Val::Str(sym("draw"))), (s::REASON, Val::Str(sym("ターン上限")))]);
+                emit(c, s::GAME_OVER, vec![(s::WINNER, Val::Str(s::DRAW)), (s::REASON, Val::Str(sym("ターン上限")))]);
                 return Ok(());
             }
             c.s.step = Step::Start;
@@ -218,7 +218,7 @@ fn run_turn(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
             // 「次の自分のターンのはじめまで」の期限切れ
             let turn = c.s.turn;
             c.s.effects.retain(|e| !matches!(e.until, Duration::UntilTurnStart { player, after_turn } if player == p && turn > after_turn));
-            let ev = emit(c, s::STEP_START, vec![(s::STEP, Val::Str(sym("start"))), (s::PLAYER, Val::Int(p as i64))]);
+            let ev = emit(c, s::STEP_START, vec![(s::STEP, Val::Str(s::START)), (s::PLAYER, Val::Int(p as i64))]);
             c.s.batch_no += 1;
             collect_batch(c, &[ev]);
             f.stage = 1;
@@ -265,7 +265,7 @@ fn run_turn(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                 f.stage = 4;
                 return Ok(());
             }
-            let ev = emit(c, s::STEP_START, vec![(s::STEP, Val::Str(sym("end"))), (s::PLAYER, Val::Int(p as i64))]);
+            let ev = emit(c, s::STEP_START, vec![(s::STEP, Val::Str(s::END)), (s::PLAYER, Val::Int(p as i64))]);
             c.s.batch_no += 1;
             collect_batch(c, &[ev]);
             f.stage = 4;
@@ -320,7 +320,7 @@ fn run_play(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
     match f.stage {
         0 => {
             let ep = vi(&f.vars, s::EP) as i32;
-            let from = var_get(&f.vars, s::FROM).and_then(|v| v.as_sym()).and_then(|sy| Zone::parse(&sy.name()));
+            let from = var_get(&f.vars, s::FROM).and_then(|v| v.as_sym()).and_then(Zone::from_sym);
             let ok = match c.s.cards.get(uid as usize) {
                 Some(card) => card.ep == ep && Some(card.zone) == from,
                 None => false,
@@ -361,10 +361,10 @@ fn run_play(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
             }
             c.s.limbo.push(uid);
             let plan_val = Val::Obj(Rc::new(vec![
-                (s::KIND, Val::Str(if plan.cast { sym("cast") } else { s::SUMMON })),
+                (s::KIND, Val::Str(if plan.cast { s::CAST } else { s::SUMMON })),
                 (s::PAID, Val::Int(plan.pay.len() as i64)),
                 (s::COST, Val::Int(plan.cost as i64)),
-                (s::AFTER, if plan.after_bottom { Val::Str(sym("deckBottom")) } else { Val::Null }),
+                (s::AFTER, if plan.after_bottom { Val::Str(s::DECK_BOTTOM) } else { Val::Null }),
                 (s::ONTO, plan.onto.map_or(Val::Null, |o| Val::Int(o as i64))),
                 (s::FACE, Val::Int(plan.face as i64)),
                 (s::FREE, Val::Bool(free)),
@@ -441,8 +441,8 @@ fn run_play(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
             // 呪文の解決後。墓地(または山札の下)に置く
             let p = var_get(&f.vars, s::PLAN).cloned().unwrap_or(Val::Null);
             if c.s.cards[uid as usize].zone == Zone::Limbo {
-                let plan_bottom = p.get(s::AFTER).and_then(|x| x.as_sym()).map_or(false, |x| &*x.name() == "deckBottom");
-                let var_bottom = var_get(&f.vars, s::AFTER).and_then(|x| x.as_sym()).map_or(false, |x| &*x.name() == "deckBottom");
+                let plan_bottom = p.get(s::AFTER).and_then(|x| x.as_sym()) == Some(s::DECK_BOTTOM);
+                let var_bottom = var_get(&f.vars, s::AFTER).and_then(|x| x.as_sym()) == Some(s::DECK_BOTTOM);
                 if plan_bottom || var_bottom {
                     let mut o = MoveOpts::new(Zone::Deck, s::CAST_BOTTOM);
                     o.pos = Some(false);
@@ -928,12 +928,12 @@ pub fn run_sba(c: &mut Ctx) -> Res<bool> {
     // 山札が0枚のプレイヤーは敗北(104.2b)。置換された後は、山札が増えるまで再度は起きない
     for p in 0..2usize {
         if !c.s.players[p].deck.is_empty() {
-            c.s.usage_del(&format!("deckOutHandled{}", p));
+            c.s.usage_del(&UKey::Other(format!("deckOutHandled{}", p)));
         }
     }
     let losers: Vec<usize> = (0..2usize)
         .filter(|&p| {
-            c.s.players[p].deck.is_empty() && c.s.turn >= 1 && !(c.s.cfg.solitaire && p == 1) && c.s.usage_get(&format!("deckOutHandled{}", p)).unwrap_or(0) == 0
+            c.s.players[p].deck.is_empty() && c.s.turn >= 1 && !(c.s.cfg.solitaire && p == 1) && c.s.usage_get(&UKey::Other(format!("deckOutHandled{}", p))).unwrap_or(0) == 0
         })
         .collect();
     if !losers.is_empty() {
@@ -946,7 +946,7 @@ pub fn run_sba(c: &mut Ctx) -> Res<bool> {
         c.s.lose_reason = Some("山札切れ".to_string());
         let w = match c.s.winner {
             Winner::P(p) => Val::Int(p as i64),
-            _ => Val::Str(sym("draw")),
+            _ => Val::Str(s::DRAW),
         };
         emit(c, s::GAME_OVER, vec![(s::WINNER, w), (s::REASON, Val::Str(sym("山札切れ")))]);
         return Ok(true);
@@ -980,7 +980,7 @@ pub fn run_sba(c: &mut Ctx) -> Res<bool> {
             )?;
             let keep = ans.to_i32s().first().copied().unwrap_or(-1);
             let bounce: Vec<i32> = smax.into_iter().filter(|u| *u != keep).collect();
-            move_cards(c, &bounce, &MoveOpts::new(Zone::Hand, sym("bounce")))?;
+            move_cards(c, &bounce, &MoveOpts::new(Zone::Hand, s::BOUNCE))?;
             return Ok(true);
         }
     }
@@ -990,7 +990,7 @@ pub fn run_sba(c: &mut Ctx) -> Res<bool> {
 
 /// 「ゲームに負ける時、かわりに〜してもよい」(ジャオウガ)。置換したら true
 fn loss_replacement(c: &mut Ctx, p: PlayerId) -> Res<bool> {
-    let key = format!("deckOutHandled{}", p);
+    let key = UKey::Other(format!("deckOutHandled{}", p));
     let reg = c.reg;
     let perms: Vec<i32> = c.s.players[p as usize].battle.iter().map(|x| x.cards[0]).collect();
     for uid in perms {

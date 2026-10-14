@@ -426,7 +426,7 @@ fn rel_ok(want: Option<Rel>, actual: Option<i64>, controller: PlayerId) -> bool 
 fn val_type(v: &Val) -> Option<Sym> {
     match v {
         Val::Ev(e) => Some(e.ty),
-        Val::Obj(_) => v.get(sym("type")).and_then(|t| t.as_sym()),
+        Val::Obj(_) => v.get(s::TYPE).and_then(|t| t.as_sym()),
         _ => None,
     }
 }
@@ -445,12 +445,12 @@ pub fn match_pattern(cc: &CC, pat: &Pattern, ev: &Ev) -> bool {
     }
     if let Some(role) = pat.role {
         let key = if ev.ty == s::BLOCKED {
-            if role == sym("attacker") {
+            if role == s::ATTACKER {
                 s::ATTACKER_CARD
             } else {
                 s::CARD
             }
-        } else if role == sym("winner") {
+        } else if role == s::WINNER {
             s::WINNER_CARD
         } else {
             s::LOSER_CARD
