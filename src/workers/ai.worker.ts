@@ -1,24 +1,49 @@
 // AI の思考を UI スレッドの外で行う Web Worker(design 7.4)。
 // 受け取るのは JSON 化できるデータ(状態・設定)だけ。
+// 1つの意思決定を丸ごと行う(decide)ほか、並列探索のラウンドの評価(begin → rounds)も受け持つ。
 import { decide, type DecideReq } from '../ai/decide';
+import { evalRound, type SearchEnv } from '../ai/mcts';
 import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
+import type { Action } from '../engine/types';
 
-export interface AiWorkerIn {
-  id: number;
-  req: DecideReq;
-}
-export type AiWorkerOut = { id: number; ok: true; action: import('../engine/types').Action; ms: number } | { id: number; ok: false; error: string };
+export type AiWorkerIn =
+  | { id: number; req: DecideReq }
+  /** 並列探索の入力を登録する(sid ごと。新しいものから数件だけ覚える) */
+  | { kind: 'begin'; sid: number; env: SearchEnv }
+  /** 並列探索のラウンドを評価する。rows[i] は seeds[i] の結果 */
+  | { kind: 'rounds'; id: number; sid: number; seeds: number[]; alive: number[] };
+export type AiWorkerOut =
+  | { id: number; ok: true; action: Action; ms: number }
+  | { id: number; ok: true; rows: number[][]; ms: number }
+  | { id: number; ok: false; error: string };
 
 const reg = loadRegistry(CARD_DB);
+const envs = new Map<number, SearchEnv>();
+const post = (m: AiWorkerOut) => (self as unknown as Worker).postMessage(m);
 
 self.onmessage = (e: MessageEvent<AiWorkerIn>) => {
-  const { id, req } = e.data;
+  const m = e.data;
+  if ('kind' in m && m.kind === 'begin') {
+    envs.set(m.sid, m.env);
+    while (envs.size > 4) envs.delete(envs.keys().next().value as number);
+    return;
+  }
   const t0 = Date.now();
+  if ('kind' in m && m.kind === 'rounds') {
+    try {
+      const env = envs.get(m.sid);
+      if (!env) throw new Error('探索の入力がありません');
+      post({ id: m.id, ok: true, rows: m.seeds.map((sd) => evalRound(env, reg, sd, m.alive)), ms: Date.now() - t0 });
+    } catch (err: any) {
+      post({ id: m.id, ok: false, error: String(err?.message ?? err) });
+    }
+    return;
+  }
+  const { id, req } = m as { id: number; req: DecideReq };
   try {
-    const action = decide(reg, req);
-    (self as unknown as Worker).postMessage({ id, ok: true, action, ms: Date.now() - t0 } satisfies AiWorkerOut);
+    post({ id, ok: true, action: decide(reg, req), ms: Date.now() - t0 });
   } catch (err: any) {
-    (self as unknown as Worker).postMessage({ id, ok: false, error: String(err?.message ?? err) } satisfies AiWorkerOut);
+    post({ id, ok: false, error: String(err?.message ?? err) });
   }
 };

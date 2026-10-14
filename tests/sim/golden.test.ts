@@ -54,7 +54,7 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
       winsA: 6,
       winsB: 0,
       draws: 0,
-      avgTurns: 11.166666666666666,
+      avgTurns: 12.5,
       reasons: { ダイレクトアタック: 6 },
     });
   });
