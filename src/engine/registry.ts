@@ -234,7 +234,6 @@ export function validateCardDb(db: CardDB): string[] {
 
 // ───────────────────────── コンパイル ─────────────────────────
 
-let uniq = 0;
 
 function compileSteps(steps: StepDef[], out: Instr[]): void {
   for (const st of steps) {
@@ -279,7 +278,7 @@ function compileSteps(steps: StepDef[], out: Instr[]): void {
         break;
       }
       case 'modes': {
-        const key = `$m${++uniq}`;
+        const key = `$m${out.length}`;
         const starts: number[] = [];
         const head: Instr = { o: 'modes', step: st, key, starts, next: -1 };
         out.push(head);
@@ -299,7 +298,7 @@ function compileSteps(steps: StepDef[], out: Instr[]): void {
         break;
       }
       case 'each': {
-        const key = `$e${++uniq}`;
+        const key = `$e${out.length}`;
         out.push({ o: 'eachInit', inVar: st.in, key });
         const nextPc = out.length;
         const nx: Instr = { o: 'eachNext', as: st.as, inVar: st.in, key, end: -1 };
@@ -310,7 +309,7 @@ function compileSteps(steps: StepDef[], out: Instr[]): void {
         break;
       }
       case 'repeat': {
-        const key = `$r${++uniq}`;
+        const key = `$r${out.length}`;
         out.push({ o: 'repeatInit', times: st.times, key });
         const nextPc = out.length;
         const nx: Instr = { o: 'repeatNext', key, end: -1 };
