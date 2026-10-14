@@ -25,7 +25,7 @@ export function probToCsv(r: ProbResult): string {
 }
 
 export function patternsToCsv(r: PatternResult): string {
-  const rows: (string | number)[][] = [['順位', 'パターン', '件数', '全試行に対する割合', '達成した試行に対する割合', '代表シード']];
+  const rows: (string | number)[][] = [['順位', 'パターン', '件数', '作れた試行の割合(全試行に対して)', '作れた試行の割合(達成した試行に対して)', '代表シード']];
   r.patterns.forEach((p, i) => rows.push([i + 1, p.key, p.count, p.ratioAll, p.ratioAchieved, p.sampleSeed]));
   return rows.map((row) => row.map(esc).join(',')).join('\n');
 }
@@ -52,8 +52,9 @@ export function formatProb(r: ProbResult): string {
 export function formatPatterns(r: PatternResult, top = 10): string {
   const lines: string[] = [];
   lines.push(`試行 ${r.trials} 回 / 達成した試行 ${r.achievedTrials} / 未判定 ${r.unknownTrials} / パターン ${r.patterns.length} 種 / ${r.ms}ms`);
+  lines.push('割合は「そのパターンを作れた試行の割合」(試行ごとに、探索で先に見つかった履歴だけを数える。実際に打つ頻度ではない)');
   r.patterns.slice(0, top).forEach((p, i) => {
-    lines.push(`#${i + 1} ${pct(p.ratioAll)}(達成した試行の ${pct(p.ratioAchieved)}) ${p.count}件`);
+    lines.push(`#${i + 1} ${pct(p.ratioAll)}の試行で作れた(達成した試行の ${pct(p.ratioAchieved)}) ${p.count}件`);
     for (const t of p.turns) {
       lines.push(`    ${t.turn}T: マナ ${t.charge ?? '-'} / 使用 ${t.plays.join(' → ') || '-'}${t.choices.length ? ' / 選択 ' + t.choices.join('; ') : ''}`);
     }

@@ -70,7 +70,7 @@ describe('patternsToCsv', () => {
   it('順位・件数・割合・代表シードが並び、カンマや引用符を含む値は引用符で囲まれる', () => {
     const csv = patternsToCsv(patterns());
     const lines = csv.split('\n');
-    expect(lines[0]).toBe('順位,パターン,件数,全試行に対する割合,達成した試行に対する割合,代表シード');
+    expect(lines[0]).toBe('順位,パターン,件数,作れた試行の割合(全試行に対して),作れた試行の割合(達成した試行に対して),代表シード');
     expect(lines[1]).toBe('1,T1 マナ:A 使用:-,12,0.24,0.6,7');
     expect(lines[2]).toBe('2,"カンマ,と""引用符""",8,0.16,0.4,9');
   });
@@ -106,7 +106,7 @@ describe('formatPatterns', () => {
   it('上位のパターンを、ターンごとの履歴つきで出す', () => {
     const t = formatPatterns(patterns());
     expect(t).toContain('達成した試行 20');
-    expect(t).toContain('#1 24.0%(達成した試行の 60.0%) 12件');
+    expect(t).toContain('#1 24.0%の試行で作れた(達成した試行の 60.0%) 12件');
     expect(t).toContain('1T: マナ A / 使用 -');
     expect(t).toContain('2T: マナ B / 使用 X → Y / 選択 X: Z');
   });
