@@ -136,7 +136,6 @@ export function useGame(setup: GameSetup) {
   const { state } = session;
   const pend = state.pending;
   const cpuTurn = !!pend && state.winner === null && setup.seats[pend.player].kind === 'cpu';
-  const [stepToken, setStepToken] = useState(0);
   useEffect(() => {
     if (!cpuTurn || paused) return;
     const my = ++stamp.current;
@@ -159,20 +158,28 @@ export function useGame(setup: GameSetup) {
     return () => {
       cancelled = true;
     };
-  }, [cpuTurn, paused, state, stepToken, speed]);
+  }, [cpuTurn, paused, state, speed]);
 
   // 「1手進める」: 一時停止中に CPU を1手だけ動かす
+  const stepping = useRef(false);
   const stepOnce = useCallback(() => {
     const cur = sessionRef.current;
-    if (!cur.state.pending || cur.state.winner !== null) return;
+    if (stepping.current || !cur.state.pending || cur.state.winner !== null) return;
+    if (setup.seats[cur.state.pending.player].kind !== 'cpu') return;
+    stepping.current = true; // 連打で、同じ状態に対する手を2回決めない
     void (async () => {
-      const spec = setup.seats[cur.state.pending!.player].agent;
-      if (setup.seats[cur.state.pending!.player].kind !== 'cpu') return;
-      const seed = hashSeed(setup.seed) ^ (cur.actions.length * 2654435761);
-      const a = await chooseWithWorker({ state: cur.state, spec, seed });
-      perform(a);
+      try {
+        const spec = setup.seats[cur.state.pending!.player].agent;
+        const seed = hashSeed(setup.seed) ^ (cur.actions.length * 2654435761);
+        const a = await chooseWithWorker({ state: cur.state, spec, seed });
+        // 待っている間に状態が変わった(別の操作・再開)なら、古い状態向けの手は捨てる
+        if (sessionRef.current.state === cur.state) perform(a);
+      } catch (e: any) {
+        setSession((s) => ({ ...s, error: String(e?.message ?? e) }));
+      } finally {
+        stepping.current = false;
+      }
     })();
-    setStepToken((t) => t + 0);
   }, [setup, perform]);
 
   const legal = state.pending && state.winner === null ? legalActions(state, reg) : [];
