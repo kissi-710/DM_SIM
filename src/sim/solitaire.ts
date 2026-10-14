@@ -328,7 +328,10 @@ export interface ProbResult {
 }
 
 /** 目標が「N枚以上引く」だけで書ける場合の厳密値 */
-export function exactDrawProbability(reg: Registry, p: Pick<SolitaireParams, 'deck' | 'goal' | 'first'>): ProbResult['exact'] | undefined {
+export function exactDrawProbability(reg: Registry, p: Pick<SolitaireParams, 'deck' | 'goal' | 'first' | 'initial'>): ProbResult['exact'] | undefined {
+  // 初手の固定・除外・山札の上の固定があると、無作為な引きではなくなる(超幾何分布は当てはまらない)
+  const init = p.initial;
+  if (init && (init.mustHand?.length || init.mustNotHand?.length || init.topFixed?.length)) return undefined;
   const g = p.goal;
   if (g.op !== 'pred' || g.pred.kind !== 'zoneHas' || g.pred.zone !== 'hand') return undefined;
   if (g.pred.card.cost || g.pred.card.civs || g.pred.card.type || g.pred.card.face) {

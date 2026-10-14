@@ -278,3 +278,19 @@ describe('replayPattern', () => {
     for (const s of r.states) expect(checkInvariants(s)).toEqual([]);
   });
 });
+
+describe('exactDrawProbability: 初期条件があれば出さない(ISSUE-02)', () => {
+  it('初手の固定・除外・山札の上の固定のどれかがあると undefined', () => {
+    const g = hand('天災 デドダム');
+    expect(exactDrawProbability(reg, { deck: maruru, goal: g, first: 0 })).toBeDefined();
+    expect(exactDrawProbability(reg, { deck: maruru, goal: g, first: 0, initial: {} })).toBeDefined();
+    expect(exactDrawProbability(reg, { deck: maruru, goal: g, first: 0, initial: { mustHand: ['天災 デドダム'] } })).toBeUndefined();
+    expect(exactDrawProbability(reg, { deck: maruru, goal: g, first: 0, initial: { mustNotHand: ['天災 デドダム'] } })).toBeUndefined();
+    expect(exactDrawProbability(reg, { deck: maruru, goal: g, first: 0, initial: { topFixed: ['天災 デドダム'] } })).toBeUndefined();
+  });
+  it('runProbability の結果にも、初期条件がある時は exact が付かない', () => {
+    const r = runProbability(CARD_DB, params({ goal: hand('天災 デドダム'), trials: 5, initial: { mustHand: ['天災 デドダム'] } }));
+    expect(r.exact).toBeUndefined();
+    expect(r.policy.rate).toBe(1);
+  });
+});
