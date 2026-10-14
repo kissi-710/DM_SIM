@@ -122,6 +122,11 @@ export function useGame(setup: GameSetup) {
       const r = writeAutosave(setup, sessionRef.current.actions, lastSaveAt.current);
       lastSaveAt.current = r.at;
       setSaveStatus(r.status);
+    } else if (lastSaveAt.current !== null) {
+      // 最初の手まで取り消した: 取り消した手を、保存に残さない(再開で、取り消したはずの手が再生されないように)
+      clearAutosave();
+      lastSaveAt.current = null;
+      setSaveStatus('ok');
     }
   }, [winner, nActions]);
   const [paused, setPaused] = useState(false);
