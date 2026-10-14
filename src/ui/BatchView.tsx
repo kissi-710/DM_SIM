@@ -154,10 +154,11 @@ export function BatchView() {
         </div>
         <div className="panel row">
           <label>
-            試合数 <input type="number" min={1} value={games} onChange={(e) => setGames(Math.max(1, Number(e.target.value)))} />
+            試合数 <input type="number" min={1} value={games} onChange={(e) => setGames(Math.max(1, Math.floor(Number(e.target.value)) || 1))} />
           </label>
+          <span className="muted">カードの強さの測定だけは、1回につき最大 {STRENGTH_MAX_GAMES} 試合に切り詰めます。</span>
           <label>
-            シード <input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} />
+            シード <input type="number" value={seed} onChange={(e) => setSeed(Math.floor(Number(e.target.value)) || 0)} />
           </label>
           <label>
             先攻

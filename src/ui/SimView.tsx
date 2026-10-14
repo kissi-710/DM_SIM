@@ -174,15 +174,15 @@ export function SimView() {
             </label>
             <label className="row">
               試行回数(シャッフル数)
-              <input type="number" min={1} max={100000} value={trials} onChange={(e) => setTrials(Math.max(1, Number(e.target.value)))} />
+              <input type="number" min={1} max={100000} value={trials} onChange={(e) => setTrials(Math.min(100000, Math.max(1, Math.floor(Number(e.target.value)) || 1)))} />
             </label>
             <label className="row">
               シード
-              <input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} />
+              <input type="number" value={seed} onChange={(e) => setSeed(Math.floor(Number(e.target.value)) || 0)} />
             </label>
             <label className="row">
               探索の上限ノード数
-              <input type="number" min={0} step={1000} value={maxNodes} onChange={(e) => setMaxNodes(Math.max(0, Number(e.target.value)))} />
+              <input type="number" min={0} step={1000} value={maxNodes} onChange={(e) => setMaxNodes(Math.max(0, Math.floor(Number(e.target.value)) || 0))} />
               <span className="muted">0 で探索しない(上限値を出さない)</span>
             </label>
             {mode === 'prob' && (

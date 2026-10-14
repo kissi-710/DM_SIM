@@ -181,6 +181,14 @@ const TIPS = [
   'ログの「自動」「手動」タグで、効果の自動解決とプレイヤーの操作を見分けられます。',
 ];
 
+/** 観戦中に出す Tips(操作のヒントは出さない) */
+const WATCH_TIPS = [
+  'Space で一時停止、一時停止中は N または → で1手ずつ進められます。',
+  '「速度」のスライダーで、CPU の手の間隔を変えられます。',
+  '「⚙ 表示」から、相手の手札の表示を切り替えられます。',
+  'ログの「自動」「手動」タグで、効果の自動解決と、プレイヤーの操作を見分けられます。',
+];
+
 function HelpPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-back" onClick={onClose}>
@@ -494,7 +502,8 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
       </div>
   );
 
-  const tip = TIPS[Math.floor(s.turn / 2) % TIPS.length];
+  const tips = cpuOnly ? WATCH_TIPS : TIPS;
+  const tip = tips[Math.floor(s.turn / 2) % tips.length];
 
   return (
     <div className={'game' + (sideOpen ? '' : ' side-closed')}>

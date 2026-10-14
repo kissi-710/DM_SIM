@@ -157,6 +157,8 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
           CPUの手の間隔(ms)
           <input type="number" value={delay} min={0} max={3000} step={100} onChange={(e) => setDelay(Number(e.target.value))} />
         </label>
+        {mode === 'play' && (
+        <>
         <label className="row">
           <input type="checkbox" checked={autoOrder} onChange={(e) => setAutoOrder(e.target.checked)} />
           同時に誘発した自分の能力の順序を自動にする(左から)
@@ -165,6 +167,8 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
           <input type="checkbox" checked={undo} onChange={(e) => setUndo(e.target.checked)} />
           「1手戻す」を許可する(練習用)
         </label>
+        </>
+        )}
         <label className="row">
           <input type="checkbox" checked={strict} onChange={(e) => setStrict(e.target.checked)} />
           構築制限(40枚・同名4枚まで)を検査する
