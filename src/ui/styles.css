@@ -267,15 +267,12 @@ th {
 }
 .rail-hover {
   height: 164px;
-  overflow: hidden;
+  overflow: auto;
   background: rgba(26, 31, 42, 0.7);
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 8px 10px;
   font-size: 12.5px;
-}
-.rail-hover:empty {
-  visibility: hidden;
 }
 .rail-action {
   min-height: 130px;

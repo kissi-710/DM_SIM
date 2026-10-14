@@ -599,7 +599,11 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
 
         {/* 盤面の右(中央右): カードの詳細・選んだカードの操作・ターン操作を、カードの近くにまとめる */}
         <div className="rail">
-          {!sideOpen && <div className="rail-hover">{hover !== null && <CardDetail s={s} uid={hover} />}</div>}
+          {/* カードの詳細は、ホバー中のカード、なければ選択中のカードを出す(タッチ操作でも読める) */}
+          <div className="rail-hover">
+            <CardDetail s={s} uid={hover ?? selUid} />
+          </div>
+          {!sideOpen && s.pool.length > 0 && <PoolPanel s={s} />}
           {interactive && (
             <div className="rail-action">
               {selected ? (
@@ -719,10 +723,6 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
 
       {sideOpen && (
         <div className="side">
-          <div className="box">
-            <h3>カードの詳細</h3>
-            <CardDetail s={s} uid={hover} />
-          </div>
           <PoolPanel s={s} />
           <LogPanel s={s} log={session.log} me={g.me} />
         </div>
