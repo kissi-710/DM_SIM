@@ -145,6 +145,60 @@ export function planPlay(
   return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto };
 }
 
+/** 支払いの選択肢(UI が「聞くか、自動で払うか」を決めるための情報) */
+export interface PayChoice {
+  /** タップする枚数(0 なら支払いなし) */
+  need: number;
+  /** 使えるマナ(アンタップ) */
+  avail: number[];
+  /** 自動で払う場合のマナ(プレイできなければ空) */
+  auto: number[];
+  /**
+   * 自明か。有効な払い方が1通り(文明の組み合わせとして区別がない)なら true。
+   * 自明なら、人間にも聞かずに自動で払ってよい(UI 方針「自明なら質問を省略する」)。
+   */
+  obvious: boolean;
+}
+
+/**
+ * カードを使う時のマナの払い方に、プレイヤーが選べる余地があるかを調べる。
+ * マナは「持つ文明の組」が同じなら区別しない(同じ組のマナどうしは、どれをタップしても結果が同じ)。
+ * 組ごとの枚数の振り分けを数え上げ、有効なものが2通り以上あるときだけ「選択がある」とする。
+ */
+export function payChoice(c: Ctx, player: PlayerId, uid: number, from: ZoneName, faceIdx: number, extra: PlayExtra | undefined, free: boolean): PayChoice {
+  const base = planPlay(c, player, uid, from, faceIdx, { ...(extra ?? {}), pay: undefined }, free);
+  if (!base.ok || base.need <= 0) return { need: base.need, avail: [], auto: base.pay, obvious: true };
+  const s = c.s;
+  const avail = s.players[player].mana.filter((u) => !s.cards[u].tapped && u !== uid);
+  const groups = new Map<string, number[]>();
+  for (const u of avail) {
+    const key = charsOf(c, u, -1).civs.slice().sort().join(',');
+    const g = groups.get(key);
+    if (g) g.push(u);
+    else groups.set(key, [u]);
+  }
+  const gs = [...groups.values()];
+  const tail: number[] = new Array(gs.length + 1).fill(0);
+  for (let i = gs.length - 1; i >= 0; i--) tail[i] = tail[i + 1] + gs[i].length;
+  let valid = 0;
+  const picked: number[] = [];
+  const go = (i: number, left: number): void => {
+    if (valid >= 2) return;
+    if (left === 0) {
+      if (covers(c, picked, base.civs)) valid++;
+      return;
+    }
+    if (i === gs.length || tail[i] < left) return;
+    for (let k = Math.min(gs[i].length, left); k >= 0; k--) {
+      for (let j = 0; j < k; j++) picked.push(gs[i][j]);
+      go(i + 1, left - k);
+      picked.length -= k;
+    }
+  };
+  go(0, base.need);
+  return { need: base.need, avail, auto: base.pay, obvious: valid <= 1 };
+}
+
 /** 選んだマナが、必要な文明を1枚ずつ(1枚は1文明)満たせるか */
 function covers(c: Ctx, mana: number[], civs: Civ[]): boolean {
   const cs = mana.map((u) => charsOf(c, u, -1).civs);
