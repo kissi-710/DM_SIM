@@ -294,12 +294,15 @@ export function SimView() {
               <button onClick={() => downloadText('patterns.json', JSON.stringify(pats, null, 2))}>JSON</button>
               <button onClick={() => downloadText('patterns.csv', patternsToCsv(pats))}>CSV</button>
             </div>
+            <p className="muted" style={{ fontSize: 12.5 }}>
+              出現割合は「そのパターンを作れた試行の割合」です。試行ごとに、探索で先に見つかった履歴(最大24個)だけを数えるので、実際に打つ頻度とは一致しません。
+            </p>
             <table>
               <thead>
                 <tr>
                   <th>#</th>
                   <th>履歴</th>
-                  <th>出現割合</th>
+                  <th>出現割合(作れた試行の割合)</th>
                   <th>必要条件の要約(初手)</th>
                   <th />
                 </tr>
