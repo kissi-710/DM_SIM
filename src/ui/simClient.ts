@@ -1,38 +1,87 @@
-// 調査用 Worker のクライアント。キャンセルは Worker を作り直して行う。
-import type { SimJob, SimOut } from '../workers/sim.worker';
+// 調査用 Worker のクライアント。ジョブを独立なチャンクに分け、CPU コア数ぶんの Worker で並列に実行して統合する。
+// 試合・試行のシードは元のジョブと同じ並びで割り当てるので、結果は1スレッドで実行した場合と一致する。
+// キャンセルは Worker を止めて行う。
+import { CARD_DB } from '../cards';
+import { planJob, type SimJob, type SimOut } from '../sim/jobs';
 
 export interface RunningJob<T> {
   promise: Promise<T>;
   cancel: () => void;
 }
 
+/** 使う Worker の数(UI のために1コアを残す。最大8) */
+export function workerCount(): number {
+  const hc = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : undefined;
+  return Math.max(1, Math.min(8, (hc ?? 4) - 1));
+}
+
 export function runSimJob<T>(job: SimJob, onProgress?: (done: number, total: number) => void): RunningJob<T> {
-  const w = new Worker(new URL('../workers/sim.worker.ts', import.meta.url), { type: 'module' });
+  const n = workerCount();
+  // 負荷の偏りをならすため、Worker の数より細かく分けて、空いた Worker から順に渡す
+  const plan = planJob({ defs: CARD_DB }, job, n * 3);
+  const results: any[] = new Array(plan.chunks.length);
+  const doneUnits = plan.units.map(() => 0);
+  const total = plan.units.reduce((a, b) => a + b, 0);
+  const t0 = Date.now();
+  const workers: Worker[] = [];
+  let next = 0;
+  let finished = 0;
+  let dead = false;
   let rejectFn: (e: Error) => void = () => {};
+
+  const stopAll = () => {
+    dead = true;
+    for (const w of workers) w.terminate();
+  };
+  const report = () => onProgress?.(doneUnits.reduce((a, b) => a + b, 0), total);
+
   const promise = new Promise<T>((resolve, reject) => {
     rejectFn = reject;
-    w.onmessage = (e: MessageEvent<SimOut>) => {
-      const m = e.data;
-      if (m.kind === 'progress') onProgress?.(m.done, m.total);
-      else if (m.kind === 'result') {
-        resolve(m.result as unknown as T);
-        w.terminate();
-      } else {
-        reject(new Error(m.message));
-        w.terminate();
-      }
+    const fail = (e: Error) => {
+      if (dead) return;
+      stopAll();
+      reject(e);
     };
-    w.onerror = (ev) => {
-      reject(new Error(ev.message || 'Worker のエラー'));
-      w.terminate();
+    const start = () => {
+      const w = new Worker(new URL('../workers/sim.worker.ts', import.meta.url), { type: 'module' });
+      workers.push(w);
+      let cur = -1;
+      const feed = () => {
+        if (next >= plan.chunks.length) {
+          w.terminate();
+          return;
+        }
+        cur = next++;
+        w.postMessage(plan.chunks[cur]);
+      };
+      w.onmessage = (e: MessageEvent<SimOut>) => {
+        if (dead) return;
+        const m = e.data;
+        if (m.kind === 'progress') {
+          doneUnits[cur] = Math.min(plan.units[cur], m.done);
+          report();
+        } else if (m.kind === 'result') {
+          results[cur] = m.result;
+          doneUnits[cur] = plan.units[cur];
+          report();
+          if (++finished === plan.chunks.length) {
+            stopAll();
+            resolve(plan.merge(results, Date.now() - t0) as unknown as T);
+          } else feed();
+        } else fail(new Error(m.message));
+      };
+      w.onerror = (ev) => fail(new Error(ev.message || 'Worker のエラー'));
+      feed();
     };
-    w.postMessage(job);
+    for (let i = 0; i < Math.min(n, plan.chunks.length); i++) start();
   });
+
   return {
     promise,
     cancel: () => {
+      if (dead) return;
+      stopAll();
       rejectFn(new Error('キャンセルしました'));
-      w.terminate();
     },
   };
 }
