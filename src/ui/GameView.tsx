@@ -192,7 +192,7 @@ const WATCH_TIPS = [
 function HelpPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-back" onClick={onClose}>
-      <div className="modal help" onClick={(e) => e.stopPropagation()}>
+      <div className="modal help" role="dialog" aria-modal="true" aria-label="操作ヘルプ" onClick={(e) => e.stopPropagation()}>
         <h2>操作ヘルプ</h2>
         <div className="help-grid">
           <div>
@@ -455,7 +455,8 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     const onClick = (e: MouseEvent) => {
       const el = e.target as HTMLElement | null;
       const b = el?.closest('button');
-      if (b) setTimeout(() => b.blur(), 0);
+      // マウスで押した時だけ外す(キーボードで押した時に外すと、フォーカスの流れが途切れる)
+      if (b && e.detail > 0) setTimeout(() => b.blur(), 0);
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('click', onClick);
@@ -728,7 +729,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           const mana = s.players[me].mana.filter((u) => !s.cards[u].tapped && u !== a.uid);
           return (
             <div className="modal-back" onClick={() => setPayFor(null)}>
-              <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
                 <h2>タップするマナを選ぶ</h2>
                 <p className="muted">
                   {cardName(s, a.uid)} — {base.need}枚({base.civs.map((x) => CIV_NAME[x]).join('・')}を含める)。自動の候補を選んであります。
@@ -780,7 +781,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
 
       {recText !== null && (
         <div className="modal-back" onClick={() => setRecText(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <h2>棋譜(シード・デッキ・行動列)</h2>
             <p className="muted">この JSON を「棋譜の再生」で読み込むと、同じ試合を再現できます。</p>
             <textarea className="json" readOnly value={recText} onFocus={(e) => e.target.select()} />

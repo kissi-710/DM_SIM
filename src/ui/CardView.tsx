@@ -61,9 +61,14 @@ export function CardView(p: CardProps) {
     onMouseLeave: () => p.onHover?.(null),
     'data-drag': p.dragKey,
     style: p.style,
+    // 支援技術向け: 操作できるカードはボタンとして、名前と状態を読み上げる
+    role: p.onClick || p.selectable ? ('button' as const) : undefined,
+    'aria-pressed': p.selected ? true : undefined,
+    'aria-label': undefined as string | undefined,
   };
   if (p.hidden || !card || card.defId === '?') {
     cls.push('back');
+    handlers['aria-label'] = '裏向きのカード';
     return (
       <div className={cls.join(' ')} {...handlers}>
         ?
@@ -71,6 +76,7 @@ export function CardView(p: CardProps) {
     );
   }
   const def = reg.defs[card.defId];
+  handlers['aria-label'] = def.name + (p.tapped ? '(タップ)' : '');
   const inPlay = card.zone === 'battle' || card.zone === 'limbo';
   const faceIdx = inPlay ? card.face : 0;
   const face = def.faces[faceIdx] ?? def.faces[0];

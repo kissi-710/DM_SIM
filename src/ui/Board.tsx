@@ -335,7 +335,7 @@ export function Board(b: BoardProps) {
       {side(viewer, true)}
       {chooser && (
         <div className="modal-back" onClick={() => setChooser(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <h2>どれを行いますか?</h2>
             <div className="col">
               {chooser.map((d, i) => (
@@ -357,7 +357,7 @@ export function Board(b: BoardProps) {
       )}
       {listOf && (
         <div className="modal-back" onClick={() => setListOf(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <h2>
               {listOf.p === viewer ? '自分' : '相手'}の{listOf.zone === 'mana' ? 'マナゾーン' : listOf.zone === 'grave' ? '墓地' : 'シールド'}(
               {s.players[listOf.p][listOf.zone].length}枚)

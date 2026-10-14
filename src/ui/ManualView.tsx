@@ -213,7 +213,7 @@ export function ManualView() {
       )}
       {showList && (
         <div className="modal-back" onClick={() => setShowList(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <h2>
               {ZONE_NAME[showList]}の一覧({cardsOf(showList).length}枚)
             </h2>
