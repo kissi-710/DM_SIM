@@ -46,6 +46,8 @@
 
 ## 3. ディレクトリ構成(予定)
 
+> 着手前の計画です。実際の構成は [README.md](../README.md) の「構成」を参照してください(例: `engine/` は `rng.ts` `setup.ts` `reducer.ts` などではなく、`engine.ts` `procs.ts` `ops.ts` `vm.ts` `registry.ts` などの平坦な構成になっています)。
+
 ```
 DM_SIM/
 ├─ docs/                  # overview / design / spec / effects / decks
