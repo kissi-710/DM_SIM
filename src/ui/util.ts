@@ -18,10 +18,12 @@ export function loadJson<T>(key: string, fallback: T): T {
   }
 }
 
-export function saveJson(key: string, value: unknown): void {
+/** 保存する。保存できない環境(容量・プライベートウィンドウなど)では何もせず、false を返す */
+export function saveJson(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
-    // 保存できない環境(プライベートウィンドウなど)では何もしない
+    return false;
   }
 }

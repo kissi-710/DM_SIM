@@ -8,7 +8,7 @@ import { hashSeed } from '../engine/state';
 import type { Action, Ev, GameConfig, GameState, PlayerId } from '../engine/types';
 import { AiCancelled, cancelAi, chooseWithWorker } from './aiClient';
 import { RECORD_VERSION, type GameRecord } from './record';
-import { loadJson, saveJson } from './util';
+import { clearAutosave, writeAutosave, type SaveStatus } from './autosave';
 import { errorMessage } from '../engine/types';
 
 export type { GameRecord } from './record';
@@ -34,34 +34,7 @@ export interface GameSetup {
   resume?: Action[];
 }
 
-const AUTOSAVE_KEY = 'dmsim.autosave';
-
-export interface Autosave {
-  /** 保存した時のエンジンの版(RECORD_VERSION)。合わない保存は、再生しても同じ局面にならない */
-  version: number;
-  setup: GameSetup;
-  actions: Action[];
-  at: number;
-}
-
-/** 進行中の対戦(保存されていない・版が合わない・形が壊れている時は null。合わないものは消す) */
-export function loadAutosave(): Autosave | null {
-  const a = loadJson<Autosave | null>(AUTOSAVE_KEY, null);
-  if (!a) return null;
-  if (a.version !== RECORD_VERSION) {
-    clearAutosave();
-    return null;
-  }
-  return Array.isArray(a.actions) && a.actions.length > 0 && a.setup?.decks ? a : null;
-}
-
-export function clearAutosave(): void {
-  try {
-    localStorage.removeItem(AUTOSAVE_KEY);
-  } catch {
-    // 保存できない環境では何もしない
-  }
-}
+export { clearAutosave, loadAutosave, type Autosave, type SaveStatus } from './autosave';
 
 const reg = loadRegistry(CARD_DB);
 
@@ -139,9 +112,17 @@ export function useGame(setup: GameSetup) {
   // 自動保存: 進行中は毎手保存し、勝敗が出たら消す
   const winner = session.state.winner;
   const nActions = session.actions.length;
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('ok');
+  const lastSaveAt = useRef<number | null>(null);
   useEffect(() => {
-    if (winner !== null) clearAutosave();
-    else if (nActions > 0) saveJson(AUTOSAVE_KEY, { version: RECORD_VERSION, setup: { ...setup, resume: undefined }, actions: sessionRef.current.actions, at: Date.now() } satisfies Autosave);
+    if (winner !== null) {
+      clearAutosave();
+      setSaveStatus('ok');
+    } else if (nActions > 0) {
+      const r = writeAutosave(setup, sessionRef.current.actions, lastSaveAt.current);
+      lastSaveAt.current = r.at;
+      setSaveStatus(r.status);
+    }
   }, [winner, nActions]);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(setup.cpuDelayMs);
@@ -258,7 +239,7 @@ export function useGame(setup: GameSetup) {
     if (a) perform(a);
   }, [perform]);
 
-  return { session, me, legal, perform, undo, canUndo: snapshots.current.length > 0, paused, setPaused, speed, setSpeed, fast, setFast, retryCpu, forceMove, stepOnce, cpuTurn };
+  return { session, saveStatus, me, legal, perform, undo, canUndo: snapshots.current.length > 0, paused, setPaused, speed, setSpeed, fast, setFast, retryCpu, forceMove, stepOnce, cpuTurn };
 }
 
 // ───────────────────────── 記録の再生 ─────────────────────────
