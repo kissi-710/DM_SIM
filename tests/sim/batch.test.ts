@@ -102,3 +102,28 @@ describe('formatStats', () => {
     expect(t).not.toContain('Aが後攻の時');
   });
 });
+
+describe('first=random は交互ではなく、乱数で席を決める(ISSUE-01)', () => {
+  const seats = (seed: number, games: number) => {
+    // Aが先攻だった試合の並び(席は 'A先攻' / 'A後攻' が1試合ごとに記録される)
+    const out: number[] = [];
+    for (let i = 0; i < games; i++) {
+      const s = runMatches(CARD_DB, base({ games: 1, seed: seed + i, first: 'random' }));
+      out.push(s.gamesAFirst);
+    }
+    return out;
+  };
+  it('先攻・後攻の並びが 1,0,1,0… の厳密な交互にならない', () => {
+    const o = seats(5, 40);
+    const alternating = o.every((v, i) => i === 0 || v !== o[i - 1]);
+    expect(alternating).toBe(false);
+  });
+  it('偏りすぎない(40試合で先攻が 10〜30)', () => {
+    const n = seats(5, 40).reduce((a, b) => a + b, 0);
+    expect(n).toBeGreaterThanOrEqual(10);
+    expect(n).toBeLessThanOrEqual(30);
+  });
+  it('同じシードなら同じ並び(再現できる)', () => {
+    expect(seats(9, 20)).toEqual(seats(9, 20));
+  });
+});

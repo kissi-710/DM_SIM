@@ -3,7 +3,7 @@ import { makeAgent, type AgentSpec } from '../ai';
 import { registryOf } from '../engine/engine';
 import type { Registry } from '../engine/registry';
 import type { CardDB, GameConfig, PlayerId } from '../engine/types';
-import { playGameSync } from './playGame';
+import { mulberry, playGameSync } from './playGame';
 import { wilson } from './stats';
 
 export type FirstMode = 'fixed' | 'alternate' | 'random';
@@ -61,7 +61,9 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
   for (let i = 0; i < o.games; i++) {
     if (o.shouldCancel?.()) break;
     // seat0 にだれを置くか
-    const aSeat: PlayerId = first === 'alternate' ? ((i % 2) as PlayerId) : first === 'fixed' ? 0 : ((o.seed + i) % 2) as PlayerId;
+    // random は、試合のシードとは独立に派生した乱数で決める(連続する値の偶奇だと、交互と区別できない)
+    const aSeat: PlayerId =
+      first === 'alternate' ? ((i % 2) as PlayerId) : first === 'fixed' ? 0 : ((mulberry((o.seed + i) ^ 0x7f4a7c15)() < 0.5 ? 0 : 1) as PlayerId);
     const decks: [string[], string[]] = aSeat === 0 ? [o.deckA, o.deckB] : [o.deckB, o.deckA];
     const agents = aSeat === 0 ? [agentA, agentB] : [agentB, agentA];
     // 先攻は席0
