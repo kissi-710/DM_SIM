@@ -264,6 +264,11 @@ export class GoalTracker {
     }
   }
 
+  /** この述語(目標の葉)が、記録の上で既に成立しているか */
+  predSatisfied(g: Extract<Goal, { op: 'pred' }>): boolean {
+    return this.leafHolds(g.timing, g.pred, Infinity);
+  }
+
   /** 目標が(cap ターン目までの記録で)成立しているか */
   holds(cap: number = Infinity): boolean {
     return this.evalGoal(this.goal, cap);
@@ -306,6 +311,29 @@ export class GoalTracker {
     return null;
   }
 
+  /**
+   * 目標が、まだ成立しうるか。期限(ターン数)を過ぎても成立していない述語があれば、その枝は成立しない。
+   * now は自分の「いま何ターン目か」。「でない(not)」は判断できないので、成立しうるとみなす。
+   */
+  possible(now: number): boolean {
+    const go = (g: Goal): boolean => {
+      switch (g.op) {
+        case 'and':
+          return g.args.every(go);
+        case 'or':
+          return g.args.some(go);
+        case 'not':
+          return true;
+        case 'pred': {
+          if (this.leafHolds(g.timing, g.pred, Infinity)) return true;
+          if (g.timing.at === 'opening') return false; // 初手の判定は、ゲーム開始時に終わっている
+          return g.timing.turn >= now;
+        }
+      }
+    };
+    return go(this.goal);
+  }
+
   /** 検索用: 記録の状態を文字列にする(状態ハッシュに含める) */
   signature(): string {
     let out = '';
@@ -321,6 +349,81 @@ export class GoalTracker {
       for (const x of l.end) m.end.add(x);
     }
     return t;
+  }
+}
+
+// ───────────────────────── 目標までの距離(探索の順序づけ・足切り) ─────────────────────────
+
+/** 手の届かない(必要なカードが、自分のどこにもない)ことを表す距離 */
+export const FAR = 100;
+
+/** カードを目的のゾーンへ持ってくるまでの手数の目安 */
+const MOVE_COST: Record<string, Record<string, number>> = {
+  battle: { battle: 0, hand: 1, mana: 2, grave: 3, shield: 3, deck: 4, limbo: 1 },
+  hand: { hand: 0, deck: 2, battle: 2, shield: 3, mana: 3, grave: 3, limbo: 2 },
+  mana: { mana: 0, hand: 1, deck: 3, battle: 3, shield: 3, grave: 3, limbo: 2 },
+  grave: { grave: 0, hand: 1, battle: 1, deck: 3, mana: 3, shield: 3, limbo: 2 },
+  shield: { shield: 0, hand: 2, deck: 2, mana: 3, grave: 3, battle: 3, limbo: 2 },
+};
+
+/**
+ * 述語を満たすまでの距離の目安(0 = 成立済み。FAR 以上 = 自分のカードだけでは不可能)。
+ * 実際の手数ではなく、探索の順序づけと足切りに使う近似。
+ */
+export function predicateDistance(reg: Registry, s: GameState, p: Predicate): number {
+  switch (p.kind) {
+    case 'manaCount': {
+      const c = mkCtx(s, reg);
+      const n = s.players[0].mana.filter((u) => !p.civ || charsOf(c, u, -1).civs.includes(p.civ)).length;
+      return Math.max(0, p.min - n);
+    }
+    case 'zoneHas': {
+      const need = p.min ?? 1;
+      const costs: number[] = [];
+      for (let u = 0; u < s.cards.length; u++) {
+        const card = s.cards[u];
+        if (card.owner !== 0 || card.zone === 'limbo') continue;
+        const z = card.zone === 'battle' && p.zone === 'battle' ? 'battle' : card.zone;
+        const m = MOVE_COST[p.zone][z];
+        if (m === undefined) continue;
+        if (matchCard(reg, s, u, p.card)) costs.push(m);
+      }
+      if (costs.length < need) return FAR;
+      costs.sort((a, b) => a - b);
+      let d = 0;
+      for (let i = 0; i < need; i++) d += costs[i];
+      return d;
+    }
+    case 'castable':
+    case 'cast': {
+      const manaN = s.players[0].mana.length;
+      let best = FAR;
+      for (let u = 0; u < s.cards.length; u++) {
+        const card = s.cards[u];
+        if (card.owner !== 0) continue;
+        if (!matchCard(reg, s, u, p.card)) continue;
+        const def = reg.defs[card.defId];
+        const cost = Math.min(...def.faces.map((f) => f.cost));
+        const gap = Math.max(0, cost - manaN) * 0.5;
+        const where = card.zone === 'hand' ? 1 : card.zone === 'mana' || card.zone === 'grave' ? 3 : card.zone === 'deck' ? 4 : card.zone === 'battle' ? 2 : 5;
+        best = Math.min(best, where + gap);
+      }
+      return best;
+    }
+  }
+}
+
+/** 目標までの距離の目安。and は合計、or は最小、not は判断しない(0)。成立済みの述語は 0 */
+export function goalDistance(reg: Registry, s: GameState, g: Goal, tracker: GoalTracker): number {
+  switch (g.op) {
+    case 'and':
+      return g.args.reduce((t, a) => t + goalDistance(reg, s, a, tracker), 0);
+    case 'or':
+      return Math.min(...g.args.map((a) => goalDistance(reg, s, a, tracker)));
+    case 'not':
+      return 0;
+    case 'pred':
+      return tracker.predSatisfied(g) ? 0 : predicateDistance(reg, s, g.pred);
   }
 }
 

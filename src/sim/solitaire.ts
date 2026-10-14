@@ -7,7 +7,7 @@ import type { Registry } from '../engine/registry';
 import { hashSeed } from '../engine/state';
 import type { Action, CardDB, Ev, GameState } from '../engine/types';
 import { FAIR, toPlayerView } from '../engine/view';
-import { goalHasNot, goalMaxTurn, GoalTracker, myTurnNo, nameMatches, type Goal } from './goal';
+import { FAR, goalDistance, goalHasNot, goalMaxTurn, GoalTracker, myTurnNo, nameMatches, type Goal } from './goal';
 import { mulberry } from './playGame';
 import { hypergeomAtLeast, wilson } from './stats';
 
@@ -282,7 +282,11 @@ export function searchTrial(reg: Registry, p: SolitaireParams, trialSeed: number
     result.histories.push({ steps: steps.slice(), actions: path.slice() });
   };
 
-  const explore = (s: GameState, tr: GoalTracker): boolean => {
+  // 限定食い違い探索(LDS): 目標に近い順の第1候補から外れる回数(disc)の上限を 0, 1, 2… と増やして探索する。
+  // 少ない食い違いで届く解を先に見つけられ、上限で枝を切らずに終われば全探索(= 届かないと確定)になる。
+  let prunedByDisc: boolean;
+
+  const explore = (s: GameState, tr: GoalTracker, disc: number): boolean => {
     // true を返したら、探索を打ち切る(必要な履歴が集まった)
     if (result.nodes++ > maxNodes) {
       result.unknown = true;
@@ -307,26 +311,49 @@ export function searchTrial(reg: Registry, p: SolitaireParams, trialSeed: number
       record();
       return result.histories.length >= maxHistories;
     }
-    const key = stateKey(s) + '#' + tr.signature();
+    const key = stateKey(s) + '#' + tr.signature() + '@' + disc;
     if (visited.has(key)) return false;
     visited.add(key);
     const mt = myTurnNo(s);
-    for (const a of legal) {
+    // 子の状態を先に作り、目標に近い順に探索する。期限切れ・必要なカードが無い枝は探索しない(足切り)
+    type Child = { a: Action; r: { state: GameState; events: Ev[] }; t2: GoalTracker; h: number; i: number };
+    const children: Child[] = [];
+    legal.forEach((a, i) => {
       const r = step(s, a, reg);
       const t2 = tr.clone();
       t2.observeStep(s, a, r.events);
       t2.observeEvents(r.state, r.events, mt);
+      if (r.state.winner === null && r.state.turn <= endTurn) {
+        if (!t2.possible(Math.ceil(r.state.turn / 2))) return;
+        const h = goalDistance(reg, r.state, p.goal, t2);
+        if (h >= FAR) return;
+        children.push({ a, r, t2, h, i });
+      } else children.push({ a, r, t2, h: 0, i });
+    });
+    children.sort((x, y) => x.h - y.h || x.i - y.i);
+    for (let j = 0; j < children.length; j++) {
+      const { a, r, t2 } = children[j];
+      const cost = j === 0 ? 0 : 1;
+      if (disc < cost) {
+        prunedByDisc = true;
+        continue;
+      }
       const d = describeAction(reg, s, a);
       path.push(a);
       if (d) steps.push(d);
-      const stop = explore(r.state, t2);
+      const stop = explore(r.state, t2, disc - cost);
       path.pop();
       if (d) steps.pop();
       if (stop) return true;
     }
     return false;
   };
-  explore(s0, t0);
+  for (let limit = 0; ; limit++) {
+    visited.clear();
+    prunedByDisc = false;
+    if (explore(s0, t0, limit)) break; // 履歴が集まった、またはノード数の上限
+    if (!prunedByDisc) break; // 枝を切らずに終わった = 全探索
+  }
   return result;
 }
 

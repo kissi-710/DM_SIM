@@ -70,13 +70,15 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
     const r = runProbability(reg, { deck: A, first: 0, goal, trials: 40, seed: 1, maxNodes: 3000 });
     expect(r.policy.achieved).toBe(13);
     expect(r.policy.byTurn).toEqual([0, 0, 0, 0.1, 0.175, 0.25, 0.325]);
-    expect(r.search?.achieved).toBe(16);
-    expect(r.search?.unknown).toBe(24);
-    expect(r.search?.avgNodes).toBe(2000.275);
+    // 限定食い違い探索 + 目標までの距離の順序づけ(旧: 到達 16 / 不明 24 / 平均 2000 ノード)
+    expect(r.search?.achieved).toBe(35);
+    expect(r.search?.unknown).toBe(5);
+    expect(r.search?.avgNodes).toBe(710.825);
   });
   it('パターン調査(12試行)', () => {
     const r = runPatterns(reg, { deck: A, first: 0, goal, trials: 12, seed: 1, maxNodes: 3000 }, { granularity: 'set', maxHistoriesPerTrial: 2 });
-    expect([r.patterns.length, r.achievedTrials, r.unknownTrials]).toEqual([6, 5, 7]);
-    expect(hash(JSON.stringify(r.patterns.map((x) => [x.key, x.count, x.sampleSeed])))).toBe(2503898531);
+    // 旧: パターン 6 / 達成 5 / 不明 7
+    expect([r.patterns.length, r.achievedTrials, r.unknownTrials]).toEqual([20, 12, 0]);
+    expect(hash(JSON.stringify(r.patterns.map((x) => [x.key, x.count, x.sampleSeed])))).toBe(1470697928);
   });
 });
