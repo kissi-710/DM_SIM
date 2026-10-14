@@ -1,12 +1,13 @@
 // AI同士のバッチ対戦(design 8.1 / spec 7)。試合ごとのシードを seed + i から派生させ、再現できる。
-import { makeAgent, type AgentSpec } from '../ai';
+import { makeAgent, type Agent, type AgentSpec } from '../ai';
 import { registryOf } from '../engine/engine';
 import type { Registry } from '../engine/registry';
 import type { CardDB, GameConfig, PlayerId } from '../engine/types';
 import { mulberry, playGameSync } from './playGame';
 import { wilson } from './stats';
 
-export type FirstMode = 'fixed' | 'alternate' | 'random';
+/** duplicate: 同じシードの対局を、A の席を入れ替えて2回行う(同じデッキ同士なら配られる手札が同一になり、運の差が打ち消される)。games は偶数 */
+export type FirstMode = 'fixed' | 'alternate' | 'random' | 'duplicate';
 
 export interface MatchOpts {
   deckA: string[];
@@ -15,9 +16,11 @@ export interface MatchOpts {
   agentB: AgentSpec;
   games: number;
   seed: number;
-  /** fixed: Aが常に先攻 / alternate: 交互 / random: 乱数 */
+  /** fixed: Aが常に先攻 / alternate: 交互 / random: 乱数 / duplicate: 同じシードで席を入れ替えて2回ずつ */
   first?: FirstMode;
   cfg?: Partial<GameConfig>;
+  /** 手を選ぶ思考時間を測って MatchStats.think に入れる(測定用。結果の勝敗には影響しない) */
+  timing?: boolean;
   onProgress?: (done: number, total: number) => void;
   shouldCancel?: () => boolean;
 }
@@ -39,12 +42,30 @@ export interface MatchStats {
   gamesASecond: number;
   ms: number;
   reasons: Record<string, number>;
+  /** 手を選ぶ思考の合計時間(ms)と回数(合法手が2つ以上の意思決定)。MatchOpts.timing の時だけ */
+  think?: { msA: number; nA: number; msB: number; nB: number };
 }
 
 export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
   const reg = registryOf(db);
-  const agentA = makeAgent(o.agentA);
-  const agentB = makeAgent(o.agentB);
+  const think = { msA: 0, nA: 0, msB: 0, nB: 0 };
+  const timed = (ag: Agent, side: 'A' | 'B'): Agent =>
+    o.timing
+      ? {
+          ...ag,
+          chooseAction(v, l, c) {
+            const t = performance.now();
+            const r = ag.chooseAction(v, l, c);
+            if (l.length > 1) {
+              think['ms' + side as 'msA' | 'msB'] += performance.now() - t;
+              think['n' + side as 'nA' | 'nB']++;
+            }
+            return r;
+          },
+        }
+      : ag;
+  const agentA = timed(makeAgent(o.agentA), 'A');
+  const agentB = timed(makeAgent(o.agentB), 'B');
   const first = o.first ?? 'alternate';
   const t0 = Date.now();
   let winsA = 0;
@@ -63,13 +84,18 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
     // seat0 にだれを置くか
     // random は、試合のシードとは独立に派生した乱数で決める(連続する値の偶奇だと、交互と区別できない)
     const aSeat: PlayerId =
-      first === 'alternate' ? ((i % 2) as PlayerId) : first === 'fixed' ? 0 : ((mulberry((o.seed + i) ^ 0x7f4a7c15)() < 0.5 ? 0 : 1) as PlayerId);
+      first === 'alternate' || first === 'duplicate'
+        ? ((i % 2) as PlayerId)
+        : first === 'fixed'
+          ? 0
+          : ((mulberry((o.seed + i) ^ 0x7f4a7c15)() < 0.5 ? 0 : 1) as PlayerId);
+    const gameSeed = first === 'duplicate' ? o.seed + (i >> 1) : o.seed + i;
     const decks: [string[], string[]] = aSeat === 0 ? [o.deckA, o.deckB] : [o.deckB, o.deckA];
     const agents = aSeat === 0 ? [agentA, agentB] : [agentB, agentA];
     // 先攻は席0
     const r = playGameSync(reg, agents as [typeof agentA, typeof agentB], {
       decks,
-      seed: o.seed + i,
+      seed: gameSeed,
       first: 0,
       cfg: o.cfg,
     });
@@ -107,6 +133,7 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
     gamesASecond: aSecondGames,
     ms: Date.now() - t0,
     reasons,
+    ...(o.timing ? { think } : {}),
   };
 }
 

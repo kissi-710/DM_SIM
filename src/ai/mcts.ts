@@ -63,6 +63,9 @@ export function rolloutPick(s: GameState, legal: Action[], reg: Registry, rand: 
   }
 }
 
+/** プレイアウト1回の手数の上限(無限ループ防止。ゲーム終了まで進める設定でも足りる値) */
+export const MAX_ROLLOUT_STEPS = 4000;
+
 /** 時間主導の探索で、反復(プレイアウト)の絶対上限(無限ループ防止) */
 const HARD_MAX_ITERATIONS = 100000;
 /** 手の比較に必要な最低ラウンド数(これ未満では判定しない) */
@@ -98,7 +101,7 @@ function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => numb
   let s = start;
   const endTurn = s.turn + horizon;
   let guard = 0;
-  while (s.winner === null && s.turn < endTurn && guard++ < 400) {
+  while (s.winner === null && s.turn < endTurn && guard++ < MAX_ROLLOUT_STEPS) {
     const legal = legalActions(s, reg);
     if (legal.length === 0) break;
     const a = rolloutPick(s, legal, reg, rand);

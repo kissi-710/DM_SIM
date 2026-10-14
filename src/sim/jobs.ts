@@ -154,7 +154,9 @@ function planChunks(reg: Pick<Registry, 'defs'>, job: SimJob, parts: number): Jo
         const sizes = splitCounts(o.games, per, true);
         const st = starts(sizes);
         sizes.forEach((n, i) => {
-          chunks.push({ type: 'batch', opts: [{ ...o, games: n, seed: o.seed + st[i] }] });
+          // 複製対局は、2試合が1つのシード(席の入れ替え)。開始位置は偶数なので、シードの進みは半分
+          const off = o.first === 'duplicate' ? st[i] / 2 : st[i];
+          chunks.push({ type: 'batch', opts: [{ ...o, games: n, seed: o.seed + off }] });
           units.push(n);
           owner.push(k);
         });
@@ -200,7 +202,15 @@ export function mergeMatches(parts: MatchStats[], ms?: number): MatchStats {
   let aSecondWins = 0;
   let msSum = 0;
   const reasons: Record<string, number> = {};
+  let think: MatchStats['think'];
   for (const p of parts) {
+    if (p.think) {
+      think ??= { msA: 0, nA: 0, msB: 0, nB: 0 };
+      think.msA += p.think.msA;
+      think.nA += p.think.nA;
+      think.msB += p.think.msB;
+      think.nB += p.think.nB;
+    }
     games += p.games;
     winsA += p.winsA;
     winsB += p.winsB;
@@ -231,6 +241,7 @@ export function mergeMatches(parts: MatchStats[], ms?: number): MatchStats {
     gamesASecond: aSecondGames,
     ms: ms ?? msSum,
     reasons,
+    ...(think ? { think } : {}),
   };
 }
 

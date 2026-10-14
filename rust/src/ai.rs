@@ -338,6 +338,9 @@ pub fn choose_turn_action(e: Env, legal: &[Action], me: PlayerId) -> usize {
 
 // ───────────────────────── プレイアウト ─────────────────────────
 
+/// プレイアウト1回の手数の上限(src/ai/mcts.ts の MAX_ROLLOUT_STEPS と同じ)
+const MAX_ROLLOUT_STEPS: i32 = 4000;
+
 fn answer_len(a: &Action) -> i32 {
     match a {
         Action::Answer { value: Val::List(l), .. } => l.len() as i32,
@@ -441,7 +444,7 @@ pub fn rollout(reg: &Registry, start: State, me: PlayerId, rand: &mut SeededRand
     let mut guard = 0;
     while st.winner == Winner::None && st.turn < end_turn {
         guard += 1;
-        if guard > 400 {
+        if guard > MAX_ROLLOUT_STEPS {
             break;
         }
         let pending = match &st.pending {
