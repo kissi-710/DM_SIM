@@ -9,6 +9,7 @@ import { formatPatterns, formatProb, patternsToCsv, probToCsv } from '../sim/exp
 import { GOAL_PRESETS, describeGoal, type Goal } from '../sim/goal';
 import { initialProblems, type PatternGranularity, type PatternResult, type ProbResult, type SolitaireParams } from '../sim/solitaire';
 import { runParallel } from './parallel';
+import { errorMessage } from '../engine/types';
 
 function parseArgs(argv: string[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -71,8 +72,8 @@ if (preset) goal = preset.goal;
 else {
   try {
     goal = JSON.parse(readFileSync(g, 'utf8')) as Goal;
-  } catch (e: any) {
-    fail(`--goal はプリセット(${GOAL_PRESETS.map((x) => x.id).join(' / ')})か、読める JSON ファイルを指定してください(${g}: ${e?.message ?? e})`);
+  } catch (e) {
+    fail(`--goal はプリセット(${GOAL_PRESETS.map((x) => x.id).join(' / ')})か、読める JSON ファイルを指定してください(${g}: ${errorMessage(e)})`);
   }
 }
 

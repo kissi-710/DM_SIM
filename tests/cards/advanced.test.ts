@@ -642,3 +642,24 @@ describe('B13 SSS級天災 デッドダムド', () => {
     expect(sim.evs('evolved').length).toBe(1);
   });
 });
+
+describe('配球の超人 / 記録的剛球', () => {
+  it('クリーチャー面: 出た時、相手のクリーチャー1体を選んでマナゾーンに置く(強制)。T・ブレイカー', () => {
+    const sim = new Sim({
+      p0: { hand: ['配球の超人'], mana: mana(8) },
+      p1: { battle: ['ティンパニ=シンバリー'] },
+    });
+    sim.play('配球の超人');
+    expect(sim.has(1, 'mana', 'ティンパニ=シンバリー')).toBe(true);
+    expect(sim.count(1, 'battle')).toBe(0);
+    expect(sim.has(0, 'battle', '配球の超人')).toBe(true);
+  });
+  it('呪文面: コスト2の自然の呪文として唱えられ、山札の上1枚をブーストする', () => {
+    const sim = new Sim({ p0: { hand: ['配球の超人'], mana: mana(2), deck: [W, 'ダミー'] } });
+    expect(sim.canPlay('配球の超人')).toBe(true);
+    sim.play('配球の超人', { face: 1 });
+    expect(sim.has(0, 'mana', W)).toBe(true);
+    expect(sim.has(0, 'grave', '配球の超人')).toBe(true);
+    expect(sim.count(0, 'battle')).toBe(0);
+  });
+});

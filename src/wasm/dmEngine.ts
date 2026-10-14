@@ -1,6 +1,7 @@
 // Rust 版エンジン(WASM)の薄いラッパー。ラウンドの評価(evalRound)を、TS 版と同じ入力・同じ結果で高速に行う。
 // 境界は C ABI(rust/src/ffi.rs)。JSON は UTF-8 でリニアメモリに書き、結果は f64 の配列で読む。
 import type { NativeRounds, SearchEnv } from '../ai/mcts';
+import type { NativePairedRound, NativeTree, TreeOpts, TreeStats } from '../ai/tree';
 
 interface Exports {
   memory: WebAssembly.Memory;
@@ -11,6 +12,9 @@ interface Exports {
   dm_load_registry(ptr: number, len: number): number;
   dm_begin(ptr: number, len: number): number;
   dm_rounds(seeds: number, nSeeds: number, alive: number, nAlive: number, out: number): number;
+  dm_tree_begin(c: number, maxDepth: number): number;
+  dm_tree_run(base: number, target: number, outVisits: number, outSums: number): number;
+  dm_tree_round(seed: number, alive: number, nAlive: number, out: number): number;
 }
 
 const enc = new TextEncoder();
@@ -51,6 +55,76 @@ export class DmEngine {
       }
       return this.rounds([seed], alive)[0];
     };
+  }
+
+  /**
+   * tree.ts の setNativeTree に渡す関数にする。同じ env・同じ種・同じ設定の間は、木を保って続きから反復する
+   * (時間主導の探索が、反復を増やしながら呼んでも、やり直さない)。
+   */
+  asNativeTree(): NativeTree {
+    let last: SearchEnv | null = null;
+    let lastBase = -1;
+    let lastO: TreeOpts | null = null;
+    let arms = 0;
+    return (env, base, iterations, o) => {
+      if (env !== last || base !== lastBase || lastO === null || lastO.c !== o.c || lastO.maxDepth !== o.maxDepth) {
+        this.begin(env);
+        arms = this.check(this.x.dm_tree_begin(o.c, o.maxDepth));
+        last = env;
+        lastBase = base;
+        lastO = o;
+      }
+      return this.treeRun(base, iterations, arms);
+    };
+  }
+
+  /**
+   * tree.ts の setNativePairedRound に渡す関数にする(ペア比較の木の1ラウンド)。
+   * 同じ env・設定の間は、木を保つ(env が変わったら作り直す)。
+   */
+  asNativePairedRound(): NativePairedRound {
+    let last: SearchEnv | null = null;
+    let lastO: TreeOpts | null = null;
+    let arms = 0;
+    return (env, seed, alive, o) => {
+      if (env !== last || lastO === null || lastO.c !== o.c || lastO.maxDepth !== o.maxDepth) {
+        this.begin(env);
+        arms = this.check(this.x.dm_tree_begin(o.c, o.maxDepth));
+        last = env;
+        lastO = o;
+      }
+      const align = (p: number, a: number) => (p + a - 1) & ~(a - 1);
+      const rawA = this.x.dm_alloc(alive.length * 4 + 4);
+      const rawO = this.x.dm_alloc(arms * 8 + 8);
+      const pA = align(rawA, 4);
+      const pO = align(rawO, 8);
+      try {
+        new Uint32Array(this.x.memory.buffer, pA, alive.length).set(alive);
+        this.check(this.x.dm_tree_round(seed >>> 0, pA, alive.length, pO));
+        return Array.from(new Float64Array(this.x.memory.buffer, pO, arms));
+      } finally {
+        this.x.dm_free(rawA, alive.length * 4 + 4);
+        this.x.dm_free(rawO, arms * 8 + 8);
+      }
+    };
+  }
+
+  private treeRun(base: number, target: number, arms: number): TreeStats {
+    const align = (p: number, a: number) => (p + a - 1) & ~(a - 1);
+    const rawV = this.x.dm_alloc(arms * 4 + 4);
+    const rawS = this.x.dm_alloc(arms * 8 + 8);
+    const pV = align(rawV, 4);
+    const pS = align(rawS, 8);
+    try {
+      this.check(this.x.dm_tree_run(base >>> 0, target, pV, pS));
+      return {
+        visits: Array.from(new Uint32Array(this.x.memory.buffer, pV, arms)),
+        sums: Array.from(new Float64Array(this.x.memory.buffer, pS, arms)),
+      };
+    } finally {
+      this.x.dm_free(rawV, arms * 4 + 4);
+      this.x.dm_free(rawS, arms * 8 + 8);
+    }
   }
 
   private mem(): Uint8Array {

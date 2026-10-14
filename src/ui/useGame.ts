@@ -6,8 +6,12 @@ import { createGame, legalActions, step } from '../engine/engine';
 import { loadRegistry } from '../engine/registry';
 import { hashSeed } from '../engine/state';
 import type { Action, Ev, GameConfig, GameState, PlayerId } from '../engine/types';
-import { chooseWithWorker } from './aiClient';
+import { AiCancelled, cancelAi, chooseWithWorker } from './aiClient';
+import { RECORD_VERSION, type GameRecord } from './record';
 import { loadJson, saveJson } from './util';
+import { errorMessage } from '../engine/types';
+
+export type { GameRecord } from './record';
 
 export interface Seat {
   kind: 'human' | 'cpu';
@@ -33,15 +37,22 @@ export interface GameSetup {
 const AUTOSAVE_KEY = 'dmsim.autosave';
 
 export interface Autosave {
+  /** 保存した時のエンジンの版(RECORD_VERSION)。合わない保存は、再生しても同じ局面にならない */
+  version: number;
   setup: GameSetup;
   actions: Action[];
   at: number;
 }
 
-/** 進行中の対戦(保存されていなければ null) */
+/** 進行中の対戦(保存されていない・版が合わない・形が壊れている時は null。合わないものは消す) */
 export function loadAutosave(): Autosave | null {
   const a = loadJson<Autosave | null>(AUTOSAVE_KEY, null);
-  return a && Array.isArray(a.actions) && a.actions.length > 0 && a.setup?.decks ? a : null;
+  if (!a) return null;
+  if (a.version !== RECORD_VERSION) {
+    clearAutosave();
+    return null;
+  }
+  return Array.isArray(a.actions) && a.actions.length > 0 && a.setup?.decks ? a : null;
 }
 
 export function clearAutosave(): void {
@@ -50,18 +61,6 @@ export function clearAutosave(): void {
   } catch {
     // 保存できない環境では何もしない
   }
-}
-
-/** 試合の記録(再生・保存用。design 10) */
-export interface GameRecord {
-  version: 1;
-  seed: number;
-  decks: [string[], string[]];
-  deckNames: [string, string];
-  first: PlayerId;
-  cfg: Partial<GameConfig>;
-  actions: Action[];
-  seats?: [Seat, Seat];
 }
 
 const reg = loadRegistry(CARD_DB);
@@ -95,7 +94,7 @@ interface Snapshot {
 
 export function makeRecord(setup: GameSetup, session: Session): GameRecord {
   return {
-    version: 1,
+    version: RECORD_VERSION,
     seed: setup.seed,
     decks: setup.decks,
     deckNames: setup.deckNames,
@@ -119,6 +118,7 @@ export function useGame(setup: GameSetup) {
     let state = g.state;
     let log = g.events;
     const done: Action[] = [];
+    let resumeError: string | null = null;
     try {
       for (const a of setup.resume ?? []) {
         const r = step(state, a, reg);
@@ -126,18 +126,22 @@ export function useGame(setup: GameSetup) {
         log = log.concat(r.events);
         done.push(a);
       }
-    } catch {
-      // 壊れた保存は、そこまでの手で止める
+    } catch (e) {
+      // 再生できなかった手の手前で止める(黙って別の局面にしない。何手目かを知らせる)
+      resumeError = `保存した対戦を ${done.length + 1} 手目で再生できませんでした(${done.length} 手目までの局面から再開します): ${errorMessage(e)}`;
     }
-    return { state, log, last: [], actions: done, thinking: false, error: null };
+    return { state, log, last: [], actions: done, thinking: false, error: resumeError };
   });
+
+  // 画面を離れる・対戦をやり直す(再生成される)時は、実行中の探索を取り消す
+  useEffect(() => () => cancelAi(), []);
 
   // 自動保存: 進行中は毎手保存し、勝敗が出たら消す
   const winner = session.state.winner;
   const nActions = session.actions.length;
   useEffect(() => {
     if (winner !== null) clearAutosave();
-    else if (nActions > 0) saveJson(AUTOSAVE_KEY, { setup: { ...setup, resume: undefined }, actions: sessionRef.current.actions, at: Date.now() } satisfies Autosave);
+    else if (nActions > 0) saveJson(AUTOSAVE_KEY, { version: RECORD_VERSION, setup: { ...setup, resume: undefined }, actions: sessionRef.current.actions, at: Date.now() } satisfies Autosave);
   }, [winner, nActions]);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(setup.cpuDelayMs);
@@ -171,8 +175,8 @@ export function useGame(setup: GameSetup) {
         }
         stamp.current++;
         setSession({ state: r.state, log: cur.log.concat(r.events), last: r.events, actions: cur.actions.concat(a), thinking: false, error: null });
-      } catch (e: any) {
-        setSession({ ...cur, error: String(e?.message ?? e) });
+      } catch (e) {
+        setSession({ ...cur, error: errorMessage(e) });
       }
     },
     [setup, me],
@@ -206,8 +210,8 @@ export function useGame(setup: GameSetup) {
         const a = await chooseWithWorker({ state: sessionRef.current.state, spec, seed });
         if (cancelled || stamp.current !== my) return;
         perform(a);
-      } catch (e: any) {
-        if (!cancelled) setSession((s) => ({ ...s, thinking: false, error: String(e?.message ?? e) }));
+      } catch (e) {
+        if (!cancelled) setSession((s) => ({ ...s, thinking: false, error: errorMessage(e) }));
       }
     };
     void run();
@@ -236,8 +240,9 @@ export function useGame(setup: GameSetup) {
         const a = await chooseWithWorker({ state: cur.state, spec, seed });
         // 待っている間に状態が変わった(別の操作・再開)なら、古い状態向けの手は捨てる
         if (sessionRef.current.state === cur.state) perform(a);
-      } catch (e: any) {
-        setSession((s) => ({ ...s, error: String(e?.message ?? e) }));
+      } catch (e) {
+        if (e instanceof AiCancelled) return; // 画面を離れて取り消された(エラーとして出さない)
+        setSession((s) => ({ ...s, error: errorMessage(e) }));
       } finally {
         stepping.current = false;
       }

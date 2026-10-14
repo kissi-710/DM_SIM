@@ -8,6 +8,7 @@ import { Board, buildDropMap, selectedActions } from './Board';
 import { CardView, civGradient } from './CardView';
 import { buildLogTree, cardName, CIV_NAME, recentFeed, reg, type LogNode } from './format';
 import { InputWidget, PaymentWidget } from './Widgets';
+import { parseRecord, saveRecord } from './record';
 import { makeRecord, type GameSetup, type Session, useGame } from './useGame';
 import { downloadText } from './util';
 
@@ -791,12 +792,8 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
               </button>
               <button
                 onClick={() => {
-                  try {
-                    const k = 'dmsim.records';
-                    const cur = JSON.parse(localStorage.getItem(k) ?? '[]');
-                    cur.push({ at: Date.now(), rec: JSON.parse(recText) });
-                    localStorage.setItem(k, JSON.stringify(cur.slice(-20)));
-                  } catch {}
+                  const c = parseRecord(recText);
+                  if (c.ok) saveRecord(c.rec);
                   setRecText(null);
                 }}
               >

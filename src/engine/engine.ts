@@ -100,19 +100,23 @@ export function createGame(db: CardDB | Registry, opts: NewGameOpts): { state: G
     skipTurn: false,
     manaCharged: false,
     breaking: [],
-    deckIds: [opts.decks[0].slice(), opts.decks[1].slice()],
+    // デッキリストは順序を落とした(ソートした)多重集合で持つ。uid の並びと対応させて、隠れたカードを割り出されないため
+    deckIds: [opts.decks[0].slice().sort(), opts.decks[1].slice().sort()],
     cfg,
     dirtySba: true,
   };
   // 乱数を少し進めて、近いシードでも別の並びにする
   for (let i = 0; i < 4; i++) rngNext(s);
   for (const p of [0, 1] as PlayerId[]) {
-    for (const id of opts.decks[p]) {
+    // シャッフルしてから uid を振る(uid の並びが、デッキリストの並びと対応しないようにする)。
+    // 位置ごとのカードは、従来(uid を振ってから位置を並べ替える)と同じになる。
+    const list = opts.decks[p].slice();
+    const sh = Array.isArray(opts.shuffle) ? opts.shuffle[p] : opts.shuffle !== false;
+    if (sh) shuffleInPlace(s, list);
+    for (const id of list) {
       cards.push({ defId: id, owner: p, zone: 'deck', ep: 0, tapped: false, ex: false, exPid: -1, pid: -1, face: 0 });
       players[p].deck.push(cards.length - 1);
     }
-    const sh = Array.isArray(opts.shuffle) ? opts.shuffle[p] : opts.shuffle !== false;
-    if (sh) shuffleInPlace(s, players[p].deck);
     // シールド5枚、手札5枚(spec 3.2)
     for (let i = 0; i < 5; i++) {
       const u = players[p].deck.shift()!;

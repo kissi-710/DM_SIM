@@ -4,6 +4,7 @@ import type { Registry } from '../engine/registry';
 import type { CardDB } from '../engine/types';
 import type { AgentSpec } from '../ai';
 import { runMatches } from './batch';
+import { zFamily } from './stats';
 
 export interface CardStrength {
   defId: string;
@@ -15,7 +16,13 @@ export interface CardStrength {
   winRateBase: number;
   /** 勝率差(基準 − 抜いた時)。正ならそのカードは強い */
   delta: number;
+  /** 勝率差の95%信頼区間(1つのカードだけを見る時)。基準と変種を独立な標本として扱う概算で、実際は同じシード列で対戦するので、やや保守的(広め) */
   ci95: [number, number];
+  /**
+   * 全カードを同時に比べるための区間(Bonferroni の補正。全体で95%)。
+   * 16〜28種を比べると、1つの95%区間では一部が偶然に0を外れる。順位を読む時はこちらを見る。
+   */
+  ciFamily: [number, number];
 }
 
 export interface StrengthOpts {
@@ -41,6 +48,7 @@ export function strengthVariants(deck: string[]): { ids: string[]; decks: string
 export function composeStrength(reg: Pick<Registry, 'defs'>, o: Pick<StrengthOpts, 'deck' | 'games'>, baseRate: number, rates: number[]): CardStrength[] {
   const { ids } = strengthVariants(o.deck);
   const n = o.games;
+  const zf = zFamily(ids.length);
   const out = ids.map((id, k): CardStrength => {
     const r = rates[k];
     const delta = baseRate - r;
@@ -54,6 +62,7 @@ export function composeStrength(reg: Pick<Registry, 'defs'>, o: Pick<StrengthOpt
       winRateBase: baseRate,
       delta,
       ci95: [delta - 1.96 * se, delta + 1.96 * se],
+      ciFamily: [delta - zf * se, delta + zf * se],
     };
   });
   return out.sort((a, b) => b.delta - a.delta);

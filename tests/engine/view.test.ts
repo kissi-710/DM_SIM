@@ -136,3 +136,44 @@ describe('情報条件の表示名', () => {
     for (const k of ['fair', 'partial', 'hypothesis', 'full'] as const) expect(INFO_PRESET_LABEL[k].length).toBeGreaterThan(0);
   });
 });
+
+describe('隠れたカードの正体を、uid と deckIds から割り出せない', () => {
+  const deckA = deckCards('maruru');
+  const deckB = deckCards('zardy');
+  const states = [1, 2, 3, 4, 5].map((seed) => createGame(CARD_DB, { decks: [deckA, deckB], seed, first: (seed % 2) as 0 | 1 }).state);
+
+  it('デッキリストの並びで uid を引いても、当たりは偶然の割合しかない', () => {
+    let hiddenN = 0;
+    let hit = 0;
+    for (const s of states) {
+      const v = toPlayerView(s, 0, FAIR, reg);
+      for (let u = 0; u < v.cards.length; u++) {
+        if (v.cards[u].defId !== '?') continue;
+        hiddenN++;
+        const owner = v.cards[u].owner;
+        const offset = owner === 0 ? 0 : deckA.length;
+        if (v.deckIds[owner][u - offset] === s.cards[u].defId) hit++;
+      }
+    }
+    expect(hiddenN).toBeGreaterThan(300);
+    // 以前は 100% 復元できた。偶然の一致(同名カードが並ぶ分)は1割に満たない
+    expect(hit / hiddenN).toBeLessThan(0.2);
+  });
+  it('uid が隣り合うカードが同名とは限らない(同名が連続して振られない)', () => {
+    let pairs = 0;
+    let same = 0;
+    for (const s of states) {
+      for (let u = 0; u + 1 < s.cards.length; u++) {
+        if (s.cards[u].owner !== s.cards[u + 1].owner) continue;
+        pairs++;
+        if (s.cards[u].defId === s.cards[u + 1].defId) same++;
+      }
+    }
+    expect(same / pairs).toBeLessThan(0.2);
+  });
+  it('deckIds はソート済みの多重集合(デッキリストの並びを残さない)', () => {
+    const s = states[0];
+    expect(s.deckIds[0]).toEqual([...deckA].sort());
+    expect(s.deckIds[1]).toEqual([...deckB].sort());
+  });
+});

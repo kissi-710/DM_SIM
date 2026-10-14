@@ -6,7 +6,7 @@ import type { CardDB } from '../src/engine/types';
 
 describe('スモーク', () => {
   it('全デッキが40枚で、全カードが読み込める', () => {
-    for (const id of ['maruru', 'zardy', 'interstellar-maruru']) {
+    for (const id of ['maruru', 'zardy', 'lost-maruru', 'interstellar-maruru']) {
       const d = deckCards(id);
       expect(d.length).toBe(40);
       expect(checkDeck(CARD_DB, d, true).ok).toBe(true);

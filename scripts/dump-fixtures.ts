@@ -11,6 +11,8 @@ import { loadRegistry } from '../src/engine/registry';
 import { FAIR, toPlayerView } from '../src/engine/view';
 import { mulberry } from '../src/sim/playGame';
 import { evalRound, roundSeed, type SearchEnv } from '../src/ai/mcts';
+import { BASE_FEATURES, type ValueModel } from '../src/ai/valueModel';
+import { PairedTree, treeSearch } from '../src/ai/tree';
 
 const out = process.argv[2] ?? 'rust/fixtures/games.json';
 const reg = loadRegistry(CARD_DB);
@@ -76,6 +78,14 @@ for (const [a, b, seed, k] of [
 ] as const) {
   games.push(play(a, b, seed, [k[0], k[1]]));
 }
+// 差分テスト用の価値関数(重みは決め打ち。全特徴量・手番・一部のカードに非零の値を入れる)
+const TEST_MODEL: ValueModel = {
+  v: 1,
+  base: Object.fromEntries(BASE_FEATURES.map((n, i) => [n, ((i * 37) % 11 - 5) / 10])) as ValueModel['base'],
+  tempo: 0.3,
+  battle: Object.fromEntries(Object.keys(reg.defs).slice(0, 40).map((d, i) => [d, ((i * 7) % 9 - 4) / 8])),
+  hand: Object.fromEntries(Object.keys(reg.defs).slice(5, 45).map((d, i) => [d, ((i * 5) % 7 - 3) / 6])),
+};
 // プレイアウトの正解: 途中の局面(自分から見た PlayerView)で、手ごとの報酬を数ラウンド
 const rounds: { env: SearchEnv; seeds: number[]; alive: number[]; rows: (number | null)[][] }[] = [];
 for (const g of games) {
@@ -87,7 +97,9 @@ for (const g of games) {
     if (!st.pending || legal.length < 2) continue;
     const me = st.pending.player;
     const view = toPlayerView(st, me, FAIR, reg);
-    const env: SearchEnv = { view, legal, me, policy: FAIR, candidateDecks: undefined, horizon: 3 };
+    // 4つに1つはゲーム終了まで(horizon 99)、2つに1つは価値関数で報酬を出す
+    const k = rounds.length;
+    const env: SearchEnv = { view, legal, me, policy: FAIR, candidateDecks: undefined, horizon: k % 4 === 3 ? 99 : 3, weights: k % 2 === 1 ? { model: TEST_MODEL } : undefined };
     const seeds = [1, 2, 3, 4].map((r) => roundSeed(77 + i, r));
     const alive = legal.map((_, k) => k);
     const rows = seeds.map((sd) => evalRound(env, reg, sd, alive).map((x) => (Number.isNaN(x) ? null : x)));
@@ -97,6 +109,35 @@ for (const g of games) {
   }
   if (rounds.length >= 120) break;
 }
+// 木の探索の正解: 同じ入力・同じ種・同じ反復数で、根の手ごとの訪問回数と報酬の合計
+const trees: { env: SearchEnv; base: number; iterations: number; c: number; maxDepth: number; visits: number[]; sums: number[] }[] = [];
+for (let i = 0; i < rounds.length && trees.length < 24; i += 3) {
+  const env = rounds[i].env;
+  const c = trees.length % 2 === 0 ? 0.3 : 0.8;
+  const maxDepth = trees.length % 3 === 0 ? 4 : 24;
+  const base = 1000 + i;
+  const iterations = 60;
+  const st = treeSearch(env, reg, base, iterations, { c, maxDepth });
+  trees.push({ env, base, iterations, c, maxDepth, visits: st.visits, sums: st.sums });
+}
+// ペア比較の木の正解: 同じ木を保ったまま、数ラウンドを順に評価した報酬の行(alive は、2ラウンド目から減らす)
+const pairedTrees: { env: SearchEnv; c: number; maxDepth: number; seeds: number[]; alives: number[][]; rows: (number | null)[][] }[] = [];
+for (let i = 1; i < rounds.length && pairedTrees.length < 16; i += 4) {
+  const env = rounds[i].env;
+  const c = pairedTrees.length % 2 === 0 ? 0.3 : 0.6;
+  const maxDepth = 24;
+  const tree = new PairedTree(env, reg, { c, maxDepth });
+  const seeds = [0, 1, 2, 3, 4, 5].map((r) => roundSeed(500 + i, r));
+  let alive = env.legal.map((_, k) => k);
+  const alives: number[][] = [];
+  const rows: (number | null)[][] = [];
+  seeds.forEach((sd, r) => {
+    if (r === 3 && alive.length > 2) alive = alive.slice(0, Math.ceil(alive.length / 2));
+    alives.push(alive.slice());
+    rows.push(tree.round(sd, alive).map((x) => (Number.isNaN(x) ? null : x)));
+  });
+  pairedTrees.push({ env, c, maxDepth, seeds, alives, rows });
+}
 const defs = plain(reg.defs);
-writeFileSync(out, JSON.stringify({ defs, games, rounds }));
+writeFileSync(out, JSON.stringify({ defs, games, rounds, trees, pairedTrees }));
 console.log('games', games.map((g) => g.actions.length).join(','), 'rounds', rounds.length);

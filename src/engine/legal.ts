@@ -83,7 +83,7 @@ export function playActions(c: Ctx, player: PlayerId): Action[] {
         const face = def.faces[fi];
         const info = c.reg.getInfo(def.id, fi);
         if (z !== 'hand' && !info.permissions.some((p) => p.from === z && p.play === (face.type === 'spell' ? 'cast' : 'summon'))) continue;
-        for (const extra of extraVariants(c, player, uid, z, fi)) {
+        for (const extra of extraVariants(c, player, uid, fi)) {
           const plan = planPlay(c, player, uid, z, fi, extra, false);
           if (plan.ok) out.push({ type: 'PLAY_CARD', uid, from: z, face: fi, extra });
         }
@@ -93,7 +93,7 @@ export function playActions(c: Ctx, player: PlayerId): Action[] {
   return out;
 }
 
-function extraVariants(c: Ctx, player: PlayerId, uid: number, from: ZoneName, fi: number): (PlayExtra | undefined)[] {
+function extraVariants(c: Ctx, player: PlayerId, uid: number, fi: number): (PlayExtra | undefined)[] {
   const s = c.s;
   const def = c.reg.defs[s.cards[uid].defId];
   const face = def.faces[fi];
@@ -159,7 +159,30 @@ function combos(items: number[], min: number, max: number, limit: number): numbe
   return res;
 }
 
+let truncations = 0;
+
+/**
+ * 回答の列挙が上限(ENUM_LIMIT)で打ち切られた回数。合法手が先頭の候補に偏っていないかを、
+ * テストや計測で確かめるための診断用(通常の対戦・調査では 0 のはず)。
+ */
+export function enumTruncations(): number {
+  return truncations;
+}
+export function resetEnumTruncations(): void {
+  truncations = 0;
+}
+
+/** 回答の合法手を列挙する(最大 limit 件)。上限を超えて打ち切った時は、診断のために数える */
 export function enumerateAnswers(p: Pending, limit = ENUM_LIMIT): AnswerValue[] {
+  const res = enumerateRaw(p, limit + 1);
+  if (res.length > limit) {
+    truncations++;
+    return res.slice(0, limit);
+  }
+  return res;
+}
+
+function enumerateRaw(p: Pending, limit: number): AnswerValue[] {
   const inp = p.input;
   if (!inp) return [];
   switch (inp.shape) {

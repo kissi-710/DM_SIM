@@ -26,17 +26,19 @@ pub struct EvalWeights {
     pub hand_cost: f64,
     pub deck_out: f64,
     pub scale: f64,
+    /// 学習した価値関数(src/ai/valueModel.ts)。あれば、打ち切りの報酬はこれが返す勝つ確率になる
+    pub model: Option<std::rc::Rc<ValueModel>>,
 }
 
 impl Default for EvalWeights {
     fn default() -> Self {
         // src/ai/eval.ts の DEFAULT_WEIGHTS と同じ
-        EvalWeights { creature: 3.0, power_div: 2500.0, blocker: 1.5, speed_attacker: 0.5, stack: 0.5, shield: 4.0, hand: 1.6, mana: 3.5, hand_cost: 0.05, deck_out: 3.0, scale: 30.0 }
+        EvalWeights { creature: 3.0, power_div: 2500.0, blocker: 1.5, speed_attacker: 0.5, stack: 0.5, shield: 4.0, hand: 1.6, mana: 3.5, hand_cost: 0.05, deck_out: 3.0, scale: 30.0, model: None }
     }
 }
 
 impl EvalWeights {
-    pub fn from_json(j: Option<&Json>) -> EvalWeights {
+    pub fn from_json(reg: &Registry, j: Option<&Json>) -> EvalWeights {
         let mut w = EvalWeights::default();
         if let Some(Json::Obj(o)) = j {
             for (k, v) in o {
@@ -58,6 +60,9 @@ impl EvalWeights {
                     "scale" => w.scale = x,
                     _ => {}
                 }
+            }
+            if let Some(m) = o.iter().find(|(k, _)| k == "model").map(|(_, v)| v) {
+                w.model = Some(std::rc::Rc::new(ValueModel::from_json(reg, m)));
             }
         }
         w
@@ -111,7 +116,175 @@ pub fn reward(e: Env, me: PlayerId, w: &EvalWeights) -> f64 {
         Winner::P(p) => return if p == me { 1.0 } else { 0.0 },
         Winner::None => {}
     }
+    if let Some(m) = &w.model {
+        return model_prob(e, me, m);
+    }
     0.5 + 0.5 * (evaluate(e, me, w) / w.scale).tanh()
+}
+
+// ───────────────────────── 学習した価値関数(src/ai/valueModel.ts と同じ式) ─────────────────────────
+
+pub const N_BASE: usize = 20;
+const BASE_NAMES: [&str; N_BASE] = [
+    "creatures",
+    "power",
+    "blockersUp",
+    "blockersAll",
+    "speedAttackers",
+    "stacked",
+    "tapped",
+    "sick",
+    "breakers",
+    "shields",
+    "shieldLow",
+    "hand",
+    "handCost",
+    "handPlayable",
+    "mana1",
+    "mana2",
+    "mana3",
+    "manaCivs",
+    "grave",
+    "deckLow",
+];
+
+#[derive(Clone, Debug)]
+pub struct ValueModel {
+    pub base: [f64; N_BASE],
+    pub tempo: f64,
+    /// 定義の添字 → バトルゾーン1枚あたりの重み
+    pub battle: Vec<f64>,
+    /// 定義の添字 → 手札1枚あたりの重み
+    pub hand: Vec<f64>,
+}
+
+impl ValueModel {
+    pub fn from_json(reg: &Registry, j: &Json) -> ValueModel {
+        let mut base = [0.0; N_BASE];
+        if let Some(Json::Obj(o)) = j.get("base") {
+            for (k, v) in o {
+                if let (Some(i), Some(x)) = (BASE_NAMES.iter().position(|n| n == k), v.as_f64()) {
+                    base[i] = x;
+                }
+            }
+        }
+        let cards = |key: &str| -> Vec<f64> {
+            let mut out = vec![0.0; reg.defs.len()];
+            if let Some(Json::Obj(o)) = j.get(key) {
+                for (k, v) in o {
+                    if let (Some(d), Some(x)) = (reg.def_index(k), v.as_f64()) {
+                        out[d as usize] = x;
+                    }
+                }
+            }
+            out
+        };
+        ValueModel { base, tempo: j.get("tempo").and_then(|x| x.as_f64()).unwrap_or(0.0), battle: cards("battle"), hand: cards("hand") }
+    }
+}
+
+fn bump(v: &mut Vec<(u16, f64)>, d: u16, by: f64) {
+    match v.iter_mut().find(|(k, _)| *k == d) {
+        Some(e) => e.1 += by,
+        None => v.push((d, by)),
+    }
+}
+
+/// プレイヤー p の基本の特徴量を f に足し(± sign)、カードごとの枚数を battle・hand に足す
+fn side_features(e: Env, p: PlayerId, f: &mut [f64; N_BASE], battle: &mut Vec<(u16, f64)>, hand: &mut Vec<(u16, f64)>, sign: f64) {
+    let s = e.s;
+    let z = &s.players[p as usize];
+    let mut blockers_up = 0.0;
+    let mut blockers_all = 0.0;
+    let mut sa = 0.0;
+    let mut stacked = 0.0;
+    let mut tapped = 0.0;
+    let mut sick = 0.0;
+    let mut breakers = 0.0;
+    let mut power = 0.0;
+    for perm in &z.battle {
+        power += (power_of(e, perm).min(15000) as f64) / 1000.0;
+        if can_block(e, perm) {
+            blockers_up += 1.0;
+        }
+        if has_keyword(e, perm, Kw::Blocker) {
+            blockers_all += 1.0;
+        }
+        if has_keyword(e, perm, Kw::SpeedAttacker) {
+            sa += 1.0;
+        }
+        if perm.cards.len() > 1 {
+            stacked += 1.0;
+        }
+        if perm.tapped {
+            tapped += 1.0;
+        }
+        if is_sick(e, perm) {
+            sick += 1.0;
+        }
+        breakers += breaker_count(e, perm) as f64;
+        bump(battle, s.cards[perm.cards[0] as usize].def, sign);
+    }
+    let mana_n = z.mana.len() as i32;
+    let mut hand_cost = 0.0;
+    let mut playable = 0.0;
+    for &u in &z.hand {
+        let cost = chars_of(e, u, -1).cost;
+        if cost < 99 {
+            hand_cost += cost.min(8) as f64;
+            if cost <= mana_n {
+                playable += 1.0;
+            }
+        }
+        bump(hand, s.cards[u as usize].def, sign);
+    }
+    let mut civs = 0u32;
+    for &m in &z.mana {
+        for cv in chars_of(e, m, -1).civs {
+            civs |= 1 << (*cv as u32);
+        }
+    }
+    let mut add = |i: usize, v: f64| f[i] += sign * v;
+    add(0, z.battle.len() as f64);
+    add(1, power);
+    add(2, blockers_up);
+    add(3, blockers_all);
+    add(4, sa);
+    add(5, stacked);
+    add(6, tapped);
+    add(7, sick);
+    add(8, breakers);
+    add(9, z.shield.len() as f64);
+    add(10, (3 - z.shield.len() as i32).max(0) as f64);
+    add(11, z.hand.len() as f64);
+    add(12, hand_cost);
+    add(13, playable);
+    add(14, mana_n.min(4) as f64);
+    add(15, (mana_n - 4).max(0).min(3) as f64);
+    add(16, (mana_n - 7).max(0).min(3) as f64);
+    add(17, civs.count_ones() as f64);
+    add(18, z.grave.len().min(10) as f64);
+    add(19, (4 - z.deck.len() as i32).max(0) as f64);
+}
+
+/// me が勝つ確率の見積もり(決着していない盤面)
+pub fn model_prob(e: Env, me: PlayerId, m: &ValueModel) -> f64 {
+    let mut f = [0.0; N_BASE];
+    let mut battle: Vec<(u16, f64)> = Vec::new();
+    let mut hand: Vec<(u16, f64)> = Vec::new();
+    side_features(e, me, &mut f, &mut battle, &mut hand, 1.0);
+    side_features(e, opp(me), &mut f, &mut battle, &mut hand, -1.0);
+    let mut z = if e.s.active == me { m.tempo } else { -m.tempo };
+    for i in 0..N_BASE {
+        z += m.base[i] * f[i];
+    }
+    for (d, n) in &battle {
+        z += m.battle[*d as usize] * n;
+    }
+    for (d, n) in &hand {
+        z += m.hand[*d as usize] * n;
+    }
+    1.0 / (1.0 + (-z).exp())
 }
 
 // ───────────────────────── ルールベースの手の選択(ターン中の行動) ─────────────────────────
@@ -338,6 +511,9 @@ pub fn choose_turn_action(e: Env, legal: &[Action], me: PlayerId) -> usize {
 
 // ───────────────────────── プレイアウト ─────────────────────────
 
+/// プレイアウト1回の手数の上限(src/ai/mcts.ts の MAX_ROLLOUT_STEPS と同じ)
+const MAX_ROLLOUT_STEPS: i32 = 4000;
+
 fn answer_len(a: &Action) -> i32 {
     match a {
         Action::Answer { value: Val::List(l), .. } => l.len() as i32,
@@ -441,7 +617,7 @@ pub fn rollout(reg: &Registry, start: State, me: PlayerId, rand: &mut SeededRand
     let mut guard = 0;
     while st.winner == Winner::None && st.turn < end_turn {
         guard += 1;
-        if guard > 400 {
+        if guard > MAX_ROLLOUT_STEPS {
             break;
         }
         let pending = match &st.pending {
@@ -531,7 +707,7 @@ impl SearchEnv {
             opp_hand_kinds,
             candidate_decks,
             horizon: j.get("horizon").and_then(|x| x.as_i64()).unwrap_or(3) as i32,
-            weights: EvalWeights::from_json(j.get("weights")),
+            weights: EvalWeights::from_json(reg, j.get("weights")),
         })
     }
 }
@@ -724,4 +900,227 @@ pub fn eval_round(reg: &Registry, env: &SearchEnv, seed: u32, alive: &[usize]) -
         }
     }
     r
+}
+
+// ───────────────────────── ターン内の行動列を木にする探索 ─────────────────────────
+// src/ai/tree.ts の treeSearch に対応する(決定化つき UCT)。乱数の使い方・選び方は TS 版と同じ。
+
+/// ラウンドの種(src/ai/mcts.ts の roundSeed と同じ)
+pub fn round_seed(base: u32, r: u32) -> u32 {
+    let mut x = base ^ (r.wrapping_add(1)).wrapping_mul(0x9e3779b1);
+    x = (x ^ (x >> 16)).wrapping_mul(0x85ebca6b);
+    x = (x ^ (x >> 13)).wrapping_mul(0xc2b2ae35);
+    x ^ (x >> 16)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TreeOpts {
+    pub c: f64,
+    pub max_depth: i32,
+}
+
+struct TNode {
+    acts: Vec<Action>,
+    n: Vec<u32>,
+    w: Vec<f64>,
+    avail: Vec<u32>,
+    kids: Vec<Option<usize>>,
+}
+
+impl TNode {
+    fn new() -> TNode {
+        TNode { acts: Vec::new(), n: Vec::new(), w: Vec::new(), avail: Vec::new(), kids: Vec::new() }
+    }
+}
+
+/// 木(続きから反復できる)。根は nodes[0] で、根の手は env.legal の並び
+pub struct Tree {
+    nodes: Vec<TNode>,
+    pub done: u32,
+}
+
+impl Tree {
+    pub fn new(env: &SearchEnv) -> Tree {
+        let mut root = TNode::new();
+        for a in &env.legal {
+            root.acts.push(a.clone());
+            root.n.push(0);
+            root.w.push(0.0);
+            root.avail.push(0);
+            root.kids.push(None);
+        }
+        Tree { nodes: vec![root], done: 0 }
+    }
+
+    /// 根の手ごとの (訪問回数, 報酬の合計)
+    pub fn root_stats(&self) -> (Vec<u32>, Vec<f64>) {
+        (self.nodes[0].n.clone(), self.nodes[0].w.clone())
+    }
+
+    /// 木を下る(src/ai/tree.ts の descend と同じ)。stv の状態から始め、止まった時の状態を stv に残す。失敗(エンジンの例外)なら true
+    fn descend(&mut self, reg: &Registry, env: &SearchEnv, o: TreeOpts, stv: &mut Option<State>, start: usize, start_depth: i32, path: &mut Vec<(usize, usize)>) -> bool {
+        let me = env.me;
+        let root_turn = env.view.turn;
+        let mut node = start;
+        let mut depth = start_depth;
+        loop {
+            let st = stv.as_ref().unwrap();
+            let (why, ok) = match &st.pending {
+                Some(p) => (p.why, p.player == me),
+                None => break,
+            };
+            if st.winner != Winner::None || !ok || st.turn != root_turn || depth >= o.max_depth {
+                break;
+            }
+            let legal: Vec<Action> = if depth == 0 { env.legal.clone() } else { legal_actions(st, reg) };
+            if legal.is_empty() {
+                break;
+            }
+            if legal.len() == 1 {
+                match step_owned(reg, stv.take().unwrap(), &legal[0]) {
+                    Ok(s2) => *stv = Some(s2),
+                    Err(_) => return true,
+                }
+                depth += 1;
+                continue;
+            }
+            let nd = &mut self.nodes[node];
+            let idxs: Vec<Option<usize>> = legal.iter().map(|a| nd.acts.iter().position(|x| x == a)).collect();
+            for i in idxs.iter().flatten() {
+                nd.avail[*i] += 1;
+            }
+            let untried: Vec<usize> = (0..legal.len())
+                .filter(|&j| match idxs[j] {
+                    None => true,
+                    Some(i) => nd.n[i] == 0,
+                })
+                .collect();
+            let expand = !untried.is_empty();
+            let chosen: usize = if expand {
+                let mut c = untried[0];
+                if why == Why::TurnAction {
+                    let j = choose_turn_action(Env { s: st, reg }, &legal, me);
+                    if untried.contains(&j) {
+                        c = j;
+                    }
+                }
+                c
+            } else {
+                let mut best = 0usize;
+                let mut bs = f64::NEG_INFINITY;
+                for j in 0..legal.len() {
+                    let i = idxs[j].unwrap();
+                    let s = nd.w[i] / nd.n[i] as f64 + o.c * ((nd.avail[i].max(1) as f64).ln() / nd.n[i] as f64).sqrt();
+                    if s > bs {
+                        bs = s;
+                        best = j;
+                    }
+                }
+                best
+            };
+            let ci = match idxs[chosen] {
+                Some(i) => i,
+                None => {
+                    nd.acts.push(legal[chosen].clone());
+                    nd.n.push(0);
+                    nd.w.push(0.0);
+                    nd.avail.push(1);
+                    nd.kids.push(None);
+                    nd.acts.len() - 1
+                }
+            };
+            path.push((node, ci));
+            match step_owned(reg, stv.take().unwrap(), &legal[chosen]) {
+                Ok(s2) => *stv = Some(s2),
+                Err(_) => return true,
+            }
+            depth += 1;
+            if expand {
+                break;
+            }
+            node = match self.nodes[node].kids[ci] {
+                Some(k) => k,
+                None => {
+                    self.nodes.push(TNode::new());
+                    let k = self.nodes.len() - 1;
+                    self.nodes[node].kids[ci] = Some(k);
+                    k
+                }
+            };
+        }
+        false
+    }
+
+    /// 反復を done から target まで行う(標準の ISMCTS)
+    pub fn run(&mut self, reg: &Registry, env: &SearchEnv, base: u32, target: u32, o: TreeOpts) {
+        let q_def = reg.def_index("?").unwrap_or(u16::MAX);
+        let end_turn = env.view.turn + env.horizon;
+        while self.done < target {
+            let it = self.done;
+            self.done += 1;
+            let mut rr = SeededRand::new(round_seed(base, it));
+            let det = determinize(reg, env, &mut rr, q_def);
+            let rollout_seed = (rr.next() * 2147483647.0).floor() as u32;
+            let mut stv: Option<State> = Some(det);
+            let mut path: Vec<(usize, usize)> = Vec::new();
+            if self.descend(reg, env, o, &mut stv, 0, 0, &mut path) {
+                continue;
+            }
+            let st = stv.unwrap();
+            let mut rand = SeededRand::new(rollout_seed);
+            let hz = (end_turn - st.turn).max(0);
+            if let Ok(r) = rollout(reg, st, env.me, &mut rand, hz, &env.weights) {
+                for (nd, i) in path {
+                    self.nodes[nd].n[i] += 1;
+                    self.nodes[nd].w[i] += r;
+                }
+            }
+        }
+    }
+
+    /// ペア比較の1ラウンド(src/ai/tree.ts の PairedTree.round)。手ごとの報酬(alive でない手・失敗した手は NaN)
+    pub fn paired_round(&mut self, reg: &Registry, env: &SearchEnv, seed: u32, alive: &[usize], o: TreeOpts) -> Vec<f64> {
+        let q_def = reg.def_index("?").unwrap_or(u16::MAX);
+        let end_turn = env.view.turn + env.horizon;
+        let mut rr = SeededRand::new(seed);
+        let det = determinize(reg, env, &mut rr, q_def);
+        let rollout_seed = (rr.next() * 2147483647.0).floor() as u32;
+        let mut out = vec![f64::NAN; env.legal.len()];
+        for &k in alive {
+            if k >= env.legal.len() {
+                continue;
+            }
+            let child = match self.nodes[0].kids[k] {
+                Some(c) => c,
+                None => {
+                    self.nodes.push(TNode::new());
+                    let c = self.nodes.len() - 1;
+                    self.nodes[0].kids[k] = Some(c);
+                    c
+                }
+            };
+            let first = match step_owned(reg, det.clone(), &env.legal[k]) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let mut stv: Option<State> = Some(first);
+            let mut path: Vec<(usize, usize)> = Vec::new();
+            if self.descend(reg, env, o, &mut stv, child, 1, &mut path) {
+                continue;
+            }
+            let st = stv.unwrap();
+            let mut rand = SeededRand::new(rollout_seed);
+            let hz = (end_turn - st.turn).max(0);
+            if let Ok(r) = rollout(reg, st, env.me, &mut rand, hz, &env.weights) {
+                for (nd, i) in path {
+                    self.nodes[nd].n[i] += 1;
+                    self.nodes[nd].w[i] += r;
+                }
+                self.nodes[0].n[k] += 1;
+                self.nodes[0].w[k] += r;
+                out[k] = r;
+            }
+        }
+        out
+    }
 }

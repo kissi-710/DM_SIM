@@ -6,6 +6,7 @@ import { civGradient } from './CardView';
 import { allDecks, deleteDeck, saveDeck } from './decks';
 import { CIV_NAME } from './format';
 import { downloadText } from './util';
+import { errorMessage } from '../engine/types';
 
 export function DeckEditor() {
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -129,8 +130,8 @@ export function DeckEditor() {
                     if (!Array.isArray(cs) || cs.some((c) => !CARD_DB[c])) throw new Error('未知のカードIDがあります');
                     load(cs, o.name ?? 'インポートしたデッキ');
                     setMsg('読み込みました');
-                  } catch (e: any) {
-                    setMsg('読み込めません: ' + e.message);
+                  } catch (e) {
+                    setMsg('読み込めません: ' + errorMessage(e));
                   }
                 }}
               >

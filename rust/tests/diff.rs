@@ -111,3 +111,74 @@ fn eval_round_matches_ts() {
     }
     eprintln!("{} 個の報酬が一致(最大差 {:e})", n, maxdiff);
 }
+
+#[test]
+fn tree_matches_ts() {
+    use dmsim::ai::{SearchEnv, Tree, TreeOpts};
+    let Some((reg, root)) = load() else { return };
+    let trees = match root.get("trees").and_then(|r| r.as_arr()) {
+        Some(r) => r,
+        None => return,
+    };
+    let mut maxdiff: f64 = 0.0;
+    for (ti, t) in trees.iter().enumerate() {
+        let env = SearchEnv::from_json(&reg, t.get("env").unwrap()).unwrap();
+        let base = t.get("base").unwrap().as_f64().unwrap() as u32;
+        let iterations = t.get("iterations").unwrap().as_i64().unwrap() as u32;
+        let o = TreeOpts { c: t.get("c").unwrap().as_f64().unwrap(), max_depth: t.get("maxDepth").unwrap().as_i64().unwrap() as i32 };
+        let mut tree = Tree::new(&env);
+        // 2回に分けて続きから反復しても、1回で行ったのと同じ
+        tree.run(&reg, &env, base, iterations / 2, o);
+        tree.run(&reg, &env, base, iterations, o);
+        let (visits, sums) = tree.root_stats();
+        let wv: Vec<i64> = t.get("visits").unwrap().as_arr().unwrap().iter().map(|x| x.as_i64().unwrap()).collect();
+        let ws: Vec<f64> = t.get("sums").unwrap().as_arr().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+        assert_eq!(visits.len(), wv.len());
+        for k in 0..visits.len() {
+            assert_eq!(visits[k] as i64, wv[k], "tree {} arm {}: 訪問回数が違う", ti, k);
+            let d = (sums[k] - ws[k]).abs();
+            maxdiff = maxdiff.max(d);
+            assert!(d < 1e-9, "tree {} arm {}: 報酬の合計 {} と {} (差 {})", ti, k, sums[k], ws[k], d);
+        }
+    }
+    eprintln!("{} 本の木が一致(最大差 {:e})", trees.len(), maxdiff);
+}
+
+#[test]
+fn paired_tree_matches_ts() {
+    use dmsim::ai::{SearchEnv, Tree, TreeOpts};
+    let Some((reg, root)) = load() else { return };
+    let trees = match root.get("pairedTrees").and_then(|r| r.as_arr()) {
+        Some(r) => r,
+        None => return,
+    };
+    let mut n = 0;
+    let mut maxdiff: f64 = 0.0;
+    for (ti, t) in trees.iter().enumerate() {
+        let env = SearchEnv::from_json(&reg, t.get("env").unwrap()).unwrap();
+        let o = TreeOpts { c: t.get("c").unwrap().as_f64().unwrap(), max_depth: t.get("maxDepth").unwrap().as_i64().unwrap() as i32 };
+        let seeds = t.get("seeds").unwrap().as_arr().unwrap();
+        let alives = t.get("alives").unwrap().as_arr().unwrap();
+        let rows = t.get("rows").unwrap().as_arr().unwrap();
+        let mut tree = Tree::new(&env);
+        for (r, sd) in seeds.iter().enumerate() {
+            let alive: Vec<usize> = alives[r].as_arr().unwrap().iter().map(|x| x.as_i64().unwrap() as usize).collect();
+            let got = tree.paired_round(&reg, &env, sd.as_f64().unwrap() as u32, &alive, o);
+            let want = rows[r].as_arr().unwrap();
+            assert_eq!(got.len(), want.len());
+            for (k, (g, w)) in got.iter().zip(want).enumerate() {
+                match w {
+                    Json::Null => assert!(g.is_nan(), "tree {} round {} arm {}: 期待は NaN だが {}", ti, r, k, g),
+                    _ => {
+                        let wv = w.as_f64().unwrap();
+                        let df = (g - wv).abs();
+                        maxdiff = maxdiff.max(df);
+                        assert!(df < 1e-9, "tree {} round {} arm {}: {} と {} (差 {})", ti, r, k, g, wv, df);
+                    }
+                }
+                n += 1;
+            }
+        }
+    }
+    eprintln!("{} 個の報酬が一致(ペア比較の木。最大差 {:e})", n, maxdiff);
+}

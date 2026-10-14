@@ -1,23 +1,24 @@
 // 棋譜({seed, decks, first, actions[]})の読み込みと再生(design 10 / spec 3.13 の再現性)。
 import { useState } from 'react';
 import { ReplayViewer } from './ReplayViewer';
-import { replayRecord, type GameRecord } from './useGame';
-import { loadJson } from './util';
+import { loadSavedRecords, parseRecord, type GameRecord } from './record';
+import { replayRecord } from './useGame';
 import type { Ev, GameState } from '../engine/types';
+import { errorMessage } from '../engine/types';
 
 export function ReplayScreen() {
   const [text, setText] = useState('');
   const [view, setView] = useState<{ title: string; states: GameState[]; events: Ev[][] } | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const saved = loadJson<{ at: number; rec: GameRecord }[]>('dmsim.records', []);
+  const saved = loadSavedRecords();
 
   const open = (rec: GameRecord) => {
     try {
       const r = replayRecord(rec);
       setView({ title: `棋譜の再生(シード ${rec.seed} / ${rec.actions.length}手)`, states: r.states, events: r.events });
       setErr(null);
-    } catch (e: any) {
-      setErr('再生できません: ' + String(e?.message ?? e));
+    } catch (e) {
+      setErr('再生できません: ' + errorMessage(e));
     }
   };
 
@@ -32,11 +33,10 @@ export function ReplayScreen() {
             <button
               className="primary"
               onClick={() => {
-                try {
-                  open(JSON.parse(text));
-                } catch (e: any) {
-                  setErr('JSONを読み込めません: ' + e.message);
-                }
+                // 形・版・カードIDを検査してから再生する
+                const c = parseRecord(text);
+                if (c.ok) open(c.rec);
+                else setErr(c.error);
               }}
             >
               再生する

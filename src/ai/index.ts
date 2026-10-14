@@ -1,7 +1,8 @@
 // エージェントの生成(設定 → Agent)。UI・CLI・Worker から共通で使う。
 import type { InfoPolicy } from '../engine/view';
-import type { EvalWeights } from './eval';
-import { makeMcts } from './mcts';
+import type { RewardWeights } from './eval';
+import { makeMcts, type TreeOpts } from './mcts';
+import { DEFAULT_TREE_OPTS, makeTreeMcts } from './tree';
 import { randomAgent } from './random';
 import { makeRuleBased } from './rulebased';
 import type { Agent } from './types';
@@ -25,7 +26,22 @@ export interface AiTuning {
   /** L1 の手に与える事前の上乗せ */
   priorBonus?: number;
   /** 評価関数の重み(差し替える分だけ) */
-  weights?: Partial<EvalWeights>;
+  weights?: Partial<RewardWeights>;
+  /** flat: 全候補手を同じ世界で比べる平坦なモンテカルロ(既定) / tree: ターン内の行動列を木にする(決定化つき UCT) / ptree: 根はペア比較のまま、2手目以降を木にする */
+  algo?: 'flat' | 'tree' | 'ptree';
+  /** tree: UCB の探索定数 */
+  treeC?: number;
+  /** tree: 木の深さの上限 */
+  treeDepth?: number;
+}
+
+/** 探索の方式の既定(docs/ai-quality-plan.md §6.4 の結果で決める) */
+export const DEFAULT_ALGO: NonNullable<AiTuning['algo']> = 'ptree';
+
+/** ペア比較の木(algo=ptree)の設定。それ以外は undefined */
+export function treeOptsOf(t: AiTuning | undefined): TreeOpts | undefined {
+  if ((t?.algo ?? DEFAULT_ALGO) !== 'ptree') return undefined;
+  return { c: t?.treeC ?? DEFAULT_TREE_OPTS.c, maxDepth: t?.treeDepth ?? DEFAULT_TREE_OPTS.maxDepth };
 }
 
 export const AGENT_LABEL: Record<AgentKind, string> = {
@@ -43,8 +59,11 @@ export function makeAgent(spec: AgentSpec): Agent {
       return passAgent;
     case 'rule':
       return makeRuleBased({ policy: spec.policy, candidateDecks: spec.candidateDecks });
-    case 'mcts':
-      return makeMcts({ policy: spec.policy, iterations: spec.iterations, ms: spec.ms, candidateDecks: spec.candidateDecks, ...spec.tuning });
+    case 'mcts': {
+      const { algo = DEFAULT_ALGO, treeC, treeDepth, ...tuning } = spec.tuning ?? {};
+      const base = { policy: spec.policy, iterations: spec.iterations, ms: spec.ms, candidateDecks: spec.candidateDecks, ...tuning };
+      return algo === 'tree' || algo === 'ptree' ? makeTreeMcts({ ...base, c: treeC, maxDepth: treeDepth, paired: algo === 'ptree' }) : makeMcts(base);
+    }
   }
 }
 

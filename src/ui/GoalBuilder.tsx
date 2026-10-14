@@ -4,6 +4,7 @@ import { CARD_LIST } from '../cards';
 import type { Civ } from '../engine/types';
 import { CIV_NAME } from './format';
 import { describeGoal, type CardMatcher, type Goal, type Predicate, type Timing } from '../sim/goal';
+import { errorMessage } from '../engine/types';
 
 interface Leaf {
   not: boolean;
@@ -201,8 +202,8 @@ export function GoalBuilder({ goal, onChange }: { goal: Goal; onChange: (g: Goal
             try {
               onChange(JSON.parse(e.target.value));
               setErr(null);
-            } catch (x: any) {
-              setErr(String(x.message));
+            } catch (x) {
+              setErr(errorMessage(x));
             }
           }}
         />

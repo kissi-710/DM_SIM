@@ -27,6 +27,19 @@ describe('measureCardStrength(カード単体の強さ)', () => {
     }
     for (let i = 1; i < r.length; i++) expect(r[i - 1].delta).toBeGreaterThanOrEqual(r[i].delta);
   });
+  it('同時比較の区間は、1つだけの区間より広く、差を含む(種類が複数ある時)', () => {
+    const r = run();
+    expect(r.length).toBeGreaterThan(1);
+    for (const row of r) {
+      const w95 = row.ci95[1] - row.ci95[0];
+      const wFam = row.ciFamily[1] - row.ciFamily[0];
+      expect(row.ciFamily[0]).toBeLessThanOrEqual(row.delta);
+      expect(row.ciFamily[1]).toBeGreaterThanOrEqual(row.delta);
+      // 両端は同じ中心(差)を挟んで、広がるだけ
+      expect(wFam).toBeGreaterThan(w95);
+      expect((row.ciFamily[0] + row.ciFamily[1]) / 2).toBeCloseTo((row.ci95[0] + row.ci95[1]) / 2, 12);
+    }
+  });
   it('進捗はカードの種類数だけ通知される', () => {
     const calls: [number, number][] = [];
     run({ onProgress: (d, t) => calls.push([d, t]) });

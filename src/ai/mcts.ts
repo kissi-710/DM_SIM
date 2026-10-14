@@ -9,9 +9,17 @@ import type { Registry } from '../engine/registry';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { FAIR, type InfoPolicy } from '../engine/view';
 import { determinize } from './determinize';
-import { reward, withWeights, type EvalWeights } from './eval';
+import { reward, withWeights, type RewardWeights } from './eval';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
 import type { Agent, AgentCtx } from './types';
+
+/** ターン内の行動列を木にする探索の設定(tree.ts) */
+export interface TreeOpts {
+  /** UCB の探索定数(報酬は 0〜1) */
+  c: number;
+  /** 木の深さの上限(これを超えたらプレイアウト) */
+  maxDepth: number;
+}
 
 export interface MctsOpts {
   policy?: InfoPolicy;
@@ -25,7 +33,9 @@ export interface MctsOpts {
   /** L1 の手に与える事前の上乗せ(報酬の単位) */
   priorBonus?: number;
   /** 評価関数の重み(差し替える分だけ指定) */
-  weights?: Partial<EvalWeights>;
+  weights?: Partial<RewardWeights>;
+  /** 指定すると、ラウンドの評価を「根はペア比較・2手目以降は木」にする(tree.ts の PairedTree)。Worker にも env 経由で伝わる */
+  tree?: TreeOpts;
   /** 1回の探索が終わるたびに呼ばれる(計測・表示用) */
   onSearch?: (info: SearchInfo) => void;
 }
@@ -63,8 +73,11 @@ export function rolloutPick(s: GameState, legal: Action[], reg: Registry, rand: 
   }
 }
 
+/** プレイアウト1回の手数の上限(無限ループ防止。ゲーム終了まで進める設定でも足りる値) */
+export const MAX_ROLLOUT_STEPS = 4000;
+
 /** 時間主導の探索で、反復(プレイアウト)の絶対上限(無限ループ防止) */
-const HARD_MAX_ITERATIONS = 100000;
+export const HARD_MAX_ITERATIONS = 100000;
 /** 手の比較に必要な最低ラウンド数(これ未満では判定しない) */
 const MIN_ROUNDS = 8;
 
@@ -83,7 +96,7 @@ export function pairedVerdict(n: number, dsum: number, dsq: number, bonusGap: nu
 }
 
 /** プレイアウトの乱数(1ラウンド内の全候補手で同じ列にするため、シードから作る) */
-function seededRand(seed: number): () => number {
+export function seededRand(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -94,11 +107,11 @@ function seededRand(seed: number): () => number {
   };
 }
 
-function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number, w: EvalWeights): number {
+export function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number, w: RewardWeights): number {
   let s = start;
   const endTurn = s.turn + horizon;
   let guard = 0;
-  while (s.winner === null && s.turn < endTurn && guard++ < 400) {
+  while (s.winner === null && s.turn < endTurn && guard++ < MAX_ROLLOUT_STEPS) {
     const legal = legalActions(s, reg);
     if (legal.length === 0) break;
     const a = rolloutPick(s, legal, reg, rand);
@@ -124,7 +137,9 @@ export interface SearchEnv {
   candidateDecks?: string[][];
   horizon: number;
   /** 評価関数の重み(既定との差分) */
-  weights?: Partial<EvalWeights>;
+  weights?: Partial<RewardWeights>;
+  /** あれば、ラウンドは木のペア比較(tree.ts)で評価する。木は評価する側が(探索の入力ごとに)保つ */
+  tree?: TreeOpts;
 }
 
 /** ラウンドの評価を差し替える関数(Rust 版エンジン(WASM)など)。TS 版と同じ入力・同じ結果を返す */
@@ -308,7 +323,7 @@ export function planSearch(
   let baseIdx = legal.findIndex((a) => JSON.stringify(a) === JSON.stringify(baseAct));
   if (baseIdx < 0) baseIdx = 0;
   return {
-    env: { view, legal, me: view.pending!.player, policy, candidateDecks: o.candidateDecks, horizon: o.horizonTurns ?? 3, weights: o.weights },
+    env: { view, legal, me: view.pending!.player, policy, candidateDecks: o.candidateDecks, horizon: o.horizonTurns ?? 3, weights: o.weights, tree: o.tree },
     baseIdx,
     prior: o.priorBonus ?? 0.005,
     maxIt: timeDriven ? HARD_MAX_ITERATIONS : Math.max(iterations!, n),
@@ -325,11 +340,18 @@ function infoOf(s: MctsSearch, plan: SearchPlan, ms: number, workers: number): S
 }
 
 /** 逐次に探索する */
-export function runSearch(plan: SearchPlan, reg: Registry, onSearch?: (i: SearchInfo) => void): Action {
+export function runSearch(
+  plan: SearchPlan,
+  reg: Registry,
+  onSearch?: (i: SearchInfo) => void,
+  /** ラウンドの評価(既定は evalRound。木のペア比較などに差し替える) */
+  round?: (seed: number, alive: number[]) => number[],
+): Action {
   const t0 = Date.now();
   const search = newSearch(plan);
   while (!search.finished && !(search.rounds > 0 && Date.now() - t0 >= plan.ms)) {
-    search.feed(evalRound(plan.env, reg, roundSeed(plan.base, search.rounds), search.alive));
+    const seed = roundSeed(plan.base, search.rounds);
+    search.feed(round ? round(seed, search.alive) : evalRound(plan.env, reg, seed, search.alive));
   }
   onSearch?.(infoOf(search, plan, Date.now() - t0, 1));
   return plan.env.legal[search.best()];

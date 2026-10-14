@@ -19,6 +19,7 @@ import { reg } from './format';
 import { runSimJob, type RunningJob } from './simClient';
 import { downloadText, loadJson, saveJson } from './util';
 import type { Ev, GameState } from '../engine/types';
+import { errorMessage } from '../engine/types';
 
 type Mode = 'prob' | 'patterns';
 
@@ -81,8 +82,8 @@ export function SimView() {
         );
         setPats(await job.current.promise);
       }
-    } catch (e: any) {
-      setError(String(e?.message ?? e));
+    } catch (e) {
+      setError(errorMessage(e));
     } finally {
       setProgress(null);
       job.current = null;
@@ -365,7 +366,7 @@ function ProbResultView({ r, goal }: { r: ProbResult; goal: Goal }) {
         </div>
         {r.search && (
           <div className="panel">
-            <div className="muted">探索による上限(山札の並びを知っていた場合)</div>
+            <div className="muted">探索による上限(山札の並びと乱数の結果まで知っていた場合)</div>
             <div style={{ fontSize: 28, fontWeight: 700 }}>
               {pct(r.search.achieved / Math.max(1, r.trials))}
               {r.search.unknown > 0 && <span className="muted" style={{ fontSize: 16 }}> 〜 {pct(r.search.maxRate)}</span>}

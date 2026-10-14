@@ -13,6 +13,11 @@ import type { Agent, AgentCtx } from './types';
 export interface RuleOpts {
   policy?: InfoPolicy;
   candidateDecks?: string[][];
+  /**
+   * 効果の選択を先読みする時に、エンジンが例外を投げた手を知らせる(その手は候補から外す)。
+   * エンジンの不具合や非合法手があっても、AI が弱く見えるだけで気づけないのを防ぐ(テスト・CLI で数える)。
+   */
+  onError?: (error: unknown, action: Action) => void;
 }
 
 /**
@@ -184,7 +189,8 @@ function chooseAnswer(view: GameState, legal: Action[], ctx: AgentCtx, o: RuleOp
     try {
       const r = step(det, a, ctx.reg);
       v = evaluate(r.state, ctx.reg, me, RULE_WEIGHTS);
-    } catch {
+    } catch (e) {
+      o.onError?.(e, a);
       continue;
     }
     // 評価が同点なら、乱数でばらつかせる

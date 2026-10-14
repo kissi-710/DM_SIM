@@ -4,10 +4,12 @@
 // src/wasm/dmsim.wasm(npm run build:wasm)があれば、ラウンドの評価を Rust 版(WASM)で行う。無ければ TS 版。
 import { decide, type DecideReq } from '../ai/decide';
 import { evalRound, setNativeRounds, type SearchEnv } from '../ai/mcts';
+import { PairedTree, setNativePairedRound, setNativeTree } from '../ai/tree';
 import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import type { Action } from '../engine/types';
 import { DmEngine } from '../wasm/dmEngine';
+import { errorMessage } from '../engine/types';
 
 export type AiWorkerIn =
   | { id: number; req: DecideReq }
@@ -22,6 +24,8 @@ export type AiWorkerOut =
 
 const reg = loadRegistry(CARD_DB);
 const envs = new Map<number, SearchEnv>();
+/** 木のペア比較(env.tree)の探索の木。入力(sid)ごとに保つ */
+const trees = new Map<number, PairedTree>();
 const post = (m: AiWorkerOut) => (self as unknown as Worker).postMessage(m);
 
 // Rust 版(WASM)。ビルドされていなければ何もしない
@@ -32,6 +36,8 @@ const nativeReady: Promise<void> = (async () => {
   const bytes = await (await fetch(url)).arrayBuffer();
   const eng = await DmEngine.create(bytes, JSON.stringify(reg.defs));
   setNativeRounds(eng.asNativeRounds());
+  setNativeTree(eng.asNativeTree());
+  setNativePairedRound(eng.asNativePairedRound());
   console.info('[ai.worker] Rust 版エンジン(WASM)で探索します');
 })().catch((e) => {
   // 読み込めなければ TS 版で動く
@@ -43,7 +49,12 @@ self.onmessage = async (e: MessageEvent<AiWorkerIn>) => {
   const m = e.data;
   if ('kind' in m && m.kind === 'begin') {
     envs.set(m.sid, m.env);
-    while (envs.size > 4) envs.delete(envs.keys().next().value as number);
+    trees.delete(m.sid);
+    while (envs.size > 4) {
+      const old = envs.keys().next().value as number;
+      envs.delete(old);
+      trees.delete(old);
+    }
     return;
   }
   const t0 = Date.now();
@@ -51,16 +62,25 @@ self.onmessage = async (e: MessageEvent<AiWorkerIn>) => {
     try {
       const env = envs.get(m.sid);
       if (!env) throw new Error('探索の入力がありません');
-      post({ id: m.id, ok: true, rows: m.seeds.map((sd) => evalRound(env, reg, sd, m.alive)), ms: Date.now() - t0 });
-    } catch (err: any) {
-      post({ id: m.id, ok: false, error: String(err?.message ?? err) });
+      let rows: number[][];
+      if (env.tree) {
+        // 木のペア比較: このWorkerが受け持ったラウンドの結果で、このWorkerの木を育てる(根の並列)
+        let tree = trees.get(m.sid);
+        if (!tree) trees.set(m.sid, (tree = new PairedTree(env, reg, env.tree)));
+        rows = m.seeds.map((sd) => tree!.round(sd, m.alive));
+      } else {
+        rows = m.seeds.map((sd) => evalRound(env, reg, sd, m.alive));
+      }
+      post({ id: m.id, ok: true, rows, ms: Date.now() - t0 });
+    } catch (err) {
+      post({ id: m.id, ok: false, error: errorMessage(err) });
     }
     return;
   }
   const { id, req } = m as { id: number; req: DecideReq };
   try {
     post({ id, ok: true, action: decide(reg, req), ms: Date.now() - t0 });
-  } catch (err: any) {
-    post({ id, ok: false, error: String(err?.message ?? err) });
+  } catch (err) {
+    post({ id, ok: false, error: errorMessage(err) });
   }
 };

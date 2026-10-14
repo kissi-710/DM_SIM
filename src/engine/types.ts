@@ -11,6 +11,12 @@ export type Json = null | boolean | number | string | Json[] | { [k: string]: Js
 
 export const other = (p: PlayerId): PlayerId => (p === 0 ? 1 : 0);
 
+/** catch で受けた値(unknown)から、画面・ログに出す文言を取り出す */
+export function errorMessage(e: unknown): string {
+  const m = (e as { message?: unknown } | null | undefined)?.message;
+  return String(m ?? e);
+}
+
 // ───────────────────────── カードデータ(ASTは ast.ts) ─────────────────────────
 
 import type { Ability, Cond } from './ast';
@@ -88,8 +94,16 @@ export interface GameConfig {
   solitaire: boolean; // プレイヤー1は何もしない(spec 6.7)
   autoOrder: [boolean, boolean]; // 同時誘発の順序を自動にする(Q17)
   ackReveals: [boolean, boolean]; // 公開した札の確認を求めるか
-  waitingPolicy: 'pool' | 'newFirst' | 'oldFirst'; // L1
-  sbaTiming: 'afterEachStep' | 'afterEffect'; // L2
+  /**
+   * L1 待機中の能力の解決順。公式は 'pool'(待機した順番は関係なく、ターン・プレイヤーから自分の効果を好きな順で。R 605.1)。
+   * 'newFirst' / 'oldFirst' は公式に反する。「順序が結果に与える影響」を比べる実験と、テスト(tests/ledger.test.ts)のためだけに残す。
+   */
+  waitingPolicy: 'pool' | 'newFirst' | 'oldFirst';
+  /**
+   * L2 状況起因処理のタイミング。公式は 'afterEachStep'(効果の解決中でも優先して処理する。R 111.2d / 703.1)。
+   * 'afterEffect' は公式に反する。比較実験とテストのためだけに残す。
+   */
+  sbaTiming: 'afterEachStep' | 'afterEffect';
   /** ジ・ウォッチ等の「ターンの残りをとばす」でターン終了時の誘発を起こすか(L6)。公式Q&A 46393 では起きない(既定 false) */
   skipRunsEndTriggers: boolean;
   maxFrameSteps: number; // L7

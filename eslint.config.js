@@ -16,6 +16,17 @@ export default tseslint.config(
     },
   },
   {
+    // 依存の向きは ui/cli/workers → sim → ai → engine(design 2)。ai は sim・ui・Worker・cli に依存しない。
+    files: ['src/ai/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          { group: ['**/ui/**', '**/workers/**', '**/cli/**', '**/sim/**', 'react', 'react-dom', 'react/*', 'react-dom/*'], message: 'ai は sim/UI/Worker/CLI/React に依存してはいけない(design 2。乱数などの共通部品は engine に置く)' },
+        ],
+      }],
+    },
+  },
+  {
     // P1: engine は UI・React・DOM・Worker に依存しない。cards は engine だけに依存する。
     files: ['src/engine/**/*.ts'],
     rules: {

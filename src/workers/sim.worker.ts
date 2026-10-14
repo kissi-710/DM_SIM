@@ -2,10 +2,12 @@
 // 実行の中身は sim/jobs.ts の runJob。分割・統合はクライアント側(ui/simClient.ts)が行う。
 // src/wasm/dmsim.wasm(npm run build:wasm)があれば、モンテカルロ探索のラウンドの評価を Rust 版(WASM)で行う。無ければ TS 版。
 import { setNativeRounds } from '../ai/mcts';
+import { setNativePairedRound, setNativeTree } from '../ai/tree';
 import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import { runJob, type SimJob, type SimOut } from '../sim/jobs';
 import { DmEngine } from '../wasm/dmEngine';
+import { errorMessage } from '../engine/types';
 
 export type { SimJob, SimOut };
 
@@ -19,6 +21,8 @@ const nativeReady: Promise<void> = (async () => {
   const bytes = await (await fetch(url)).arrayBuffer();
   const eng = await DmEngine.create(bytes, JSON.stringify(reg.defs));
   setNativeRounds(eng.asNativeRounds());
+  setNativeTree(eng.asNativeTree());
+  setNativePairedRound(eng.asNativePairedRound());
   console.info('[sim.worker] Rust 版エンジン(WASM)で探索します');
 })().catch((e) => {
   console.warn('[sim.worker] Rust 版エンジン(WASM)を読み込めませんでした。TS 版で動きます:', e);
@@ -40,7 +44,7 @@ self.onmessage = async (e: MessageEvent<SimJob>) => {
     lastPost = 0;
     const result = runJob(reg, job, progress);
     post({ kind: 'result', job: job.type, result } as SimOut);
-  } catch (err: any) {
-    post({ kind: 'error', message: String(err?.message ?? err) });
+  } catch (err) {
+    post({ kind: 'error', message: errorMessage(err) });
   }
 };

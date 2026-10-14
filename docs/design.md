@@ -1,6 +1,6 @@
 # 設計書(DM_SIM)
 
-- 状態: **草案 v0.3**(2026-10-14)。効果・タイミング・操作の設計を [effects.md](./effects.md) に分離し、この文書の該当章(4・5.2・6・9・13・14)を整合させた。Q9〜Q15 は仮の既定値で確定(spec.md 9.2)
+- 状態: **草案 v0.3(実装はこの設計に沿って完了。以後の変更・実施結果は ROADMAP.md と docs/ai-speed-and-strength.md に記す。ここは設計時の記録)**(2026-10-14)。効果・タイミング・操作の設計を [effects.md](./effects.md) に分離し、この文書の該当章(4・5.2・6・9・13・14)を整合させた。Q9〜Q15 は仮の既定値で確定(spec.md 9.2)
 - 対象: デュエマ シミュレータ(ブラウザ版)
 - 関連: [overview.md](./overview.md)(目的・技術スタック) / [spec.md](./spec.md)(仕様) / [decks.md](./decks.md)(対象デッキとカード効果) / **[effects.md](./effects.md)(カード効果・タイミング・UI操作。最重要)** / [reference_duel-hub.md](./reference_duel-hub.md)(参考: 既存ツールのUIと効果の記述形式)
 - 「未確定」と書いた箇所は、spec.md 第9章の質問・仮決定で扱う。それまでは仮の方針で進める。

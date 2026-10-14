@@ -33,28 +33,29 @@ const goal: Goal = { op: 'pred', timing: { turn: 6, at: 'byTurn' }, pred: { kind
 describe('ゴールデン(シード固定の結果が変わらない)', () => {
   it('バッチ対戦: ランダム同士 60試合', () => {
     expect(match({ kind: 'random' }, { kind: 'random' }, 60, 1)).toEqual({
-      winsA: 37,
-      winsB: 23,
+      winsA: 35,
+      winsB: 25,
       draws: 0,
-      avgTurns: 24.133333333333333,
-      reasons: { ダイレクトアタック: 41, 山札切れ: 19 },
+      avgTurns: 24.15,
+      reasons: { ダイレクトアタック: 40, 山札切れ: 20 },
     });
   });
   it('バッチ対戦: ルールベース同士 60試合', () => {
     expect(match({ kind: 'rule' }, { kind: 'rule' }, 60, 1)).toEqual({
-      winsA: 47,
-      winsB: 13,
+      winsA: 49,
+      winsB: 11,
       draws: 0,
-      avgTurns: 12.116666666666667,
+      avgTurns: 12.183333333333334,
       reasons: { ダイレクトアタック: 60 },
     });
   });
+  // 探索の既定を、根はペア比較・2手目以降は木(ptree。docs/ai-quality-plan.md §6.4)にした時に更新した固定値
   it('バッチ対戦: MCTS(20反復) 対 ルールベース 6試合', () => {
     expect(match({ kind: 'mcts', iterations: 20, ms: 100000 }, { kind: 'rule' }, 6, 1)).toEqual({
-      winsA: 6,
-      winsB: 0,
+      winsA: 4,
+      winsB: 2,
       draws: 0,
-      avgTurns: 12.5,
+      avgTurns: 13.5,
       reasons: { ダイレクトアタック: 6 },
     });
   });
@@ -63,8 +64,8 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
       const r = playGameSync(reg, [makeAgent({ kind }), makeAgent({ kind })], { decks: [A, B], seed });
       return [r.actions.length, hash(JSON.stringify(r.actions)), r.winner, r.turns, r.state.seq, r.state.rng, hash(JSON.stringify(r.state.cards))];
     };
-    expect(play('rule', 5)).toEqual([70, 4240761097, 1, 14, 431, 1376401139, 1526906329]);
-    expect(play('random', 9)).toEqual([139, 2008849440, 0, 34, 688, 1568224734, 3288983309]);
+    expect(play('rule', 5)).toEqual([51, 3895777216, 0, 11, 297, -1527012423, 257919613]);
+    expect(play('random', 9)).toEqual([96, 1152920333, 0, 25, 470, 1504283537, 3871052353]);
   });
   it('確率調査: 方針プレイと探索(40試行)', () => {
     const r = runProbability(reg, { deck: A, first: 0, goal, trials: 40, seed: 1, maxNodes: 3000 });

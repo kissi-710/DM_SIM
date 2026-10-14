@@ -812,6 +812,30 @@
     ]
   },
   {
+    "id": "dm23rp1-070",
+    "name": "配球の超人 / 記録的剛球",
+    "text": "【クリーチャー面】T・ブレイカー。出た時、相手のクリーチャーを1体選び、持ち主のマナゾーンに置く。【呪文面】山札の上1枚をマナゾーンに置く。",
+    "faces": [
+      {
+        "name": "配球の超人", "type": "creature", "cost": 8, "civs": ["nature"], "power": 14000, "races": ["ジャイアント"],
+        "abilities": [
+          { "kind": "keyword", "name": "breaker", "n": 3 },
+          {
+            "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
+              { "op": "act", "act": { "move": { "sel": "$t", "to": "mana", "cause": "manaPlace" } } }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "記録的剛球", "type": "spell", "cost": 2, "civs": ["nature"],
+        "abilities": [{ "kind": "spell", "steps": [{ "op": "act", "act": { "moveTop": { "n": 1, "to": "mana", "cause": "boost" } } }] }]
+      }
+    ]
+  },
+  {
     "id": "dm24ex4-017",
     "name": "偽りの月 インターステラ",
     "text": "ブロッカー。W・ブレイカー。ジャストダイバー。このクリーチャーが出た時、水または闇のコスト7以下の呪文を1枚、自分の手札または墓地からコストを支払わずに唱えてもよい。そうしたら、唱えた後、墓地のかわりに超次元ゾーンに置く。このクリーチャーが攻撃する時、呪文を1枚、自分の超次元ゾーンからコストを支払わずに唱えてもよい。そうしたら、唱えた後、墓地のかわりに山札の下に置く。",
@@ -965,33 +989,6 @@
               { "op": "act", "act": { "playerEffect": { "mod": { "kind": "cannotUseCost", "n": { "var": "$n" } }, "until": "nextTurnStart" } } }
             ]
           }
-        ]
-      }
-    ]
-  },
-  {
-    "id": "dm23rp1-070",
-    "name": "配球の超人 / 記録的剛球",
-    "text": "【クリーチャー面】T・ブレイカー。このクリーチャーが出た時、相手のクリーチャーを1体選び、持ち主のマナゾーンに置く。【呪文面】自分の山札の上から1枚をマナゾーンに置く。",
-    "faces": [
-      {
-        "name": "配球の超人", "type": "creature", "cost": 8, "civs": ["nature"], "power": 14000, "races": ["ジャイアント"],
-        "abilities": [
-          { "kind": "keyword", "name": "breaker", "n": 3 },
-          {
-            "kind": "trigger", "label": "相手のクリーチャーをマナゾーンに置く",
-            "spec": { "on": { "type": "entered" }, "subject": "self" },
-            "steps": [
-              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
-              { "op": "act", "act": { "move": { "sel": "$t", "to": "mana", "cause": "manaPlace" } } }
-            ]
-          }
-        ]
-      },
-      {
-        "name": "記録的剛球", "type": "spell", "cost": 2, "civs": ["nature"],
-        "abilities": [
-          { "kind": "spell", "steps": [{ "op": "act", "act": { "moveTop": { "n": 1, "to": "mana", "cause": "boost" } } }] }
         ]
       }
     ]
