@@ -1075,3 +1075,8 @@ textarea.json {
   color: var(--text);
   font-weight: 600;
 }
+
+.tile.resume {
+  border-color: var(--accent2);
+  cursor: default;
+}

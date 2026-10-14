@@ -7,6 +7,7 @@ import { loadRegistry } from '../engine/registry';
 import { hashSeed } from '../engine/state';
 import type { Action, Ev, GameConfig, GameState, PlayerId } from '../engine/types';
 import { chooseWithWorker } from './aiClient';
+import { loadJson, saveJson } from './util';
 
 export interface Seat {
   kind: 'human' | 'cpu';
@@ -25,6 +26,30 @@ export interface GameSetup {
   allowUndo: boolean;
   cpuDelayMs: number;
   strict: boolean;
+  /** 自動保存からの再開: 先頭からこの行動列を再生した状態で始める */
+  resume?: Action[];
+}
+
+const AUTOSAVE_KEY = 'dmsim.autosave';
+
+export interface Autosave {
+  setup: GameSetup;
+  actions: Action[];
+  at: number;
+}
+
+/** 進行中の対戦(保存されていなければ null) */
+export function loadAutosave(): Autosave | null {
+  const a = loadJson<Autosave | null>(AUTOSAVE_KEY, null);
+  return a && Array.isArray(a.actions) && a.actions.length > 0 && a.setup?.decks ? a : null;
+}
+
+export function clearAutosave(): void {
+  try {
+    localStorage.removeItem(AUTOSAVE_KEY);
+  } catch {
+    // 保存できない環境では何もしない
+  }
 }
 
 /** 試合の記録(再生・保存用。design 10) */
@@ -90,8 +115,30 @@ export function useGame(setup: GameSetup) {
       cfg: configOf(setup),
       strict: setup.strict,
     });
-    return { state: g.state, log: g.events, last: [], actions: [], thinking: false, error: null };
+    // 再開: 保存した行動列を先頭から再生する(同じシードなので、同じ状態に戻る)
+    let state = g.state;
+    let log = g.events;
+    const done: Action[] = [];
+    try {
+      for (const a of setup.resume ?? []) {
+        const r = step(state, a, reg);
+        state = r.state;
+        log = log.concat(r.events);
+        done.push(a);
+      }
+    } catch {
+      // 壊れた保存は、そこまでの手で止める
+    }
+    return { state, log, last: [], actions: done, thinking: false, error: null };
   });
+
+  // 自動保存: 進行中は毎手保存し、勝敗が出たら消す
+  const winner = session.state.winner;
+  const nActions = session.actions.length;
+  useEffect(() => {
+    if (winner !== null) clearAutosave();
+    else if (nActions > 0) saveJson(AUTOSAVE_KEY, { setup: { ...setup, resume: undefined }, actions: sessionRef.current.actions, at: Date.now() } satisfies Autosave);
+  }, [winner, nActions]);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(setup.cpuDelayMs);
   // 「一気に進める」: CPU の手の間隔を0にする(対戦中の一時的な切り替え)

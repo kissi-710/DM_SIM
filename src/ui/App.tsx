@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ErrorBoundary } from './ErrorBoundary';
 import { BatchView } from './BatchView';
 import { DeckEditor } from './DeckEditor';
 import { GameView } from './GameView';
@@ -6,12 +7,30 @@ import { ManualView } from './ManualView';
 import { ReplayScreen } from './ReplayScreen';
 import { SetupScreen } from './SetupScreen';
 import { SimView } from './SimView';
-import type { GameSetup } from './useGame';
+import { clearAutosave, loadAutosave, type GameSetup } from './useGame';
 
 export type Screen = 'menu' | 'play-setup' | 'watch-setup' | 'game' | 'sim' | 'batch' | 'replay' | 'decks' | 'manual';
 
+const SCREENS: Screen[] = ['menu', 'play-setup', 'watch-setup', 'game', 'sim', 'batch', 'replay', 'decks', 'manual'];
+
+/** URL の # から画面を決める。対戦中の状態は URL にないので、対戦は復元しない */
+function screenFromHash(): Screen {
+  const h = location.hash.replace(/^#\/?/, '') as Screen;
+  return SCREENS.includes(h) && h !== 'game' ? h : 'menu';
+}
+
 export function App() {
-  const [screen, setScreen] = useState<Screen>('menu');
+  const [screen, setScreenState] = useState<Screen>(screenFromHash);
+  // 画面の移動を履歴に積み、ブラウザの「戻る」でアプリから離れないようにする
+  const setScreen = (s: Screen) => {
+    setScreenState(s);
+    if (location.hash !== `#/${s}`) history.pushState(null, '', `#/${s}`);
+  };
+  useEffect(() => {
+    const onPop = () => setScreenState((cur) => (cur === 'game' ? 'menu' : screenFromHash()));
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   const [setup, setSetup] = useState<GameSetup | null>(null);
   const [gameKey, setGameKey] = useState(0);
 
@@ -30,7 +49,8 @@ export function App() {
         <span className="spacer" />
         {screen !== 'menu' && screen !== 'game' && <button onClick={home}>メニュー</button>}
       </div>
-      {screen === 'menu' && <Menu go={setScreen} />}
+      <ErrorBoundary key={screen + gameKey} onReset={home}>
+      {screen === 'menu' && <Menu go={setScreen} onResume={(a) => start({ ...a.setup, resume: a.actions })} />}
       {screen === 'play-setup' && (
         <div className="page">
           <SetupScreen mode="play" onBack={home} onStart={start} />
@@ -59,16 +79,39 @@ export function App() {
       {screen === 'replay' && <ReplayScreen />}
       {screen === 'decks' && <DeckEditor />}
       {screen === 'manual' && <ManualView />}
+      </ErrorBoundary>
     </div>
   );
 }
 
-function Menu({ go }: { go: (s: Screen) => void }) {
+function Menu({ go, onResume }: { go: (s: Screen) => void; onResume: (a: NonNullable<ReturnType<typeof loadAutosave>>) => void }) {
+  const [saved, setSaved] = useState(loadAutosave);
   return (
     <div className="page">
       <div className="menu">
         <h2>メニュー</h2>
         <div className="menu-grid">
+          {saved && (
+            <div className="tile resume">
+              <h3>対戦を再開</h3>
+              <p>
+                {saved.setup.deckNames[0]} vs {saved.setup.deckNames[1]}({saved.actions.length}手目まで・{new Date(saved.at).toLocaleString()})
+              </p>
+              <div className="row">
+                <button className="primary" onClick={() => onResume(saved)}>
+                  続きから遊ぶ
+                </button>
+                <button
+                  onClick={() => {
+                    clearAutosave();
+                    setSaved(null);
+                  }}
+                >
+                  破棄
+                </button>
+              </div>
+            </div>
+          )}
           <button className="tile" onClick={() => go('play-setup')}>
             <h3>CPUと対戦</h3>
             <p>人間 vs CPU。カードをドラッグ&ドロップ(またはクリック)で遊べます。</p>
