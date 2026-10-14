@@ -63,6 +63,7 @@ pub fn ask(c: &mut Ctx, spec: NeedInput) -> Res<Val> {
 // ───────────────────────── イベント ─────────────────────────
 
 pub fn emit(c: &mut Ctx, ty: Sym, payload: Vec<(Sym, Val)>) -> Rc<Ev> {
+    crate::prof!(17);
     let id = c.s.next_id();
     let ev = Rc::new(Ev { id, caused_by: c.cause, ty, turn: c.s.turn, f: payload });
     if c.keep_out {
@@ -84,14 +85,23 @@ fn ability_val(reg: &Registry, a: AbilityRef) -> Val {
 
 /// イベントを監視している能力を探して、待機プールに入れる。
 pub fn collect(c: &mut Ctx, ev: &Rc<Ev>) {
+    crate::prof!(16);
     let reg = c.reg;
     let by_def = match reg.trig_by_def.get(ev.ty.0 as usize) {
         Some(Some(b)) => b,
         _ => return,
     };
     let batch = c.s.batch_no;
-    let n = c.s.cards.len();
-    for uid in 0..n {
+    // 誘発能力を持つ定義のカードだけを、uid の昇順で調べる(全カードの走査と同じ順序)
+    let mut cands: Vec<usize> = Vec::new();
+    if let Some(Some(defs)) = reg.trig_defs.get(ev.ty.0 as usize) {
+        let by = c.s.cards_by_def.clone();
+        for &d in defs {
+            cands.extend(by[d as usize].iter().map(|&u| u as usize));
+        }
+    }
+    cands.sort_unstable();
+    for uid in cands {
         let (def, zone, face) = {
             let card = &c.s.cards[uid];
             (card.def, card.zone, card.face)
@@ -416,6 +426,7 @@ struct Proposal {
 /// カードを移動する(バッチ)。置換を判定し、移動し、イベントを発行して誘発を収集する。
 /// 置換の選択が必要なら、状態を変更する前に ask する。
 pub fn move_cards(c: &mut Ctx, uids: &[i32], opts: &MoveOpts) -> Res<Vec<MoveResult>> {
+    crate::prof!(18);
     let mut proposals: Vec<Proposal> = uids
         .iter()
         .map(|&uid| Proposal { uid, from: c.s.cards[uid as usize].zone, to: opts.to, cause: opts.cause, pos: opts.pos, cancelled: false, also: None })
@@ -556,6 +567,7 @@ fn do_move(c: &mut Ctx, uid: i32, to: Zone, cause: Sym, pos: Option<bool>, evs: 
 
 /// カードをバトルゾーンに出す(新しい山、または onto の山の上)。EXライフもここで処理する。
 pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>>) -> Res<MoveResult> {
+    crate::prof!(19);
     let (from, owner, def) = {
         let card = &c.s.cards[uid as usize];
         (card.zone, card.owner, card.def)

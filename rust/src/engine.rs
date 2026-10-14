@@ -26,6 +26,7 @@ pub fn step(reg: &Registry, state: &State, action: &Action) -> Result<StepOut, S
 
 /// 検証せず、状態を消費して進める(プレイアウト用。行動は legal_actions から選ばれている前提。イベントは集めない)
 pub fn step_owned(reg: &Registry, state: State, action: &Action) -> Result<State, String> {
+    crate::prof!(21);
     let mut c = Ctx::new(state, reg);
     c.keep_out = false;
     run_step(&mut c, action)?;
@@ -94,6 +95,7 @@ fn apply_turn_action(c: &mut Ctx, a: &Action) -> Res<()> {
 
 /// 実行ループ。入力待ち・決着・フレームが尽きるまで進める。
 pub fn drive(c: &mut Ctx) -> Result<(), String> {
+    crate::prof!(22);
     let mut steps = 0;
     while c.s.pending.is_none() && c.s.winner == Winner::None && !c.s.cont.is_empty() {
         steps += 1;

@@ -6,10 +6,13 @@ pub mod ast;
 pub mod cond;
 pub mod derive;
 pub mod engine;
+pub mod ffi;
 pub mod json;
 pub mod legal;
 pub mod ops;
 pub mod procs;
+#[macro_use]
+pub mod prof;
 pub mod registry;
 pub mod state;
 pub mod types;

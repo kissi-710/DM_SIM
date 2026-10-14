@@ -66,6 +66,7 @@ pub struct ActiveStatic<'a> {
 
 /// バトルゾーンの一番上のカードが持つ常在型能力
 pub fn active_statics<'a>(e: Env<'a>) -> Vec<ActiveStatic<'a>> {
+    crate::prof!(15);
     let mut out = Vec::new();
     for p in 0..2u8 {
         for perm in &e.s.players[p as usize].battle {
@@ -92,9 +93,43 @@ pub fn active_statics<'a>(e: Env<'a>) -> Vec<ActiveStatic<'a>> {
     out
 }
 
+/// 常在型能力を1つずつ処理する(f が true を返したら打ち切って true を返す)。Vec を確保しない。
+pub fn any_static<'a>(e: Env<'a>, mut f: impl FnMut(&ActiveStatic<'a>) -> bool) -> bool {
+    crate::prof!(15);
+    for p in 0..2u8 {
+        for perm in &e.s.players[p as usize].battle {
+            let uid = perm.cards[0];
+            let card = &e.s.cards[uid as usize];
+            // バトルゾーンの一番上: 使用中の面(無ければ面0)
+            let def = &e.reg.defs[card.def as usize];
+            let fidx = if card.face >= 0 && (card.face as usize) < def.faces.len() { card.face } else { 0 };
+            let info = e.reg.info(card.def, fidx);
+            if info.statics.is_empty() {
+                continue;
+            }
+            let face = &def.faces[fidx as usize];
+            for &si in &info.statics {
+                if let Ability::Static { m, while_ } = &face.abilities[si as usize] {
+                    if let Some(w) = while_ {
+                        let cc = CC::new(e, p).with_self(uid);
+                        if !eval_cond(&cc, w) {
+                            continue;
+                        }
+                    }
+                    if f(&ActiveStatic { src: uid, controller: p, m }) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
 // ───────────────────────── パワー・能力 ─────────────────────────
 
 pub fn power_of(e: Env, perm: &Perm) -> i32 {
+    crate::prof!(14);
     let uid = perm.cards[0];
     let card = &e.s.cards[uid as usize];
     let def = &e.reg.defs[card.def as usize];
@@ -212,7 +247,7 @@ fn player_attack_blocked_by_entry(e: Env, perm: &Perm, owner: PlayerId) -> bool 
     if perm.entered_turn != e.s.turn {
         return false;
     }
-    active_statics(e).iter().any(|st| matches!(st.m, StaticMod::CannotAttackPlayerWhenEntered) && st.controller != owner)
+    any_static(e, |st| matches!(st.m, StaticMod::CannotAttackPlayerWhenEntered) && st.controller != owner)
 }
 
 /// 召喚酔いか(総合ルール 301.5 / 801.3)。進化クリーチャー(S-MAX進化を含む)は召喚酔いしない。
@@ -224,6 +259,7 @@ pub fn is_sick(e: Env, perm: &Perm) -> bool {
 }
 
 pub fn can_attack(e: Env, perm: &Perm, target: &crate::state::Target) -> bool {
+    crate::prof!(13);
     use crate::state::Target;
     let s = e.s;
     let uid = perm.cards[0];
@@ -282,6 +318,7 @@ pub fn can_block(e: Env, perm: &Perm) -> bool {
 
 /// 召喚・詠唱するカードの最終コスト(0未満にならない)。
 pub fn cost_of(e: Env, uid: i32, face_idx: i32, taps: &[i32], free: bool) -> i32 {
+    crate::prof!(12);
     let s = e.s;
     let card = &s.cards[uid as usize];
     let def = &e.reg.defs[card.def as usize];
@@ -297,17 +334,17 @@ pub fn cost_of(e: Env, uid: i32, face_idx: i32, taps: &[i32], free: bool) -> i32
     if info.hyper_energy && !taps.is_empty() {
         cost -= 2 * taps.len() as i32;
     }
-    for st in active_statics(e) {
+    any_static(e, |st| {
         if let StaticMod::CostDelta { delta, cond } = st.m {
-            if st.controller != card.owner {
-                continue;
-            }
-            let cc = CC::new(e, st.controller).with_self(st.src).with_it(uid, face_idx);
-            if eval_cond(&cc, cond) {
-                cost += delta;
+            if st.controller == card.owner {
+                let cc = CC::new(e, st.controller).with_self(st.src).with_it(uid, face_idx);
+                if eval_cond(&cc, cond) {
+                    cost += delta;
+                }
             }
         }
-    }
+        false
+    });
     cost.max(0)
 }
 
@@ -320,17 +357,65 @@ pub fn mana_civs<'a>(e: Env<'a>, uid: i32) -> &'a [Civ] {
     chars_of(e, uid, -1).civs
 }
 
+/// 払えるか(plan_payment が Some を返す条件と同じ)だけを調べる。どのマナを払うかは計算しない(確保もしない)。
+pub fn can_pay(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: &[i32]) -> bool {
+    if need <= 0 {
+        return true;
+    }
+    let s = e.s;
+    let mut masks = [0u8; 32];
+    let mut n = 0usize;
+    for &u in &s.players[player as usize].mana {
+        if s.cards[u as usize].tapped || exclude.contains(&u) {
+            continue;
+        }
+        if n >= masks.len() {
+            return plan_payment(e, player, civs, need, exclude, &[]).is_some();
+        }
+        let mut m = 0u8;
+        for c in chars_of(e, u, -1).civs {
+            m |= 1 << (*c as u8);
+        }
+        masks[n] = m;
+        n += 1;
+    }
+    let total = need.max(civs.len() as i32);
+    if (n as i32) < total {
+        return false;
+    }
+    // 文明ごとに、その文明を持つ別々のマナを1枚ずつ割り当てられるか
+    fn go(i: usize, civs: &[Civ], masks: &[u8], used: u32) -> bool {
+        if i == civs.len() {
+            return true;
+        }
+        let bit = 1u8 << (civs[i] as u8);
+        for (j, m) in masks.iter().enumerate() {
+            if used & (1 << j) != 0 || m & bit == 0 {
+                continue;
+            }
+            if go(i + 1, civs, masks, used | (1 << j)) {
+                return true;
+            }
+        }
+        false
+    }
+    go(0, civs, &masks[..n], 0)
+}
+
 /// マナの支払いの割り当て。必要な文明ごとに1枚(1枚のマナは1文明)+残りは数値で支払う。
 /// 手札の他のカードの文明条件を残しやすいように、価値の低いマナからタップする。払えなければ None。
 pub fn plan_payment(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: &[i32], keep_for: &[i32]) -> Option<Vec<i32>> {
+    crate::prof!(11);
     let s = e.s;
     if need <= 0 {
         return Some(vec![]);
     }
-    let avail: Vec<i32> = s.players[player as usize].mana.iter().copied().filter(|u| !s.cards[*u as usize].tapped && !exclude.contains(u)).collect();
-    if (avail.len() as i32) < need {
+    let mana = &s.players[player as usize].mana;
+    let n_avail = mana.iter().filter(|u| !s.cards[**u as usize].tapped && !exclude.contains(u)).count();
+    if (n_avail as i32) < need {
         return None;
     }
+    let avail: Vec<i32> = mana.iter().copied().filter(|u| !s.cards[*u as usize].tapped && !exclude.contains(u)).collect();
     // 価値(残したいほど高い)
     let mut want = [0i32; 5];
     for &h in keep_for {
@@ -452,18 +537,16 @@ pub fn plan_payment(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: 
 
 /// プレイヤーがこの呪文(面)を唱えられるか(ドルファディロムの制限など)
 pub fn can_cast(e: Env, player: PlayerId, uid: i32, face_idx: i32) -> bool {
-    for st in active_statics(e) {
+    // 「相手は〜できない」(自分の常在能力は対象外)
+    !any_static(e, |st| {
         if let StaticMod::CannotCast { cond } = st.m {
-            if st.controller == player {
-                continue; // 「相手は〜できない」
-            }
-            let cc = CC::new(e, st.controller).with_self(st.src).with_it(uid, face_idx);
-            if eval_cond(&cc, cond) {
-                return false;
+            if st.controller != player {
+                let cc = CC::new(e, st.controller).with_self(st.src).with_it(uid, face_idx);
+                return eval_cond(&cc, cond);
             }
         }
-    }
-    true
+        false
+    })
 }
 
 // ───────────────────────── スナップショット ─────────────────────────

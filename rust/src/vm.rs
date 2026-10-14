@@ -57,9 +57,16 @@ fn spell_face(c: &Ctx, uid: i32) -> i32 {
 
 /// 実行を1命令進める。フレームが終われば true(呼び出し側が pop する)。
 pub fn run_effect(c: &mut Ctx, fi: usize) -> Res<bool> {
-    let mut f = match &c.s.cont[fi] {
-        Frame::Effect(f) => f.clone(),
-        _ => return fail("効果フレームではありません"),
+    crate::prof!(20);
+    let id = c.s.cont[fi].id();
+    // 同じ id の空のフレームと入れ替えて取り出す(pop の整合性検査を通すため。複製しない)
+    let placeholder = Frame::Proc(ProcFrame { id, caused_by: None, name: ProcName::Sba, stage: 0, vars: Vec::new() });
+    let mut f = match std::mem::replace(&mut c.s.cont[fi], placeholder) {
+        Frame::Effect(f) => f,
+        other => {
+            c.s.cont[fi] = other;
+            return fail("効果フレームではありません");
+        }
     };
     let r = run_effect_inner(c, &mut f);
     c.s.cont[fi] = Frame::Effect(f);

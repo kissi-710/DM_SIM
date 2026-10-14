@@ -55,6 +55,17 @@ fn plan_fail(face: i32, err: &'static str) -> PlayPlan {
 }
 
 pub fn plan_play(e: Env, player: PlayerId, uid: i32, from: Zone, face_idx: i32, extra: Option<&PlayExtra>, free: bool) -> PlayPlan {
+    plan_play_inner(e, player, uid, from, face_idx, extra, free, true)
+}
+
+/// 使えるかだけを調べる(払うマナの選択は計算しない)。合法手の列挙で使う。
+pub fn plan_play_ok(e: Env, player: PlayerId, uid: i32, from: Zone, face_idx: i32, extra: Option<&PlayExtra>, free: bool) -> bool {
+    plan_play_inner(e, player, uid, from, face_idx, extra, free, false).ok
+}
+
+#[allow(clippy::too_many_arguments)]
+fn plan_play_inner(e: Env, player: PlayerId, uid: i32, from: Zone, face_idx: i32, extra: Option<&PlayExtra>, free: bool, want_pay: bool) -> PlayPlan {
+    crate::prof!(8);
     let s = e.s;
     let card = match s.cards.get(uid as usize) {
         Some(c) if c.owner == player => c,
@@ -156,11 +167,15 @@ pub fn plan_play(e: Env, player: PlayerId, uid: i32, from: Zone, face_idx: i32, 
             }
             pay = m.clone();
         } else {
-            let keep: Vec<i32> = s.players[player as usize].hand.iter().copied().filter(|u| *u != uid).collect();
             let exclude: Vec<i32> = if from == Zone::Mana { vec![uid] } else { vec![] };
-            match plan_payment(e, player, civs, need, &exclude, &keep) {
-                Some(p) => pay = p,
-                None => return plan_fail(face_idx, "マナが足りません"),
+            if want_pay {
+                let keep: Vec<i32> = s.players[player as usize].hand.iter().copied().filter(|u| *u != uid).collect();
+                match plan_payment(e, player, civs, need, &exclude, &keep) {
+                    Some(p) => pay = p,
+                    None => return plan_fail(face_idx, "マナが足りません"),
+                }
+            } else if !can_pay(e, player, civs, need, &exclude) {
+                return plan_fail(face_idx, "マナが足りません");
             }
         }
     }
@@ -919,6 +934,7 @@ fn resolve_entry(c: &mut Ctx, e: PoolEntry) -> Res<()> {
 
 /// 1つの変更を行ったら true を返す(呼び出し側は再度チェックする)。
 pub fn run_sba(c: &mut Ctx) -> Res<bool> {
+    crate::prof!(10);
     if !c.s.dirty_sba {
         return Ok(false);
     }
@@ -928,12 +944,12 @@ pub fn run_sba(c: &mut Ctx) -> Res<bool> {
     // 山札が0枚のプレイヤーは敗北(104.2b)。置換された後は、山札が増えるまで再度は起きない
     for p in 0..2usize {
         if !c.s.players[p].deck.is_empty() {
-            c.s.usage_del(&UKey::Other(format!("deckOutHandled{}", p)));
+            c.s.usage_del(&UKey::DeckOut(p as u8));
         }
     }
     let losers: Vec<usize> = (0..2usize)
         .filter(|&p| {
-            c.s.players[p].deck.is_empty() && c.s.turn >= 1 && !(c.s.cfg.solitaire && p == 1) && c.s.usage_get(&UKey::Other(format!("deckOutHandled{}", p))).unwrap_or(0) == 0
+            c.s.players[p].deck.is_empty() && c.s.turn >= 1 && !(c.s.cfg.solitaire && p == 1) && c.s.usage_get(&UKey::DeckOut(p as u8)).unwrap_or(0) == 0
         })
         .collect();
     if !losers.is_empty() {
@@ -990,7 +1006,7 @@ pub fn run_sba(c: &mut Ctx) -> Res<bool> {
 
 /// 「ゲームに負ける時、かわりに〜してもよい」(ジャオウガ)。置換したら true
 fn loss_replacement(c: &mut Ctx, p: PlayerId) -> Res<bool> {
-    let key = UKey::Other(format!("deckOutHandled{}", p));
+    let key = UKey::DeckOut(p);
     let reg = c.reg;
     let perms: Vec<i32> = c.s.players[p as usize].battle.iter().map(|x| x.cards[0]).collect();
     for uid in perms {
@@ -1063,9 +1079,15 @@ fn loss_replacement(c: &mut Ctx, p: PlayerId) -> Res<bool> {
 // ───────────────────────── ディスパッチ ─────────────────────────
 
 pub fn run_proc(c: &mut Ctx, fi: usize) -> Res<()> {
-    let mut f = match &c.s.cont[fi] {
-        Frame::Proc(f) => f.clone(),
-        _ => return fail("手続きフレームではありません"),
+    crate::prof!(9);
+    let id = c.s.cont[fi].id();
+    let placeholder = Frame::Proc(ProcFrame { id, caused_by: None, name: ProcName::Sba, stage: 0, vars: Vec::new() });
+    let mut f = match std::mem::replace(&mut c.s.cont[fi], placeholder) {
+        Frame::Proc(f) => f,
+        other => {
+            c.s.cont[fi] = other;
+            return fail("手続きフレームではありません");
+        }
     };
     let r = match f.name {
         ProcName::Turn => run_turn(c, &mut f),

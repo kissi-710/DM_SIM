@@ -17,3 +17,7 @@ panic = "abort"
 
 [profile.dev]
 opt-level = 1
+
+[features]
+# 関数別の包含時間を測る(開発用。rdtsc を使うので x86_64 のみ)
+prof = []

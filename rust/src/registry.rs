@@ -85,6 +85,8 @@ pub struct Registry {
     pub id_syms: Vec<Sym>,
     /// イベントの種類 → 定義ごとの誘発能力
     pub trig_by_def: Vec<Option<Vec<Vec<TrigRef>>>>,
+    /// イベントの種類 → 誘発能力を持つ定義の一覧
+    pub trig_defs: Vec<Option<Vec<u16>>>,
     /// [def][face][idx] → (任意あり, 任意なし)
     progs: Vec<Vec<Vec<Option<(Program, Program)>>>>,
 }
@@ -232,8 +234,14 @@ impl Registry {
         for (k, v) in trig_map {
             trig_by_def[k.0 as usize] = Some(v);
         }
+        let mut trig_defs: Vec<Option<Vec<u16>>> = vec![None; trig_by_def.len()];
+        for (i, v) in trig_by_def.iter().enumerate() {
+            if let Some(per_def) = v {
+                trig_defs[i] = Some(per_def.iter().enumerate().filter(|(_, r)| !r.is_empty()).map(|(d, _)| d as u16).collect());
+            }
+        }
         let id_syms: Vec<Sym> = ids.iter().map(|i| sym(i)).collect();
-        Ok(Registry { defs, infos, by_id, ids, id_syms, trig_by_def, progs })
+        Ok(Registry { defs, infos, by_id, ids, id_syms, trig_by_def, trig_defs, progs })
     }
 
     pub fn def_index(&self, id: &str) -> Option<u16> {

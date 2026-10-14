@@ -105,6 +105,7 @@ pub fn evaluate(e: Env, me: PlayerId, w: &EvalWeights) -> f64 {
 
 /// 評価を 0〜1 の報酬に写す(勝敗は 1/0/0.5)
 pub fn reward(e: Env, me: PlayerId, w: &EvalWeights) -> f64 {
+    crate::prof!(4);
     match e.s.winner {
         Winner::Draw => return 0.5,
         Winner::P(p) => return if p == me { 1.0 } else { 0.0 },
@@ -199,6 +200,7 @@ fn play_score(e: Env, uid: i32, from: Option<Zone>, face: Option<i32>, extra: &O
 const SKIP_MANA_FROM: usize = 7;
 
 pub fn choose_turn_action(e: Env, legal: &[Action], me: PlayerId) -> usize {
+    crate::prof!(23);
     let s = e.s;
     let o = opp(me);
     // マナチャージ
@@ -345,6 +347,7 @@ fn answer_len(a: &Action) -> i32 {
 
 /// プレイアウト用の素早い方針: ターン中の行動は L1 の手順、効果の選択は軽い規則
 pub fn rollout_pick(e: Env, legal: &[Action], rand: &mut SeededRand) -> usize {
+    crate::prof!(2);
     let p = e.s.pending.as_ref().unwrap();
     if p.why == Why::TurnAction {
         return choose_turn_action(e, legal, p.player);
@@ -384,8 +387,55 @@ pub fn rollout_pick(e: Env, legal: &[Action], rand: &mut SeededRand) -> usize {
     }
 }
 
+/// ターン中の行動(turnAction)について、legal_actions を作ってから choose_turn_action で選んだ手と同じ手を、
+/// 必要な分だけ列挙して返す。マナのステップでは charges だけ、メインでは使えるカードがあればそれだけを調べる。
+fn fast_turn_action(e: Env, me: PlayerId) -> Action {
+    use crate::legal::{attack_actions, play_actions};
+    let s = e.s;
+    if s.step == Step::Mana {
+        let mut legal: Vec<Action> = Vec::new();
+        if !s.mana_charged {
+            let mut seen: Vec<u16> = Vec::new();
+            for &u in &s.players[me as usize].hand {
+                let d = s.cards[u as usize].def;
+                if !seen.contains(&d) {
+                    seen.push(d);
+                    legal.push(Action::ChargeMana(u));
+                }
+            }
+        }
+        legal.push(Action::SkipMana);
+        let i = choose_turn_action(e, &legal, me);
+        return legal.swap_remove(i);
+    }
+    if s.step == Step::Main {
+        let plays = play_actions(e, me);
+        if !plays.is_empty() {
+            let mut best = 0usize;
+            let mut bs = f64::NEG_INFINITY;
+            for (i, a) in plays.iter().enumerate() {
+                if let Action::PlayCard { uid, from, face, extra } = a {
+                    let sc = play_score(e, *uid, *from, *face, extra, me);
+                    if i == 0 || sc > bs {
+                        bs = sc;
+                        best = i;
+                    }
+                }
+            }
+            let mut plays = plays;
+            return plays.swap_remove(best);
+        }
+    }
+    // 使えるカードが無い: 攻撃(メインでは END_MAIN が先に並ぶが、選択には影響しない)
+    let mut legal = attack_actions(e, me);
+    legal.push(Action::EndTurn);
+    let i = choose_turn_action(e, &legal, me);
+    legal.swap_remove(i)
+}
+
 /// 状態 start から、horizon ターン先(または決着)まで進めて報酬を返す。エンジンの例外は Err。
 pub fn rollout(reg: &Registry, start: State, me: PlayerId, rand: &mut SeededRand, horizon: i32, w: &EvalWeights) -> Result<f64, String> {
+    crate::prof!(1);
     let mut st = start;
     let end_turn = st.turn + horizon;
     let mut guard = 0;
@@ -394,12 +444,21 @@ pub fn rollout(reg: &Registry, start: State, me: PlayerId, rand: &mut SeededRand
         if guard > 400 {
             break;
         }
-        let legal = legal_actions(&st, reg);
-        if legal.is_empty() {
-            break;
-        }
-        let i = rollout_pick(Env { s: &st, reg }, &legal, rand);
-        st = step_owned(reg, st, &legal[i])?;
+        let pending = match &st.pending {
+            Some(p) => p,
+            None => break,
+        };
+        let action = if pending.why == Why::TurnAction {
+            fast_turn_action(Env { s: &st, reg }, pending.player)
+        } else {
+            let mut legal = legal_actions(&st, reg);
+            if legal.is_empty() {
+                break;
+            }
+            let i = rollout_pick(Env { s: &st, reg }, &legal, rand);
+            legal.swap_remove(i)
+        };
+        st = step_owned(reg, st, &action)?;
     }
     Ok(reward(Env { s: &st, reg }, me, w))
 }
@@ -522,6 +581,7 @@ pub fn kinds_of(reg: &Registry, def: u16) -> Vec<&'static str> {
 
 /// 決定化: 隠れたカード('?')に、あり得る中身を割り当てて、実際に進められる状態を作る
 pub fn determinize(reg: &Registry, env: &SearchEnv, rand: &mut SeededRand, q_def: u16) -> State {
+    crate::prof!(3);
     let view = &env.view;
     let me = env.me;
     let opp_p = opp(me);
@@ -636,6 +696,7 @@ pub fn determinize(reg: &Registry, env: &SearchEnv, rand: &mut SeededRand, q_def
     };
     assign(&mut s, opp_p, &opp_list, hypo.as_deref(), rand);
     s.rng = ((rand.next() * 2147483647.0).floor() as i64 | 1) as i32;
+    s.rebuild_index(reg.defs.len());
     s
 }
 
@@ -644,6 +705,7 @@ pub fn determinize(reg: &Registry, env: &SearchEnv, rand: &mut SeededRand, q_def
 /// 1ラウンド: 種から世界を1つ作り、alive の手を同じ世界・同じ乱数で評価する。
 /// 戻り値は手ごとの報酬(alive でない手・例外を出した手は NaN)。
 pub fn eval_round(reg: &Registry, env: &SearchEnv, seed: u32, alive: &[usize]) -> Vec<f64> {
+    crate::prof!(0);
     let q_def = reg.def_index("?").unwrap_or(u16::MAX);
     let mut rr = SeededRand::new(seed);
     let det = determinize(reg, env, &mut rr, q_def);

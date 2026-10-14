@@ -421,6 +421,10 @@ pub fn state_from_json(reg: &Registry, j: &Json) -> R<State> {
                 .collect::<R<Vec<_>>>()?,
         );
     }
+    let mut by_def: Vec<Vec<i32>> = vec![Vec::new(); reg.defs.len()];
+    for (i, c) in cards.iter().enumerate() {
+        by_def[c.def as usize].push(i as i32);
+    }
     Ok(State {
         cards,
         players,
@@ -454,6 +458,7 @@ pub fn state_from_json(reg: &Registry, j: &Json) -> R<State> {
         mana_charged: gb(j, "manaCharged")?,
         breaking: ints(get(j, "breaking")?)?,
         deck_ids: Rc::new(deck_ids),
+        cards_by_def: Rc::new(by_def),
         cfg: Rc::new(cfg),
         dirty_sba: gb(j, "dirtySba")?,
         v: gi(j, "v")? as i32,

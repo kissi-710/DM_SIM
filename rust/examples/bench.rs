@@ -35,5 +35,7 @@ fn main() {
         }
     }
     let dt = t0.elapsed().as_secs_f64();
+    #[cfg(feature = "prof")]
+    dmsim::prof::p::dump(&["eval_round", "rollout", "rollout_pick", "determinize", "reward", "legal_actions", "play_actions", "attack_actions", "plan_play", "run_proc", "run_sba", "plan_payment", "cost_of", "can_attack", "power_of", "active_statics", "collect", "emit", "move_cards", "enter_battle", "run_effect", "step_owned", "drive", "choose_turn_action"]);
     println!("Rust: {} プレイアウト / {:.3}秒 = {:.0} 回/秒 (検算 {:.3})", n, dt, n as f64 / dt, sum);
 }

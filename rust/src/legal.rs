@@ -2,7 +2,7 @@
 
 use crate::cond::*;
 use crate::derive::*;
-use crate::procs::plan_play;
+use crate::procs::{plan_play, plan_play_ok};
 use crate::registry::Registry;
 use crate::state::*;
 use crate::types::*;
@@ -11,6 +11,7 @@ use std::rc::Rc;
 pub const ENUM_LIMIT: usize = 200;
 
 pub fn legal_actions(s: &State, reg: &Registry) -> Vec<Action> {
+    crate::prof!(5);
     if s.winner != Winner::None {
         return vec![];
     }
@@ -66,6 +67,7 @@ fn turn_actions(e: Env, player: PlayerId) -> Vec<Action> {
 }
 
 pub fn attack_actions(e: Env, player: PlayerId) -> Vec<Action> {
+    crate::prof!(7);
     let s = e.s;
     let mut out = Vec::new();
     let o = opp(player);
@@ -84,6 +86,7 @@ pub fn attack_actions(e: Env, player: PlayerId) -> Vec<Action> {
 
 /// 使えるカード(召喚・詠唱)の行動を列挙する。各カードの種類・面・進化先・ハイパーエナジーの組み合わせ。
 pub fn play_actions(e: Env, player: PlayerId) -> Vec<Action> {
+    crate::prof!(6);
     let s = e.s;
     let mut out = Vec::new();
     for z in [Zone::Hand, Zone::Mana, Zone::Grave] {
@@ -107,8 +110,7 @@ pub fn play_actions(e: Env, player: PlayerId) -> Vec<Action> {
                     }
                 }
                 for extra in extra_variants(e, player, uid, z, fi as i32) {
-                    let plan = plan_play(e, player, uid, z, fi as i32, extra.as_ref(), false);
-                    if plan.ok {
+                    if plan_play_ok(e, player, uid, z, fi as i32, extra.as_ref(), false) {
                         out.push(Action::PlayCard { uid, from: Some(z), face: Some(fi as i32), extra });
                     }
                 }

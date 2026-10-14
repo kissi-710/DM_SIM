@@ -743,6 +743,8 @@ pub struct NeedInput {
 pub enum UKey {
     /// "uid:ep:face:idx"(hash なら末尾に "#")
     Lim { uid: i32, ep: i32, face: i32, idx: i32, hash: bool },
+    /// 山札切れの置換を済ませたプレイヤー
+    DeckOut(u8),
     Other(String),
 }
 
@@ -759,11 +761,16 @@ impl UKey {
                 return UKey::Lim { uid: n[0].unwrap(), ep: n[1].unwrap(), face: n[2].unwrap(), idx: n[3].unwrap(), hash };
             }
         }
-        UKey::Other(s.to_string())
+        match s {
+            "deckOutHandled0" => UKey::DeckOut(0),
+            "deckOutHandled1" => UKey::DeckOut(1),
+            _ => UKey::Other(s.to_string()),
+        }
     }
     pub fn to_str(&self) -> String {
         match self {
             UKey::Lim { uid, ep, face, idx, hash } => format!("{}:{}:{}:{}{}", uid, ep, face, idx, if *hash { "#" } else { "" }),
+            UKey::DeckOut(p) => format!("deckOutHandled{}", p),
             UKey::Other(s) => s.clone(),
         }
     }
@@ -795,6 +802,8 @@ pub struct State {
     pub mana_charged: bool,
     pub breaking: Vec<i32>,
     pub deck_ids: Rc<Vec<Vec<u16>>>,
+    /// 定義 → その定義のカードの uid(昇順)。誘発の収集で、全カードを走査しないための索引
+    pub cards_by_def: Rc<Vec<Vec<i32>>>,
     pub cfg: Rc<Cfg>,
     pub dirty_sba: bool,
     pub v: i32,
@@ -803,6 +812,14 @@ pub struct State {
 // ───────────────────────── 乱数(mulberry32。状態に内包) ─────────────────────────
 
 impl State {
+    /// cards の defId を書き換えた後(決定化など)は、これで索引を作り直す
+    pub fn rebuild_index(&mut self, n_defs: usize) {
+        let mut v: Vec<Vec<i32>> = vec![Vec::new(); n_defs];
+        for (i, c) in self.cards.iter().enumerate() {
+            v[c.def as usize].push(i as i32);
+        }
+        self.cards_by_def = Rc::new(v);
+    }
     pub fn rng_next(&mut self) -> f64 {
         self.rng = self.rng.wrapping_add(0x6d2b79f5u32 as i32);
         let mut t = self.rng as u32;
