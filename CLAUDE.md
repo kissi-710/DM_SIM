@@ -53,6 +53,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 |---|---|
 | `npm run dev` | 開発サーバー(Vite) |
 | `npm test` | Vitest(engine・カード・AI・シミュレータ) |
+| `npm run test:coverage` | カバレッジの計測(結果は `coverage/`。git の管理外) |
 | `npm run typecheck` | 型チェック(`tsc --noEmit`) |
 | `npm run lint` | ESLint |
 | `npm run build` | 型チェック+ビルド |
