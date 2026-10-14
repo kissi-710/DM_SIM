@@ -476,6 +476,11 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             </label>
           </>
         )}
+        {g.me !== null && g.cpuTurn && (
+          <button className={g.fast ? 'on' : ''} onClick={() => g.setFast(!g.fast)} title="CPU の手の間隔をなくして、一気に進めます">
+            ⏩ 一気に進める
+          </button>
+        )}
         {setup.allowUndo && (
           <button disabled={!g.canUndo || !humanTurn} onClick={g.undo} title="1手戻す(練習用。情報が公開された後は戻せません)">
             ↶ 1手戻す
@@ -645,7 +650,19 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           {interactive && <div className="rail-tip">💡 {tip}</div>}
         </div>
 
-        {session.error && <div className="toast">{session.error}</div>}
+        {session.error && (
+          <div className="toast" role="alert">
+            <div>{session.error}</div>
+            {g.cpuTurn && (
+              <div className="row" style={{ marginTop: 6 }}>
+                <button onClick={g.retryCpu}>もう一度考えさせる</button>
+                <button onClick={g.forceMove} title="合法手の先頭で進めます(棋譜に残ります)">
+                  合法手で進める
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
       {payFor &&

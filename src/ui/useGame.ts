@@ -41,6 +41,9 @@ export interface GameRecord {
 
 const reg = loadRegistry(CARD_DB);
 
+/** 人間と対戦する時の、CPU の手の最低間隔(ms) */
+export const MIN_CPU_GAP_MS = 300;
+
 function configOf(setup: GameSetup): Partial<GameConfig> {
   const human = (p: PlayerId) => setup.seats[p].kind === 'human';
   return {
@@ -91,6 +94,10 @@ export function useGame(setup: GameSetup) {
   });
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(setup.cpuDelayMs);
+  // 「一気に進める」: CPU の手の間隔を0にする(対戦中の一時的な切り替え)
+  const [fast, setFast] = useState(false);
+  // CPU の手が失敗した後の「もう一度考えさせる」
+  const [retry, setRetry] = useState(0);
   const snapshots = useRef<Snapshot[]>([]);
   const sessionRef = useRef(session);
   sessionRef.current = session;
@@ -142,7 +149,9 @@ export function useGame(setup: GameSetup) {
     let cancelled = false;
     setSession((s) => (s.thinking ? s : { ...s, thinking: true }));
     const run = async () => {
-      await new Promise((r) => setTimeout(r, speed));
+      // 人間と対戦する時は、CPU の連続した手を見失わないよう、最低限の間隔をあける
+      const wait = fast ? 0 : me !== null ? Math.max(speed, MIN_CPU_GAP_MS) : speed;
+      await new Promise((r) => setTimeout(r, wait));
       if (cancelled) return;
       try {
         const spec = setup.seats[pend!.player].agent;
@@ -158,7 +167,13 @@ export function useGame(setup: GameSetup) {
     return () => {
       cancelled = true;
     };
-  }, [cpuTurn, paused, state, speed]);
+  }, [cpuTurn, paused, state, speed, fast, retry]);
+
+  /** CPU の手が失敗した時の復帰: もう一度考えさせる */
+  const retryCpu = useCallback(() => {
+    setSession((s) => ({ ...s, error: null }));
+    setRetry((n) => n + 1);
+  }, []);
 
   // 「1手進める」: 一時停止中に CPU を1手だけ動かす
   const stepping = useRef(false);
@@ -183,7 +198,15 @@ export function useGame(setup: GameSetup) {
   }, [setup, perform]);
 
   const legal = state.pending && state.winner === null ? legalActions(state, reg) : [];
-  return { session, me, legal, perform, undo, canUndo: snapshots.current.length > 0, paused, setPaused, speed, setSpeed, stepOnce, cpuTurn };
+  /** CPU の手が決まらない時の復帰: 合法手の先頭で進める(棋譜には通常の手として残る) */
+  const forceMove = useCallback(() => {
+    const cur = sessionRef.current;
+    if (!cur.state.pending || cur.state.winner !== null) return;
+    const a = legalActions(cur.state, reg)[0];
+    if (a) perform(a);
+  }, [perform]);
+
+  return { session, me, legal, perform, undo, canUndo: snapshots.current.length > 0, paused, setPaused, speed, setSpeed, fast, setFast, retryCpu, forceMove, stepOnce, cpuTurn };
 }
 
 // ───────────────────────── 記録の再生 ─────────────────────────
