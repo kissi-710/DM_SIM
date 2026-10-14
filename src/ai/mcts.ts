@@ -117,7 +117,8 @@ export function makeMcts(o: MctsOpts = {}): Agent {
       // どちらも未指定なら、再現できる既定(120反復)。ms だけなら時間主導(反復の上限なし)
       if (iterations === undefined && ms === undefined) iterations = 120;
       const timeDriven = iterations === undefined;
-      if (ms === undefined) ms = 1500;
+      // 反復回数だけを指定した時は、時間では打ち切らない(マシンの速さ・負荷に結果が左右されない)
+      if (ms === undefined) ms = timeDriven ? 1500 : Infinity;
       const horizon = o.horizonTurns ?? 3;
       const C = o.c ?? 0.5;
       const prior = o.priorBonus ?? 0.08;

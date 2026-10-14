@@ -59,7 +59,7 @@ export function BatchView() {
   const [error, setError] = useState<string | null>(null);
   const job = useRef<RunningJob<any> | null>(null);
 
-  const spec = (k: AgentKind, i: InfoPreset): AgentSpec => ({ kind: k, policy: policyOf(i), iterations: 40, ms: 150 });
+  const spec = (k: AgentKind, i: InfoPreset): AgentSpec => ({ kind: k, policy: policyOf(i), iterations: 40 });
 
   const run = async () => {
     setError(null);

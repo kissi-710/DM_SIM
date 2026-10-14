@@ -109,3 +109,20 @@ describe('makeMcts: ms だけを指定した時は時間主導(反復の上限�
     expect(r.winner).not.toBeNull();
   }, 120000);
 });
+
+describe('iterations だけを指定した時は、時間で打ち切らない(再現できる。ISSUE-03)', () => {
+  it('実行の速さ・負荷に関わらず、同じ反復数・同じ乱数なら同じ手と反復数', () => {
+    const s = advanced(11, 14);
+    const legal = legalActions(s, reg);
+    const infos: Info[] = [];
+    const ag = makeMcts({ iterations: 40, onSearch: (i) => infos.push(i) });
+    const a = ag.chooseAction(s, legal, ctx(3));
+    // 重い処理を挟んで時間をかけても、結果は変わらない
+    const t0 = Date.now();
+    while (Date.now() - t0 < 50) Math.sqrt(Math.random());
+    const b = ag.chooseAction(s, legal, ctx(3));
+    expect(a).toEqual(b);
+    expect(infos[0].iterations).toBe(Math.max(40, legal.length));
+    expect(infos[1].iterations).toBe(infos[0].iterations);
+  }, 30000);
+});

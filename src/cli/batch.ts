@@ -42,7 +42,8 @@ function usage(): never {
   --jobs <n>       並列数  既定: コア数-1(最大8)。1なら直列。結果は並列数によらず同じ
   --seed <n>       シード  既定 1
   --first <m>      fixed / alternate / random  既定 alternate
-  --iterations <n> mcts の反復回数  --ms <n> mcts の時間上限
+  --iterations <n> mcts の反復回数(これだけを指定すると再現できる。既定 120)
+  --ms <n>         mcts の最大思考時間(指定すると実行環境の速さ・負荷で結果が変わる)
   --strength       カード単体の強さ(1枚を入れ替えた時の勝率差)を測る(デッキA vs デッキB、ルールベース同士)
   --json           JSONで出力`);
   process.exit(0);
