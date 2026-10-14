@@ -5,6 +5,10 @@ import { Worker } from 'node:worker_threads';
 import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import { planJob, runJob, type JobResult, type SimJob } from '../sim/jobs';
+import { installNativeFromEnv } from '../wasm/installNode';
+
+// 直列実行(--jobs 1)でも、環境変数 DM_WASM があれば Rust 版でラウンドを評価する
+installNativeFromEnv();
 
 /** 既定の並列数(1コアを残す。最大8) */
 export function defaultJobs(): number {

@@ -1,11 +1,13 @@
 // AI の思考を UI スレッドの外で行う Web Worker(design 7.4)。
 // 受け取るのは JSON 化できるデータ(状態・設定)だけ。
 // 1つの意思決定を丸ごと行う(decide)ほか、並列探索のラウンドの評価(begin → rounds)も受け持つ。
+// src/wasm/dmsim.wasm(npm run build:wasm)があれば、ラウンドの評価を Rust 版(WASM)で行う。無ければ TS 版。
 import { decide, type DecideReq } from '../ai/decide';
-import { evalRound, type SearchEnv } from '../ai/mcts';
+import { evalRound, setNativeRounds, type SearchEnv } from '../ai/mcts';
 import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import type { Action } from '../engine/types';
+import { DmEngine } from '../wasm/dmEngine';
 
 export type AiWorkerIn =
   | { id: number; req: DecideReq }
@@ -22,7 +24,22 @@ const reg = loadRegistry(CARD_DB);
 const envs = new Map<number, SearchEnv>();
 const post = (m: AiWorkerOut) => (self as unknown as Worker).postMessage(m);
 
-self.onmessage = (e: MessageEvent<AiWorkerIn>) => {
+// Rust 版(WASM)。ビルドされていなければ何もしない
+const wasmUrls = (import.meta as any).glob('../wasm/dmsim.wasm', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
+const nativeReady: Promise<void> = (async () => {
+  const url = Object.values(wasmUrls)[0];
+  if (!url) return;
+  const bytes = await (await fetch(url)).arrayBuffer();
+  const eng = await DmEngine.create(bytes, JSON.stringify(reg.defs));
+  setNativeRounds(eng.asNativeRounds());
+  console.info('[ai.worker] Rust 版エンジン(WASM)で探索します');
+})().catch((e) => {
+  // 読み込めなければ TS 版で動く
+  console.warn('[ai.worker] Rust 版エンジン(WASM)を読み込めませんでした。TS 版で動きます:', e);
+});
+
+self.onmessage = async (e: MessageEvent<AiWorkerIn>) => {
+  await nativeReady;
   const m = e.data;
   if ('kind' in m && m.kind === 'begin') {
     envs.set(m.sid, m.env);

@@ -1,6 +1,6 @@
 // Rust 版エンジン(WASM)の薄いラッパー。ラウンドの評価(evalRound)を、TS 版と同じ入力・同じ結果で高速に行う。
 // 境界は C ABI(rust/src/ffi.rs)。JSON は UTF-8 でリニアメモリに書き、結果は f64 の配列で読む。
-import type { SearchEnv } from '../ai/mcts';
+import type { NativeRounds, SearchEnv } from '../ai/mcts';
 
 interface Exports {
   memory: WebAssembly.Memory;
@@ -23,9 +23,34 @@ export class DmEngine {
   /** wasm のバイト列とカード定義(TS 版 registry.defs の JSON)から作る */
   static async create(wasm: BufferSource, defsJson: string): Promise<DmEngine> {
     const { instance } = await WebAssembly.instantiate(wasm, {});
+    return DmEngine.init(instance, defsJson);
+  }
+
+  /** 同期版(Node の CLI・Worker 用。小さなモジュールなので同期コンパイルで足りる) */
+  static createSync(wasm: BufferSource, defsJson: string): DmEngine {
+    const instance = new WebAssembly.Instance(new WebAssembly.Module(wasm), {});
+    return DmEngine.init(instance, defsJson);
+  }
+
+  private static init(instance: WebAssembly.Instance, defsJson: string): DmEngine {
     const e = new DmEngine(instance.exports as unknown as Exports);
     e.check(e.withBytes(enc.encode(defsJson), (p, n) => e.x.dm_load_registry(p, n)));
     return e;
+  }
+
+  /**
+   * mcts.ts の setNativeRounds に渡す関数にする。同じ env(同一のオブジェクト)の間は、
+   * 入力の登録(JSON の受け渡し)を1度だけ行う。
+   */
+  asNativeRounds(): NativeRounds {
+    let last: SearchEnv | null = null;
+    return (env, seed, alive) => {
+      if (env !== last) {
+        this.begin(env);
+        last = env;
+      }
+      return this.rounds([seed], alive)[0];
+    };
   }
 
   private mem(): Uint8Array {

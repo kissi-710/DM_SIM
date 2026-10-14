@@ -3,7 +3,9 @@ import { parentPort } from 'node:worker_threads';
 import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import { runJob, type SimJob } from '../sim/jobs';
+import { installNativeFromEnv } from '../wasm/installNode';
 
+installNativeFromEnv();
 const reg = loadRegistry(CARD_DB);
 
 parentPort!.on('message', (job: SimJob) => {

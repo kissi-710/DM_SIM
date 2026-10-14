@@ -127,11 +127,25 @@ export interface SearchEnv {
   weights?: Partial<EvalWeights>;
 }
 
+/** ラウンドの評価を差し替える関数(Rust 版エンジン(WASM)など)。TS 版と同じ入力・同じ結果を返す */
+export type NativeRounds = (env: SearchEnv, seed: number, alive: number[]) => number[];
+let native: NativeRounds | null = null;
+export function setNativeRounds(f: NativeRounds | null): void {
+  native = f;
+}
+
 /**
  * 1ラウンド: 種から世界を1つ作り、alive の手を同じ世界・同じ乱数で評価する。
  * 戻り値は手ごとの報酬(alive でない手・例外を出した手は NaN)。純関数なので、どの Worker で評価しても同じ。
  */
 export function evalRound(env: SearchEnv, reg: Registry, seed: number, alive: number[]): number[] {
+  if (native) {
+    try {
+      return native(env, seed, alive);
+    } catch {
+      // 外部の評価器(Rust 版)が使えない入力の時は、TS 版で評価する
+    }
+  }
   const rr = seededRand(seed);
   const det = determinize(env.view, env.me, { rand: rr, reg, policy: env.policy, candidateDecks: env.candidateDecks });
   const rolloutSeed = Math.floor(rr() * 0x7fffffff);
