@@ -88,7 +88,7 @@ export interface GameConfig {
   ackReveals: [boolean, boolean]; // 公開した札の確認を求めるか
   waitingPolicy: 'pool' | 'newFirst' | 'oldFirst'; // L1
   sbaTiming: 'afterEachStep' | 'afterEffect'; // L2
-  /** ジ・ウォッチ等の「ターンの残りをとばす」でターン終了時の誘発を起こすか(L6) */
+  /** ジ・ウォッチ等の「ターンの残りをとばす」でターン終了時の誘発を起こすか(L6)。公式Q&A 46393 では起きない(既定 false) */
   skipRunsEndTriggers: boolean;
   maxFrameSteps: number; // L7
 }
@@ -100,7 +100,7 @@ export const defaultConfig = (): GameConfig => ({
   ackReveals: [false, false],
   waitingPolicy: 'pool',
   sbaTiming: 'afterEachStep',
-  skipRunsEndTriggers: true,
+  skipRunsEndTriggers: false,
   maxFrameSteps: 20000,
 });
 

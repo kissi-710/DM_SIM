@@ -195,17 +195,21 @@ describe('L6 ジ・ウォッチの「ターンの残りをとばす」', () => {
     sim.play(N); // ジ・ウォッチ(相手)が「呪文を唱えた時」に誘発
     return sim;
   };
-  it('残りの手順はとばされるが、ターン終了時の誘発は起きる(既定)', () => {
-    const sim = setup(true);
+  it('ターンの残りがとばされると、ターン終了時の誘発は起きない(既定。公式Q&A 46393)', () => {
+    const sim = new Sim({
+      p0: { battle: [{ c: '龍風混成 ザーディクリカ', ex: true }], hand: [N], mana: mana(3), deck: 5 },
+      p1: { battle: ['ヨビニオン・マルル', '終末の監視者 ジ・ウォッチ'] },
+    });
+    sim.play(N); // ジ・ウォッチ(相手)が「呪文を唱えた時」に誘発
     sim.yes(); // ターンの残りをとばす
-    expect(sim.has(1, 'grave', 'ヨビニオン・マルル')).toBe(true); // ザーディクリカのターン終了時の効果
-    sim.drain(); // 「カードを引いてもよい」は引かない
+    expect(sim.has(1, 'battle', 'ヨビニオン・マルル')).toBe(true); // ザーディクリカのターン終了時の効果は起きない
     expect(sim.s.active).toBe(1);
   });
-  it('設定でターン終了時の誘発を起こさないこともできる', () => {
-    const sim = setup(false);
+  it('設定でターン終了時の誘発を起こすこともできる(公式の挙動ではない)', () => {
+    const sim = setup(true);
     sim.yes();
-    expect(sim.has(1, 'battle', 'ヨビニオン・マルル')).toBe(true);
+    expect(sim.has(1, 'grave', 'ヨビニオン・マルル')).toBe(true);
+    sim.drain(); // 「カードを引いてもよい」は引かない
     expect(sim.s.active).toBe(1);
   });
   it('相手のターンでも使える(攻撃もとばされる)', () => {
