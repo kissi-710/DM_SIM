@@ -4,7 +4,7 @@
 use crate::ast::R;
 use crate::cond::*;
 use crate::derive::*;
-use crate::engine::{step, step_owned};
+use crate::engine::step_owned;
 use crate::json::Json;
 use crate::legal::legal_actions;
 use crate::registry::Registry;
@@ -352,7 +352,7 @@ pub fn rollout_pick(e: Env, legal: &[Action], rand: &mut SeededRand) -> usize {
     if p.why == Why::TurnAction {
         return choose_turn_action(e, legal, p.player);
     }
-    let mut pick = |n: usize, rand: &mut SeededRand| (rand.next() * n as f64).floor() as usize;
+    let pick = |n: usize, rand: &mut SeededRand| (rand.next() * n as f64).floor() as usize;
     match p.why {
         Why::TriggerDeclare => {
             // S・トリガーは宣言できるだけ宣言する
@@ -598,7 +598,7 @@ pub fn determinize(reg: &Registry, env: &SearchEnv, rand: &mut SeededRand, q_def
         out
     };
 
-    let mut assign = |s: &mut State, p: PlayerId, list: &[u16], hypo: Option<&[u16]>, rand: &mut SeededRand| {
+    let assign = |s: &mut State, p: PlayerId, list: &[u16], hypo: Option<&[u16]>, rand: &mut SeededRand| {
         let slots = unknown_of(s, p);
         if slots.is_empty() {
             return;
