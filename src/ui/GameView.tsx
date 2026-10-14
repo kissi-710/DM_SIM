@@ -158,6 +158,8 @@ const SHORTCUTS: Array<[string, string]> = [
   ['E', 'ターン終了'],
   ['Z', '1手戻す(練習用設定のとき)'],
   ['Y / N', 'はい / いいえ'],
+  ['A', '自動で払う・自動で振る・すべて1回ずつ使う'],
+  ['N / R / C', '選ばない / やり直す / キャンセル(ダイアログ内)'],
   ['Esc', '選択やダイアログを閉じる'],
   ['L', 'ログ・詳細の表示/非表示'],
   ['O', '表示設定を開く'],
@@ -334,6 +336,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           back.click();
           return done();
         }
+        if (/^[a-z]$/i.test(k) && clickNth(`.modal-back [data-key="${k.toLowerCase()}"]`, 0)) return done();
         if (digit >= 0 && clickNth('.modal-back .choice', digit)) return done();
         if (k === 'Enter' && clickNth('.modal-back button.primary', 0)) return done();
         return;
@@ -374,6 +377,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           g.perform({ type: 'ANSWER', id: pend!.id, value: false });
           return done();
         }
+        if (/^[a-z]$/i.test(k) && clickNth(`.input-panel [data-key="${k.toLowerCase()}"]`, 0)) return done();
         if (digit >= 0) {
           const sel = shape === 'option' || shape === 'order' ? '.input-panel .choice' : '.input-panel .cards .card';
           if (clickNth(sel, digit)) return done();
@@ -670,14 +674,17 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                 {payErr && <div style={{ color: 'var(--bad)' }}>{payErr}</div>}
                 <div className="row" style={{ marginTop: 8 }}>
                   <button
+                    data-key="a"
                     onClick={() => {
                       setPayFor(null);
                       g.perform(a);
                     }}
                   >
-                    自動で払う
+                    自動で払う <span className="kbd">A</span>
                   </button>
-                  <button onClick={() => setPayFor(null)}>キャンセル</button>
+                  <button data-key="c" onClick={() => setPayFor(null)}>
+                    キャンセル <span className="kbd">C</span>
+                  </button>
                 </div>
               </div>
             </div>

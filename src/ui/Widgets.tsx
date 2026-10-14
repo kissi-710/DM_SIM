@@ -70,7 +70,11 @@ export function PickWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extra
           <button className="primary" disabled={!ok} onClick={() => onAnswer(sel)}>
             確定
           </button>
-          {spec.min === 0 && <button onClick={() => onAnswer([])}>選ばない</button>}
+          {spec.min === 0 && (
+            <button data-key="n" onClick={() => onAnswer([])}>
+              選ばない <span className="kbd">N</span>
+            </button>
+          )}
         </div>
       )}
     </>
@@ -155,6 +159,7 @@ export function AssignWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
           確定
         </button>
         <button
+          data-key="a"
           onClick={() => {
             // 自動(先頭から詰める)
             const items = spec.items.slice();
@@ -163,7 +168,7 @@ export function AssignWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
             setAsg(out);
           }}
         >
-          自動で振る
+          自動で振る <span className="kbd">A</span>
         </button>
       </div>
     </>
@@ -221,9 +226,15 @@ export function OptionWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
           確定
         </button>
         {spec.allIf && (
-          <button onClick={() => onAnswer(spec.options.map((_, i) => i))}>すべて1回ずつ使う</button>
+          <button data-key="a" onClick={() => onAnswer(spec.options.map((_, i) => i))}>
+            すべて1回ずつ使う <span className="kbd">A</span>
+          </button>
         )}
-        {sel.length > 0 && <button onClick={() => setSel([])}>やり直す</button>}
+        {sel.length > 0 && (
+          <button data-key="r" onClick={() => setSel([])}>
+            やり直す <span className="kbd">R</span>
+          </button>
+        )}
       </div>
     </>
   );
