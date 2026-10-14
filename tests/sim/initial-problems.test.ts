@@ -1,4 +1,4 @@
-// 初期条件の検査(ISSUE-14): arrangeDeck は効かない名前を無視するので、入力画面・CLI が事前に知らせる。
+// 初期条件の検査: arrangeDeck は効かない名前を無視するので、入力画面・CLI が事前に知らせる。
 import { describe, expect, it } from 'vitest';
 import { CARD_DB, deckCards } from '../../src/cards';
 import { loadRegistry } from '../../src/engine/registry';

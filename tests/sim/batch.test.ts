@@ -103,7 +103,7 @@ describe('formatStats', () => {
   });
 });
 
-describe('first=random は交互ではなく、乱数で席を決める(ISSUE-01)', () => {
+describe('first=random は交互ではなく、乱数で席を決める', () => {
   const seats = (seed: number, games: number) => {
     // Aが先攻だった試合の並び(席は 'A先攻' / 'A後攻' が1試合ごとに記録される)
     const out: number[] = [];

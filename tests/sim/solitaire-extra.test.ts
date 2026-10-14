@@ -279,7 +279,7 @@ describe('replayPattern', () => {
   });
 });
 
-describe('exactDrawProbability: 初期条件があれば出さない(ISSUE-02)', () => {
+describe('exactDrawProbability: 初期条件があれば出さない', () => {
   it('初手の固定・除外・山札の上の固定のどれかがあると undefined', () => {
     const g = hand('天災 デドダム');
     expect(exactDrawProbability(reg, { deck: maruru, goal: g, first: 0 })).toBeDefined();

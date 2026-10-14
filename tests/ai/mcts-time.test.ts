@@ -123,7 +123,7 @@ describe('makeMcts: ms だけを指定した時は時間主導(反復の上限�
   }, 120000);
 });
 
-describe('iterations だけを指定した時は、時間で打ち切らない(再現できる。ISSUE-03)', () => {
+describe('iterations だけを指定した時は、時間で打ち切らない(再現できる)', () => {
   it('実行の速さ・負荷に関わらず、同じ反復数・同じ乱数なら同じ手と反復数', () => {
     const s = advanced(11, 14);
     const legal = legalActions(s, reg);
