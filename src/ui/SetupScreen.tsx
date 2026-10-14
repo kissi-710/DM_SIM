@@ -1,9 +1,10 @@
 // 対戦設定: 座席ごとの人間/CPU・強さ・情報条件・デッキ・先攻後攻・シード(spec 5.1)。
 import { useState } from 'react';
 import { AGENT_LABEL, type AgentKind } from '../ai';
+import { checkHypotheses, hypothesisProblems, makePolicy } from '../ai/policy';
 import { checkDeck } from '../engine/engine';
 import { CARD_DB } from '../cards';
-import { INFO_PRESET_LABEL, type InfoPolicy, type InfoPreset } from '../engine/view';
+import { INFO_PRESET_LABEL, type InfoPreset } from '../engine/view';
 import { allDecks, findDeck } from './decks';
 import type { GameSetup, Seat } from './useGame';
 import { loadJson, saveJson } from './util';
@@ -13,16 +14,8 @@ interface SeatForm {
   agent: AgentKind;
   info: InfoPreset;
   deck: string;
-}
-
-function policyOf(preset: InfoPreset): InfoPolicy {
-  return {
-    preset,
-    knowOpponentDecklist: true,
-    reveal: preset === 'partial' ? { opponentHandCount: 2, opponentHandKinds: ['shieldTrigger', 'blocker'] } : undefined,
-    hypotheses: preset === 'hypothesis' ? [{ defId: 'dm24ex2-Cho033' }, { defId: 'dmrp17-029' }] : undefined,
-    hypothesisWeight: 0.6,
-  };
+  /** 決め打ち(hypothesis)の仮説: 相手が手札に持っていそうなカード名(カンマ区切り) */
+  hypo?: string;
 }
 
 export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch'; onStart: (s: GameSetup) => void; onBack: () => void }) {
@@ -62,15 +55,25 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
       // 空欄なら乱数。入力があれば整数だけを受け付ける(0 も有効。数字でない入力を黙って 1 にしない)
       if (seed.trim() !== '' && !/^-?\d+$/.test(seed.trim())) throw new Error('シードは整数で入力してください(空欄ならランダム)');
       const sd = seed.trim() === '' ? Math.floor(Math.random() * 1e9) : Number(seed.trim());
-      const mk = (f: SeatForm): Seat => ({
+      // 決め打ち: 仮説のカード名を解決し、相手のデッキにないものなどは、始める前に知らせる
+      const problems: string[] = [];
+      const hypoIds: string[][] = seats.map((f, i) => {
+        if (!(mode === 'watch' || f.kind === 'cpu') || f.info !== 'hypothesis') return [];
+        const names = (f.hypo ?? '').split(/[,、]/);
+        const c = checkHypotheses(CARD_DB, names, ds[1 - i].cards);
+        problems.push(...hypothesisProblems(c, `席${i + 1}の決め打ち`));
+        return c.ids;
+      });
+      if (problems.length) throw new Error(problems.join(' / '));
+      const mk = (f: SeatForm, i: number): Seat => ({
         kind: mode === 'watch' ? 'cpu' : f.kind,
-        agent: { kind: f.agent, policy: policyOf(f.info), candidateDecks: decks.filter((d) => d.preset).map((d) => d.cards), ms: think },
+        agent: { kind: f.agent, policy: makePolicy(f.info, { hypotheses: hypoIds[i] }), candidateDecks: decks.filter((d) => d.preset).map((d) => d.cards), ms: think },
       });
       saveJson('dmsim.setup.' + mode, { seats, first, seed, autoOrder, undo, delay, think });
       onStart({
         decks: [ds[0].cards, ds[1].cards],
         deckNames: [ds[0].name, ds[1].name],
-        seats: [mk(seats[0]), mk(seats[1])],
+        seats: [mk(seats[0], 0), mk(seats[1], 1)],
         first: first === 'random' ? 'random' : first === '0' ? 0 : 1,
         seed: sd,
         autoOrder,
@@ -131,7 +134,18 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
                     ))}
                   </select>
                 </label>
-                <span className="muted">既定は「公平」(相手の手札・シールド・山札の並びは見えません)。弱い時だけ部分開示・決め打ちで調整します。</span>
+                {seats[i].info === 'hypothesis' && (
+                  <label className="row">
+                    仮説のカード
+                    <input
+                      style={{ minWidth: 260 }}
+                      value={seats[i].hypo ?? ''}
+                      onChange={(e) => setSeat(i, { hypo: e.target.value })}
+                      placeholder="相手が手札に持っていそうなカード(カンマ区切り)"
+                    />
+                  </label>
+                )}
+                <span className="muted">既定は「公平」(相手の手札・シールド・山札の並びは見えません)。弱い時だけ部分開示・決め打ちで調整します。決め打ちは、相手が持っていそうなカードを自分で指定します。</span>
               </>
             )}
           </div>

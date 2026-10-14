@@ -1,7 +1,9 @@
 // バッチ対戦画面(spec 7): AI同士の対戦を Worker で実行し、勝率・先攻後攻別・情報条件の比較・カードの強さを出す。
 import { useRef, useState } from 'react';
 import { AGENT_LABEL, type AgentKind, type AgentSpec } from '../ai';
-import { INFO_PRESET_LABEL, type InfoPolicy, type InfoPreset } from '../engine/view';
+import { checkHypotheses, hypothesisProblems, makePolicy } from '../ai/policy';
+import { CARD_DB } from '../cards';
+import { INFO_PRESET_LABEL, type InfoPreset } from '../engine/view';
 import { pct } from '../sim/export';
 import type { FirstMode, MatchStats } from '../sim/batch';
 import type { CardStrength } from '../sim/strength';
@@ -14,14 +16,6 @@ function resolveSeed(raw: string): number {
   const t = raw.trim();
   if (t === '') return Math.floor(Math.random() * 0x7fffffff);
   return Math.floor(Number(t));
-}
-
-function policyOf(preset: InfoPreset): InfoPolicy {
-  return {
-    preset,
-    knowOpponentDecklist: true,
-    reveal: preset === 'partial' ? { opponentHandCount: 2, opponentHandKinds: ['shieldTrigger', 'blocker'] } : undefined,
-  };
 }
 
 function StatsRow({ label, s }: { label: string; s: MatchStats }) {
@@ -56,6 +50,9 @@ export function BatchView() {
   const [kindB, setKindB] = useState<AgentKind>('mcts');
   const [infoA, setInfoA] = useState<InfoPreset>('fair');
   const [infoB, setInfoB] = useState<InfoPreset>('fair');
+  // 決め打ち(hypothesis)の仮説: 相手が手札に持っていそうなカード名(カンマ区切り)
+  const [hypoA, setHypoA] = useState('');
+  const [hypoB, setHypoB] = useState('');
   const [games, setGames] = useState(500);
   const [seedText, setSeedText] = useState('');
   const [iterations, setIterations] = useState(40);
@@ -67,7 +64,25 @@ export function BatchView() {
   const [error, setError] = useState<string | null>(null);
   const job = useRef<RunningJob<any> | null>(null);
 
-  const spec = (k: AgentKind, i: InfoPreset): AgentSpec => ({ kind: k, policy: policyOf(i), iterations });
+  const spec = (k: AgentKind, i: InfoPreset, hypothesisIds: string[] = []): AgentSpec => ({ kind: k, policy: makePolicy(i, { hypotheses: hypothesisIds }), iterations });
+
+  /** 決め打ちの仮説(カード名)を解決して検査する。問題があれば、エラーを出して null を返す */
+  const takeHypotheses = (compareMode: boolean): { a: string[]; b: string[] } | null => {
+    const problems: string[] = [];
+    const pick = (info: InfoPreset, text: string, opponentDeck: string[], label: string): string[] => {
+      if (info !== 'hypothesis') return [];
+      const c = checkHypotheses(CARD_DB, text.split(/[,、]/), opponentDeck);
+      problems.push(...hypothesisProblems(c, label));
+      return c.ids;
+    };
+    const a = pick(compareMode ? 'fair' : infoA, hypoA, findDeck(deckB).cards, 'Aの決め打ち');
+    const b = pick(infoB, hypoB, findDeck(deckA).cards, 'Bの決め打ち');
+    if (problems.length) {
+      setError(problems.join(' / '));
+      return null;
+    }
+    return { a, b };
+  };
 
   /** 入力のシードを数にする。空欄ならランダム。数でなければエラーにして null を返す */
   const takeSeed = (): number | null => {
@@ -83,6 +98,8 @@ export function BatchView() {
     setError(null);
     const seed = takeSeed();
     if (seed === null) return;
+    const hy = takeHypotheses(compare);
+    if (hy === null) return;
     setResults(null);
     setProgress([0, 1]);
     try {
@@ -94,7 +111,7 @@ export function BatchView() {
       job.current = runSimJob<MatchStats[]>(
         {
           type: 'batch',
-          opts: variants.map((v) => ({ deckA: a, deckB: b, agentA: spec(kindA, v.info), agentB: spec(kindB, infoB), games, seed, first })),
+          opts: variants.map((v) => ({ deckA: a, deckB: b, agentA: spec(kindA, v.info, hy.a), agentB: spec(kindB, infoB, hy.b), games, seed, first })),
         },
         (d, t) => setProgress([d, t]),
       );
@@ -111,11 +128,13 @@ export function BatchView() {
     setError(null);
     const seed = takeSeed();
     if (seed === null) return;
+    const hy = takeHypotheses(false);
+    if (hy === null) return;
     setStrength(null);
     setProgress([0, 1]);
     try {
       job.current = runSimJob<CardStrength[]>(
-        { type: 'strength', deck: findDeck(deckA).cards, opponent: findDeck(deckB).cards, agent: spec(kindA, infoA), games, seed },
+        { type: 'strength', deck: findDeck(deckA).cards, opponent: findDeck(deckB).cards, agent: spec(kindA, infoA, hy.a), games, seed },
         (d, t) => setProgress([d, t]),
       );
       setStrength({ seed, rows: await job.current.promise });
@@ -133,8 +152,8 @@ export function BatchView() {
         <p className="muted">デッキの勝率・先攻後攻の有利不利・CPUの情報条件による強さの違いを、数百〜数千試合で測ります(同じシード・同じ設定なら同じ結果になります)。</p>
         <div className="grid2">
           {[
-            { k: 'A', deck: deckA, setDeck: setDeckA, kind: kindA, setKind: setKindA, info: infoA, setInfo: setInfoA },
-            { k: 'B', deck: deckB, setDeck: setDeckB, kind: kindB, setKind: setKindB, info: infoB, setInfo: setInfoB },
+            { k: 'A', deck: deckA, setDeck: setDeckA, kind: kindA, setKind: setKindA, info: infoA, setInfo: setInfoA, hypo: hypoA, setHypo: setHypoA },
+            { k: 'B', deck: deckB, setDeck: setDeckB, kind: kindB, setKind: setKindB, info: infoB, setInfo: setInfoB, hypo: hypoB, setHypo: setHypoB },
           ].map((x) => (
             <div key={x.k} className="panel col">
               <h3>{x.k}</h3>
@@ -168,6 +187,17 @@ export function BatchView() {
                   ))}
                 </select>
               </label>
+              {x.info === 'hypothesis' && (
+                <label className="row">
+                  仮説のカード
+                  <input
+                    style={{ minWidth: 240 }}
+                    value={x.hypo}
+                    onChange={(e) => x.setHypo(e.target.value)}
+                    placeholder="相手が手札に持っていそうなカード(カンマ区切り)"
+                  />
+                </label>
+              )}
             </div>
           ))}
         </div>
