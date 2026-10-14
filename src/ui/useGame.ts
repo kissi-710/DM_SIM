@@ -6,7 +6,7 @@ import { createGame, legalActions, step } from '../engine/engine';
 import { loadRegistry } from '../engine/registry';
 import { hashSeed } from '../engine/state';
 import type { Action, Ev, GameConfig, GameState, PlayerId } from '../engine/types';
-import { chooseWithWorker } from './aiClient';
+import { AiCancelled, cancelAi, chooseWithWorker } from './aiClient';
 import { RECORD_VERSION, type GameRecord } from './record';
 import { loadJson, saveJson } from './util';
 
@@ -132,6 +132,9 @@ export function useGame(setup: GameSetup) {
     return { state, log, last: [], actions: done, thinking: false, error: resumeError };
   });
 
+  // 画面を離れる・対戦をやり直す(再生成される)時は、実行中の探索を取り消す
+  useEffect(() => () => cancelAi(), []);
+
   // 自動保存: 進行中は毎手保存し、勝敗が出たら消す
   const winner = session.state.winner;
   const nActions = session.actions.length;
@@ -237,6 +240,7 @@ export function useGame(setup: GameSetup) {
         // 待っている間に状態が変わった(別の操作・再開)なら、古い状態向けの手は捨てる
         if (sessionRef.current.state === cur.state) perform(a);
       } catch (e: any) {
+        if (e instanceof AiCancelled) return; // 画面を離れて取り消された(エラーとして出さない)
         setSession((s) => ({ ...s, error: String(e?.message ?? e) }));
       } finally {
         stepping.current = false;

@@ -64,6 +64,25 @@ const call = (w: Worker, msg: (id: number) => AiWorkerIn) =>
     w.postMessage(msg(id));
   });
 
+/** 画面を離れる・対戦をやり直す時の取り消し。待機中の要求は、これで失敗として返る */
+export class AiCancelled extends Error {
+  constructor() {
+    super('AI の思考を取り消しました');
+    this.name = 'AiCancelled';
+  }
+}
+
+/**
+ * 実行中・待機中の AI の探索をすべて取り消す。Worker は途中で止められないので、停止(terminate)して
+ * 次の要求で作り直す。やり直した対戦の最初の CPU の手が、前の対戦の探索に待たされないようにする。
+ */
+export function cancelAi(): void {
+  const err = new AiCancelled();
+  for (const w of pool.splice(0)) w.terminate();
+  for (const [, p] of waiting) p.reject(err);
+  waiting.clear();
+}
+
 export function chooseWithWorker(req: DecideReq): Promise<Action> {
   const n = canParallelize(CARD_DB, req) ? aiParallelism() : 1;
   const ws = getPool(n);
