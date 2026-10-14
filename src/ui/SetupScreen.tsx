@@ -59,7 +59,9 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
         const chk = checkDeck(CARD_DB, d.cards, strict);
         if (!chk.ok) throw new Error(`${d.name}: ${chk.errors.join(' / ')}`);
       }
-      const sd = seed.trim() === '' ? Math.floor(Math.random() * 1e9) : Number(seed) || 1;
+      // 空欄なら乱数。入力があれば整数だけを受け付ける(0 も有効。数字でない入力を黙って 1 にしない)
+      if (seed.trim() !== '' && !/^-?\d+$/.test(seed.trim())) throw new Error('シードは整数で入力してください(空欄ならランダム)');
+      const sd = seed.trim() === '' ? Math.floor(Math.random() * 1e9) : Number(seed.trim());
       const mk = (f: SeatForm): Seat => ({
         kind: mode === 'watch' ? 'cpu' : f.kind,
         agent: { kind: f.agent, policy: policyOf(f.info), candidateDecks: decks.filter((d) => d.preset).map((d) => d.cards), ms: think },
