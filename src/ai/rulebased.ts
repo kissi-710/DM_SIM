@@ -1,6 +1,6 @@
 // L1 ルールベースAI(design 7.2): 優先度つきの手続き。
 // ターン中の行動はルールで決め、効果の選択(対象・選択肢・任意)は1手先読みで決める。
-import { canBlock, charsOf, costOf, hasKeyword, payNeed, powerOf } from '../engine/derive';
+import { breakerCount, canBlock, charsOf, costOf, hasKeyword, payNeed, powerOf } from '../engine/derive';
 import { step } from '../engine/engine';
 import { mkCtx } from '../engine/state';
 import type { Registry } from '../engine/registry';
@@ -15,17 +15,21 @@ export interface RuleOpts {
   candidateDecks?: string[][];
 }
 
-/** マナに置く優先度(小さいほど置きたい) */
+/**
+ * マナに置く優先度(小さいほど置きたい)。重みは、旧版との自己対戦(勝率)で調整した値。
+ * 方針: 呪文(特にS・トリガー)を先にマナへ置き、盤面に残るクリーチャーを手札に残す。
+ * 文明が足りなければ、その文明のカードを優先して置く。
+ */
 function keepScore(view: GameState, reg: Registry, uid: number, me: PlayerId): number {
   const c = mkCtx(view, reg);
   const card = view.cards[uid];
   const ch = charsOf(c, uid, -1);
   const manaN = view.players[me].mana.length;
-  let v = ch.cost <= manaN + 2 ? 6 : 3;
+  let v = ch.cost <= manaN + 2 ? 4.5 : 3;
   v -= ch.cost * 0.15;
+  if (ch.cost <= manaN) v -= 0.5; // 今でも使えるカードは、先にマナへ回してよい
   const info = reg.getInfo(card.defId, ch.faceIdx);
-  if (info.shieldTriggers.length) v += 1.5;
-  // 手札の他のカードが必要とする文明を、マナに足せるなら置きたい
+  if (info.shieldTriggers.length) v -= 2;
   const have = new Set<string>();
   for (const m of view.players[me].mana) for (const cv of charsOf(c, m, -1).civs) have.add(cv);
   const need = new Set<string>();
@@ -33,10 +37,15 @@ function keepScore(view: GameState, reg: Registry, uid: number, me: PlayerId): n
     if (h === uid) continue;
     for (const cv of charsOf(c, h, -1).civs) if (!have.has(cv)) need.add(cv);
   }
-  for (const cv of ch.civs) if (need.has(cv)) v -= 2;
+  // 手札の他のカードが必要とする文明は、マナに足せるなら置きたい。マナにない文明を足すのも良い
+  for (const cv of ch.civs) {
+    if (need.has(cv)) v -= 3;
+    if (!have.has(cv)) v -= 1;
+  }
   // 同じカードが複数あれば1枚は置いてよい
   const dup = view.players[me].hand.filter((h) => view.cards[h].defId === card.defId).length;
-  if (dup > 1) v -= 1.5;
+  if (dup > 1) v -= 1;
+  v += ch.face.type === 'spell' ? -1 : 1;
   return v;
 }
 
@@ -62,6 +71,9 @@ function playScore(view: GameState, reg: Registry, a: Extract<Action, { type: 'P
   return v;
 }
 
+/** マナがこの枚数以上で、手札を全部払えるなら、マナチャージをしない */
+const SKIP_MANA_FROM = 7;
+
 export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<AgentCtx, 'reg' | 'rand'>): Action {
   const reg = ctx.reg;
   const me = view.pending!.player;
@@ -72,6 +84,17 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
   // マナチャージ
   const charges = byType('CHARGE_MANA') as Extract<Action, { type: 'CHARGE_MANA' }>[];
   if (charges.length > 0) {
+    // マナが十分にあり、手札のどのカードも払えるなら、これ以上マナを増やしても使い道がない(カードを手札に残す)
+    const skip = legal.find((a) => a.type === 'SKIP_MANA');
+    const manaN = view.players[me].mana.length;
+    if (skip && manaN >= SKIP_MANA_FROM) {
+      let maxCost = 0;
+      for (const u of view.players[me].hand) {
+        const cost = charsOf(c, u, -1).cost;
+        if (cost < 99) maxCost = Math.max(maxCost, cost);
+      }
+      if (manaN >= maxCost) return skip;
+    }
     let best = charges[0];
     let bs = Infinity;
     for (const a of charges) {
@@ -105,6 +128,14 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
     const maxBlock = oppBlockers.reduce((m, p) => Math.max(m, powerOf(c, p)), 0);
     const oppShield = view.players[opp].shield.length;
     const myShield = view.players[me].shield.length;
+    // 勝ちが確定する攻撃(S・トリガーは考えない): ブロッカーに止められない攻撃のブレイク数が、シールド+1以上
+    const mine = view.players[me].battle.filter((p) => attacks.some((a) => a.target.kind === 'player' && a.attacker === p.pid));
+    const byBreaks = mine.map((p) => ({ p, b: breakerCount(c, p) })).sort((x, y) => y.b - x.b);
+    const through = byBreaks.slice(oppBlockers.length); // ブロックされるのは、ブレイク数の多い順
+    if (through.length > 0 && through.reduce((n, x) => n + x.b, 0) >= oppShield + 1) {
+      const lethal = attacks.find((x) => x.attacker === byBreaks[0].p.pid && x.target.kind === 'player');
+      if (lethal) return lethal;
+    }
     let best: Action | null = null;
     let bs = 0;
     for (const a of attacks) {
@@ -112,7 +143,7 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
       const pa = powerOf(c, pm);
       let score = -1;
       if (a.target.kind === 'player') {
-        const breakers = charsOf(c, pm.cards[0], -1).face.abilities.some((x) => x.kind === 'keyword' && x.name === 'breaker') ? 2 : 1;
+        const breakers = breakerCount(c, pm);
         if (oppShield === 0 && oppBlockers.length === 0) score = 100;
         else if (oppBlockers.length === 0) score = 20 + breakers;
         else if (maxBlock < pa) score = 12 + breakers; // ブロックされても負けない

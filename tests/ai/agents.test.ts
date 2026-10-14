@@ -357,3 +357,41 @@ describe('AI同士の対戦(健全性)', () => {
     expect(s.winsA).toBe(0);
   }, 120000);
 });
+
+describe('chooseTurnAction: マナチャージの方針と勝ち確定の攻撃', () => {
+  const choose = (s: GameState): Action => chooseTurnAction(s, legalActions(s, reg), ctx());
+  const defOf = (s: GameState, a: Action) => s.cards[(a as Extract<Action, { type: 'CHARGE_MANA' }>).uid].defId;
+
+  it('マナが十分にあり、手札のどれも払えるなら、マナチャージしない(カードを手札に残す)', () => {
+    const s = buildState({ step: 'mana', p0: { hand: ['アクアン'], mana: mana(7) } });
+    expect(choose(s)).toEqual({ type: 'SKIP_MANA' });
+  });
+  it('マナが十分でも、手札に払えないカードがあればマナチャージする', () => {
+    const s = buildState({ step: 'mana', p0: { hand: ['九番龍 ジゴクバンカー'], mana: mana(7) } });
+    expect(choose(s).type).toBe('CHARGE_MANA');
+  });
+  it('マナが少ないうちは、手札が安くてもマナチャージする', () => {
+    const s = buildState({ step: 'mana', p0: { hand: ['アクアン'], mana: mana(3) } });
+    expect(choose(s).type).toBe('CHARGE_MANA');
+  });
+  it('S・トリガーの呪文は、盤面に残るクリーチャーより先にマナへ置く', () => {
+    const s = buildState({ step: 'mana', p0: { hand: ['アクアン', 'ドラゴンズ・サイン'], mana: mana(3) } });
+    expect(defOf(s, choose(s))).toBe('promoy21-048');
+  });
+  it('ブロッカーに止められない攻撃だけでシールドを割り切れるなら、弱いクリーチャーでも攻撃する', () => {
+    const s = buildState({
+      p0: { battle: ['アクアン', 'アクアン', 'アクアン'] },
+      p1: { battle: ['ティンパニ=シンバリー'], shield: 1 },
+    });
+    const a = choose(s);
+    expect(a.type).toBe('ATTACK');
+    expect((a as Extract<Action, { type: 'ATTACK' }>).target).toEqual({ kind: 'player' });
+  });
+  it('割り切れないなら、ブロッカーより弱いクリーチャーで攻撃しない', () => {
+    const s = buildState({
+      p0: { battle: ['アクアン', 'アクアン', 'アクアン'] },
+      p1: { battle: ['ティンパニ=シンバリー'], shield: 2 },
+    });
+    expect(choose(s)).toEqual({ type: 'END_TURN' });
+  });
+});

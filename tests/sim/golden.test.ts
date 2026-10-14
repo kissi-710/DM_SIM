@@ -42,19 +42,19 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
   });
   it('バッチ対戦: ルールベース同士 60試合', () => {
     expect(match({ kind: 'rule' }, { kind: 'rule' }, 60, 1)).toEqual({
-      winsA: 45,
-      winsB: 15,
+      winsA: 47,
+      winsB: 13,
       draws: 0,
-      avgTurns: 13.15,
-      reasons: { ダイレクトアタック: 58, 山札切れ: 2 },
+      avgTurns: 12.116666666666667,
+      reasons: { ダイレクトアタック: 60 },
     });
   });
   it('バッチ対戦: MCTS(20反復) 対 ルールベース 6試合', () => {
     expect(match({ kind: 'mcts', iterations: 20, ms: 100000 }, { kind: 'rule' }, 6, 1)).toEqual({
-      winsA: 4,
-      winsB: 2,
+      winsA: 5,
+      winsB: 1,
       draws: 0,
-      avgTurns: 14.166666666666666,
+      avgTurns: 11.666666666666666,
       reasons: { ダイレクトアタック: 6 },
     });
   });
@@ -63,13 +63,13 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
       const r = playGameSync(reg, [makeAgent({ kind }), makeAgent({ kind })], { decks: [A, B], seed });
       return [r.actions.length, hash(JSON.stringify(r.actions)), r.winner, r.turns, r.state.seq, r.state.rng, hash(JSON.stringify(r.state.cards))];
     };
-    expect(play('rule', 5)).toEqual([87, 113457387, 1, 16, 521, -455164674, 2751677596]);
+    expect(play('rule', 5)).toEqual([70, 4240761097, 1, 14, 431, 1376401139, 1526906329]);
     expect(play('random', 9)).toEqual([139, 2008849440, 0, 34, 688, 1568224734, 3288983309]);
   });
   it('確率調査: 方針プレイと探索(40試行)', () => {
     const r = runProbability(reg, { deck: A, first: 0, goal, trials: 40, seed: 1, maxNodes: 3000 });
     expect(r.policy.achieved).toBe(13);
-    expect(r.policy.byTurn).toEqual([0, 0, 0, 0.075, 0.15, 0.25, 0.325]);
+    expect(r.policy.byTurn).toEqual([0, 0, 0, 0.1, 0.175, 0.25, 0.325]);
     expect(r.search?.achieved).toBe(16);
     expect(r.search?.unknown).toBe(24);
     expect(r.search?.avgNodes).toBe(2000.275);
