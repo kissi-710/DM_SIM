@@ -61,7 +61,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 | `npm run aibench -- --games 100 --iterations 120 --seed 1` | AI の強さの測定(モンテカルロ 対 ルールベース、勝率と95%区間。`--w hand=1.2 --prior 0` などで調整) |
 | `npm run tune-eval -- --games 100 --rounds 2` | 評価関数の重みの座標降下(自己対戦。時間がかかる) |
 | `npm run build:wasm` | Rust 版エンジンを WASM にビルドして `src/wasm/dmsim.wasm` に置く(要 Rust。あれば AI の探索が自動で使う。無ければ TS 版) |
-| `cargo test --release`(`rust/` で) | Rust 版と TS 版の差分テスト(先に `npx tsx scripts/dump-fixtures.ts rust/fixtures/games.json`) |
+| `npm run test:rust` | Rust 版と TS 版の差分テスト。正解データ(`rust/fixtures/games.json`)を TS 版で作り直してから `cargo test --release` を実行する。ルール・カード・プレイアウトを変えたら必ず回す(フィクスチャが無いとテストはスキップされる) |
 
 注意: この環境(Windows)では `python` / `python3` は Microsoft Store のスタブで動かない。Python が必要なときは `py` で実行する(例: `py script.py`)。
 

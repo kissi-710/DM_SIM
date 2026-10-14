@@ -18,7 +18,8 @@
     "prob": "tsx src/cli/prob.ts",
     "aibench": "tsx src/cli/aibench.ts",
     "tune-eval": "tsx src/cli/tuneEval.ts",
-    "build:wasm": "node scripts/build-wasm.mjs"
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "test:rust": "node scripts/test-rust.mjs"
   },
   "dependencies": {
     "react": "^19.3.0",
