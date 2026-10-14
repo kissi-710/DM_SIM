@@ -3,6 +3,7 @@ import { hasKeyword, powerOf, charsOf } from '../engine/derive';
 import { mkCtx } from '../engine/state';
 import type { Registry } from '../engine/registry';
 import type { GameState, PlayerId } from '../engine/types';
+import { modelProb, type ValueModel } from './valueModel';
 
 /** 評価の重み(自己対戦で調整できるように、外から差し替えられる。JSON 化できる) */
 export interface EvalWeights {
@@ -24,6 +25,11 @@ export interface EvalWeights {
   deckOut: number;
   /** 評価差を 0〜1 の報酬に写す尺度(tanh(差/scale)) */
   scale: number;
+}
+
+/** プレイアウトの報酬に使う設定: 評価の重み + (あれば)学習した価値関数。model があれば、打ち切りの報酬は評価の重みではなく、これが返す勝つ確率になる */
+export interface RewardWeights extends EvalWeights {
+  model?: ValueModel;
 }
 
 /**
@@ -48,7 +54,7 @@ export const DEFAULT_WEIGHTS: EvalWeights = {
 /** ルールベース(L1)の1手先の評価で使う重み。L1 は、この重みで調整されている(探索の既定とは別) */
 export const RULE_WEIGHTS: EvalWeights = { ...DEFAULT_WEIGHTS, mana: 1.1 };
 
-export const withWeights = (w?: Partial<EvalWeights>): EvalWeights => (w ? { ...DEFAULT_WEIGHTS, ...w } : DEFAULT_WEIGHTS);
+export const withWeights = (w?: Partial<RewardWeights>): RewardWeights => (w ? { ...DEFAULT_WEIGHTS, ...w } : DEFAULT_WEIGHTS);
 
 /** プレイヤー p の盤面の価値 */
 function side(s: GameState, reg: Registry, p: PlayerId, w: EvalWeights): number {
@@ -85,11 +91,12 @@ export function evaluate(s: GameState, reg: Registry, me: PlayerId, w: EvalWeigh
 }
 
 /** 評価を 0〜1 の報酬に写す(勝敗は 1/0/0.5) */
-export function reward(s: GameState, reg: Registry, me: PlayerId, w: EvalWeights = DEFAULT_WEIGHTS): number {
+export function reward(s: GameState, reg: Registry, me: PlayerId, w: RewardWeights = DEFAULT_WEIGHTS): number {
   if (s.winner !== null) {
     if (s.winner === 'draw') return 0.5;
     return s.winner === me ? 1 : 0;
   }
+  if (w.model) return modelProb(w.model, s, reg, me);
   const e = evaluate(s, reg, me, w);
   return 0.5 + 0.5 * Math.tanh(e / w.scale);
 }

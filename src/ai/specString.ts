@@ -2,8 +2,10 @@
 //   rule / random
 //   mcts:iter=120,horizon=3,prior=0.005,w.mana=3.5
 // キー: iter(反復回数) ms(最大思考時間) horizon(先読みターン数。99でゲーム終了まで) prior(L1の手への上乗せ) w.<重み名>
+//       value=<パス>(学習した価値関数の JSON。trainValue の出力。Node の CLI 専用)
+import { readFileSync } from 'node:fs';
 import type { AgentKind, AgentSpec, AiTuning } from './index';
-import type { EvalWeights } from './eval';
+import type { RewardWeights } from './eval';
 
 const KINDS: AgentKind[] = ['random', 'rule', 'mcts', 'pass'];
 
@@ -13,9 +15,17 @@ export function parseSpec(text: string): AgentSpec {
   const spec: AgentSpec = { kind: kindRaw as AgentKind };
   const tuning: AiTuning = {};
   const weights: Record<string, number> = {};
+  let modelPath: string | undefined;
   for (const kv of rest.split(',').filter((x) => x.trim() !== '')) {
     const [k, v] = kv.split('=');
     const n = Number(v);
+    if (k === 'value') {
+      if (!v) throw new Error('value= にはモデルの JSON のパスを指定してください');
+      const { meta: _meta, ...model } = JSON.parse(readFileSync(v, 'utf8'));
+      (tuning.weights ??= {}).model = model;
+      modelPath = v;
+      continue;
+    }
     if (!k || v === undefined || v === '') throw new Error(`設定は キー=値 の形で書いてください: ${kv}`);
     if (k === 'iter' || k === 'ms' || k === 'horizon' || k === 'prior' || k.startsWith('w.')) {
       if (!Number.isFinite(n)) throw new Error(`${k} は数で指定してください(指定値: ${v})`);
@@ -27,7 +37,8 @@ export function parseSpec(text: string): AgentSpec {
     else if (k.startsWith('w.')) weights[k.slice(2)] = n;
     else throw new Error(`未知の設定キー: ${k}`);
   }
-  if (Object.keys(weights).length) tuning.weights = weights as Partial<EvalWeights>;
+  if (Object.keys(weights).length) tuning.weights = { ...tuning.weights, ...(weights as Partial<RewardWeights>) };
+  if (modelPath) (tuning as any).modelPath = modelPath;
   if (Object.keys(tuning).length) spec.tuning = tuning;
   return spec;
 }
@@ -39,6 +50,7 @@ export function specLabel(spec: AgentSpec): string {
   const t = spec.tuning;
   if (t?.horizonTurns !== undefined) parts.push(`horizon=${t.horizonTurns}`);
   if (t?.priorBonus !== undefined) parts.push(`prior=${t.priorBonus}`);
-  for (const [k, v] of Object.entries(t?.weights ?? {})) parts.push(`w.${k}=${v}`);
+  for (const [k, v] of Object.entries(t?.weights ?? {})) if (k !== 'model') parts.push(`w.${k}=${v}`);
+  if ((t as any)?.modelPath) parts.push(`value=${(t as any).modelPath}`);
   return parts.length ? `${spec.kind}:${parts.join(',')}` : spec.kind;
 }

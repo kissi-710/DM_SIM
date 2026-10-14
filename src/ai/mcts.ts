@@ -9,7 +9,7 @@ import type { Registry } from '../engine/registry';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { FAIR, type InfoPolicy } from '../engine/view';
 import { determinize } from './determinize';
-import { reward, withWeights, type EvalWeights } from './eval';
+import { reward, withWeights, type RewardWeights } from './eval';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
 import type { Agent, AgentCtx } from './types';
 
@@ -25,7 +25,7 @@ export interface MctsOpts {
   /** L1 の手に与える事前の上乗せ(報酬の単位) */
   priorBonus?: number;
   /** 評価関数の重み(差し替える分だけ指定) */
-  weights?: Partial<EvalWeights>;
+  weights?: Partial<RewardWeights>;
   /** 1回の探索が終わるたびに呼ばれる(計測・表示用) */
   onSearch?: (info: SearchInfo) => void;
 }
@@ -67,7 +67,7 @@ export function rolloutPick(s: GameState, legal: Action[], reg: Registry, rand: 
 export const MAX_ROLLOUT_STEPS = 4000;
 
 /** 時間主導の探索で、反復(プレイアウト)の絶対上限(無限ループ防止) */
-const HARD_MAX_ITERATIONS = 100000;
+export const HARD_MAX_ITERATIONS = 100000;
 /** 手の比較に必要な最低ラウンド数(これ未満では判定しない) */
 const MIN_ROUNDS = 8;
 
@@ -86,7 +86,7 @@ export function pairedVerdict(n: number, dsum: number, dsq: number, bonusGap: nu
 }
 
 /** プレイアウトの乱数(1ラウンド内の全候補手で同じ列にするため、シードから作る) */
-function seededRand(seed: number): () => number {
+export function seededRand(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -97,7 +97,7 @@ function seededRand(seed: number): () => number {
   };
 }
 
-function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number, w: EvalWeights): number {
+export function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number, w: RewardWeights): number {
   let s = start;
   const endTurn = s.turn + horizon;
   let guard = 0;
@@ -127,7 +127,7 @@ export interface SearchEnv {
   candidateDecks?: string[][];
   horizon: number;
   /** 評価関数の重み(既定との差分) */
-  weights?: Partial<EvalWeights>;
+  weights?: Partial<RewardWeights>;
 }
 
 /** ラウンドの評価を差し替える関数(Rust 版エンジン(WASM)など)。TS 版と同じ入力・同じ結果を返す */

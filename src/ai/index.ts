@@ -1,6 +1,6 @@
 // エージェントの生成(設定 → Agent)。UI・CLI・Worker から共通で使う。
 import type { InfoPolicy } from '../engine/view';
-import type { EvalWeights } from './eval';
+import type { RewardWeights } from './eval';
 import { makeMcts } from './mcts';
 import { randomAgent } from './random';
 import { makeRuleBased } from './rulebased';
@@ -25,7 +25,7 @@ export interface AiTuning {
   /** L1 の手に与える事前の上乗せ */
   priorBonus?: number;
   /** 評価関数の重み(差し替える分だけ) */
-  weights?: Partial<EvalWeights>;
+  weights?: Partial<RewardWeights>;
 }
 
 export const AGENT_LABEL: Record<AgentKind, string> = {
