@@ -8,10 +8,13 @@ import { mulberry } from '../engine/prng';
 import { decide, type DecideReq } from './decide';
 import { planSearch, runSearchParallel, type RoundDispatch, type SearchEnv, type SearchInfo } from './mcts';
 import { makeRuleBased } from './rulebased';
+import { treeOptsOf } from './index';
 
 /** 並列に探索できる要求か(モンテカルロで、選択肢が2つ以上) */
 export function canParallelize(db: CardDB | Registry, req: DecideReq): boolean {
   if (req.spec.kind !== 'mcts' || !req.state.pending) return false;
+  // 標準の木(tree)は反復が前の反復に依存するので、並列にしない(根の並列は ptree のラウンド評価で行う)
+  if (req.spec.tuning?.algo === 'tree') return false;
   return legalActions(req.state, registryOf(db)).length > 1;
 }
 
@@ -35,7 +38,7 @@ export async function decideParallel(
     view,
     legal,
     { rand: mulberry(req.seed), reg, budget: req.budget },
-    { policy, iterations: req.spec.iterations, ms: req.spec.ms, candidateDecks: req.spec.candidateDecks, ...req.spec.tuning },
+    { policy, iterations: req.spec.iterations, ms: req.spec.ms, candidateDecks: req.spec.candidateDecks, ...req.spec.tuning, tree: treeOptsOf(req.spec.tuning) },
     l1,
   );
   io.begin(plan.env);

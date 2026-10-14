@@ -12,6 +12,7 @@ import { FAIR, toPlayerView } from '../src/engine/view';
 import { mulberry } from '../src/sim/playGame';
 import { evalRound, roundSeed, type SearchEnv } from '../src/ai/mcts';
 import { BASE_FEATURES, type ValueModel } from '../src/ai/valueModel';
+import { PairedTree, treeSearch } from '../src/ai/tree';
 
 const out = process.argv[2] ?? 'rust/fixtures/games.json';
 const reg = loadRegistry(CARD_DB);
@@ -86,6 +87,35 @@ for (const g of games) {
   }
   if (rounds.length >= 90) break;
 }
+// 木の探索の正解: 同じ入力・同じ種・同じ反復数で、根の手ごとの訪問回数と報酬の合計
+const trees: { env: SearchEnv; base: number; iterations: number; c: number; maxDepth: number; visits: number[]; sums: number[] }[] = [];
+for (let i = 0; i < rounds.length && trees.length < 24; i += 3) {
+  const env = rounds[i].env;
+  const c = trees.length % 2 === 0 ? 0.3 : 0.8;
+  const maxDepth = trees.length % 3 === 0 ? 4 : 24;
+  const base = 1000 + i;
+  const iterations = 60;
+  const st = treeSearch(env, reg, base, iterations, { c, maxDepth });
+  trees.push({ env, base, iterations, c, maxDepth, visits: st.visits, sums: st.sums });
+}
+// ペア比較の木の正解: 同じ木を保ったまま、数ラウンドを順に評価した報酬の行(alive は、2ラウンド目から減らす)
+const pairedTrees: { env: SearchEnv; c: number; maxDepth: number; seeds: number[]; alives: number[][]; rows: (number | null)[][] }[] = [];
+for (let i = 1; i < rounds.length && pairedTrees.length < 16; i += 4) {
+  const env = rounds[i].env;
+  const c = pairedTrees.length % 2 === 0 ? 0.3 : 0.6;
+  const maxDepth = 24;
+  const tree = new PairedTree(env, reg, { c, maxDepth });
+  const seeds = [0, 1, 2, 3, 4, 5].map((r) => roundSeed(500 + i, r));
+  let alive = env.legal.map((_, k) => k);
+  const alives: number[][] = [];
+  const rows: (number | null)[][] = [];
+  seeds.forEach((sd, r) => {
+    if (r === 3 && alive.length > 2) alive = alive.slice(0, Math.ceil(alive.length / 2));
+    alives.push(alive.slice());
+    rows.push(tree.round(sd, alive).map((x) => (Number.isNaN(x) ? null : x)));
+  });
+  pairedTrees.push({ env, c, maxDepth, seeds, alives, rows });
+}
 const defs = plain(reg.defs);
-writeFileSync(out, JSON.stringify({ defs, games, rounds }));
+writeFileSync(out, JSON.stringify({ defs, games, rounds, trees, pairedTrees }));
 console.log('games', games.map((g) => g.actions.length).join(','), 'rounds', rounds.length);

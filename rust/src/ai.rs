@@ -901,3 +901,226 @@ pub fn eval_round(reg: &Registry, env: &SearchEnv, seed: u32, alive: &[usize]) -
     }
     r
 }
+
+// ───────────────────────── ターン内の行動列を木にする探索 ─────────────────────────
+// src/ai/tree.ts の treeSearch に対応する(決定化つき UCT)。乱数の使い方・選び方は TS 版と同じ。
+
+/// ラウンドの種(src/ai/mcts.ts の roundSeed と同じ)
+pub fn round_seed(base: u32, r: u32) -> u32 {
+    let mut x = base ^ (r.wrapping_add(1)).wrapping_mul(0x9e3779b1);
+    x = (x ^ (x >> 16)).wrapping_mul(0x85ebca6b);
+    x = (x ^ (x >> 13)).wrapping_mul(0xc2b2ae35);
+    x ^ (x >> 16)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TreeOpts {
+    pub c: f64,
+    pub max_depth: i32,
+}
+
+struct TNode {
+    acts: Vec<Action>,
+    n: Vec<u32>,
+    w: Vec<f64>,
+    avail: Vec<u32>,
+    kids: Vec<Option<usize>>,
+}
+
+impl TNode {
+    fn new() -> TNode {
+        TNode { acts: Vec::new(), n: Vec::new(), w: Vec::new(), avail: Vec::new(), kids: Vec::new() }
+    }
+}
+
+/// 木(続きから反復できる)。根は nodes[0] で、根の手は env.legal の並び
+pub struct Tree {
+    nodes: Vec<TNode>,
+    pub done: u32,
+}
+
+impl Tree {
+    pub fn new(env: &SearchEnv) -> Tree {
+        let mut root = TNode::new();
+        for a in &env.legal {
+            root.acts.push(a.clone());
+            root.n.push(0);
+            root.w.push(0.0);
+            root.avail.push(0);
+            root.kids.push(None);
+        }
+        Tree { nodes: vec![root], done: 0 }
+    }
+
+    /// 根の手ごとの (訪問回数, 報酬の合計)
+    pub fn root_stats(&self) -> (Vec<u32>, Vec<f64>) {
+        (self.nodes[0].n.clone(), self.nodes[0].w.clone())
+    }
+
+    /// 木を下る(src/ai/tree.ts の descend と同じ)。stv の状態から始め、止まった時の状態を stv に残す。失敗(エンジンの例外)なら true
+    fn descend(&mut self, reg: &Registry, env: &SearchEnv, o: TreeOpts, stv: &mut Option<State>, start: usize, start_depth: i32, path: &mut Vec<(usize, usize)>) -> bool {
+        let me = env.me;
+        let root_turn = env.view.turn;
+        let mut node = start;
+        let mut depth = start_depth;
+        loop {
+            let st = stv.as_ref().unwrap();
+            let (why, ok) = match &st.pending {
+                Some(p) => (p.why, p.player == me),
+                None => break,
+            };
+            if st.winner != Winner::None || !ok || st.turn != root_turn || depth >= o.max_depth {
+                break;
+            }
+            let legal: Vec<Action> = if depth == 0 { env.legal.clone() } else { legal_actions(st, reg) };
+            if legal.is_empty() {
+                break;
+            }
+            if legal.len() == 1 {
+                match step_owned(reg, stv.take().unwrap(), &legal[0]) {
+                    Ok(s2) => *stv = Some(s2),
+                    Err(_) => return true,
+                }
+                depth += 1;
+                continue;
+            }
+            let nd = &mut self.nodes[node];
+            let idxs: Vec<Option<usize>> = legal.iter().map(|a| nd.acts.iter().position(|x| x == a)).collect();
+            for i in idxs.iter().flatten() {
+                nd.avail[*i] += 1;
+            }
+            let untried: Vec<usize> = (0..legal.len())
+                .filter(|&j| match idxs[j] {
+                    None => true,
+                    Some(i) => nd.n[i] == 0,
+                })
+                .collect();
+            let expand = !untried.is_empty();
+            let chosen: usize = if expand {
+                let mut c = untried[0];
+                if why == Why::TurnAction {
+                    let j = choose_turn_action(Env { s: st, reg }, &legal, me);
+                    if untried.contains(&j) {
+                        c = j;
+                    }
+                }
+                c
+            } else {
+                let mut best = 0usize;
+                let mut bs = f64::NEG_INFINITY;
+                for j in 0..legal.len() {
+                    let i = idxs[j].unwrap();
+                    let s = nd.w[i] / nd.n[i] as f64 + o.c * ((nd.avail[i].max(1) as f64).ln() / nd.n[i] as f64).sqrt();
+                    if s > bs {
+                        bs = s;
+                        best = j;
+                    }
+                }
+                best
+            };
+            let ci = match idxs[chosen] {
+                Some(i) => i,
+                None => {
+                    nd.acts.push(legal[chosen].clone());
+                    nd.n.push(0);
+                    nd.w.push(0.0);
+                    nd.avail.push(1);
+                    nd.kids.push(None);
+                    nd.acts.len() - 1
+                }
+            };
+            path.push((node, ci));
+            match step_owned(reg, stv.take().unwrap(), &legal[chosen]) {
+                Ok(s2) => *stv = Some(s2),
+                Err(_) => return true,
+            }
+            depth += 1;
+            if expand {
+                break;
+            }
+            node = match self.nodes[node].kids[ci] {
+                Some(k) => k,
+                None => {
+                    self.nodes.push(TNode::new());
+                    let k = self.nodes.len() - 1;
+                    self.nodes[node].kids[ci] = Some(k);
+                    k
+                }
+            };
+        }
+        false
+    }
+
+    /// 反復を done から target まで行う(標準の ISMCTS)
+    pub fn run(&mut self, reg: &Registry, env: &SearchEnv, base: u32, target: u32, o: TreeOpts) {
+        let q_def = reg.def_index("?").unwrap_or(u16::MAX);
+        let end_turn = env.view.turn + env.horizon;
+        while self.done < target {
+            let it = self.done;
+            self.done += 1;
+            let mut rr = SeededRand::new(round_seed(base, it));
+            let det = determinize(reg, env, &mut rr, q_def);
+            let rollout_seed = (rr.next() * 2147483647.0).floor() as u32;
+            let mut stv: Option<State> = Some(det);
+            let mut path: Vec<(usize, usize)> = Vec::new();
+            if self.descend(reg, env, o, &mut stv, 0, 0, &mut path) {
+                continue;
+            }
+            let st = stv.unwrap();
+            let mut rand = SeededRand::new(rollout_seed);
+            let hz = (end_turn - st.turn).max(0);
+            if let Ok(r) = rollout(reg, st, env.me, &mut rand, hz, &env.weights) {
+                for (nd, i) in path {
+                    self.nodes[nd].n[i] += 1;
+                    self.nodes[nd].w[i] += r;
+                }
+            }
+        }
+    }
+
+    /// ペア比較の1ラウンド(src/ai/tree.ts の PairedTree.round)。手ごとの報酬(alive でない手・失敗した手は NaN)
+    pub fn paired_round(&mut self, reg: &Registry, env: &SearchEnv, seed: u32, alive: &[usize], o: TreeOpts) -> Vec<f64> {
+        let q_def = reg.def_index("?").unwrap_or(u16::MAX);
+        let end_turn = env.view.turn + env.horizon;
+        let mut rr = SeededRand::new(seed);
+        let det = determinize(reg, env, &mut rr, q_def);
+        let rollout_seed = (rr.next() * 2147483647.0).floor() as u32;
+        let mut out = vec![f64::NAN; env.legal.len()];
+        for &k in alive {
+            if k >= env.legal.len() {
+                continue;
+            }
+            let child = match self.nodes[0].kids[k] {
+                Some(c) => c,
+                None => {
+                    self.nodes.push(TNode::new());
+                    let c = self.nodes.len() - 1;
+                    self.nodes[0].kids[k] = Some(c);
+                    c
+                }
+            };
+            let first = match step_owned(reg, det.clone(), &env.legal[k]) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let mut stv: Option<State> = Some(first);
+            let mut path: Vec<(usize, usize)> = Vec::new();
+            if self.descend(reg, env, o, &mut stv, child, 1, &mut path) {
+                continue;
+            }
+            let st = stv.unwrap();
+            let mut rand = SeededRand::new(rollout_seed);
+            let hz = (end_turn - st.turn).max(0);
+            if let Ok(r) = rollout(reg, st, env.me, &mut rand, hz, &env.weights) {
+                for (nd, i) in path {
+                    self.nodes[nd].n[i] += 1;
+                    self.nodes[nd].w[i] += r;
+                }
+                self.nodes[0].n[k] += 1;
+                self.nodes[0].w[k] += r;
+                out[k] = r;
+            }
+        }
+        out
+    }
+}

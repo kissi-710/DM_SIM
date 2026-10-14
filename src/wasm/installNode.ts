@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { CARD_DB } from '../cards';
 import { setNativeRounds } from '../ai/mcts';
+import { setNativePairedRound, setNativeTree } from '../ai/tree';
 import { loadRegistry } from '../engine/registry';
 import { DmEngine } from './dmEngine';
 
@@ -24,6 +25,8 @@ export function installNativeFromEnv(): boolean {
     const reg = loadRegistry(CARD_DB);
     const eng = DmEngine.createSync(readFileSync(path), JSON.stringify(reg.defs));
     setNativeRounds(eng.asNativeRounds());
+    setNativeTree(eng.asNativeTree());
+    setNativePairedRound(eng.asNativePairedRound());
     installed = true;
     return true;
   } catch (e) {

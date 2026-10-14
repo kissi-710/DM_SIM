@@ -1,7 +1,7 @@
 // AI の設定を文字列で書く(CLI の測定用): 「種類」または「種類:キー=値,キー=値」。
 //   rule / random
 //   mcts:iter=120,horizon=3,prior=0.005,w.mana=3.5
-// キー: iter(反復回数) ms(最大思考時間) horizon(先読みターン数。99でゲーム終了まで) prior(L1の手への上乗せ) w.<重み名>
+// キー: algo=flat|tree|ptree c(木の探索定数) depth(木の深さ) iter(反復回数) ms(最大思考時間) horizon(先読みターン数。99でゲーム終了まで) prior(L1の手への上乗せ) w.<重み名>
 //       value=<パス>(学習した価値関数の JSON。trainValue の出力。Node の CLI 専用)
 import { readFileSync } from 'node:fs';
 import type { AgentKind, AgentSpec, AiTuning } from './index';
@@ -27,13 +27,20 @@ export function parseSpec(text: string): AgentSpec {
       continue;
     }
     if (!k || v === undefined || v === '') throw new Error(`設定は キー=値 の形で書いてください: ${kv}`);
-    if (k === 'iter' || k === 'ms' || k === 'horizon' || k === 'prior' || k.startsWith('w.')) {
+    if (k === 'algo') {
+      if (v !== 'flat' && v !== 'tree' && v !== 'ptree') throw new Error('algo は flat / tree / ptree のどれかです');
+      tuning.algo = v;
+      continue;
+    }
+    if (k === 'iter' || k === 'ms' || k === 'horizon' || k === 'prior' || k === 'c' || k === 'depth' || k.startsWith('w.')) {
       if (!Number.isFinite(n)) throw new Error(`${k} は数で指定してください(指定値: ${v})`);
     }
     if (k === 'iter') spec.iterations = n;
     else if (k === 'ms') spec.ms = n;
     else if (k === 'horizon') tuning.horizonTurns = n;
     else if (k === 'prior') tuning.priorBonus = n;
+    else if (k === 'c') tuning.treeC = n;
+    else if (k === 'depth') tuning.treeDepth = n;
     else if (k.startsWith('w.')) weights[k.slice(2)] = n;
     else throw new Error(`未知の設定キー: ${k}`);
   }
@@ -50,6 +57,9 @@ export function specLabel(spec: AgentSpec): string {
   const t = spec.tuning;
   if (t?.horizonTurns !== undefined) parts.push(`horizon=${t.horizonTurns}`);
   if (t?.priorBonus !== undefined) parts.push(`prior=${t.priorBonus}`);
+  if (t?.algo !== undefined) parts.push(`algo=${t.algo}`);
+  if (t?.treeC !== undefined) parts.push(`c=${t.treeC}`);
+  if (t?.treeDepth !== undefined) parts.push(`depth=${t.treeDepth}`);
   for (const [k, v] of Object.entries(t?.weights ?? {})) if (k !== 'model') parts.push(`w.${k}=${v}`);
   if ((t as any)?.modelPath) parts.push(`value=${(t as any).modelPath}`);
   return parts.length ? `${spec.kind}:${parts.join(',')}` : spec.kind;

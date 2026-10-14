@@ -2,7 +2,7 @@
 //! 使い方(JS 側): dm_alloc で領域を確保 → UTF-8 の JSON を書く → dm_load_registry / dm_begin → dm_rounds。
 //! 戻り値は 0 が成功、負がエラー(dm_error_ptr / dm_error_len で UTF-8 のメッセージを読む)。
 
-use crate::ai::{eval_round, SearchEnv};
+use crate::ai::{eval_round, SearchEnv, Tree, TreeOpts};
 use crate::json;
 use crate::registry::Registry;
 use std::cell::RefCell;
@@ -10,6 +10,7 @@ use std::cell::RefCell;
 thread_local! {
     static REG: RefCell<Option<Registry>> = const { RefCell::new(None) };
     static ENV: RefCell<Option<SearchEnv>> = const { RefCell::new(None) };
+    static TREE: RefCell<Option<(Tree, TreeOpts)>> = const { RefCell::new(None) };
     static ERR: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
@@ -103,6 +104,71 @@ pub extern "C" fn dm_rounds(seeds_ptr: *const u32, n_seeds: usize, alive_ptr: *c
                 }
             }
             0
+        })
+    })
+}
+
+/// 木の探索を始める(dm_begin で登録した入力に対して、新しい木を作る)。戻り値は根の手の数(>= 0)
+#[no_mangle]
+pub extern "C" fn dm_tree_begin(c: f64, max_depth: i32) -> i32 {
+    ENV.with(|eg| match eg.borrow().as_ref() {
+        Some(env) => {
+            TREE.with(|t| *t.borrow_mut() = Some((Tree::new(env), TreeOpts { c, max_depth })));
+            env.legal.len() as i32
+        }
+        None => set_err("探索の入力がありません".to_string()),
+    })
+}
+
+/// 木の反復を target 回まで進め(続きから)、根の手ごとの訪問回数(u32)と報酬の合計(f64)を書く
+#[no_mangle]
+pub extern "C" fn dm_tree_run(base: u32, target: u32, out_visits: *mut u32, out_sums: *mut f64) -> i32 {
+    REG.with(|rg| {
+        ENV.with(|eg| {
+            TREE.with(|tg| {
+                let rb = rg.borrow();
+                let eb = eg.borrow();
+                let mut tb = tg.borrow_mut();
+                let (reg, env, tree) = match (rb.as_ref(), eb.as_ref(), tb.as_mut()) {
+                    (Some(r), Some(e), Some(t)) => (r, e, t),
+                    _ => return set_err("木の探索が始まっていません".to_string()),
+                };
+                let o = tree.1;
+                tree.0.run(reg, env, base, target, o);
+                let (v, s) = tree.0.root_stats();
+                for k in 0..v.len() {
+                    unsafe {
+                        *out_visits.add(k) = v[k];
+                        *out_sums.add(k) = s[k];
+                    }
+                }
+                0
+            })
+        })
+    })
+}
+
+/// ペア比較の木の1ラウンド(dm_tree_begin の木を使う)。種 seed の世界で、alive の手を評価し、手ごとの報酬(f64)を out に書く(NaN は評価できない手)
+#[no_mangle]
+pub extern "C" fn dm_tree_round(seed: u32, alive_ptr: *const u32, n_alive: usize, out: *mut f64) -> i32 {
+    let alive: Vec<usize> = unsafe { std::slice::from_raw_parts(alive_ptr, n_alive) }.iter().map(|&x| x as usize).collect();
+    REG.with(|rg| {
+        ENV.with(|eg| {
+            TREE.with(|tg| {
+                let rb = rg.borrow();
+                let eb = eg.borrow();
+                let mut tb = tg.borrow_mut();
+                let (reg, env, tree) = match (rb.as_ref(), eb.as_ref(), tb.as_mut()) {
+                    (Some(r), Some(e), Some(t)) => (r, e, t),
+                    _ => return set_err("木の探索が始まっていません".to_string()),
+                };
+                let o = tree.1;
+                let row = tree.0.paired_round(reg, env, seed, &alive, o);
+                for (k, v) in row.iter().enumerate() {
+                    unsafe { *out.add(k) = *v };
+                }
+                0
+            })
         })
     })
 }
