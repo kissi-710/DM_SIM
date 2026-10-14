@@ -83,7 +83,7 @@ export function playActions(c: Ctx, player: PlayerId): Action[] {
         const face = def.faces[fi];
         const info = c.reg.getInfo(def.id, fi);
         if (z !== 'hand' && !info.permissions.some((p) => p.from === z && p.play === (face.type === 'spell' ? 'cast' : 'summon'))) continue;
-        for (const extra of extraVariants(c, player, uid, z, fi)) {
+        for (const extra of extraVariants(c, player, uid, fi)) {
           const plan = planPlay(c, player, uid, z, fi, extra, false);
           if (plan.ok) out.push({ type: 'PLAY_CARD', uid, from: z, face: fi, extra });
         }
@@ -93,7 +93,7 @@ export function playActions(c: Ctx, player: PlayerId): Action[] {
   return out;
 }
 
-function extraVariants(c: Ctx, player: PlayerId, uid: number, from: ZoneName, fi: number): (PlayExtra | undefined)[] {
+function extraVariants(c: Ctx, player: PlayerId, uid: number, fi: number): (PlayExtra | undefined)[] {
   const s = c.s;
   const def = c.reg.defs[s.cards[uid].defId];
   const face = def.faces[fi];
