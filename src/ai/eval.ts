@@ -26,6 +26,11 @@ export interface EvalWeights {
   scale: number;
 }
 
+/**
+ * モンテカルロ探索の既定の重み。自己対戦での調整の結果、マナの価値が大きく上がった(手札1枚より高い)。
+ * マナは「先の手番の選択肢」なので、3ターン先の評価で手札と同じ重さだと、探索が「溜めない」を選んでしまう。
+ * 調整の記録: docs/ai-speed-and-strength.md の §2。
+ */
 export const DEFAULT_WEIGHTS: EvalWeights = {
   creature: 3,
   powerDiv: 2500,
@@ -34,11 +39,14 @@ export const DEFAULT_WEIGHTS: EvalWeights = {
   stack: 0.5,
   shield: 4,
   hand: 1.6,
-  mana: 1.1,
+  mana: 3.5,
   handCost: 0.05,
   deckOut: 3,
   scale: 30,
 };
+
+/** ルールベース(L1)の1手先の評価で使う重み。L1 は、この重みで調整されている(探索の既定とは別) */
+export const RULE_WEIGHTS: EvalWeights = { ...DEFAULT_WEIGHTS, mana: 1.1 };
 
 export const withWeights = (w?: Partial<EvalWeights>): EvalWeights => (w ? { ...DEFAULT_WEIGHTS, ...w } : DEFAULT_WEIGHTS);
 

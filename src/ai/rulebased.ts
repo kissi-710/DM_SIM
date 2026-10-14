@@ -7,7 +7,7 @@ import type { Registry } from '../engine/registry';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { FAIR, type InfoPolicy } from '../engine/view';
 import { determinize } from './determinize';
-import { evaluate } from './eval';
+import { evaluate, RULE_WEIGHTS } from './eval';
 import type { Agent, AgentCtx } from './types';
 
 export interface RuleOpts {
@@ -183,7 +183,7 @@ function chooseAnswer(view: GameState, legal: Action[], ctx: AgentCtx, o: RuleOp
     let v: number;
     try {
       const r = step(det, a, ctx.reg);
-      v = evaluate(r.state, ctx.reg, me);
+      v = evaluate(r.state, ctx.reg, me, RULE_WEIGHTS);
     } catch {
       continue;
     }

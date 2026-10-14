@@ -296,7 +296,7 @@ export function planSearch(
   return {
     env: { view, legal, me: view.pending!.player, policy, candidateDecks: o.candidateDecks, horizon: o.horizonTurns ?? 3, weights: o.weights },
     baseIdx,
-    prior: o.priorBonus ?? 0.08,
+    prior: o.priorBonus ?? 0.005,
     maxIt: timeDriven ? HARD_MAX_ITERATIONS : Math.max(iterations!, n),
     ms,
     timeDriven,
