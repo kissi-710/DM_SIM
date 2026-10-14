@@ -58,6 +58,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 | `npm run build` | 型チェック+ビルド |
 | `npm run batch -- --deckA maruru --deckB zardy --games 1000 --seed 1` | AI同士のバッチ対戦(CLI) |
 | `npm run prob -- ...` | 確率調査・パターン調査(CLI) |
+| `npm run aibench -- --games 100 --iterations 120 --seed 1` | AI の強さの測定(モンテカルロ 対 ルールベース、勝率と95%区間。`--w hand=1.2 --prior 0` などで調整) |
 
 注意: この環境(Windows)では `python` / `python3` は Microsoft Store のスタブで動かない。Python が必要なときは `py` で実行する(例: `py script.py`)。
 
