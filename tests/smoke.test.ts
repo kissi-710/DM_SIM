@@ -5,20 +5,20 @@ import { loadRegistry, validateCardDb } from '../src/engine/registry';
 import type { CardDB } from '../src/engine/types';
 
 describe('スモーク', () => {
-  it('2デッキが40枚で、全カードが読み込める', () => {
-    for (const id of ['maruru', 'zardy']) {
+  it('全デッキが40枚で、全カードが読み込める', () => {
+    for (const id of ['maruru', 'zardy', 'interstellar-maruru']) {
       const d = deckCards(id);
       expect(d.length).toBe(40);
       expect(checkDeck(CARD_DB, d, true).ok).toBe(true);
     }
-    // 28種+ダミー+不明カード('?')
-    expect(Object.keys(loadRegistryFor().defs).length).toBe(30);
+    // 33種+ダミー+不明カード('?')
+    expect(Object.keys(loadRegistryFor().defs).length).toBe(35);
   });
 
-  it('デッキに含まれる異なるカードは28種', () => {
+  it('デッキに含まれる異なるカードは33種', () => {
     const ids = new Set<string>();
     for (const p of DECK_PRESETS) for (const [id] of p.list) ids.add(id);
-    expect(ids.size).toBe(28);
+    expect(ids.size).toBe(33);
     for (const id of ids) expect(CARD_DB[id]).toBeDefined();
   });
 
@@ -36,7 +36,7 @@ describe('カードデータの検証(spec 4.3)', () => {
   const base = (): CardDB => JSON.parse(JSON.stringify(CARD_DB));
   it('正しいデータはエラーなし', () => {
     expect(validateCardDb(CARD_DB)).toEqual([]);
-    expect(CARD_LIST.length).toBe(29);
+    expect(CARD_LIST.length).toBe(34);
   });
   it('未知の原始操作・未知のキーワード・必須項目の不足はエラーになる', () => {
     const a = base();

@@ -810,5 +810,190 @@
         ]
       }
     ]
+  },
+  {
+    "id": "dm24ex4-017",
+    "name": "偽りの月 インターステラ",
+    "text": "ブロッカー。W・ブレイカー。ジャストダイバー。このクリーチャーが出た時、水または闇のコスト7以下の呪文を1枚、自分の手札または墓地からコストを支払わずに唱えてもよい。そうしたら、唱えた後、墓地のかわりに超次元ゾーンに置く。このクリーチャーが攻撃する時、呪文を1枚、自分の超次元ゾーンからコストを支払わずに唱えてもよい。そうしたら、唱えた後、墓地のかわりに山札の下に置く。",
+    "faces": [
+      {
+        "name": "偽りの月 インターステラ", "type": "creature", "cost": 7, "civs": ["water", "darkness"], "power": 9000,
+        "races": ["サイバー・ムーン・コマンド", "アンノウン"],
+        "abilities": [
+          { "kind": "keyword", "name": "blocker" },
+          { "kind": "keyword", "name": "breaker", "n": 2 },
+          { "kind": "keyword", "name": "justDiver" },
+          {
+            "kind": "trigger", "optional": true, "label": "呪文を無料で唱え、超次元ゾーンに置く",
+            "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              {
+                "op": "select", "as": "$s", "prompt": "コストを支払わずに唱える呪文を選んでください",
+                "from": { "zone": ["hand", "grave"], "owner": "self", "type": "spell", "where": { "all": [{ "any": [{ "civ": "water" }, { "civ": "darkness" }] }, { "cost": { "lte": 7 } }] } },
+                "min": 1, "max": 1
+              },
+              { "op": "act", "act": { "castFree": { "sel": "$s", "after": "hyper" } } }
+            ]
+          },
+          {
+            "kind": "trigger", "optional": true, "label": "超次元ゾーンの呪文を無料で唱える",
+            "spec": { "on": { "type": "attackDeclared" }, "subject": "self" },
+            "steps": [
+              {
+                "op": "select", "as": "$s", "prompt": "コストを支払わずに唱える呪文を選んでください",
+                "from": { "zone": "hyper", "owner": "self", "type": "spell" },
+                "min": 1, "max": 1
+              },
+              { "op": "act", "act": { "castFree": { "sel": "$s", "after": "deckBottom" } } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dmrp20-009",
+    "name": "覚醒連結 XXDDZ",
+    "text": "EXライフ。W・ブレイカー。自分のクリーチャーすべてに「スピードアタッカー」と「スレイヤー」を与える。このクリーチャーが攻撃する時、このクリーチャーのEXライフのシールドを墓地に置いてもよい。そうしたら、次の自分のターンのはじめまで、相手は呪文を唱えられない。",
+    "faces": [
+      {
+        "name": "覚醒連結 XXDDZ", "type": "creature", "cost": 7, "civs": ["light", "darkness", "fire"], "power": 8000,
+        "races": ["ディスペクター", "アーマード・ドラゴン", "ワールド・コマンド"],
+        "abilities": [
+          { "kind": "keyword", "name": "exLife" },
+          { "kind": "keyword", "name": "breaker", "n": 2 },
+          { "kind": "static", "mod": { "type": "grantKeyword", "keyword": "speedAttacker", "cond": { "type": "creature" } } },
+          { "kind": "static", "mod": { "type": "grantKeyword", "keyword": "slayer", "cond": { "type": "creature" } } },
+          {
+            "kind": "trigger", "optional": true, "label": "EXライフのシールドを墓地に置き、相手の呪文を封じる",
+            "spec": { "on": { "type": "attackDeclared" }, "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$sh", "from": { "zone": "shield", "owner": "self", "where": { "exShield": true } }, "min": 1, "max": 1 },
+              { "op": "act", "act": { "move": { "sel": "$sh", "to": "grave", "cause": "exSacrifice", "as": "$moved" } } },
+              {
+                "op": "if", "cond": { "nonEmpty": "$moved" },
+                "then": [{ "op": "act", "act": { "playerEffect": { "mod": { "kind": "cannotCast" }, "until": "nextTurnStart" } } }]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dmex12-S20",
+    "name": "轟く革命 レッドギラゾーン",
+    "text": "革命チェンジ[水、火または自然のコマンド]。W・ブレイカー。自分のコマンドすべてに「スピードアタッカー」と「マッハファイター」を与え、それらはブロックされない。ファイナル革命: このクリーチャーが革命チェンジによって出た時、そのターン中に他のファイナル革命を使っていなければ、自分の他のクリーチャーをすべてアンタップする。",
+    "faces": [
+      {
+        "name": "轟く革命 レッドギラゾーン", "type": "creature", "cost": 7, "civs": ["water", "fire", "nature"], "power": 11000,
+        "races": ["ソニック・コマンド・ドラゴン", "革命軍"],
+        "abilities": [
+          {
+            "kind": "keyword", "name": "revolutionChange", "label": "革命チェンジ[水、火または自然のコマンド]",
+            "attacker": { "all": [{ "race": "コマンド" }, { "any": [{ "civ": "water" }, { "civ": "fire" }, { "civ": "nature" }] }] }
+          },
+          { "kind": "keyword", "name": "breaker", "n": 2 },
+          { "kind": "static", "mod": { "type": "grantKeyword", "keyword": "speedAttacker", "cond": { "race": "コマンド" } } },
+          { "kind": "static", "mod": { "type": "grantKeyword", "keyword": "machFighter", "cond": { "race": "コマンド" } } },
+          { "kind": "static", "mod": { "type": "grantKeyword", "keyword": "unblockable", "cond": { "race": "コマンド" } } },
+          {
+            "kind": "trigger", "label": "ファイナル革命: 他のクリーチャーをすべてアンタップ",
+            "spec": {
+              "on": { "type": "entered", "via": "revolutionChange" }, "subject": "self",
+              "ifAtResolve": { "not": { "logged": { "pattern": { "type": "finalRevolution" } } } }
+            },
+            "steps": [
+              { "op": "act", "act": { "log": "finalRevolution" } },
+              { "op": "act", "act": { "untap": { "sel": { "zone": "battle", "owner": "self", "type": "creature", "notSelf": true } } } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm26rp2-S09",
+    "name": "完璧団長 オーパーツ銃",
+    "text": "革命チェンジ[水または闇のパワー8000以上のクリーチャー]。ジャストダイバー。T・ブレイカー。カードがどこからでも相手の墓地に置かれた時、カードを1枚引いてもよい。ファイナル革命: このクリーチャーが革命チェンジによって出た時、そのターン中に他のファイナル革命を使っていなければ、数字を1つ選ぶ。その数字と同じコストの相手のエレメントをすべて破壊する。次の自分のターンのはじめまで、相手はその数字と同じコストのカードを実行できない。",
+    "faces": [
+      {
+        "name": "完璧団長 オーパーツ銃", "type": "creature", "cost": 8, "civs": ["water", "darkness"], "power": 13000,
+        "races": ["クリスタル・コマンド・ドラゴン", "革命軍", "ハムカツ団"],
+        "abilities": [
+          {
+            "kind": "keyword", "name": "revolutionChange", "label": "革命チェンジ[水または闇のパワー8000以上のクリーチャー]",
+            "attacker": { "all": [{ "any": [{ "civ": "water" }, { "civ": "darkness" }] }, { "power": { "gte": 8000 } }] }
+          },
+          { "kind": "keyword", "name": "justDiver" },
+          { "kind": "keyword", "name": "breaker", "n": 3 },
+          {
+            "kind": "trigger", "optional": true, "label": "相手の墓地にカードが置かれた時、1枚引く",
+            "spec": { "on": { "type": "moved", "to": "grave", "owner": "opponent" }, "subject": "any" },
+            "steps": [{ "op": "act", "act": { "draw": 1 } }]
+          },
+          {
+            "kind": "trigger", "label": "ファイナル革命: 数字を選び、そのコストの相手のエレメントを破壊して実行を封じる",
+            "spec": {
+              "on": { "type": "entered", "via": "revolutionChange" }, "subject": "self",
+              "ifAtResolve": { "not": { "logged": { "pattern": { "type": "finalRevolution" } } } }
+            },
+            "steps": [
+              { "op": "act", "act": { "log": "finalRevolution" } },
+              {
+                "op": "modes", "pick": 1,
+                "options": [
+                  { "label": "0", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 0 } } }] },
+                  { "label": "1", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 1 } } }] },
+                  { "label": "2", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 2 } } }] },
+                  { "label": "3", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 3 } } }] },
+                  { "label": "4", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 4 } } }] },
+                  { "label": "5", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 5 } } }] },
+                  { "label": "6", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 6 } } }] },
+                  { "label": "7", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 7 } } }] },
+                  { "label": "8", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 8 } } }] },
+                  { "label": "9", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 9 } } }] },
+                  { "label": "10", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 10 } } }] },
+                  { "label": "11", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 11 } } }] },
+                  { "label": "12", "steps": [{ "op": "act", "act": { "setVar": { "as": "$n", "value": 12 } } }] }
+                ]
+              },
+              {
+                "op": "act",
+                "act": { "move": { "sel": { "zone": "battle", "owner": "opponent", "type": "creature", "where": { "cost": { "eq": { "var": "$n" } } } }, "to": "grave", "cause": "destroy" } }
+              },
+              { "op": "act", "act": { "playerEffect": { "mod": { "kind": "cannotUseCost", "n": { "var": "$n" } }, "until": "nextTurnStart" } } }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm23rp1-070",
+    "name": "配球の超人 / 記録的剛球",
+    "text": "【クリーチャー面】T・ブレイカー。このクリーチャーが出た時、相手のクリーチャーを1体選び、持ち主のマナゾーンに置く。【呪文面】自分の山札の上から1枚をマナゾーンに置く。",
+    "faces": [
+      {
+        "name": "配球の超人", "type": "creature", "cost": 8, "civs": ["nature"], "power": 14000, "races": ["ジャイアント"],
+        "abilities": [
+          { "kind": "keyword", "name": "breaker", "n": 3 },
+          {
+            "kind": "trigger", "label": "相手のクリーチャーをマナゾーンに置く",
+            "spec": { "on": { "type": "entered" }, "subject": "self" },
+            "steps": [
+              { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true }, "min": 1, "max": 1 },
+              { "op": "act", "act": { "move": { "sel": "$t", "to": "mana", "cause": "manaPlace" } } }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "記録的剛球", "type": "spell", "cost": 2, "civs": ["nature"],
+        "abilities": [
+          { "kind": "spell", "steps": [{ "op": "act", "act": { "moveTop": { "n": 1, "to": "mana", "cause": "boost" } } }] }
+        ]
+      }
+    ]
   }
 ]
