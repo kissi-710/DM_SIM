@@ -1,0 +1,19 @@
+[package]
+name = "dmsim"
+version = "0.1.0"
+edition = "2021"
+description = "DM_SIM engine (Rust port of src/engine; differential-tested against the TypeScript engine)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 1
