@@ -53,6 +53,8 @@ export interface Registry {
   defs: CardDB;
   info: Record<string, FaceInfo[]>;
   trigIndex: Map<string, TrigRef[]>;
+  /** イベント種類 → 定義ID → その定義の誘発能力(trigIndex の定義別の索引。collect が全カードを走査する時に使う) */
+  trigByDef: Map<string, Map<string, TrigRef[]>>;
   progs: Map<string, Program>;
   getFace(defId: string, face: number): Face;
   getInfo(defId: string, face: number): FaceInfo;
@@ -416,12 +418,26 @@ export function loadRegistry(origDb: CardDB): Registry {
     });
   }
 
+  const trigByDef = new Map<string, Map<string, TrigRef[]>>();
+  for (const [type, refs] of trigIndex) {
+    const m = new Map<string, TrigRef[]>();
+    for (const r of refs) {
+      const l = m.get(r.defId) ?? [];
+      l.push(r);
+      m.set(r.defId, l);
+    }
+    trigByDef.set(type, m);
+  }
+
   const progs = new Map<string, Program>();
+  // program() の高速な引き当て: 定義ID → (面・能力・任意なし) の配列。文字列キーを毎回作らない
+  const progFast = new Map<string, (Program | undefined)[]>();
   const reg: Registry = {
     db,
     defs,
     info,
     trigIndex,
+    trigByDef,
     progs,
     getFace(defId, face) {
       const d = defs[defId];
@@ -437,6 +453,14 @@ export function loadRegistry(origDb: CardDB): Registry {
       return reg.getFace(ref.defId, ref.face).abilities[ref.idx];
     },
     program(ref, noOptional = false) {
+      let fast = progFast.get(ref.defId);
+      if (!fast) {
+        fast = [];
+        progFast.set(ref.defId, fast);
+      }
+      const fi = (ref.face * 1024 + ref.idx) * 2 + (noOptional ? 1 : 0);
+      const hit = fast[fi];
+      if (hit) return hit;
       const key = `${ref.defId}:${ref.face}:${ref.idx}:${noOptional ? 1 : 0}`;
       let p = progs.get(key);
       if (!p) {
@@ -453,6 +477,7 @@ export function loadRegistry(origDb: CardDB): Registry {
         }
         progs.set(key, p);
       }
+      fast[fi] = p;
       return p;
     },
   };

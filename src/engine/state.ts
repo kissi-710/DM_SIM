@@ -141,7 +141,7 @@ export function snapOf(c: Ctx, uid: number): Snap {
   const inPlay = card.zone === 'battle' || card.zone === 'limbo';
   const def = reg.defs[card.defId];
   const face = inPlay ? def.faces[card.face] ?? def.faces[0] : def.faces[0];
-  const civs = inPlay ? face.civs : unionCivs(def.faces.map((f) => f.civs));
+  const civs = inPlay ? face.civs : unionCivs(def.faces);
   return {
     uid,
     defId: card.defId,
@@ -156,10 +156,17 @@ export function snapOf(c: Ctx, uid: number): Snap {
   };
 }
 
-function unionCivs(lists: string[][]): any[] {
-  const set = new Set<string>();
-  for (const l of lists) for (const c of l) set.add(c);
-  return [...set];
+// 全面の文明の和集合(カード定義ごとに不変なのでキャッシュする。戻り値は書き換えない)
+const unionCache = new WeakMap<object, any[]>();
+function unionCivs(faces: { civs: string[] }[]): any[] {
+  let r = unionCache.get(faces);
+  if (!r) {
+    const set = new Set<string>();
+    for (const f of faces) for (const c of f.civs) set.add(c);
+    r = [...set];
+    unionCache.set(faces, r);
+  }
+  return r;
 }
 
 export function cardsOwnedBy(s: GameState, p: PlayerId): number[] {

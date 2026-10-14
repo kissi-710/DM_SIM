@@ -48,22 +48,21 @@ const WATCH_DEFAULT: ZoneName[] = ['battle'];
 
 /** イベントを監視している能力を探して、待機プールに入れる。 */
 export function collect(c: Ctx, ev: Ev): void {
-  const refs = c.reg.trigIndex.get(ev.type);
-  if (!refs) return;
+  const byDef = c.reg.trigByDef.get(ev.type);
+  if (!byDef) return;
   const s = c.s;
   // 定義IDごとに、そのカードがどこにあるかを走査
-  const defSet = new Set(refs.map((r) => r.defId));
   const batch = s.batchNo;
   for (let uid = 0; uid < s.cards.length; uid++) {
     const card = s.cards[uid];
-    if (!defSet.has(card.defId)) continue;
+    const refs = byDef.get(card.defId);
+    if (!refs) continue;
     // バトルゾーンでは山の一番上だけが能力を持つ
     if (card.zone === 'battle') {
       const pm = permByPid(s, card.pid);
       if (!pm || pm.perm.cards[0] !== uid) continue;
     }
     for (const r of refs) {
-      if (r.defId !== card.defId) continue;
       const spec = r.ability.spec;
       const watch = spec.watch ?? WATCH_DEFAULT;
       if (!watch.includes(card.zone)) continue;

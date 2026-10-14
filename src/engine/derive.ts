@@ -16,10 +16,17 @@ export interface Chars {
   races: string[];
 }
 
+// 全面の文明の和集合(カード定義ごとに不変なのでキャッシュする。戻り値は書き換えない)
+const unionCache = new WeakMap<Face[], Civ[]>();
 function unionCivs(faces: Face[]): Civ[] {
-  const set = new Set<Civ>();
-  for (const f of faces) for (const c of f.civs) set.add(c);
-  return [...set];
+  let r = unionCache.get(faces);
+  if (!r) {
+    const set = new Set<Civ>();
+    for (const f of faces) for (const c of f.civs) set.add(c);
+    r = [...set];
+    unionCache.set(faces, r);
+  }
+  return r;
 }
 
 /** カードの特性。hint=-1 のとき、場以外のカードは面0(文明は全面の和集合)で見る。 */
