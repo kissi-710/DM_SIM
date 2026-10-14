@@ -109,16 +109,20 @@ export function runEffect(c: Ctx, f: EffectFrame): boolean {
       return false;
     }
     case 'eachInit':
+      // 処理する対象は開始時点で確定する(本体でカードを動かしても、後ろの要素を飛ばさない)
+      f.vars[ins.key + ':list'] = varUids(cc, ins.inVar, { ignoreEp: false }).map((u) => ref(c, u));
       f.vars[ins.key] = 0;
       f.pc++;
       return false;
     case 'eachNext': {
-      const list = varUids(cc, ins.inVar, { ignoreEp: false });
-      const i: number = f.vars[ins.key] ?? 0;
+      const list: ObjRef[] = f.vars[ins.key + ':list'] ?? [];
+      let i: number = f.vars[ins.key] ?? 0;
+      // 先の反復で別のゾーンへ動いた(参照が古くなった)ものは処理しない
+      while (i < list.length && c.s.cards[list[i].uid]?.ep !== list[i].ep) i++;
       if (i >= list.length) f.pc = ins.end;
       else {
         f.vars[ins.key] = i + 1;
-        f.vars[ins.as] = ref(c, list[i]);
+        f.vars[ins.as] = list[i];
         f.pc++;
       }
       return false;

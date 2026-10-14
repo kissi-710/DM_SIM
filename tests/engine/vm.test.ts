@@ -557,8 +557,7 @@ describe('each(選んだものを1つずつ処理する)', () => {
     a.play('s-each-tap');
     expect(a.s.pending?.why).toBe('turnAction');
   });
-  // 既知の不具合: 本体でカードを動かすと、リストの再計算で後ろの要素を飛ばす(vm.ts の eachNext)。修正したら .fails を外す。
-  it.fails('それぞれに対して本体を実行する(本体でカードを動かしても、全員が処理される)', () => {
+  it('それぞれに対して本体を実行する(本体でカードを動かしても、全員が処理される)', () => {
     const a = sim({ p0: G({ hand: ['s-each-move', 'vanilla', 'cheap2', 'big'] }) });
     a.play('s-each-move');
     a.pick('cheap2', 'big');
