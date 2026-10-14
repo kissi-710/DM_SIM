@@ -61,6 +61,7 @@ describe('probToCsv', () => {
     );
     expect(csv).toContain('探索による上限(達成率),0.5');
     expect(csv).toContain('探索: 未判定の試行,2');
+    expect(csv).toContain('探索による上限(未判定を含めた最大値),0.7');
     expect(csv).toContain('超幾何分布の厳密値,0.25');
   });
 });
@@ -87,10 +88,15 @@ describe('formatProb', () => {
     expect(t).toContain('3ターン目まで 40.0%');
     expect(t).not.toContain('0ターン目まで');
   });
+  it('未判定がなければ、探索の上限に範囲(最大値)は付かない', () => {
+    const t = formatProb(prob({ search: { achieved: 5, unknown: 0, judged: 10, rate: 0.5, ci95: [0.2, 0.8], avgNodes: 10, maxRate: 0.5 } }));
+    expect(t).toContain('探索による上限: 50.0%(95%信頼区間');
+    expect(t).not.toContain('50.0%〜');
+  });
   it('探索・厳密値の行は、あるときだけ出る', () => {
     expect(formatProb(prob())).not.toContain('探索による上限');
     const t = formatProb(prob({ search: { achieved: 5, unknown: 2, judged: 8, rate: 0.5, ci95: [0.1, 0.9], avgNodes: 10, maxRate: 0.7 }, exact: { value: 0.123, note: 'N' } }));
-    expect(t).toContain('探索による上限: 50.0%');
+    expect(t).toContain('探索による上限: 50.0%〜70.0%');
     expect(t).toContain('未判定 2 回');
     expect(t).toContain('厳密値(超幾何分布): 12.30% … N');
   });

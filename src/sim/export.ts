@@ -17,6 +17,7 @@ export function probToCsv(r: ProbResult): string {
   rows.push(['95%信頼区間(上)', r.policy.ci95[1]]);
   if (r.search) {
     rows.push(['探索による上限(達成率)', r.search.rate]);
+    rows.push(['探索による上限(未判定を含めた最大値)', r.search.maxRate]);
     rows.push(['探索: 未判定の試行', r.search.unknown]);
   }
   if (r.exact) rows.push(['超幾何分布の厳密値', r.exact.value]);
@@ -37,7 +38,7 @@ export function formatProb(r: ProbResult): string {
   lines.push(`方針プレイ: ${pct(r.policy.rate)}(95%信頼区間 ${pct(r.policy.ci95[0])} 〜 ${pct(r.policy.ci95[1])})`);
   if (r.search) {
     lines.push(
-      `探索による上限: ${pct(r.search.rate)}(95%信頼区間 ${pct(r.search.ci95[0])} 〜 ${pct(r.search.ci95[1])}、未判定 ${r.search.unknown} 回、平均 ${r.search.avgNodes.toFixed(0)} ノード)`,
+      `探索による上限: ${pct(r.search.rate)}${r.search.unknown > 0 ? `〜${pct(r.search.maxRate)}` : ''}(95%信頼区間 ${pct(r.search.ci95[0])} 〜 ${pct(r.search.ci95[1])}、未判定 ${r.search.unknown} 回、平均 ${r.search.avgNodes.toFixed(0)} ノード)`,
     );
   }
   if (r.exact) lines.push(`厳密値(超幾何分布): ${pct(r.exact.value, 2)} … ${r.exact.note}`);
