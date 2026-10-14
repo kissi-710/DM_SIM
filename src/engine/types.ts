@@ -286,10 +286,12 @@ export interface Pending {
   prompt?: string;
 }
 
-export class NeedInput extends Error {
-  constructor(public spec: Omit<Pending, 'id'>) {
-    super('NeedInput');
-  }
+/**
+ * 入力待ちを drive に知らせるための制御用の例外。
+ * Error を継承しない(継承するとスタックトレースの生成が高コストで、入力待ちのたびに発生する)。
+ */
+export class NeedInput {
+  constructor(public spec: Omit<Pending, 'id'>) {}
 }
 
 export class RuleLoopError extends Error {}
