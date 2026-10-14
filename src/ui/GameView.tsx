@@ -150,23 +150,24 @@ export function LogPanel({ s, log, me }: { s: GameState; log: Session['log']; me
   );
 }
 
-const SHORTCUTS: Array<[string, string]> = [
-  ['← →', '自分の動かせるカードを順に選ぶ'],
-  ['1 〜 9', '操作パネル・選択肢・候補カードの上から N 番目を選ぶ'],
-  ['Enter', '操作が1つならそれを実行 / 入力パネルの「確定」「はい」'],
-  ['M', 'マナチャージしない / メインを終える'],
-  ['E', 'ターン終了'],
-  ['Z', '1手戻す(練習用設定のとき)'],
-  ['Y / N', 'はい / いいえ'],
-  ['A', '自動で払う・自動で振る・すべて1回ずつ使う'],
-  ['N / R / C', '選ばない / やり直す / キャンセル(ダイアログ内)'],
-  ['Esc', '選択やダイアログを閉じる'],
-  ['L', 'ログ・詳細の表示/非表示'],
-  ['O', '表示設定を開く'],
-  ['Space', '観戦: 一時停止 / 再開'],
-  ['N', '観戦: 一時停止中に1手進める'],
-  ['R', '勝敗が出たら「もう一度」'],
-  ['? / H', 'このヘルプ'],
+/** [場面, キー, 内容]。同じキーでも場面で意味が変わるので、場面ごとに分けて見せる */
+const SHORTCUTS: Array<[string, string, string]> = [
+  ['盤面', '← →', '自分の動かせるカードを順に選ぶ'],
+  ['盤面', '1 〜 9', '選んだカードの操作を、上から N 番目で実行'],
+  ['盤面', 'Enter', '操作が1つならそれを実行'],
+  ['盤面', 'M', 'マナチャージしない / メインを終える'],
+  ['盤面', 'E', 'ターン終了(出せるカードが残っていれば、もう一度押す)'],
+  ['盤面', 'Z', '1手戻す(練習用設定のとき)'],
+  ['入力パネル', 'Y / N', 'はい / いいえ'],
+  ['入力パネル', '1 〜 9', '選択肢・候補カードの上から N 番目を選ぶ'],
+  ['入力パネル', 'Enter', '「確定」「はい」'],
+  ['ダイアログ', 'A / N / R / C', '自動で払う・振る / 選ばない / やり直す / キャンセル'],
+  ['ダイアログ', 'Esc', '閉じる'],
+  ['観戦', 'Space', '一時停止 / 再開'],
+  ['観戦', 'N または →', '一時停止中に1手進める'],
+  ['結果', 'R', '「もう一度」'],
+  ['どこでも', 'L / O', 'ログ・詳細の表示切替 / 表示設定'],
+  ['どこでも', '? / H', 'このヘルプ'],
 ];
 
 const TIPS = [
@@ -190,8 +191,11 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
             <h3>ショートカットキー</h3>
             <table>
               <tbody>
-                {SHORTCUTS.map(([key, what]) => (
-                  <tr key={key}>
+                {SHORTCUTS.map(([scene, key, what]) => (
+                  <tr key={scene + key}>
+                    <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                      {scene}
+                    </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <span className="kbd">{key}</span>
                     </td>
@@ -564,7 +568,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           )}
         </div>
         <button onClick={() => setHelpOpen(true)} title="ショートカットキーと Tips(?)">
-          ?
+          ? ヘルプ
         </button>
         <button className={sideOpen ? 'on' : ''} onClick={() => setSideOpen((v) => !v)} title="カードの詳細・待機中の能力・ログ(L)">
           ログ
