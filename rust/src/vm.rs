@@ -632,6 +632,74 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             c.s.dirty_sba = true;
             Ok(())
         }
+        Act::RevolutionChange => {
+            // 革命チェンジ: 攻撃中のクリーチャーを手札に戻し、このカードを手札から攻撃中のクリーチャーとして出す。
+            let trig = match &f.trigger {
+                Some(t) if t.ty == s::ATTACK_DECLARED => t.clone(),
+                _ => return Ok(()),
+            };
+            let uid = f.source.uid;
+            let (card_ep, card_zone) = {
+                let card = &c.s.cards[uid as usize];
+                (card.ep, card.zone)
+            };
+            if card_ep != f.source.ep || card_zone != Zone::Hand {
+                return Ok(());
+            }
+            let attacker = trig.int(s::ATTACKER).unwrap_or(-1) as i32;
+            let a_card = trig.int(s::CARD).unwrap_or(-1) as i32;
+            match c.s.perm(attacker) {
+                Some(pm) if pm.cards[0] == a_card => {}
+                _ => return Ok(()),
+            }
+            let fr_idx = c.s.cont.iter().rposition(|x| matches!(x, Frame::Proc(p) if p.name == ProcName::Attack && var_get(&p.vars, s::PID).and_then(|v| v.as_i32()) == Some(attacker)));
+            let fr_idx = match fr_idx {
+                Some(i) => i,
+                None => return Ok(()),
+            };
+            let fi = creature_face(c, uid);
+            if fi < 0 {
+                return Ok(());
+            }
+            let res = move_cards(c, &[a_card], &MoveOpts::new(Zone::Hand, s::REVOLUTION_CHANGE))?;
+            if !res.first().map_or(false, |r| r.moved) {
+                return Ok(()); // 置換されて離れなかった(EXライフなど): 入れ替わらない
+            }
+            let mut evs: Vec<Rc<Ev>> = Vec::new();
+            let mut o = MoveOpts::new(Zone::Battle, s::REVOLUTION_CHANGE);
+            o.via = Some(s::REVOLUTION_CHANGE);
+            o.face = Some(fi);
+            o.tapped = true;
+            o.paid = Some(0);
+            enter_battle(c, uid, &o, &mut evs)?;
+            let new_pid = c.s.cards[uid as usize].pid;
+            if let Frame::Proc(p) = &mut c.s.cont[fr_idx] {
+                var_set(&mut p.vars, s::PID, Val::Int(new_pid as i64));
+            }
+            c.s.batch_no += 1;
+            collect_batch(c, &evs);
+            c.s.dirty_sba = true;
+            Ok(())
+        }
+        Act::PlayerEffect { m, until } => {
+            // プレイヤー単位の継続効果(pid = -1)。「相手は〜できない」
+            let em = match m {
+                PlayerMod::CannotCast => EffectMod::CannotCast,
+                PlayerMod::CannotUseCost(x) => {
+                    let cc = cc_of(c.env(), f);
+                    EffectMod::CannotUseCost(eval_expr(&cc, x) as i32)
+                }
+            };
+            let id = c.s.next_id();
+            let until = duration_of(c, f, *until);
+            c.s.effects.push(ContEffect { id, pid: -1, m: em, until, controller: f.controller });
+            Ok(())
+        }
+        Act::Log { ty } => {
+            // 「そのターン中に〜を使っていなければ」の判定用の印
+            emit(c, *ty, vec![(s::OWNER, Val::Int(f.controller as i64)), (s::SOURCE, Val::Int(f.source.uid as i64))]);
+            Ok(())
+        }
         Act::SetVar { as_, value } => {
             var_set(&mut f.vars, *as_, value.clone());
             Ok(())

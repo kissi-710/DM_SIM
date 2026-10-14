@@ -166,6 +166,8 @@ pub enum Kw {
     ShieldTrigger,
     JustDiver,
     ExLife,
+    Slayer,
+    Unblockable,
 }
 
 pub fn has_keyword(e: Env, perm: &Perm, kw: Kw) -> bool {
@@ -178,20 +180,11 @@ pub fn has_keyword(e: Env, perm: &Perm, kw: Kw) -> bool {
         Kw::MachFighter => info.mach_fighter,
         Kw::JustDiver => info.just_diver,
         Kw::ExLife => info.ex_life,
+        Kw::Slayer => info.slayer,
+        Kw::Unblockable => false,
     };
     if yes {
         return true;
-    }
-    let name = match kw {
-        Kw::Blocker => "blocker",
-        Kw::SpeedAttacker => "speedAttacker",
-        Kw::MachFighter => "machFighter",
-        Kw::ShieldTrigger => "shieldTrigger",
-        Kw::JustDiver => "justDiver",
-        Kw::ExLife => "exLife",
-    };
-    if e.s.effects.is_empty() {
-        return false;
     }
     let ks = match kw {
         Kw::Blocker => s::BLOCKER,
@@ -200,9 +193,55 @@ pub fn has_keyword(e: Env, perm: &Perm, kw: Kw) -> bool {
         Kw::ShieldTrigger => s::SHIELD_TRIGGER,
         Kw::JustDiver => s::KW_JUST_DIVER,
         Kw::ExLife => s::EX_LIFE,
+        Kw::Slayer => s::KW_SLAYER,
+        Kw::Unblockable => s::KW_UNBLOCKABLE,
     };
-    let _ = name;
-    e.s.effects.iter().any(|ef| ef.pid == perm.pid && matches!(ef.m, EffectMod::Grant(k) if k == ks))
+    if e.s.effects.iter().any(|ef| ef.pid == perm.pid && matches!(ef.m, EffectMod::Grant(k) if k == ks)) {
+        return true;
+    }
+    // 場の常在型能力(grantKeyword)で与えられているか
+    if matches!(kw, Kw::SpeedAttacker | Kw::MachFighter | Kw::Slayer | Kw::Unblockable) {
+        return granted_by_static(e, perm, ks);
+    }
+    false
+}
+
+fn granted_by_static(e: Env, perm: &Perm, ks: Sym) -> bool {
+    let uid = perm.cards[0];
+    let owner = e.s.cards[uid as usize].owner;
+    let face_of_it = e.s.cards[uid as usize].face;
+    for src in &e.s.players[owner as usize].battle {
+        let su = src.cards[0];
+        let card = &e.s.cards[su as usize];
+        let def = &e.reg.defs[card.def as usize];
+        let fidx = if card.face >= 0 && (card.face as usize) < def.faces.len() { card.face } else { 0 };
+        let info = e.reg.info(card.def, fidx);
+        if info.statics.is_empty() {
+            continue;
+        }
+        let face = &def.faces[fidx as usize];
+        for &si in &info.statics {
+            if let Ability::Static { m: StaticMod::GrantKeyword { keyword, cond }, while_ } = &face.abilities[si as usize] {
+                if *keyword != ks {
+                    continue;
+                }
+                if let Some(w) = while_ {
+                    if !eval_cond(&CC::new(e, owner).with_self(su), w) {
+                        continue;
+                    }
+                }
+                if eval_cond(&CC::new(e, owner).with_self(su).with_it(uid, face_of_it), cond) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// 攻撃クリーチャーが「ブロックされない」か
+pub fn is_unblockable(e: Env, attacker: &Perm) -> bool {
+    has_keyword(e, attacker, Kw::Unblockable)
 }
 
 pub fn breaker_count(e: Env, perm: &Perm) -> i32 {
@@ -537,6 +576,10 @@ pub fn plan_payment(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: 
 
 /// プレイヤーがこの呪文(面)を唱えられるか(ドルファディロムの制限など)
 pub fn can_cast(e: Env, player: PlayerId, uid: i32, face_idx: i32) -> bool {
+    // 「次の自分のターンのはじめまで、相手は呪文を唱えられない」(XXDDZ)
+    if e.s.effects.iter().any(|ef| ef.m == EffectMod::CannotCast && ef.controller != player) {
+        return false;
+    }
     // 「相手は〜できない」(自分の常在能力は対象外)
     !any_static(e, |st| {
         if let StaticMod::CannotCast { cond } = st.m {
@@ -547,6 +590,11 @@ pub fn can_cast(e: Env, player: PlayerId, uid: i32, face_idx: i32) -> bool {
         }
         false
     })
+}
+
+/// 「相手はそのコストのカードを実行できない」(オーパーツ銃のファイナル革命)に当たらないか
+pub fn can_use_cost(e: Env, player: PlayerId, cost: i32) -> bool {
+    !e.s.effects.iter().any(|ef| matches!(ef.m, EffectMod::CannotUseCost(n) if n == cost) && ef.controller != player)
 }
 
 // ───────────────────────── スナップショット ─────────────────────────

@@ -38,6 +38,7 @@ pub struct FaceInfo {
     pub mach_fighter: bool,
     pub ex_life: bool,
     pub just_diver: bool,
+    pub slayer: bool,
     pub sympathy: bool,
     pub hyper_energy: bool,
     /// 能力の添字
@@ -174,6 +175,7 @@ impl Registry {
                             KeywordName::MachFighter => info.mach_fighter = true,
                             KeywordName::ExLife => info.ex_life = true,
                             KeywordName::JustDiver => info.just_diver = true,
+                            KeywordName::Slayer => info.slayer = true,
                             KeywordName::Sympathy => info.sympathy = true,
                             KeywordName::HyperEnergy => info.hyper_energy = true,
                             KeywordName::ShieldTrigger => info.shield_triggers.push(ai),

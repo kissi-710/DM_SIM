@@ -57,10 +57,12 @@ syms! {
     // 使用回数のキー
     DECK_OUT => "deckOutHandled",
     // ゾーン名・その他
-    Z_DECK => "deck", Z_HAND => "hand", Z_MANA => "mana", Z_SHIELD => "shield", Z_BATTLE => "battle", Z_GRAVE => "grave", Z_LIMBO => "limbo",
+    Z_DECK => "deck", Z_HAND => "hand", Z_MANA => "mana", Z_SHIELD => "shield", Z_BATTLE => "battle", Z_GRAVE => "grave", Z_LIMBO => "limbo", Z_HYPER => "hyper",
     DEFID => "defId", IDX => "idx", TAP => "tap", PAY => "pay", TYPE => "type",
     ALL => "all", START => "start", END => "end", DECK_BOTTOM => "deckBottom",
     KW_SPEED_ATTACKER => "speedAttacker", KW_MACH_FIGHTER => "machFighter", KW_JUST_DIVER => "justDiver",
+    KW_SLAYER => "slayer", KW_UNBLOCKABLE => "unblockable", CAST_HYPER => "castHyper",
+    REVOLUTION_CHANGE => "revolutionChange",
 }
 
 thread_local! {
@@ -139,6 +141,7 @@ pub enum Zone {
     Battle,
     Grave,
     Limbo,
+    Hyper,
 }
 
 impl Zone {
@@ -151,6 +154,7 @@ impl Zone {
             "battle" => Zone::Battle,
             "grave" => Zone::Grave,
             "limbo" => Zone::Limbo,
+            "hyper" => Zone::Hyper,
             _ => return None,
         })
     }
@@ -163,6 +167,7 @@ impl Zone {
             Zone::Battle => "battle",
             Zone::Grave => "grave",
             Zone::Limbo => "limbo",
+            Zone::Hyper => "hyper",
         }
     }
     pub fn sym(self) -> Sym {
@@ -174,6 +179,7 @@ impl Zone {
             Zone::Battle => s::Z_BATTLE,
             Zone::Grave => s::Z_GRAVE,
             Zone::Limbo => s::Z_LIMBO,
+            Zone::Hyper => s::Z_HYPER,
         }
     }
     pub fn from_sym(x: Sym) -> Option<Zone> {
@@ -185,6 +191,7 @@ impl Zone {
             s::Z_BATTLE => Zone::Battle,
             s::Z_GRAVE => Zone::Grave,
             s::Z_LIMBO => Zone::Limbo,
+            s::Z_HYPER => Zone::Hyper,
             _ => return None,
         })
     }
@@ -477,6 +484,7 @@ pub struct PlayerZones {
     pub mana: Vec<i32>,
     pub shield: Vec<i32>,
     pub grave: Vec<i32>,
+    pub hyper: Vec<i32>,
     pub battle: Vec<Perm>,
 }
 
@@ -607,6 +615,10 @@ pub enum EffectMod {
     Grant(Sym),
     CannotBeChosen,
     CannotBeAttacked,
+    /// プレイヤー単位(pid = -1): 発生源の持ち主の相手は呪文を唱えられない
+    CannotCast,
+    /// プレイヤー単位: 発生源の持ち主の相手は、コストが n のカードを実行できない
+    CannotUseCost(i32),
 }
 
 #[derive(Clone, Debug)]

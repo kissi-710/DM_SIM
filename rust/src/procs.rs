@@ -103,6 +103,9 @@ fn plan_play_inner(e: Env, player: PlayerId, uid: i32, from: Zone, face_idx: i32
     if cast && !can_cast(e, player, uid, face_idx) {
         return plan_fail(face_idx, "この呪文は唱えられません");
     }
+    if !can_use_cost(e, player, face.cost) {
+        return plan_fail(face_idx, "そのコストのカードは実行できません");
+    }
     let mut onto: Option<i32> = None;
     if face.ty == FaceType::Evolution {
         let target = extra.and_then(|x| x.onto).and_then(|p| s.perm_by_pid(p));
@@ -321,6 +324,7 @@ fn remove_from(c: &mut Ctx, uid: i32) {
                 Zone::Hand => &mut own.hand,
                 Zone::Mana => &mut own.mana,
                 Zone::Shield => &mut own.shield,
+                Zone::Hyper => &mut own.hyper,
                 _ => &mut own.grave,
             };
             if let Some(i) = arr.iter().position(|x| *x == uid) {
@@ -458,7 +462,13 @@ fn run_play(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
             if c.s.cards[uid as usize].zone == Zone::Limbo {
                 let plan_bottom = p.get(s::AFTER).and_then(|x| x.as_sym()) == Some(s::DECK_BOTTOM);
                 let var_bottom = var_get(&f.vars, s::AFTER).and_then(|x| x.as_sym()) == Some(s::DECK_BOTTOM);
-                if plan_bottom || var_bottom {
+                let var_hyper = var_get(&f.vars, s::AFTER).and_then(|x| x.as_sym()) == Some(s::Z_HYPER);
+                if var_hyper {
+                    // インターステラ: 墓地(や山札の下)のかわりに超次元ゾーンに置く
+                    let mut o = MoveOpts::new(Zone::Hyper, s::CAST_HYPER);
+                    o.no_replace = true;
+                    move_cards(c, &[uid], &o)?;
+                } else if plan_bottom || var_bottom {
                     let mut o = MoveOpts::new(Zone::Deck, s::CAST_BOTTOM);
                     o.pos = Some(false);
                     o.no_replace = true;
@@ -526,7 +536,11 @@ fn run_attack(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
             };
             let cands: Vec<i32> = {
                 let e = c.env();
-                c.s.players[defender as usize].battle.iter().filter(|p| p.pid != attacked && can_block(e, p)).map(|p| p.cards[0]).collect()
+                if is_unblockable(e, &c.s.players[po as usize].battle[pi]) {
+                    Vec::new()
+                } else {
+                    c.s.players[defender as usize].battle.iter().filter(|p| p.pid != attacked && can_block(e, p)).map(|p| p.cards[0]).collect()
+                }
             };
             let mut blocker: Option<i32> = None;
             if !cands.is_empty() {
@@ -621,6 +635,17 @@ fn run_attack(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                     } else {
                         losers.push(a_top);
                         losers.push(d_top);
+                    }
+                    // スレイヤー: バトルの後、バトルした相手を破壊する(勝敗にかかわらず)
+                    let (a_slay, d_slay) = {
+                        let e = c.env();
+                        (has_keyword(e, &c.s.players[po as usize].battle[pi], Kw::Slayer), has_keyword(e, &c.s.players[dop as usize].battle[di], Kw::Slayer))
+                    };
+                    if a_slay && !losers.contains(&d_top) {
+                        losers.push(d_top);
+                    }
+                    if d_slay && !losers.contains(&a_top) {
+                        losers.push(a_top);
                     }
                     let (a_owner, d_owner) = (po, dop);
                     move_cards(c, &losers, &MoveOpts::new(Zone::Grave, s::DESTROY))?;

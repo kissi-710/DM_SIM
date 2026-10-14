@@ -121,6 +121,8 @@ pub enum Cond {
     NotInBattle,
     Logged { pattern: Pattern, min: i32 },
     ZoneIs(Zone),
+    /// $it が、能力の発生源のEXライフのシールドか
+    ExShield,
     Civ(Civ),
     CivsAll(Vec<Civ>),
     Multicolor(bool),
@@ -183,7 +185,17 @@ pub enum Act {
     SkipRestOfTurn,
     CopyTrigger,
     Invade,
+    RevolutionChange,
+    PlayerEffect { m: PlayerMod, until: UntilKind },
+    /// イベントを1つ残す(ファイナル革命の「使った」印)
+    Log { ty: Sym },
     SetVar { as_: Sym, value: Val },
+}
+
+#[derive(Clone, Debug)]
+pub enum PlayerMod {
+    CannotCast,
+    CannotUseCost(Expr),
 }
 
 #[derive(Clone, Debug)]
@@ -232,6 +244,8 @@ pub enum KeywordName {
     HyperEnergy,
     Yobinion,
     Invasion,
+    Slayer,
+    RevolutionChange,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -266,6 +280,8 @@ pub enum StaticMod {
     CannotAttackPlayerWhenEntered,
     CannotCast { cond: Cond },
     PowerAdd { n: i32 },
+    /// 自分のクリーチャー(cond に合うもの)すべてにキーワードを与える
+    GrantKeyword { keyword: Sym, cond: Cond },
 }
 
 #[derive(Clone, Debug)]
@@ -473,6 +489,9 @@ pub fn parse_cond(j: &Json) -> R<Cond> {
         let min = v.get("min").and_then(|x| x.as_i64()).unwrap_or(1) as i32;
         return Ok(Cond::Logged { pattern, min });
     }
+    if o.get("exShield").is_some() {
+        return Ok(Cond::ExShield);
+    }
     if let Some(v) = o.get("zoneIs") {
         return Ok(Cond::ZoneIs(zone_of(v.as_str().unwrap_or(""))?));
     }
@@ -622,6 +641,23 @@ fn parse_act(j: &Json) -> R<Act> {
         "skipRestOfTurn" => Act::SkipRestOfTurn,
         "copyTrigger" => Act::CopyTrigger,
         "invade" => Act::Invade,
+        "revolutionChange" => Act::RevolutionChange,
+        "log" => Act::Log { ty: sym(a.as_str().ok_or("log")?) },
+        "playerEffect" => {
+            let m = a.get("mod").ok_or("playerEffect.mod")?;
+            let pm = match s_of(m, "kind") {
+                Some("cannotCast") => PlayerMod::CannotCast,
+                Some("cannotUseCost") => PlayerMod::CannotUseCost(parse_expr(m.get("n").ok_or("cannotUseCost.n")?)?),
+                k => return err(format!("未知のプレイヤー効果: {:?}", k)),
+            };
+            let until = match s_of(a, "until") {
+                Some("endOfTurn") => UntilKind::EndOfTurn,
+                Some("nextTurnStart") => UntilKind::NextTurnStart,
+                Some("source") => UntilKind::Source,
+                u => return err(format!("未知の期限: {:?}", u)),
+            };
+            Act::PlayerEffect { m: pm, until }
+        }
         "setVar" => Act::SetVar { as_: opt_sym(a, "as").ok_or("setVar.as")?, value: Val::from_json(a.get("value").unwrap_or(&Json::Null)) },
         k => return err(format!("未対応の原始操作: {}", k)),
     })
@@ -702,6 +738,8 @@ fn keyword_of(s: &str) -> R<KeywordName> {
         "hyperEnergy" => KeywordName::HyperEnergy,
         "yobinion" => KeywordName::Yobinion,
         "invasion" => KeywordName::Invasion,
+        "slayer" => KeywordName::Slayer,
+        "revolutionChange" => KeywordName::RevolutionChange,
         k => return err(format!("未知のキーワード: {}", k)),
     })
 }
@@ -773,6 +811,10 @@ pub fn parse_ability(j: &Json) -> R<Ability> {
                 Some("cannotAttackPlayerWhenEntered") => StaticMod::CannotAttackPlayerWhenEntered,
                 Some("cannotCast") => StaticMod::CannotCast { cond: parse_cond(m.get("cond").ok_or("cannotCast.cond")?)? },
                 Some("powerAdd") => StaticMod::PowerAdd { n: m.get("n").and_then(|x| x.as_i64()).unwrap_or(0) as i32 },
+                Some("grantKeyword") => StaticMod::GrantKeyword {
+                    keyword: sym(s_of(m, "keyword").ok_or("grantKeyword.keyword")?),
+                    cond: parse_cond(m.get("cond").ok_or("grantKeyword.cond")?)?,
+                },
                 t => return err(format!("未知の常在効果: {:?}", t)),
             };
             Ability::Static { m: sm, while_: opt_cond(j, "while")? }

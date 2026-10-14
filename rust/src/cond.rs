@@ -232,6 +232,13 @@ pub fn eval_cond(cc: &CC, cond: &Cond) -> bool {
             n >= *min
         }
         Cond::ZoneIs(z) => cc.it.map_or(false, |u| s.cards[u as usize].zone == *z),
+        Cond::ExShield => match (cc.it, cc.self_) {
+            (Some(it), Some(me)) => {
+                let sh = &s.cards[it as usize];
+                sh.zone == Zone::Shield && sh.ex && sh.ex_pid == s.cards[me as usize].pid
+            }
+            _ => false,
+        },
         _ => {
             // ここから先は「判定対象のカード $it」を使う条件
             let it = match cc.it {
@@ -349,6 +356,7 @@ pub fn select_cards(cc: &CC, sel: &Selector) -> Vec<i32> {
                     Zone::Mana => s.players[owner as usize].mana.clone(),
                     Zone::Shield => s.players[owner as usize].shield.clone(),
                     Zone::Grave => s.players[owner as usize].grave.clone(),
+                    Zone::Hyper => s.players[owner as usize].hyper.clone(),
                 }
             };
             for uid in list {

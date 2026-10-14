@@ -54,13 +54,34 @@ for (const [a, b, seed, k] of [
   ['zardy', 'zardy', 6, ['random', 'random']],
   ['maruru', 'zardy', 7, ['random', 'rule']],
   ['zardy', 'maruru', 8, ['rule', 'random']],
+  // インターステラ型マルル(革命チェンジ・超次元ゾーン・スレイヤー・コスト封じなどの新しい仕組み)
+  ['interstellar-maruru', 'zardy', 9, ['rule', 'rule']],
+  ['maruru', 'interstellar-maruru', 10, ['rule', 'rule']],
+  ['interstellar-maruru', 'interstellar-maruru', 11, ['random', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 12, ['rule', 'random']],
+  ['interstellar-maruru', 'maruru', 13, ['random', 'random']],
+  ['zardy', 'interstellar-maruru', 14, ['random', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 15, ['rule', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 16, ['random', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 17, ['random', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 18, ['rule', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 19, ['random', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 20, ['random', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 21, ['rule', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 22, ['random', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 23, ['random', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 24, ['rule', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 25, ['random', 'random']],
+  ['interstellar-maruru', 'interstellar-maruru', 26, ['random', 'random']],
 ] as const) {
   games.push(play(a, b, seed, [k[0], k[1]]));
 }
 // プレイアウトの正解: 途中の局面(自分から見た PlayerView)で、手ごとの報酬を数ラウンド
 const rounds: { env: SearchEnv; seeds: number[]; alive: number[]; rows: (number | null)[][] }[] = [];
 for (const g of games) {
+  let nThis = 0;
   for (let i = 0; i < g.states.length - 1; i += 3) {
+    if (nThis >= 15) break; // 1試合から取る数(デッキの組が偏らないように)
     const st: any = g.states[i];
     const legal: any[] = g.legal[i] as any[];
     if (!st.pending || legal.length < 2) continue;
@@ -71,9 +92,10 @@ for (const g of games) {
     const alive = legal.map((_, k) => k);
     const rows = seeds.map((sd) => evalRound(env, reg, sd, alive).map((x) => (Number.isNaN(x) ? null : x)));
     rounds.push({ env: plain(env), seeds, alive, rows });
-    if (rounds.length >= 90) break;
+    nThis++;
+    if (rounds.length >= 120) break;
   }
-  if (rounds.length >= 90) break;
+  if (rounds.length >= 120) break;
 }
 const defs = plain(reg.defs);
 writeFileSync(out, JSON.stringify({ defs, games, rounds }));

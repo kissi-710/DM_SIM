@@ -237,6 +237,8 @@ fn mod_from_json(j: &Json) -> R<EffectMod> {
         "grant" => EffectMod::Grant(sym(gs(j, "keyword")?)),
         "cannotBeChosen" => EffectMod::CannotBeChosen,
         "cannotBeAttacked" => EffectMod::CannotBeAttacked,
+        "cannotCast" => EffectMod::CannotCast,
+        "cannotUseCost" => EffectMod::CannotUseCost(gi(j, "n")? as i32),
         k => return Err(format!("未知の効果: {}", k)),
     })
 }
@@ -248,6 +250,8 @@ fn mod_to_json(m: &EffectMod) -> Json {
         EffectMod::Grant(k) => Json::obj(vec![("kind", Json::str("grant")), ("keyword", Json::Str(k.name().to_string()))]),
         EffectMod::CannotBeChosen => Json::obj(vec![("kind", Json::str("cannotBeChosen"))]),
         EffectMod::CannotBeAttacked => Json::obj(vec![("kind", Json::str("cannotBeAttacked"))]),
+        EffectMod::CannotCast => Json::obj(vec![("kind", Json::str("cannotCast"))]),
+        EffectMod::CannotUseCost(n) => Json::obj(vec![("kind", Json::str("cannotUseCost")), ("n", Json::int(*n as i64))]),
     }
 }
 
@@ -309,6 +313,10 @@ pub fn state_from_json(reg: &Registry, j: &Json) -> R<State> {
             mana: ints(get(p, "mana")?)?,
             shield: ints(get(p, "shield")?)?,
             grave: ints(get(p, "grave")?)?,
+            hyper: match p.get("hyper") {
+                Some(h) => ints(h)?,
+                None => Vec::new(),
+            },
             battle: get(p, "battle")?.as_arr().ok_or("battle")?.iter().map(perm_from_json).collect::<R<Vec<_>>>()?,
         })
     };
@@ -495,6 +503,7 @@ pub fn state_to_json(reg: &Registry, s: &State) -> Json {
                     ("mana", jints(&p.mana)),
                     ("shield", jints(&p.shield)),
                     ("grave", jints(&p.grave)),
+                    ("hyper", jints(&p.hyper)),
                     (
                         "battle",
                         Json::Arr(

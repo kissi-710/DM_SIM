@@ -355,13 +355,14 @@ fn remove_from_zone(c: &mut Ctx, uid: i32) {
     };
     let s = &mut c.s;
     match zone {
-        Zone::Deck | Zone::Hand | Zone::Mana | Zone::Shield | Zone::Grave => {
+        Zone::Deck | Zone::Hand | Zone::Mana | Zone::Shield | Zone::Grave | Zone::Hyper => {
             let own = &mut s.players[owner];
             let arr = match zone {
                 Zone::Deck => &mut own.deck,
                 Zone::Hand => &mut own.hand,
                 Zone::Mana => &mut own.mana,
                 Zone::Shield => &mut own.shield,
+                Zone::Hyper => &mut own.hyper,
                 _ => &mut own.grave,
             };
             if let Some(i) = arr.iter().position(|x| *x == uid) {
@@ -402,6 +403,7 @@ fn place_in_zone(c: &mut Ctx, uid: i32, to: Zone, pos: Option<bool>) -> Res<()> 
         Zone::Mana => own.mana.push(uid),
         Zone::Shield => own.shield.push(uid),
         Zone::Grave => own.grave.push(uid),
+        Zone::Hyper => own.hyper.push(uid),
         Zone::Limbo => c.s.limbo.push(uid),
         Zone::Battle => return fail("battle への移動は enterBattle を使う"),
     }
