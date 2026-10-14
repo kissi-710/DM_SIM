@@ -35,7 +35,7 @@ export async function decideParallel(
     view,
     legal,
     { rand: mulberry(req.seed), reg, budget: req.budget },
-    { policy, iterations: req.spec.iterations, ms: req.spec.ms, candidateDecks: req.spec.candidateDecks },
+    { policy, iterations: req.spec.iterations, ms: req.spec.ms, candidateDecks: req.spec.candidateDecks, ...req.spec.tuning },
     l1,
   );
   io.begin(plan.env);

@@ -9,7 +9,7 @@ import type { Registry } from '../engine/registry';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { FAIR, type InfoPolicy } from '../engine/view';
 import { determinize } from './determinize';
-import { reward } from './eval';
+import { reward, withWeights, type EvalWeights } from './eval';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
 import type { Agent, AgentCtx } from './types';
 
@@ -24,6 +24,8 @@ export interface MctsOpts {
   horizonTurns?: number;
   /** L1 の手に与える事前の上乗せ(報酬の単位) */
   priorBonus?: number;
+  /** 評価関数の重み(差し替える分だけ指定) */
+  weights?: Partial<EvalWeights>;
   /** 1回の探索が終わるたびに呼ばれる(計測・表示用) */
   onSearch?: (info: SearchInfo) => void;
 }
@@ -92,7 +94,7 @@ function seededRand(seed: number): () => number {
   };
 }
 
-function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number): number {
+function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number, w: EvalWeights): number {
   let s = start;
   const endTurn = s.turn + horizon;
   let guard = 0;
@@ -102,7 +104,7 @@ function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => numb
     const a = rolloutPick(s, legal, reg, rand);
     s = step(s, a, reg).state;
   }
-  return reward(s, reg, me);
+  return reward(s, reg, me, w);
 }
 
 /** 世界(決定化)と乱数を作るための種から、そのラウンドの種を作る。ラウンドの結果は「環境・種・評価する手」だけで決まる。 */
@@ -121,6 +123,8 @@ export interface SearchEnv {
   policy: InfoPolicy;
   candidateDecks?: string[][];
   horizon: number;
+  /** 評価関数の重み(既定との差分) */
+  weights?: Partial<EvalWeights>;
 }
 
 /**
@@ -131,10 +135,11 @@ export function evalRound(env: SearchEnv, reg: Registry, seed: number, alive: nu
   const rr = seededRand(seed);
   const det = determinize(env.view, env.me, { rand: rr, reg, policy: env.policy, candidateDecks: env.candidateDecks });
   const rolloutSeed = Math.floor(rr() * 0x7fffffff);
+  const w = withWeights(env.weights);
   const r = new Array<number>(env.legal.length).fill(NaN);
   for (const k of alive) {
     try {
-      r[k] = rollout(step(det, env.legal[k], reg).state, reg, env.me, seededRand(rolloutSeed), env.horizon);
+      r[k] = rollout(step(det, env.legal[k], reg).state, reg, env.me, seededRand(rolloutSeed), env.horizon, w);
     } catch {
       // エンジンの例外は「負け」にせず、その手を候補から外す(feed が NaN を見て外す)
     }
@@ -289,7 +294,7 @@ export function planSearch(
   let baseIdx = legal.findIndex((a) => JSON.stringify(a) === JSON.stringify(baseAct));
   if (baseIdx < 0) baseIdx = 0;
   return {
-    env: { view, legal, me: view.pending!.player, policy, candidateDecks: o.candidateDecks, horizon: o.horizonTurns ?? 3 },
+    env: { view, legal, me: view.pending!.player, policy, candidateDecks: o.candidateDecks, horizon: o.horizonTurns ?? 3, weights: o.weights },
     baseIdx,
     prior: o.priorBonus ?? 0.08,
     maxIt: timeDriven ? HARD_MAX_ITERATIONS : Math.max(iterations!, n),

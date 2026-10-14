@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests",
     "batch": "tsx src/cli/batch.ts",
-    "prob": "tsx src/cli/prob.ts"
+    "prob": "tsx src/cli/prob.ts",
+    "aibench": "tsx src/cli/aibench.ts"
   },
   "dependencies": {
     "react": "^19.3.0",
