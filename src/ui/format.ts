@@ -159,3 +159,28 @@ export function buildLogTree(s: GameState, evs: Ev[], me: number | null): LogNod
   }
   return roots;
 }
+
+// ───────────────────────── 直近の出来事(盤面の下に出す要約) ─────────────────────────
+
+/** 盤面の下の「直近の出来事」に出す種類。ドロー・能力の解決・補助的な移動は含めない(ログに任せる) */
+const FEED_TYPES = new Set(['cast', 'entered', 'evolved', 'attackDeclared', 'blocked', 'battleEnded', 'shieldBroken', 'triggerDeclared', 'gameOver']);
+
+export interface FeedLine {
+  id: number;
+  text: string;
+  turn: number;
+}
+
+/** 因果ツリーではなく、プレイヤーが「いま何が起きたか」を追うための時系列の要約(新しいものが後ろ) */
+export function recentFeed(s: GameState, evs: Ev[], me: number | null, max = 3): FeedLine[] {
+  const out: FeedLine[] = [];
+  for (let i = evs.length - 1; i >= 0 && out.length < max; i--) {
+    const e = evs[i];
+    const charge = e.type === 'moved' && e.cause === 'charge';
+    if (!FEED_TYPES.has(e.type) && !charge) continue;
+    const text = describeEvent(s, e, me);
+    if (text === null) continue;
+    out.push({ id: e.id, text, turn: e.turn });
+  }
+  return out.reverse();
+}

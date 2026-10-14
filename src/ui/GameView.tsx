@@ -6,7 +6,7 @@ import { mkCtx, permByPid } from '../engine/state';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { Board, buildDropMap, selectedActions } from './Board';
 import { CardView, civGradient } from './CardView';
-import { buildLogTree, cardName, CIV_NAME, reg, type LogNode } from './format';
+import { buildLogTree, cardName, CIV_NAME, recentFeed, reg, type LogNode } from './format';
 import { InputWidget, PaymentWidget } from './Widgets';
 import { makeRecord, type GameSetup, type Session, useGame } from './useGame';
 import { downloadText } from './util';
@@ -241,6 +241,9 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     }
     return set;
   }, [session.last]);
+
+  // 盤面の下に出す「直近の出来事」(CPU の手を目で追えるように)
+  const feed = useMemo(() => recentFeed(s, session.log.slice(-80), g.me, 3), [s, session.log, g.me]);
 
   const pend = s.pending;
   const viewer: PlayerId = g.me ?? (pend && setup.seats[pend.player].kind === 'human' ? pend.player : 0);
@@ -578,6 +581,15 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           </div>
         )}
 
+        {feed.length > 0 && (
+          <div className="feed" aria-live="polite" aria-label="直近の出来事">
+            {feed.map((f, i) => (
+              <div key={f.id} className={'feed-line' + (i === feed.length - 1 ? ' latest' : '')}>
+                {f.text}
+              </div>
+            ))}
+          </div>
+        )}
         </div>
 
         {/* 盤面の右(中央右): カードの詳細・選んだカードの操作・ターン操作を、カードの近くにまとめる */}

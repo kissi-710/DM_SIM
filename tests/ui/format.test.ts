@@ -3,7 +3,7 @@ import { CARD_DB, deckCards } from '../../src/cards';
 import { randomAgent } from '../../src/ai/random';
 import type { Ev, GameState } from '../../src/engine/types';
 import { playGameSync } from '../../src/sim/playGame';
-import { CIV_COLOR, CIV_NAME, ZONE_NAME, buildLogTree, cardName, civsOf, defName, describeEvent, playerLabel, shortName, type LogNode } from '../../src/ui/format';
+import { CIV_COLOR, CIV_NAME, ZONE_NAME, buildLogTree, cardName, civsOf, defName, describeEvent, playerLabel, recentFeed, shortName, type LogNode } from '../../src/ui/format';
 import { Sim } from '../scenario';
 
 describe('名前・文明・ラベル', () => {
@@ -124,5 +124,27 @@ describe('describeEvent / buildLogTree(実際の対戦のログ)', () => {
   });
   it('buildLogTree: 空のログは空の木', () => {
     expect(buildLogTree(new Sim({}).s, [], null)).toEqual([]);
+  });
+});
+
+describe('recentFeed: 直近の出来事の要約', () => {
+  const sim = new Sim({ p0: { hand: ['ワクムテラス'] } });
+  const u = sim.s.players[0].hand[0];
+  const ev = (id: number, over: Record<string, unknown>) => ({ id, turn: 1, ...over }) as unknown as Ev;
+
+  it('ドロー・解決などは出さず、行動と結果だけを時系列で返す', () => {
+    const evs = [ev(1, { type: 'moved', cause: 'draw', owner: 0, card: u, from: 'deck', to: 'hand' }), ev(2, { type: 'cast', owner: 1, card: u }), ev(3, { type: 'resolve', label: 'x' }), ev(4, { type: 'shieldBroken', owner: 0 })];
+    const feed = recentFeed(sim.s, evs, 0);
+    expect(feed.map((f) => f.id)).toEqual([2, 4]);
+    expect(feed[0].text).toContain('相手');
+    expect(feed[1].text).toContain('シールドがブレイク');
+  });
+  it('max 件に切り詰め、新しいものを残す', () => {
+    const evs = [1, 2, 3, 4, 5].map((i) => ev(i, { type: 'blocked', card: u }));
+    expect(recentFeed(sim.s, evs, 0, 2).map((f) => f.id)).toEqual([4, 5]);
+  });
+  it('マナチャージは出す', () => {
+    const evs = [ev(1, { type: 'moved', cause: 'charge', owner: 0, card: u, from: 'hand', to: 'mana' })];
+    expect(recentFeed(sim.s, evs, 0)[0].text).toContain('マナゾーンに置いた');
   });
 });
