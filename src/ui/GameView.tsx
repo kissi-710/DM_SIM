@@ -520,6 +520,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
       </div>
 
       <div className="stage">
+        <div className="field">
         <Board
           s={s}
           me={g.me}
@@ -534,71 +535,12 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           flash={flash}
                   />
 
-        {!sideOpen && hover !== null && (
-          <div className="hover-card">
-            <CardDetail s={s} uid={hover} />
-          </div>
-        )}
-
-        {interactive && (
-          <div className="dock-space">
-            <span className="tip">💡 {tip}</span>
-          </div>
-        )}
-
         {/* CPU が考えている間の表示 */}
         {!interactive && !showHuman && s.winner === null && pend && (
           <div className="thinking-pill">
             {activeLabel}が考えています…
             {session.thinking && <span className="thinking" />}
             <div className="tip">💡 {tip}</div>
-          </div>
-        )}
-
-        {/* 選んだカードの行き先(操作パネル) */}
-        {interactive && selected && (
-          <div className="action-panel">
-            <div className="ap-head">
-              <strong>{selDef?.name ?? 'カード'}</strong>
-              <button className="small" onClick={() => setSelected(null)} aria-label="閉じる">
-                ✕
-              </button>
-            </div>
-            {selDef && <div className="ap-text">{selDef.text}</div>}
-            {selActs.length > 0 ? (
-              <div className="ap-actions">
-                {selActs.map((d, i) => (
-                  <button key={i} className="choice big" onClick={() => act(d.action)}>
-                    {i < 9 && <span className="kbd">{i + 1}</span>} {d.label}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="muted">このカードで今できる操作はありません。</div>
-            )}
-          </div>
-        )}
-
-        {/* ターン操作(常に右下) */}
-        {interactive && (
-          <div className="dock">
-            <div className="dock-buttons">
-              {stepActs.skipMana && (
-                <button onClick={() => act(stepActs.skipMana!)}>
-                  マナチャージしない <span className="kbd">M</span>
-                </button>
-              )}
-              {stepActs.endMain && (
-                <button onClick={() => act(stepActs.endMain!)}>
-                  メインを終える <span className="kbd">M</span>
-                </button>
-              )}
-              {stepActs.endTurn && (
-                <button className="primary" onClick={() => act(stepActs.endTurn!)}>
-                  ターン終了 <span className="kbd">E</span>
-                </button>
-              )}
-            </div>
           </div>
         )}
 
@@ -635,6 +577,61 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             </div>
           </div>
         )}
+
+        </div>
+
+        {/* 盤面の右(中央右): カードの詳細・選んだカードの操作・ターン操作を、カードの近くにまとめる */}
+        <div className="rail">
+          {!sideOpen && <div className="rail-hover">{hover !== null && <CardDetail s={s} uid={hover} />}</div>}
+          {interactive && (
+            <div className="rail-action">
+              {selected ? (
+                <div className="action-panel">
+                  <div className="ap-head">
+                    <strong>{selDef?.name ?? 'カード'}</strong>
+                    <button className="small" onClick={() => setSelected(null)} aria-label="閉じる" title="閉じる(Esc)">
+                      ✕
+                    </button>
+                  </div>
+                  {selDef && <div className="ap-text">{selDef.text}</div>}
+                  {selActs.length > 0 ? (
+                    <div className="ap-actions">
+                      {selActs.map((d, i) => (
+                        <button key={i} className="choice big" onClick={() => act(d.action)}>
+                          {i < 9 && <span className="kbd">{i + 1}</span>} {d.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="muted">このカードで今できる操作はありません。</div>
+                  )}
+                </div>
+              ) : (
+                <div className="rail-hint">カードを選ぶと、できる操作がここに出ます</div>
+              )}
+            </div>
+          )}
+          {interactive && (
+            <div className="dock">
+              {stepActs.skipMana && (
+                <button onClick={() => act(stepActs.skipMana!)}>
+                  マナチャージしない <span className="kbd">M</span>
+                </button>
+              )}
+              {stepActs.endMain && (
+                <button onClick={() => act(stepActs.endMain!)}>
+                  メインを終える <span className="kbd">M</span>
+                </button>
+              )}
+              {stepActs.endTurn && (
+                <button className="primary" onClick={() => act(stepActs.endTurn!)}>
+                  ターン終了 <span className="kbd">E</span>
+                </button>
+              )}
+            </div>
+          )}
+          {interactive && <div className="rail-tip">💡 {tip}</div>}
+        </div>
 
         {session.error && <div className="toast">{session.error}</div>}
       </div>
