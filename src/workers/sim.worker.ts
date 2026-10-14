@@ -7,6 +7,7 @@ import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import { runJob, type SimJob, type SimOut } from '../sim/jobs';
 import { DmEngine } from '../wasm/dmEngine';
+import { errorMessage } from '../engine/types';
 
 export type { SimJob, SimOut };
 
@@ -43,7 +44,7 @@ self.onmessage = async (e: MessageEvent<SimJob>) => {
     lastPost = 0;
     const result = runJob(reg, job, progress);
     post({ kind: 'result', job: job.type, result } as SimOut);
-  } catch (err: any) {
-    post({ kind: 'error', message: String(err?.message ?? err) });
+  } catch (err) {
+    post({ kind: 'error', message: errorMessage(err) });
   }
 };

@@ -8,6 +8,7 @@ import { INFO_PRESET_LABEL, type InfoPreset } from '../engine/view';
 import { allDecks, findDeck } from './decks';
 import type { GameSetup, Seat } from './useGame';
 import { loadJson, saveJson } from './util';
+import { errorMessage } from '../engine/types';
 
 interface SeatForm {
   kind: 'human' | 'cpu';
@@ -81,8 +82,8 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
         cpuDelayMs: delay,
         strict,
       });
-    } catch (e: any) {
-      setErr(String(e?.message ?? e));
+    } catch (e) {
+      setErr(errorMessage(e));
     }
   };
 

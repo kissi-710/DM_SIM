@@ -10,6 +10,12 @@ export type Json = null | boolean | number | string | Json[] | { [k: string]: Js
 
 export const other = (p: PlayerId): PlayerId => (p === 0 ? 1 : 0);
 
+/** catch で受けた値(unknown)から、画面・ログに出す文言を取り出す */
+export function errorMessage(e: unknown): string {
+  const m = (e as { message?: unknown } | null | undefined)?.message;
+  return String(m ?? e);
+}
+
 // ───────────────────────── カードデータ(ASTは ast.ts) ─────────────────────────
 
 import type { Ability, Cond } from './ast';

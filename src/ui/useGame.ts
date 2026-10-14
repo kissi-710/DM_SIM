@@ -9,6 +9,7 @@ import type { Action, Ev, GameConfig, GameState, PlayerId } from '../engine/type
 import { AiCancelled, cancelAi, chooseWithWorker } from './aiClient';
 import { RECORD_VERSION, type GameRecord } from './record';
 import { loadJson, saveJson } from './util';
+import { errorMessage } from '../engine/types';
 
 export type { GameRecord } from './record';
 
@@ -125,9 +126,9 @@ export function useGame(setup: GameSetup) {
         log = log.concat(r.events);
         done.push(a);
       }
-    } catch (e: any) {
+    } catch (e) {
       // 再生できなかった手の手前で止める(黙って別の局面にしない。何手目かを知らせる)
-      resumeError = `保存した対戦を ${done.length + 1} 手目で再生できませんでした(${done.length} 手目までの局面から再開します): ${String(e?.message ?? e)}`;
+      resumeError = `保存した対戦を ${done.length + 1} 手目で再生できませんでした(${done.length} 手目までの局面から再開します): ${errorMessage(e)}`;
     }
     return { state, log, last: [], actions: done, thinking: false, error: resumeError };
   });
@@ -174,8 +175,8 @@ export function useGame(setup: GameSetup) {
         }
         stamp.current++;
         setSession({ state: r.state, log: cur.log.concat(r.events), last: r.events, actions: cur.actions.concat(a), thinking: false, error: null });
-      } catch (e: any) {
-        setSession({ ...cur, error: String(e?.message ?? e) });
+      } catch (e) {
+        setSession({ ...cur, error: errorMessage(e) });
       }
     },
     [setup, me],
@@ -209,8 +210,8 @@ export function useGame(setup: GameSetup) {
         const a = await chooseWithWorker({ state: sessionRef.current.state, spec, seed });
         if (cancelled || stamp.current !== my) return;
         perform(a);
-      } catch (e: any) {
-        if (!cancelled) setSession((s) => ({ ...s, thinking: false, error: String(e?.message ?? e) }));
+      } catch (e) {
+        if (!cancelled) setSession((s) => ({ ...s, thinking: false, error: errorMessage(e) }));
       }
     };
     void run();
@@ -239,9 +240,9 @@ export function useGame(setup: GameSetup) {
         const a = await chooseWithWorker({ state: cur.state, spec, seed });
         // 待っている間に状態が変わった(別の操作・再開)なら、古い状態向けの手は捨てる
         if (sessionRef.current.state === cur.state) perform(a);
-      } catch (e: any) {
+      } catch (e) {
         if (e instanceof AiCancelled) return; // 画面を離れて取り消された(エラーとして出さない)
-        setSession((s) => ({ ...s, error: String(e?.message ?? e) }));
+        setSession((s) => ({ ...s, error: errorMessage(e) }));
       } finally {
         stepping.current = false;
       }

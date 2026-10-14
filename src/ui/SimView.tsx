@@ -19,6 +19,7 @@ import { reg } from './format';
 import { runSimJob, type RunningJob } from './simClient';
 import { downloadText, loadJson, saveJson } from './util';
 import type { Ev, GameState } from '../engine/types';
+import { errorMessage } from '../engine/types';
 
 type Mode = 'prob' | 'patterns';
 
@@ -81,8 +82,8 @@ export function SimView() {
         );
         setPats(await job.current.promise);
       }
-    } catch (e: any) {
-      setError(String(e?.message ?? e));
+    } catch (e) {
+      setError(errorMessage(e));
     } finally {
       setProgress(null);
       job.current = null;

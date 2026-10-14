@@ -4,6 +4,7 @@ import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import { runJob, type SimJob } from '../sim/jobs';
 import { installNativeFromEnv } from '../wasm/installNode';
+import { errorMessage } from '../engine/types';
 
 installNativeFromEnv();
 const reg = loadRegistry(CARD_DB);
@@ -11,7 +12,7 @@ const reg = loadRegistry(CARD_DB);
 parentPort!.on('message', (job: SimJob) => {
   try {
     parentPort!.postMessage({ ok: true, result: runJob(reg, job) });
-  } catch (e: any) {
-    parentPort!.postMessage({ ok: false, error: String(e?.message ?? e) });
+  } catch (e) {
+    parentPort!.postMessage({ ok: false, error: errorMessage(e) });
   }
 });

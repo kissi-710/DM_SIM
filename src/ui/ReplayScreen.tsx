@@ -4,6 +4,7 @@ import { ReplayViewer } from './ReplayViewer';
 import { loadSavedRecords, parseRecord, type GameRecord } from './record';
 import { replayRecord } from './useGame';
 import type { Ev, GameState } from '../engine/types';
+import { errorMessage } from '../engine/types';
 
 export function ReplayScreen() {
   const [text, setText] = useState('');
@@ -16,8 +17,8 @@ export function ReplayScreen() {
       const r = replayRecord(rec);
       setView({ title: `棋譜の再生(シード ${rec.seed} / ${rec.actions.length}手)`, states: r.states, events: r.events });
       setErr(null);
-    } catch (e: any) {
-      setErr('再生できません: ' + String(e?.message ?? e));
+    } catch (e) {
+      setErr('再生できません: ' + errorMessage(e));
     }
   };
 

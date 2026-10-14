@@ -9,6 +9,7 @@ import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import type { Action } from '../engine/types';
 import { DmEngine } from '../wasm/dmEngine';
+import { errorMessage } from '../engine/types';
 
 export type AiWorkerIn =
   | { id: number; req: DecideReq }
@@ -71,15 +72,15 @@ self.onmessage = async (e: MessageEvent<AiWorkerIn>) => {
         rows = m.seeds.map((sd) => evalRound(env, reg, sd, m.alive));
       }
       post({ id: m.id, ok: true, rows, ms: Date.now() - t0 });
-    } catch (err: any) {
-      post({ id: m.id, ok: false, error: String(err?.message ?? err) });
+    } catch (err) {
+      post({ id: m.id, ok: false, error: errorMessage(err) });
     }
     return;
   }
   const { id, req } = m as { id: number; req: DecideReq };
   try {
     post({ id, ok: true, action: decide(reg, req), ms: Date.now() - t0 });
-  } catch (err: any) {
-    post({ id, ok: false, error: String(err?.message ?? err) });
+  } catch (err) {
+    post({ id, ok: false, error: errorMessage(err) });
   }
 };

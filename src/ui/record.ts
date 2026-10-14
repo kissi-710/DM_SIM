@@ -3,6 +3,7 @@ import type { AgentSpec } from '../ai';
 import { CARD_DB } from '../cards';
 import type { Action, GameConfig, PlayerId } from '../engine/types';
 import { loadJson, saveJson } from './util';
+import { errorMessage } from '../engine/types';
 
 /**
  * 棋譜・自動保存の版。エンジンの変更で「同じシード・同じ行動列」の意味が変わった時に上げる。
@@ -81,8 +82,8 @@ export function parseRecord(text: string): RecordCheck {
   let v: unknown;
   try {
     v = JSON.parse(text);
-  } catch (e: any) {
-    return { ok: false, error: 'JSON を読み込めません: ' + String(e?.message ?? e) };
+  } catch (e) {
+    return { ok: false, error: 'JSON を読み込めません: ' + errorMessage(e) };
   }
   return validateRecord(v);
 }

@@ -5,6 +5,7 @@ import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import { judgeAgent, teacherValues, type Judgement, type Position, type TeacherEntry, type TeacherOpts } from '../sim/aiEval';
 import { installNativeFromEnv } from '../wasm/installNode';
+import { errorMessage } from '../engine/types';
 
 installNativeFromEnv();
 const reg = loadRegistry(CARD_DB);
@@ -24,7 +25,7 @@ parentPort!.on('message', (t: QualityTask) => {
         judged: t.items.map((it, i) => judgeAgent(reg, it.pos, it.teacher, t.spec, t.seed + i)),
       } satisfies QualityOut);
     }
-  } catch (e: any) {
-    parentPort!.postMessage({ ok: false, error: String(e?.message ?? e) } satisfies QualityOut);
+  } catch (e) {
+    parentPort!.postMessage({ ok: false, error: errorMessage(e) } satisfies QualityOut);
   }
 });

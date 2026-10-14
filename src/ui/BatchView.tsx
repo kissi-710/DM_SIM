@@ -10,6 +10,7 @@ import type { CardStrength } from '../sim/strength';
 import { allDecks, findDeck } from './decks';
 import { runSimJob, type RunningJob } from './simClient';
 import { downloadText } from './util';
+import { errorMessage } from '../engine/types';
 
 /** シード欄が空なら、実行のたびにランダムに決める(結果に表示するので、同じ値を入れれば再現できる) */
 function resolveSeed(raw: string): number {
@@ -117,8 +118,8 @@ export function BatchView() {
       );
       const r: MatchStats[] = await job.current.promise;
       setResults(r.map((s, i) => ({ label: variants[i].label, seed, s })));
-    } catch (e: any) {
-      setError(String(e?.message ?? e));
+    } catch (e) {
+      setError(errorMessage(e));
     } finally {
       setProgress(null);
     }
@@ -138,8 +139,8 @@ export function BatchView() {
         (d, t) => setProgress([d, t]),
       );
       setStrength({ seed, rows: await job.current.promise });
-    } catch (e: any) {
-      setError(String(e?.message ?? e));
+    } catch (e) {
+      setError(errorMessage(e));
     } finally {
       setProgress(null);
     }
