@@ -692,7 +692,13 @@ fn run_break(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
         0 => {
             let shields = c.s.players[defender as usize].shield.clone();
             if shields.is_empty() {
-                // 攻撃先が変更されないまま、シールドが0枚の相手プレイヤーへの攻撃が成立 → 勝利
+                // 攻撃先が変更されないまま、シールドが0枚の相手プレイヤーへの攻撃が成立 → 勝利。
+                // 負ける側の「ゲームに負ける時、かわりに〜してもよい」(ジャオウガ)を使えるなら、勝敗は決まらず攻撃は終わる
+                if loss_replacement(c, defender, false)? {
+                    f.stage = 2;
+                    push_proc(c, ProcName::Settle, vec![]);
+                    return Ok(());
+                }
                 c.s.winner = Winner::P(attacker_owner);
                 c.s.lose_reason = Some("ダイレクトアタック".to_string());
                 emit(c, s::GAME_OVER, vec![(s::WINNER, Val::Int(attacker_owner as i64)), (s::REASON, Val::Str(sym("ダイレクトアタック")))]);
@@ -979,7 +985,7 @@ pub fn run_sba(c: &mut Ctx) -> Res<bool> {
         .collect();
     if !losers.is_empty() {
         for &p in &losers {
-            if loss_replacement(c, p as u8)? {
+            if loss_replacement(c, p as u8, true)? {
                 return Ok(true);
             }
         }
@@ -1029,8 +1035,10 @@ pub fn run_sba(c: &mut Ctx) -> Res<bool> {
     Ok(false)
 }
 
-/// 「ゲームに負ける時、かわりに〜してもよい」(ジャオウガ)。置換したら true
-fn loss_replacement(c: &mut Ctx, p: PlayerId) -> Res<bool> {
+/// 「ゲームに負ける時、かわりに〜してもよい」(ジャオウガ)。置換したら true。
+/// deck_out: 山札切れによる敗北か(置換後、山札が増えるまで再度は起きないので、記録する)。
+/// ダイレクトアタックによる敗北は、攻撃のたびに起きる出来事なので記録しない。
+fn loss_replacement(c: &mut Ctx, p: PlayerId, deck_out: bool) -> Res<bool> {
     let key = UKey::DeckOut(p);
     let reg = c.reg;
     let perms: Vec<i32> = c.s.players[p as usize].battle.iter().map(|x| x.cards[0]).collect();
@@ -1090,7 +1098,9 @@ fn loss_replacement(c: &mut Ctx, p: PlayerId) -> Res<bool> {
                 )?;
                 ans.to_i32s()
             };
-            c.s.usage_set(&key, 1);
+            if deck_out {
+                c.s.usage_set(&key, 1);
+            }
             let mut o = MoveOpts::new(Zone::Grave, s::DESTROY);
             o.no_replace = true;
             move_cards(c, &picks, &o)?;

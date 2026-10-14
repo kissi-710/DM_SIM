@@ -564,7 +564,13 @@ function runBreak(c: Ctx, f: ProcFrame): void {
     case 0: {
       const shields = s.players[defender].shield;
       if (shields.length === 0) {
-        // 攻撃先が変更されないまま、シールドが0枚の相手プレイヤーへの攻撃が成立 → 勝利
+        // 攻撃先が変更されないまま、シールドが0枚の相手プレイヤーへの攻撃が成立 → 勝利。
+        // 負ける側の「ゲームに負ける時、かわりに〜してもよい」(ジャオウガ)を使えるなら、勝敗は決まらず攻撃は終わる
+        if (lossReplacement(c, defender, false)) {
+          f.stage = 2;
+          pushProc(c, 'settle');
+          return;
+        }
         s.winner = attackerOwner;
         s.loseReason = 'ダイレクトアタック';
         emit(c, 'gameOver', { winner: attackerOwner, reason: 'ダイレクトアタック' });
@@ -812,7 +818,7 @@ export function runSba(c: Ctx): boolean {
   );
   if (losers.length) {
     for (const p of losers) {
-      const sacrifice = lossReplacement(c, p);
+      const sacrifice = lossReplacement(c, p, true);
       if (sacrifice) return true;
     }
     if (losers.length === 2) s.winner = 'draw';
@@ -850,8 +856,12 @@ export function runSba(c: Ctx): boolean {
   return false;
 }
 
-/** 「ゲームに負ける時、かわりに〜してもよい」(ジャオウガ)。置換したら true */
-function lossReplacement(c: Ctx, p: PlayerId): boolean {
+/**
+ * 「ゲームに負ける時、かわりに〜してもよい」(ジャオウガ)。置換したら true。
+ * deckOut: 山札切れによる敗北か(置換後、山札が増えるまで再度は起きないので、記録する)。
+ * ダイレクトアタックによる敗北は、攻撃のたびに起きる出来事なので記録しない。
+ */
+function lossReplacement(c: Ctx, p: PlayerId, deckOut: boolean): boolean {
   const s = c.s;
   const key = `deckOutHandled${p}`;
   for (const perm of s.players[p].battle) {
@@ -880,7 +890,7 @@ function lossReplacement(c: Ctx, p: PlayerId): boolean {
               source: { uid, ep: s.cards[uid].ep },
               prompt: `${c.reg.defs[s.cards[uid].defId].name}: かわりに破壊する表向きのカードを3枚選んでください`,
             });
-      s.usage[key] = 1;
+      if (deckOut) s.usage[key] = 1;
       moveCards(c, scored, { to: 'grave', cause: 'destroy', noReplace: true });
       return true;
     }

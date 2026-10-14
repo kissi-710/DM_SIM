@@ -164,6 +164,44 @@ describe('A11 CRYMAX ジャオウガ', () => {
     expect(sim.has(0, 'grave', 'ヨビニオン・トライブ')).toBe(true);
     expect(sim.has(0, 'mana', 'ヨビニオン・トライブ')).toBe(false);
   });
+  it('ダイレクトアタックで負ける時も、かわりに表向きのカード3枚を破壊してもよい(置換)', () => {
+    const sim = new Sim({
+      active: 1,
+      p0: { battle: ['CRYMAX ジャオウガ', '天災 デドダム', 'ヨビニオン・トライブ', '漢気の2号 ボスカツ'], shield: 0 },
+      p1: { battle: ['ヨビニオン・マルル'] },
+    });
+    sim.attack('ヨビニオン・マルル', 'player');
+    // 置換の選択(持ち主=p0)
+    expect(sim.pending.why).toBe('replaceChoice');
+    expect(sim.pending.player).toBe(0);
+    sim.option(0);
+    // 勝敗は決まらず、ジャオウガは残る。ほかの3体が破壊される(ちょうど3枚なので選択はない)
+    expect(sim.s.winner).toBeNull();
+    expect(sim.has(0, 'battle', 'CRYMAX ジャオウガ')).toBe(true);
+    expect(sim.count(0, 'grave')).toBe(3);
+    expect(sim.count(0, 'battle')).toBe(1);
+  });
+  it('ダイレクトアタックの置換をしなければ、そのまま負ける', () => {
+    const sim = new Sim({
+      active: 1,
+      p0: { battle: ['CRYMAX ジャオウガ', '天災 デドダム', 'ヨビニオン・トライブ', '漢気の2号 ボスカツ'], shield: 0 },
+      p1: { battle: ['ヨビニオン・マルル'] },
+    });
+    sim.attack('ヨビニオン・マルル', 'player');
+    sim.option(1); // 置換しない
+    expect(sim.s.winner).toBe(1);
+    expect(sim.count(0, 'grave')).toBe(0);
+  });
+  it('ダイレクトアタックで負ける時、身代わりにできるカードが3枚に満たなければ置換できず負ける', () => {
+    const sim = new Sim({
+      active: 1,
+      p0: { battle: ['CRYMAX ジャオウガ', '天災 デドダム', 'ヨビニオン・トライブ'], mana: mana(4), shield: 0 },
+      p1: { battle: ['ヨビニオン・マルル'] },
+    });
+    sim.attack('ヨビニオン・マルル', 'player');
+    // マナゾーンのカードは身代わりにできない(破壊できるのはバトルゾーンのカードだけ)
+    expect(sim.s.winner).toBe(1);
+  });
   it('S-MAX進化クリーチャーが2体以上いる場合、1体を残して残りを手札に戻す', () => {
     const sim = new Sim({
       p0: { hand: ['CRYMAX ジャオウガ'], mana: mana(7, D), battle: ['CRYMAX ジャオウガ'], shield: 5 },
