@@ -3,7 +3,7 @@ import { legalActions, registryOf } from '../engine/engine';
 import type { Action, CardDB, GameState } from '../engine/types';
 import { FAIR, toPlayerView } from '../engine/view';
 import type { Registry } from '../engine/registry';
-import { mulberry } from '../sim/playGame';
+import { mulberry } from '../engine/prng';
 import { makeAgent, type AgentSpec } from './index';
 
 export interface DecideReq {

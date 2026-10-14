@@ -4,7 +4,7 @@ import { legalActions, registryOf } from '../engine/engine';
 import type { Registry } from '../engine/registry';
 import type { Action, CardDB } from '../engine/types';
 import { FAIR, toPlayerView } from '../engine/view';
-import { mulberry } from '../sim/playGame';
+import { mulberry } from '../engine/prng';
 import { decide, type DecideReq } from './decide';
 import { planSearch, runSearchParallel, type RoundDispatch, type SearchEnv, type SearchInfo } from './mcts';
 import { makeRuleBased } from './rulebased';
