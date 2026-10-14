@@ -193,6 +193,7 @@ function stateKey(s: GameState): string {
       .join(','),
   );
   parts.push(z.grave.map(def).sort().join(','));
+  parts.push(z.hyper.map(def).sort().join(','));
   parts.push(z.shield.map(def).sort().join(','));
   parts.push(s.effects.length);
   if (s.pending && s.pending.why !== 'turnAction') {

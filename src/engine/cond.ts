@@ -143,6 +143,11 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('zoneIs' in o) {
     return cc.it != null && s.cards[cc.it].zone === o.zoneIs;
   }
+  if ('exShield' in o) {
+    if (cc.it == null || cc.self == null) return false;
+    const sh = s.cards[cc.it];
+    return sh.zone === 'shield' && sh.ex && sh.exPid === s.cards[cc.self].pid;
+  }
   // ここから先は「判定対象のカード $it」を使う条件
   if (cc.it == null) throw new Error('$it が無い条件: ' + JSON.stringify(cond));
   const it = cc.it;

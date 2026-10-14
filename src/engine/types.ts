@@ -5,7 +5,8 @@ export type Civ = 'light' | 'water' | 'darkness' | 'fire' | 'nature';
 export const CIVS: Civ[] = ['light', 'water', 'darkness', 'fire', 'nature'];
 export const CIV_LABEL: Record<Civ, string> = { light: '光', water: '水', darkness: '闇', fire: '火', nature: '自然' };
 
-export type ZoneName = 'deck' | 'hand' | 'mana' | 'shield' | 'battle' | 'grave' | 'limbo';
+/** hyper = 超次元ゾーン(各プレイヤーの表向きの置き場。インターステラが唱えた呪文を一時的に置く) */
+export type ZoneName = 'deck' | 'hand' | 'mana' | 'shield' | 'battle' | 'grave' | 'limbo' | 'hyper';
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 
 export const other = (p: PlayerId): PlayerId => (p === 0 ? 1 : 0);
@@ -71,6 +72,7 @@ export interface PlayerZones {
   mana: number[];
   shield: number[];
   grave: number[]; // 末尾が一番上
+  hyper: number[]; // 超次元ゾーン
   battle: Permanent[];
 }
 
@@ -180,11 +182,15 @@ export type EffectMod =
   | { kind: 'powerAdd'; n: number }
   | { kind: 'grant'; keyword: string }
   | { kind: 'cannotBeChosen' }
-  | { kind: 'cannotBeAttacked' };
+  | { kind: 'cannotBeAttacked' }
+  /** プレイヤー単位(ContEffect.pid = -1): 発生源の持ち主の相手は呪文を唱えられない */
+  | { kind: 'cannotCast' }
+  /** プレイヤー単位: 発生源の持ち主の相手は、コストが n のカードを実行できない */
+  | { kind: 'cannotUseCost'; n: number };
 
 export interface ContEffect {
   id: number;
-  /** 対象の山 */
+  /** 対象の山(プレイヤー単位の効果は -1) */
   pid: number;
   mod: EffectMod;
   until: Duration;

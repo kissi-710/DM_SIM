@@ -203,7 +203,8 @@ function removeFromZone(c: Ctx, uid: number): void {
     case 'hand':
     case 'mana':
     case 'shield':
-    case 'grave': {
+    case 'grave':
+    case 'hyper': {
       const arr = own[card.zone];
       const i = arr.indexOf(uid);
       if (i >= 0) arr.splice(i, 1);
@@ -242,6 +243,7 @@ function placeInZone(c: Ctx, uid: number, to: ZoneName, pos: 'top' | 'bottom' | 
     case 'mana':
     case 'shield':
     case 'grave':
+    case 'hyper':
       own[to].push(uid);
       break;
     case 'limbo':

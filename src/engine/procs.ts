@@ -6,10 +6,12 @@ import {
   canAttack,
   canBlock,
   canCast,
+  canUseCost,
   charsOf,
   costOf,
   hasKeyword,
   infoOf,
+  isUnblockable,
   payNeed,
   planPayment,
   powerOf,
@@ -97,6 +99,7 @@ export function planPlay(
     after = perm?.after ?? null;
   }
   if (kind === 'cast' && !canCast(c, player, uid, faceIdx)) return fail('この呪文は唱えられません');
+  if (!canUseCost(c, player, face.cost)) return fail('そのコストのカードは実行できません');
 
   let onto: number | undefined;
   if (face.type === 'evolution') {
@@ -378,7 +381,10 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       const p = v.plan;
       const card = s.cards[uid];
       if (card.zone === 'limbo') {
-        if (p.after === 'deckBottom' || v.after === 'deckBottom') {
+        if (v.after === 'hyper') {
+          // インターステラ: 墓地(や山札の下)のかわりに超次元ゾーンに置く。呪文自身の置換と重なる時は超次元ゾーンを選ぶ
+          moveCards(c, [uid], { to: 'hyper', cause: 'castHyper', noReplace: true });
+        } else if (p.after === 'deckBottom' || v.after === 'deckBottom') {
           moveCards(c, [uid], { to: 'deck', cause: 'castBottom', pos: 'bottom', noReplace: true });
         } else {
           moveCards(c, [uid], { to: 'grave', cause: 'cast', noReplace: true });
@@ -448,7 +454,9 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       const defender = opponentOf(pm.owner);
       // 攻撃されているクリーチャー自身は、ブロッカーとして選べない(総合ルール 507.1a)
       const attacked = v.target.kind === 'creature' ? v.target.pid : -1;
-      const cands = s.players[defender].battle.filter((p) => p.pid !== attacked && canBlock(c, p)).map((p) => p.cards[0]);
+      const cands = isUnblockable(c, pm.perm)
+        ? []
+        : s.players[defender].battle.filter((p) => p.pid !== attacked && canBlock(c, p)).map((p) => p.cards[0]);
       let blocker: number | null = null;
       if (cands.length > 0) {
         const ans = ask<number[]>(c, {
@@ -510,6 +518,9 @@ function runAttack(c: Ctx, f: ProcFrame): void {
         losers.push(aTop);
         winner = dTop;
       } else losers.push(aTop, dTop);
+      // スレイヤー: バトルの後、バトルした相手を破壊する(勝敗にかかわらず)
+      if (hasKeyword(c, pm.perm, 'slayer') && !losers.includes(dTop)) losers.push(dTop);
+      if (hasKeyword(c, dm.perm, 'slayer') && !losers.includes(aTop)) losers.push(aTop);
       const aOwner = pm.owner;
       const dOwner = dm.owner;
       const aPid = pm.perm.pid;

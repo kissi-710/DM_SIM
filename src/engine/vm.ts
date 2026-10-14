@@ -452,6 +452,42 @@ function execAct(c: Ctx, f: EffectFrame, cc: CC, act: ActDef): void {
       s.dirtySba = true;
       return;
     }
+    case 'revolutionChange': {
+      // 革命チェンジ: 攻撃中のクリーチャーを手札に戻し、このカードを手札から攻撃中のクリーチャーとして出す。
+      // 「攻撃する時」は誘発しない(攻撃の宣言は済んでいる)。攻撃の対象は変わらない。
+      const trig = f.trigger;
+      if (!trig || trig.type !== 'attackDeclared') return;
+      const uid = f.source.uid;
+      const card = s.cards[uid];
+      if (card.ep !== f.source.ep || card.zone !== 'hand') return;
+      const pm = permByPid(s, trig.attacker);
+      if (!pm || pm.perm.cards[0] !== trig.card) return;
+      const fr = [...s.cont].reverse().find((x) => x.kind === 'proc' && x.name === 'attack' && x.vars.pid === trig.attacker);
+      if (!fr) return;
+      const fi = creatureFace(c, uid);
+      if (fi < 0) return;
+      const res = moveCards(c, [trig.card], { to: 'hand', cause: 'revolutionChange' });
+      if (!res[0]?.moved) return; // 置換されて離れなかった(EXライフなど): 入れ替わらない
+      const evs: Ev[] = [];
+      enterBattle(c, uid, { to: 'battle', cause: 'revolutionChange', via: 'revolutionChange', face: fi, tapped: true, paid: 0 }, evs);
+      fr.vars.pid = s.cards[uid].pid;
+      s.batchNo++;
+      collectBatch(c, evs);
+      s.dirtySba = true;
+      return;
+    }
+    case 'playerEffect': {
+      // プレイヤー単位の継続効果(pid = -1)。「相手は〜できない」
+      const m = a.mod;
+      const mod: EffectMod = m.kind === 'cannotUseCost' ? { kind: 'cannotUseCost', n: evalExpr(cc, m.n) } : { kind: 'cannotCast' };
+      s.effects.push({ id: nextId(s), pid: -1, mod, until: durationOf(c, f, a.until), controller: f.controller });
+      return;
+    }
+    case 'log': {
+      // 「そのターン中に〜を使っていなければ」の判定用に、印をログに残す
+      emit(c, a, { owner: f.controller, source: f.source.uid });
+      return;
+    }
     case 'setVar': {
       f.vars[a.as] = a.value;
       return;

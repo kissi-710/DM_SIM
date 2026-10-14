@@ -25,6 +25,7 @@ export interface ZoneSpec {
   mana?: Item[];
   battle?: Item[];
   grave?: Item[];
+  hyper?: Item[];
   shield?: Item[] | number;
   deck?: Item[] | number;
 }
@@ -43,8 +44,8 @@ export interface Setup {
 export function buildState(setup: Setup, r: Registry = reg): GameState {
   const cards: Card[] = [];
   const players: [PlayerZones, PlayerZones] = [
-    { deck: [], hand: [], mana: [], shield: [], grave: [], battle: [] },
-    { deck: [], hand: [], mana: [], shield: [], grave: [], battle: [] },
+    { deck: [], hand: [], mana: [], shield: [], grave: [], hyper: [], battle: [] },
+    { deck: [], hand: [], mana: [], shield: [], grave: [], hyper: [], battle: [] },
   ];
   let nextPid = 1;
   const add = (p: PlayerId, defId: string, zone: Card['zone']): number => {
@@ -63,6 +64,7 @@ export function buildState(setup: Setup, r: Registry = reg): GameState {
       z.mana.push(u);
     }
     for (const it of sp.grave ?? []) z.grave.push(add(p, defIdOf(norm(it).c, r), 'grave'));
+    for (const it of sp.hyper ?? []) z.hyper.push(add(p, defIdOf(norm(it).c, r), 'hyper'));
     const sh = sp.shield ?? 5;
     if (typeof sh === 'number') for (let i = 0; i < sh; i++) z.shield.push(add(p, 'dummy', 'shield'));
     else for (const it of sh) z.shield.push(add(p, defIdOf(norm(it).c, r), 'shield'));
@@ -145,7 +147,7 @@ export class Sim {
     return this;
   }
 
-  uid(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle', name: string, nth = 0): number {
+  uid(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle' | 'hyper', name: string, nth = 0): number {
     const did = defIdOf(name, this.r);
     const list: number[] = zone === 'battle' ? this.s.players[p].battle.map((x) => x.cards[0]) : this.s.players[p][zone];
     const hits = list.filter((u) => this.s.cards[u].defId === did);
@@ -269,17 +271,17 @@ export class Sim {
   }
 
   // ───── 検証 ─────
-  names(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle'): string[] {
+  names(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle' | 'hyper'): string[] {
     const list: number[] = zone === 'battle' ? this.s.players[p].battle.map((x) => x.cards[0]) : this.s.players[p][zone];
     return list.map((u) => this.r.defs[this.s.cards[u].defId].name);
   }
-  count(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle', name?: string): number {
+  count(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle' | 'hyper', name?: string): number {
     if (!name) return zone === 'battle' ? this.s.players[p].battle.length : this.s.players[p][zone].length;
     const did = defIdOf(name, this.r);
     const list: number[] = zone === 'battle' ? this.s.players[p].battle.map((x) => x.cards[0]) : this.s.players[p][zone];
     return list.filter((u) => this.s.cards[u].defId === did).length;
   }
-  has(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle', name: string): boolean {
+  has(p: PlayerId, zone: 'hand' | 'mana' | 'grave' | 'shield' | 'deck' | 'battle' | 'hyper', name: string): boolean {
     return this.count(p, zone, name) > 0;
   }
   legal(): Action[] {

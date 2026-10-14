@@ -35,6 +35,7 @@ export interface FaceInfo {
   machFighter: boolean;
   exLife: boolean;
   justDiver: boolean;
+  slayer: boolean;
   sympathy: boolean;
   hyperEnergy: boolean;
   shieldTriggers: { ability: Extract<Ability, { kind: 'keyword' }>; idx: number }[];
@@ -102,6 +103,18 @@ function expandFace(face: Face): Face {
           },
         ],
       });
+    } else if (a.name === 'revolutionChange') {
+      out.push({
+        kind: 'trigger',
+        label: a.label ?? '革命チェンジ',
+        optional: true,
+        spec: {
+          on: { type: 'attackDeclared', attackerCond: a.attacker, owner: 'self' },
+          watch: ['hand'],
+          subject: 'any',
+        },
+        steps: [{ op: 'act', act: { revolutionChange: {} } }],
+      });
     } else if (a.name === 'invasion') {
       const spec: TriggerSpec = {
         on: { type: 'attackDeclared', attackerCond: a.attacker, owner: 'self' },
@@ -123,17 +136,17 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'true',
+  'turnOf', 'zoneIs', 'exShield', 'true',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
   'blocker', 'breaker', 'shieldTrigger', 'gStrike', 'speedAttacker', 'machFighter', 'exLife', 'justDiver',
-  'sympathy', 'hyperEnergy', 'yobinion', 'invasion',
+  'sympathy', 'hyperEnergy', 'yobinion', 'invasion', 'slayer', 'revolutionChange',
 ]);
 
 function checkCond(c: any, where: string, errs: string[]) {
@@ -365,7 +378,7 @@ export function loadRegistry(origDb: CardDB): Registry {
     defs[id] = nd;
     info[id] = faces.map((f, fi) => {
       const fi_: FaceInfo = {
-        blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false,
+        blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false, slayer: false,
         sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], statics: [],
         replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
       };
@@ -380,6 +393,7 @@ export function loadRegistry(origDb: CardDB): Registry {
             else if (a.name === 'machFighter') fi_.machFighter = true;
             else if (a.name === 'exLife') fi_.exLife = true;
             else if (a.name === 'justDiver') fi_.justDiver = true;
+            else if (a.name === 'slayer') fi_.slayer = true;
             else if (a.name === 'sympathy') fi_.sympathy = true;
             else if (a.name === 'hyperEnergy') fi_.hyperEnergy = true;
             else if (a.name === 'shieldTrigger') fi_.shieldTriggers.push({ ability: a, idx });

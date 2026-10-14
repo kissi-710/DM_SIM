@@ -23,6 +23,7 @@ export const ZONE_NAME: Record<ZoneName, string> = {
   shield: 'シールド',
   battle: 'バトルゾーン',
   grave: '墓地',
+  hyper: '超次元ゾーン',
   limbo: '(処理中)',
 };
 

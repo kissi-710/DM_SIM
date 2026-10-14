@@ -111,7 +111,7 @@ export function powerOf(c: Ctx, perm: Permanent): number {
   return p;
 }
 
-export type KwName = 'blocker' | 'speedAttacker' | 'machFighter' | 'shieldTrigger' | 'justDiver' | 'exLife';
+export type KwName = 'blocker' | 'speedAttacker' | 'machFighter' | 'shieldTrigger' | 'justDiver' | 'exLife' | 'slayer' | 'unblockable';
 
 export function hasKeyword(c: Ctx, perm: Permanent, kw: KwName): boolean {
   const uid = perm.cards[0];
@@ -120,6 +120,23 @@ export function hasKeyword(c: Ctx, perm: Permanent, kw: KwName): boolean {
     if (info.shieldTriggers.length > 0) return true;
   } else if ((info as any)[kw]) return true;
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'grant' && e.mod.keyword === kw) return true;
+  return grantedByStatic(c, perm, kw);
+}
+
+/** 場の常在型能力(grantKeyword)でキーワードを与えられているか */
+function grantedByStatic(c: Ctx, perm: Permanent, kw: KwName): boolean {
+  const uid = perm.cards[0];
+  const owner = c.s.cards[uid].owner;
+  for (const src of c.s.players[owner].battle) {
+    const su = src.cards[0];
+    const info = infoOf(c, su);
+    for (const st of info.statics) {
+      const m = st.ability.mod;
+      if (m.type !== 'grantKeyword' || m.keyword !== kw) continue;
+      if (st.ability.while && !evalCond(mkCC(c, owner, { self: su }), st.ability.while)) continue;
+      if (evalCond(mkCC(c, owner, { self: su, it: uid, itFace: c.s.cards[uid].face }), m.cond as Cond)) return true;
+    }
+  }
   return false;
 }
 
@@ -193,6 +210,11 @@ export function canAttack(c: Ctx, perm: Permanent, target: { kind: 'player' } | 
   if (tp.perm.tapped) return true;
   // アンタップ状態のクリーチャーは、出たターンのマッハファイターだけが攻撃できる
   return sick && mach;
+}
+
+/** 攻撃クリーチャーが「ブロックされない」か(レッドギラゾーン) */
+export function isUnblockable(c: Ctx, attacker: Permanent): boolean {
+  return hasKeyword(c, attacker, 'unblockable');
 }
 
 export function canBlock(c: Ctx, perm: Permanent): boolean {
@@ -321,11 +343,21 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
 
 /** プレイヤーがこの呪文(面)を唱えられるか(ドルファディロムの制限など) */
 export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
+  // 「次の自分のターンのはじめまで、相手は呪文を唱えられない」(XXDDZ)
+  for (const e of c.s.effects) if (e.mod.kind === 'cannotCast' && e.controller !== player) return false;
   for (const st of activeStatics(c)) {
     if (st.ability.mod.type !== 'cannotCast') continue;
     if (st.controller === player) continue; // 「相手は〜できない」
     const cc = mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx });
     if (evalCond(cc, st.ability.mod.cond as Cond)) return false;
+  }
+  return true;
+}
+
+/** 「相手はそのコストのカードを実行できない」(オーパーツ銃のファイナル革命)に当たらないか */
+export function canUseCost(c: Ctx, player: PlayerId, cost: number): boolean {
+  for (const e of c.s.effects) {
+    if (e.mod.kind === 'cannotUseCost' && e.controller !== player && e.mod.n === cost) return false;
   }
   return true;
 }

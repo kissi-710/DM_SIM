@@ -52,6 +52,8 @@ export type Cond =
   | { nonEmpty: string }
   | { turnOf: 'self' | 'opponent' }
   | { zoneIs: ZoneName }
+  /** $it が、能力の発生源(EXライフを持つクリーチャー)のEXライフのシールドか */
+  | { exShield: true }
   | { true: true };
 
 export type ActDef = { [act: string]: any };
@@ -108,13 +110,17 @@ export type KeywordName =
   | 'sympathy'
   | 'hyperEnergy'
   | 'yobinion'
-  | 'invasion';
+  | 'invasion'
+  | 'slayer'
+  | 'revolutionChange';
 
 export type StaticMod =
   | { type: 'costDelta'; delta: number; cond: Cond }
   | { type: 'cannotAttackPlayerWhenEntered' }
   | { type: 'cannotCast'; cond: Cond }
-  | { type: 'powerAdd'; n: number };
+  | { type: 'powerAdd'; n: number }
+  /** 自分のクリーチャー(cond に合うもの)すべてにキーワードを与える。unblockable = ブロックされない */
+  | { type: 'grantKeyword'; keyword: 'speedAttacker' | 'machFighter' | 'slayer' | 'unblockable'; cond: Cond };
 
 export type ReplaceApply =
   | { type: 'changeDest'; to: ZoneName }

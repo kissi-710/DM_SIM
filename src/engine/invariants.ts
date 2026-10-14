@@ -10,7 +10,7 @@ export function checkInvariants(s: GameState): string[] {
   };
   for (const p of [0, 1] as PlayerId[]) {
     const z = s.players[p];
-    for (const name of ['deck', 'hand', 'mana', 'shield', 'grave'] as const) {
+    for (const name of ['deck', 'hand', 'mana', 'shield', 'grave', 'hyper'] as const) {
       for (const u of z[name]) {
         put(u, `${p}:${name}`);
         const c = s.cards[u];

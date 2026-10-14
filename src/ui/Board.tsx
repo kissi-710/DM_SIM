@@ -274,6 +274,7 @@ export function Board(b: BoardProps) {
       <div className="chip grave" onDoubleClick={() => openList(p, 'grave')} title="ダブルクリックで一覧">
         <span className="chip-label">
           墓地 <b>{z.grave.length}</b>
+          {z.hyper.length > 0 && <span className="chip-sub">超次元 {z.hyper.length}</span>}
           <button className="small icon" onClick={() => openList(p, 'grave')} aria-label="墓地の一覧">
             ≡
           </button>

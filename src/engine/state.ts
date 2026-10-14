@@ -74,6 +74,7 @@ function clonePlayer(p: PlayerZones): PlayerZones {
     mana: p.mana.slice(),
     shield: p.shield.slice(),
     grave: p.grave.slice(),
+    hyper: p.hyper.slice(),
     battle: p.battle.map((b) => ({ ...b, cards: b.cards.slice() })),
   };
 }

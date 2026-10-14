@@ -73,7 +73,7 @@ export function createGame(db: CardDB | Registry, opts: NewGameOpts): { state: G
   }
   const cfg: GameConfig = { ...defaultConfig(), ...(opts.cfg ?? {}) };
   const cards: Card[] = [];
-  const zones = (): PlayerZones => ({ deck: [], hand: [], mana: [], shield: [], grave: [], battle: [] });
+  const zones = (): PlayerZones => ({ deck: [], hand: [], mana: [], shield: [], grave: [], hyper: [], battle: [] });
   const players: [PlayerZones, PlayerZones] = [zones(), zones()];
   const s: GameState = {
     v: 1,
