@@ -16,7 +16,7 @@ const isCreature = (id: string) => reg.defs[id].faces.some((f) => f.type !== 'sp
 function randomSetup(rand: () => number, must: string, mustZone: Zone, mustPlayer: 0 | 1): Setup {
   const pick = () => POOL[Math.floor(rand() * POOL.length)];
   const n = (lo: number, hi: number) => lo + Math.floor(rand() * (hi - lo + 1));
-  const side = (p: 0 | 1) => {
+  const side = () => {
     const hand = Array.from({ length: n(0, 6) }, pick);
     const mana = Array.from({ length: n(0, 11) }, pick).map((c) => ({ c, tapped: rand() < 0.3 }));
     const battle = Array.from({ length: n(0, 4) }, pick)
@@ -28,8 +28,8 @@ function randomSetup(rand: () => number, must: string, mustZone: Zone, mustPlaye
     return { hand, mana, battle, grave, shield, deck } as any;
   };
   const setup: Setup = {
-    p0: side(0),
-    p1: side(1),
+    p0: side(),
+    p1: side(),
     active: 0,
     step: (['mana', 'main', 'main', 'attack'] as const)[Math.floor(rand() * 4)],
     turn: n(1, 12) * 2 - 1,
@@ -57,7 +57,7 @@ function run(seed: number, must: string, zone: Zone, player: 0 | 1, maxSteps = 1
     try {
       s = step(s, a, reg).state;
     } catch (e: any) {
-      throw new Error(`例外 seed=${seed} ${must}@${zone}/${player} step=${steps} action=${JSON.stringify(a)}: ${e?.message ?? e}`);
+      throw new Error(`例外 seed=${seed} ${must}@${zone}/${player} step=${steps} action=${JSON.stringify(a)}: ${e?.message ?? e}`, { cause: e });
     }
     const errs = checkInvariants(s);
     if (errs.length) throw new Error(`不変条件違反 seed=${seed} ${must}@${zone}/${player} step=${steps} action=${JSON.stringify(a)}: ${errs.join(' / ')}`);
