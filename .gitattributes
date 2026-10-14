@@ -1,2 +1,2 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# 改行は LF に統一する(Windows の autocrlf でも、作業ツリーを LF にする)
+* text=auto eol=lf
