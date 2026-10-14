@@ -227,7 +227,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [peek, setPeek] = useState(false);
   const [showOpp, setShowOpp] = useState(g.me === null);
   const [recText, setRecText] = useState<string | null>(null);
-  const [manualPay, setManualPay] = useState(false);
+  const [askPay, setAskPay] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [sideOpen, setSideOpen] = useState(() => window.innerWidth >= 1200);
@@ -486,8 +486,8 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                 </label>
               )}
               {g.me !== null && (
-                <label className="check">
-                  <input type="checkbox" checked={manualPay} onChange={(e) => setManualPay(e.target.checked)} /> マナを手動で選んで支払う
+                <label className="check" title="オフにすると、常に自動でタップするマナを決めます">
+                  <input type="checkbox" checked={askPay} onChange={(e) => setAskPay(e.target.checked)} /> 選べるときはタップするマナを選ぶ
                 </label>
               )}
               <label className="check">
@@ -521,7 +521,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           selected={selected}
           onSelect={setSelected}
           flash={flash}
-          manualPay={manualPay}
+          askPay={askPay}
         />
 
         {interactive && (

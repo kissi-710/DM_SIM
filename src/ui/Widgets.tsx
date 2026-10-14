@@ -256,8 +256,8 @@ export function OrderWidget({ spec, onAnswer }: { spec: Extract<InputSpec, { sha
 }
 
 // ── payment: マナの割り当て(手動支払い) ──
-export function PaymentWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extract<InputSpec, { shape: 'payment' }> }) {
-  const [sel, setSel] = useState<number[]>([]);
+export function PaymentWidget({ s, spec, onAnswer, onHover, initial }: Props & { spec: Extract<InputSpec, { shape: 'payment' }>; initial?: number[] }) {
+  const [sel, setSel] = useState<number[]>(initial ?? []);
   return (
     <>
       <div className="cards">

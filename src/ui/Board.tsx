@@ -4,9 +4,9 @@
 import { useMemo, useState } from 'react';
 import { CardView } from './CardView';
 import { PaymentWidget } from './Widgets';
-import { planPlay } from '../engine/procs';
+import { payChoice, planPlay } from '../engine/procs';
 import { mkCtx } from '../engine/state';
-import { cardName, reg } from './format';
+import { CIV_NAME, cardName, reg } from './format';
 import { useDrag } from './useDrag';
 import type { Action, GameState, PlayerId } from '../engine/types';
 
@@ -82,8 +82,8 @@ interface BoardProps {
   onSelect: (key: string | null) => void;
   /** 直近のイベントで動いたカード(強調表示) */
   flash?: Set<number>;
-  /** マナを手動で選んで支払う(spec 3.4) */
-  manualPay?: boolean;
+  /** 支払いに選択があるときだけ、タップするマナを選ばせる(自明なら聞かない。spec 3.4) */
+  askPay?: boolean;
 }
 
 export function Board(b: BoardProps) {
@@ -92,18 +92,19 @@ export function Board(b: BoardProps) {
   const opp: PlayerId = viewer === 0 ? 1 : 0;
   const dropMap = useMemo(() => (interactive ? buildDropMap(s, b.legal) : new Map<string, Drop[]>()), [s, b.legal, interactive]);
   const [chooser, setChooser] = useState<Drop[] | null>(null);
-  const [payFor, setPayFor] = useState<Drop | null>(null);
+  const [payFor, setPayFor] = useState<{ drop: Drop; auto: number[] } | null>(null);
   const [payErr, setPayErr] = useState<string | null>(null);
   const flashOf = (u: number) => !!b.flash?.has(u);
   /** 行動を実行する。手動支払いが有効なら、先にマナの選択を挟む */
   const act = (d: Drop) => {
     b.onSelect(null);
-    if (b.manualPay && d.action.type === 'PLAY_CARD') {
+    // 自明(払い方が1通り)なら聞かずに自動で払う。選べるときだけ、タップするマナを選ばせる
+    if (b.askPay && d.action.type === 'PLAY_CARD') {
       const a = d.action;
-      const plan = planPlay(mkCtx(s, reg), viewer, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
-      if (plan.ok && plan.need > 0) {
+      const ch = payChoice(mkCtx(s, reg), viewer, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
+      if (ch.need > 0 && !ch.obvious && ch.auto.length === ch.need) {
         setPayErr(null);
-        setPayFor(d);
+        setPayFor({ drop: d, auto: ch.auto });
         return;
       }
     }
@@ -363,23 +364,25 @@ export function Board(b: BoardProps) {
           </div>
         </div>
       )}
-      {payFor && payFor.action.type === 'PLAY_CARD' && (() => {
-        const a = payFor.action;
+      {payFor && payFor.drop.action.type === 'PLAY_CARD' && (() => {
+        const a = payFor.drop.action;
+        const label = payFor.drop.label;
         const ctx = mkCtx(s, reg);
         const base = planPlay(ctx, viewer, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
         const mana = s.players[viewer].mana.filter((u) => !s.cards[u].tapped && u !== a.uid);
         return (
           <div className="modal-back" onClick={() => setPayFor(null)}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <h2>支払うマナを選ぶ</h2>
+              <h2>タップするマナを選ぶ</h2>
               <p className="muted">
-                {payFor.label}。文明ごとに1枚ずつ含めて {base.need} 枚をタップします(多色のマナは1つの文明としてだけ数えます)。
+                {label} — {base.need}枚({base.civs.map((x) => CIV_NAME[x]).join("・")}を含める)。初めから自動の候補を選んであります。
               </p>
               <PaymentWidget
                 s={s}
                 pending={{ id: 0, player: viewer, why: 'ack', input: null }}
                 me={viewer}
                 spec={{ shape: 'payment', need: base.need, mana }}
+                initial={payFor.auto}
                 onHover={b.onHover}
                 onAnswer={(v) => {
                   const pay = v as number[];
