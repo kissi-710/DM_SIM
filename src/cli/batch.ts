@@ -106,7 +106,7 @@ if (args.strength) {
   )) as CardStrength[];
   console.log(`■ カード単体の強さ: ${deckA} vs ${deckB}(ルールベース同士・各${games}試合)`);
   for (const r of res) {
-    console.log(`  ${(r.delta * 100).toFixed(1).padStart(6)}pt  ${r.name} ×${r.copies}  (95%信頼区間 ${(r.ci95[0] * 100).toFixed(1)} 〜 ${(r.ci95[1] * 100).toFixed(1)})`);
+    console.log(`  ${(r.delta * 100).toFixed(1).padStart(6)}pt  ${r.name} ×${r.copies}  (95%信頼区間 ${(r.ci95[0] * 100).toFixed(1)} 〜 ${(r.ci95[1] * 100).toFixed(1)}、同時比較 ${(r.ciFamily[0] * 100).toFixed(1)} 〜 ${(r.ciFamily[1] * 100).toFixed(1)})`);
   }
   process.exit(0);
 }

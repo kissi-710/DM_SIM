@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hypergeomAtLeast, hypergeomPmf, wilson } from '../../src/sim/stats';
+import { hypergeomAtLeast, hypergeomPmf, normalQuantile, wilson, zFamily } from '../../src/sim/stats';
 
 describe('wilson(95%信頼区間)', () => {
   it('試行0回は [0, 1]', () => {
@@ -77,5 +77,35 @@ describe('超幾何分布', () => {
   });
   it('atLeast は 1 を超えない', () => {
     expect(hypergeomAtLeast(40, 40, 40, 0)).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('normalQuantile / zFamily(同時比較の補正)', () => {
+  it('よく知られた分位点と一致する', () => {
+    expect(normalQuantile(0.5)).toBeCloseTo(0, 9);
+    expect(normalQuantile(0.975)).toBeCloseTo(1.959964, 5);
+    expect(normalQuantile(0.995)).toBeCloseTo(2.575829, 5);
+    expect(normalQuantile(0.9)).toBeCloseTo(1.281552, 5);
+    expect(normalQuantile(0.025)).toBeCloseTo(-1.959964, 5);
+  });
+  it('対称で、端(裾)でも単調に増える', () => {
+    for (const p of [0.001, 0.01, 0.03, 0.2, 0.4]) expect(normalQuantile(p)).toBeCloseTo(-normalQuantile(1 - p), 9);
+    let prev = -Infinity;
+    for (const p of [1e-6, 1e-4, 0.01, 0.02, 0.03, 0.3, 0.5, 0.7, 0.97, 0.98, 0.9999, 1 - 1e-6]) {
+      const z = normalQuantile(p);
+      expect(z).toBeGreaterThan(prev);
+      prev = z;
+    }
+  });
+  it('範囲外は ±∞', () => {
+    expect(normalQuantile(0)).toBe(-Infinity);
+    expect(normalQuantile(1)).toBe(Infinity);
+  });
+  it('zFamily: 1つなら 1.96、k が増えるほど大きい(Bonferroni)', () => {
+    expect(zFamily(1)).toBeCloseTo(1.959964, 5);
+    expect(zFamily(16)).toBeGreaterThan(zFamily(4));
+    expect(zFamily(4)).toBeGreaterThan(zFamily(1));
+    expect(zFamily(16)).toBeCloseTo(normalQuantile(1 - 0.05 / 32), 12);
+    expect(zFamily(0)).toBeCloseTo(zFamily(1), 12);
   });
 });

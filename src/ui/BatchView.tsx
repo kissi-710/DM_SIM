@@ -284,6 +284,7 @@ export function BatchView() {
                   <th>枚数</th>
                   <th>勝率差</th>
                   <th>95%信頼区間</th>
+                  <th title="全カードを同時に比べるための区間(全体で95%)。順位を読む時はこちらを見る">同時比較の区間</th>
                 </tr>
               </thead>
               <tbody>
@@ -294,6 +295,9 @@ export function BatchView() {
                     <td style={{ color: c.delta > 0 ? 'var(--good)' : 'var(--bad)' }}>{(c.delta * 100).toFixed(1)}pt</td>
                     <td className="muted">
                       {(c.ci95[0] * 100).toFixed(1)} 〜 {(c.ci95[1] * 100).toFixed(1)}
+                    </td>
+                    <td className="muted">
+                      {(c.ciFamily[0] * 100).toFixed(1)} 〜 {(c.ciFamily[1] * 100).toFixed(1)}
                     </td>
                   </tr>
                 ))}
