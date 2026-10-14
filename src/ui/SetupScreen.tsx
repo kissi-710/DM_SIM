@@ -27,7 +27,7 @@ function policyOf(preset: InfoPreset): InfoPolicy {
 
 export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch'; onStart: (s: GameSetup) => void; onBack: () => void }) {
   const decks = allDecks();
-  const saved = loadJson<{ seats: SeatForm[]; first: string; seed: string; autoOrder: boolean; undo: boolean; delay: number } | null>('dmsim.setup.' + mode, null);
+  const saved = loadJson<{ seats: SeatForm[]; first: string; seed: string; autoOrder: boolean; undo: boolean; delay: number; think?: number } | null>('dmsim.setup.' + mode, null);
   const [seats, setSeats] = useState<SeatForm[]>(
     saved?.seats ??
       (mode === 'play'
@@ -45,6 +45,8 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
   const [autoOrder, setAutoOrder] = useState(saved?.autoOrder ?? false);
   const [undo, setUndo] = useState(saved?.undo ?? true);
   const [delay, setDelay] = useState(saved?.delay ?? (mode === 'watch' ? 600 : 500));
+  // モンテカルロ探索の最大の思考時間。手の優劣がはっきりすれば、これより早く打ち切る
+  const [think, setThink] = useState(saved?.think ?? 1200);
   const [strict, setStrict] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -60,9 +62,9 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
       const sd = seed.trim() === '' ? Math.floor(Math.random() * 1e9) : Number(seed) || 1;
       const mk = (f: SeatForm): Seat => ({
         kind: mode === 'watch' ? 'cpu' : f.kind,
-        agent: { kind: f.agent, policy: policyOf(f.info), candidateDecks: decks.filter((d) => d.preset).map((d) => d.cards), iterations: 80, ms: 1200 },
+        agent: { kind: f.agent, policy: policyOf(f.info), candidateDecks: decks.filter((d) => d.preset).map((d) => d.cards), ms: think },
       });
-      saveJson('dmsim.setup.' + mode, { seats, first, seed, autoOrder, undo, delay });
+      saveJson('dmsim.setup.' + mode, { seats, first, seed, autoOrder, undo, delay, think });
       onStart({
         decks: [ds[0].cards, ds[1].cards],
         deckNames: [ds[0].name, ds[1].name],
@@ -146,6 +148,11 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
           シード(空欄で自動)
           <input type="text" value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="例: 12345" />
         </label>
+        <label className="row">
+          モンテカルロの最大思考時間(ms)
+          <input type="number" value={think} min={50} max={20000} step={100} onChange={(e) => setThink(Math.max(50, Number(e.target.value) || 1200))} />
+        </label>
+        <span className="muted">1手ごとの上限です。手の優劣がはっきりすれば、早めに打ち切ります。長いほど強くなります。</span>
         <label className="row">
           CPUの手の間隔(ms)
           <input type="number" value={delay} min={0} max={3000} step={100} onChange={(e) => setDelay(Number(e.target.value))} />
