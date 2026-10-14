@@ -694,6 +694,13 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           {interactive && <div className="rail-tip">💡 {tip}</div>}
         </div>
 
+        {g.saveStatus !== 'ok' && (
+          <div className="toast" role="status" style={{ bottom: session.error ? 96 : undefined }}>
+            {g.saveStatus === 'failed'
+              ? '⚠ 自動保存できません(ブラウザの保存領域が使えません)。このまま画面を閉じると、対戦は戻せません。'
+              : '⚠ 別のタブの対戦の自動保存を上書きしています。'}
+          </div>
+        )}
         {session.error && (
           <div className="toast" role="alert">
             <div>{session.error}</div>

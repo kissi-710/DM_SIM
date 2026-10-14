@@ -7,7 +7,8 @@ import { ManualView } from './ManualView';
 import { ReplayScreen } from './ReplayScreen';
 import { SetupScreen } from './SetupScreen';
 import { SimView } from './SimView';
-import { clearAutosave, loadAutosave, type GameSetup } from './useGame';
+import { clearAutosave, isRecentOtherTab, loadAutosave } from './autosave';
+import type { GameSetup } from './useGame';
 
 export type Screen = 'menu' | 'play-setup' | 'watch-setup' | 'game' | 'sim' | 'batch' | 'replay' | 'decks' | 'manual';
 
@@ -97,6 +98,11 @@ function Menu({ go, onResume }: { go: (s: Screen) => void; onResume: (a: NonNull
               <p>
                 {saved.setup.deckNames[0]} vs {saved.setup.deckNames[1]}({saved.actions.length}手目まで・{new Date(saved.at).toLocaleString()})
               </p>
+              {isRecentOtherTab(saved) && (
+                <p className="muted" role="status">
+                  別のタブで進行中の対戦かもしれません。続きから遊ぶと、そのタブの自動保存を上書きします。
+                </p>
+              )}
               <div className="row">
                 <button className="primary" onClick={() => onResume(saved)}>
                   続きから遊ぶ
