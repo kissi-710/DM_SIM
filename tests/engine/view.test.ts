@@ -121,6 +121,35 @@ describe('toPlayerView', () => {
     const ov = toPlayerView(sim.s, 1, FAIR, reg);
     for (const u of cands) expect(ov.cards[u].defId).toBe('?');
   });
+  it('シールドを選ぶ場面(ジャオウガの「3枚残す」)でも、候補のシールドの中身は見えない', () => {
+    const sim = new Sim({
+      p0: { hand: ['CRYMAX ジャオウガ'], mana: mana(7, 'ロスト・Re:ソウル'), shield: ['アクアン', 'ロスト・Re:ソウル', 'フェアリー・ライフ', 'ドラゴンズ・サイン', 'ティンパニ=シンバリー'] },
+      p1: { shield: ['フェアリー・ライフ', 'アクアン', 'ロスト・Re:ソウル', 'ドラゴンズ・サイン', 'ティンパニ=シンバリー'] },
+    });
+    sim.play('CRYMAX ジャオウガ');
+    const inp: any = sim.pending.input;
+    expect(inp.shape).toBe('pick');
+    expect(inp.candidates).toHaveLength(5);
+    // 選ぶ本人(p0)にも、自分のシールドは裏向きのまま。相手のシールドも見えない
+    const v = toPlayerView(sim.s, 0, FAIR, reg);
+    expect(hidden(v, inp.candidates)).toBe(5);
+    expect(hidden(v, sim.s.players[1].shield)).toBe(5);
+  });
+  it('ブレイクされたシールドは、S・トリガーの宣言の場面で持ち主に見える', () => {
+    const sim = new Sim({
+      active: 1,
+      p0: { shield: ['フェアリー・ライフ', 'フェアリー・ライフ', 'フェアリー・ライフ'] },
+      p1: { battle: ['ヨビニオン・マルル'] },
+    });
+    sim.attack('ヨビニオン・マルル', 'player');
+    expect(sim.pending.why).toBe('triggerDeclare');
+    const inp: any = sim.pending.input;
+    const v = toPlayerView(sim.s, 0, FAIR, reg);
+    for (const u of inp.candidates as number[]) expect(v.cards[u].defId).toBe(sim.s.cards[u].defId);
+    // 割られなかったシールドは、見えないまま
+    const rest = sim.s.players[0].shield.filter((u) => !sim.s.breaking.includes(u));
+    expect(hidden(v, rest)).toBe(rest.length);
+  });
   it('ログに残るイベントの lki(離れる前の情報)は、見える側にも含めない', () => {
     const sim = new Sim({ p0: { battle: ['終末縫合王 ザ=キラー・キーナリー'] }, p1: { shield: ['アクアン'] } });
     sim.s.turnLog.push({ id: 99, causedBy: null, type: 'moved', turn: 5, lki: { defId: 'dm23bd1-007' } } as any);

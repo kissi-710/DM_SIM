@@ -102,7 +102,12 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
             : inp.shape === 'option'
               ? (inp.seen ?? [])
               : [];
-    for (const u of show) v.cards[u].defId = state.cards[u].defId;
+    for (const u of show) {
+      // シールドは裏向きのまま選ぶ(ジャオウガの「3枚残す」など)。選択肢に出ても中身は見えない。
+      // ブレイクされたシールド(S・トリガーの宣言)は、持ち主に開く
+      if (state.cards[u].zone === 'shield' && !state.breaking.includes(u)) continue;
+      v.cards[u].defId = state.cards[u].defId;
+    }
   }
   // イベントに残る最後の情報(lki)から、隠れたカードが漏れないようにする
   v.turnLog = v.turnLog.map((e) => {
