@@ -150,7 +150,7 @@ CPU の思考時間(待ち時間)を、使えるコア数に近い倍率で縮�
 - **確率調査・パターン調査**(`sim/solitaire.ts` の探索)は未移植で、TS のまま。ここを速くするには、探索側(深さ優先・LDS)を Rust に移す必要がある。エンジンの `step`・`legal_actions` は Rust 版に揃っているので、移植の土台はある。
 - 検証したのは現在のカードプール(30定義)が使う機能。`custom` ステップ(カード定義にまだ無い)は TS 版と同じく未対応。
 - Windows では MSVC が無い環境のため、GNU ツールチェーンと、`libgcc_eh` の空のスタブ(`ar rcs libgcc_eh.a`、`RUSTFLAGS=-L <dir>`)で native のテストを動かしている。WASM のビルドにはリンカが要らない。
-- **main へは未取り込み**。取り込む場合は、`rust/`・`src/wasm/`・`scripts/`・`tests/wasm/` と、`mcts.ts` / `ai.worker.ts` / CLI の差分。TS 版だけで動く挙動は変わらない(wasm が無ければ従来どおり)。
+- **main へ取り込み済み**(fast-forward)。`src/wasm/dmsim.wasm` が無ければ従来どおり TS 版で動く。CLI は `src/wasm/dmsim.wasm` があれば既定で使い、`DM_WASM=off` で TS 版に戻せる。
 
 ## 4. 進め方
 

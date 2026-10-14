@@ -60,12 +60,15 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 | `npm run prob -- ...` | 確率調査・パターン調査(CLI) |
 | `npm run aibench -- --games 100 --iterations 120 --seed 1` | AI の強さの測定(モンテカルロ 対 ルールベース、勝率と95%区間。`--w hand=1.2 --prior 0` などで調整) |
 | `npm run tune-eval -- --games 100 --rounds 2` | 評価関数の重みの座標降下(自己対戦。時間がかかる) |
+| `npm run build:wasm` | Rust 版エンジンを WASM にビルドして `src/wasm/dmsim.wasm` に置く(要 Rust。あれば AI の探索が自動で使う。無ければ TS 版) |
+| `cargo test --release`(`rust/` で) | Rust 版と TS 版の差分テスト(先に `npx tsx scripts/dump-fixtures.ts rust/fixtures/games.json`) |
 
 注意: この環境(Windows)では `python` / `python3` は Microsoft Store のスタブで動かない。Python が必要なときは `py` で実行する(例: `py script.py`)。
 
 ## コードの決まり(docs の要約)
 
 - **engine は純TypeScript**。DOM・React・Worker・`ai/` `sim/` `ui/` に依存しない(ESLintで禁止)。
+- **`rust/` は engine と AI のプレイアウトの Rust 版**(探索のラウンド評価を高速化する。TS 版が基準)。ルール・カード効果・プレイアウトの手順を変えたら、Rust 版にも反映し、`scripts/dump-fixtures.ts` で正解データを作り直して、`cargo test --release` と `npm test`(`tests/wasm`)を通す。`DM_WASM=off` で TS 版だけで動かして比べられる。
 - 状態は **JSON互換**。`step(state, action)` は純粋関数(入力を書き換えない)。乱数は状態内のシード付きPRNG。
 - カード効果は **データ(AST)** で書く(`src/cards/data/*.json`)。エンジンのコードを触るのは「原始操作が足りない時」だけ。
 - **質問(`ask`)は状態を変更する前に行う**。再実行しても二重に変更されない(effects 6.5 の再開可能な実行)。
