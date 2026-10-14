@@ -294,3 +294,12 @@ describe('exactDrawProbability: 初期条件があれば出さない(ISSUE-02)',
     expect(r.policy.rate).toBe(1);
   });
 });
+
+describe('exactDrawProbability: 手札から離れうるタイミングでは出さない', () => {
+  it('opening と byTurn だけで出し、anyMain・turnEnd では出さない', () => {
+    expect(exactDrawProbability(reg, { deck: maruru, goal: hand('天災 デドダム', 1, 3, 'byTurn'), first: 0 })).toBeDefined();
+    expect(exactDrawProbability(reg, { deck: maruru, goal: hand('天災 デドダム', 1, 3, 'anyMain'), first: 0 })).toBeUndefined();
+    const turnEnd: Goal = { op: 'pred', timing: { turn: 3, at: 'turnEnd' }, pred: { kind: 'zoneHas', zone: 'hand', card: { names: ['天災 デドダム'] } } };
+    expect(exactDrawProbability(reg, { deck: maruru, goal: turnEnd, first: 0 })).toBeUndefined();
+  });
+});

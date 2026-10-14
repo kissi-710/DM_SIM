@@ -385,9 +385,9 @@ export function exactDrawProbability(reg: Registry, p: Pick<SolitaireParams, 'de
   if (init && (init.mustHand?.length || init.mustNotHand?.length || init.topFixed?.length)) return undefined;
   const g = p.goal;
   if (g.op !== 'pred' || g.pred.kind !== 'zoneHas' || g.pred.zone !== 'hand') return undefined;
-  if (g.pred.card.cost || g.pred.card.civs || g.pred.card.type || g.pred.card.face) {
-    // 名前以外の条件があっても、枚数が数えられれば扱える
-  }
+  // 「そのターンのメインで」「そのターンの終了時に」は、その時点で手札にあるかの判定。
+  // マナチャージ・使用で手札から離れるので、「引いたかどうか」の超幾何分布は当てはまらない(大きく上にずれる)。
+  if (g.timing.at !== 'opening' && g.timing.at !== 'byTurn') return undefined;
   const m = g.pred.card;
   const K = p.deck.filter((id) => {
     const def = reg.defs[id];
