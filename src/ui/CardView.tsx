@@ -14,6 +14,8 @@ export interface CardProps {
   sick?: boolean;
   small?: boolean;
   tiny?: boolean;
+  /** マナなど、色とコストだけの小さなタイル */
+  mini?: boolean;
   selectable?: boolean;
   selected?: boolean;
   target?: boolean;
@@ -42,6 +44,7 @@ export function CardView(p: CardProps) {
   const cls = ['card'];
   if (p.small) cls.push('small');
   if (p.tiny) cls.push('tiny');
+  if (p.mini) cls.push('mini');
   if (p.tapped) cls.push('tapped');
   if (p.selectable) cls.push('selectable');
   if (p.selected) cls.push('selected');
@@ -92,6 +95,13 @@ export function CardView(p: CardProps) {
       if (hasKeyword(c, pm.perm, 'machFighter')) keywords.push('マッハ');
     }
   }
+  if (p.mini) {
+    return (
+      <div className={cls.join(' ')} title={def.name} {...handlers} style={{ background: civGradient(civs), ...p.style }}>
+        <span className="mini-cost">{twin ? def.faces[0].cost : face.cost}</span>
+      </div>
+    );
+  }
   const imgStyle: CSSProperties | undefined = def.image
     ? { backgroundImage: `linear-gradient(rgba(10,14,22,0.55), rgba(10,14,22,0.85)), url(${def.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     : undefined;
@@ -103,13 +113,9 @@ export function CardView(p: CardProps) {
         <span className="cost">{twin ? `${def.faces[0].cost}/${def.faces[1].cost}` : face.cost}</span>
         <span className="name">{twin ? def.name.split(' / ')[0] : face.name}</span>
       </div>
-      <div className="body">
-        {typeLabel}
-        {face.races?.length ? ` / ${face.races[0]}` : ''}
-        {keywords.length ? <div>{keywords.join(' ')}</div> : null}
-      </div>
+      <div className="body">{keywords.length ? <div>{keywords.join(' ')}</div> : null}</div>
       <div className="foot">
-        <span>{power !== null ? power : ''}</span>
+        <span>{power !== null ? power : typeLabel}</span>
         <span>{def.faces.length > 1 && !inPlay ? 'ツイン' : ''}</span>
       </div>
       {p.badge ? <span className="badge">{p.badge}</span> : null}

@@ -1,13 +1,13 @@
 // 対戦画面: 盤面・待機プール・因果ツリーのログ・入力ウィジェット・操作ボタン。
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { costOf, effectsOnPerm, hasKeyword, powerOf, type KwName } from '../engine/derive';
-import { entryLabel } from '../engine/procs';
+import { entryLabel, payChoice, planPlay } from '../engine/procs';
 import { mkCtx, permByPid } from '../engine/state';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { Board, buildDropMap, selectedActions } from './Board';
 import { CardView, civGradient } from './CardView';
-import { buildLogTree, CIV_NAME, reg, type LogNode } from './format';
-import { InputWidget } from './Widgets';
+import { buildLogTree, cardName, CIV_NAME, reg, type LogNode } from './format';
+import { InputWidget, PaymentWidget } from './Widgets';
 import { makeRecord, type GameSetup, type Session, useGame } from './useGame';
 import { downloadText } from './util';
 
@@ -173,7 +173,7 @@ const TIPS = [
   '「E」キーでターン終了、「M」キーでマナチャージを飛ばす・メインを終える。',
   'カードにマウスを乗せると、右の「ログ・詳細」に現在のコストやパワーが出ます。',
   '手札やマナが増えたら、横にスクロールできます(トラックパッドや Shift+ホイール)。',
-  '「⚙ 表示」で、マナを手動で選んで支払う設定や、自分のシールドを見る設定ができます。',
+  'マナの払い方に選択があるときだけ、タップするマナを聞かれます。「⚙ 表示」で常に自動にもできます。',
   '練習用設定なら「↶ 1手戻す」(または Z)でやり直せます。',
   'ログの「自動」「手動」タグで、効果の自動解決とプレイヤーの操作を見分けられます。',
 ];
@@ -230,7 +230,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [askPay, setAskPay] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [sideOpen, setSideOpen] = useState(() => window.innerWidth >= 1200);
+  const [sideOpen, setSideOpen] = useState(() => window.innerWidth >= 1500);
   // 直近の1手で動いたカードを強調する(イベントの再生。design 9)
   const flash = useMemo(() => {
     const set = new Set<number>();
@@ -251,8 +251,19 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     setSelected(null);
   }, [pend?.id]);
 
+  // 支払い: 払い方に選択があるときだけ、タップするマナを選ばせる(自明なら聞かずに自動で払う)
+  const [payFor, setPayFor] = useState<{ action: Extract<Action, { type: 'PLAY_CARD' }>; auto: number[] } | null>(null);
+  const [payErr, setPayErr] = useState<string | null>(null);
   const act = (a: Action) => {
     setSelected(null);
+    if (askPay && a.type === 'PLAY_CARD' && g.me !== null && !a.extra?.pay) {
+      const ch = payChoice(mkCtx(s, reg), g.me, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
+      if (ch.need > 0 && !ch.obvious && ch.auto.length === ch.need) {
+        setPayErr(null);
+        setPayFor({ action: a, auto: ch.auto });
+        return;
+      }
+    }
     g.perform(a);
   };
 
@@ -283,12 +294,6 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     return Number(id);
   }, [selected, s]);
   const selDef = selUid !== null && s.cards[selUid] ? reg.defs[s.cards[selUid].defId] : null;
-  const hint =
-    s.step === 'mana'
-      ? '手札を1枚選んでマナチャージ(ドラッグでも可)'
-      : s.step === 'main'
-        ? '手札を選んで召喚・呪文。クリーチャーを選んで攻撃。'
-        : 'クリーチャーを選んで攻撃。';
   const cpuOnly = setup.seats.every((x) => x.kind === 'cpu');
   const showHuman = humanTurn && pend!.why !== 'turnAction';
 
@@ -446,16 +451,11 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     <div className={'game' + (sideOpen ? '' : ' side-closed')}>
       <div className="game-head">
         <button onClick={onExit}>← メニュー</button>
-        <span className="status-chip">
-          {Math.ceil(s.turn / 2)}ターン目({s.active === (g.me ?? 0) ? (g.me === null ? 'プレイヤー1' : 'あなた') : g.me === null ? 'プレイヤー2' : '相手'})
+        <span className={'status-chip ' + (setup.seats[s.active].kind === 'human' ? 'me' : 'cpu')}>
+          {Math.ceil(s.turn / 2)}ターン目 ・ {s.active === (g.me ?? 0) ? (g.me === null ? 'プレイヤー1' : 'あなた') : g.me === null ? 'プレイヤー2' : '相手'} ・{' '}
+          {STEP_LABEL[s.step] ?? s.step}
+          {session.thinking && <span className="thinking" />}
         </span>
-        <span className="status-chip">{STEP_LABEL[s.step] ?? s.step}</span>
-        {pend && s.winner === null && (
-          <span className={'status-chip ' + (setup.seats[pend.player].kind === 'human' ? 'me' : 'cpu')}>
-            {activeLabel}の{pend.why === 'turnAction' ? '行動' : '入力'}待ち
-            {session.thinking && <span className="thinking" />}
-          </span>
-        )}
         <span style={{ flex: 1 }} />
         {cpuOnly && (
           <>
@@ -493,18 +493,25 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
               <label className="check">
                 <input type="checkbox" checked={showOpp} onChange={(e) => setShowOpp(e.target.checked)} /> 相手の手札を見る
               </label>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setRecText(rec());
+                }}
+              >
+                棋譜を見る・保存
+              </button>
               <div className="muted" style={{ fontSize: 12 }}>
                 シード {setup.seed}
               </div>
             </div>
           )}
         </div>
-        <button onClick={() => setRecText(rec())}>棋譜</button>
         <button onClick={() => setHelpOpen(true)} title="ショートカットキーと Tips(?)">
-          ? ヘルプ
+          ?
         </button>
-        <button className={sideOpen ? 'on' : ''} onClick={() => setSideOpen((v) => !v)} title="カードの詳細・待機中の能力・ログ">
-          ログ・詳細
+        <button className={sideOpen ? 'on' : ''} onClick={() => setSideOpen((v) => !v)} title="カードの詳細・待機中の能力・ログ(L)">
+          ログ
         </button>
       </div>
 
@@ -521,8 +528,13 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           selected={selected}
           onSelect={setSelected}
           flash={flash}
-          askPay={askPay}
-        />
+                  />
+
+        {!sideOpen && hover !== null && (
+          <div className="hover-card">
+            <CardDetail s={s} uid={hover} />
+          </div>
+        )}
 
         {interactive && (
           <div className="dock-space">
@@ -566,7 +578,6 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         {/* ターン操作(常に右下) */}
         {interactive && (
           <div className="dock">
-            <div className="dock-hint">{hint}</div>
             <div className="dock-buttons">
               {stepActs.skipMana && (
                 <button onClick={() => act(stepActs.skipMana!)}>
@@ -624,6 +635,54 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         {session.error && <div className="toast">{session.error}</div>}
       </div>
       {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
+      {payFor &&
+        (() => {
+          const a = payFor.action;
+          const me = g.me ?? 0;
+          const ctx = mkCtx(s, reg);
+          const base = planPlay(ctx, me, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
+          const mana = s.players[me].mana.filter((u) => !s.cards[u].tapped && u !== a.uid);
+          return (
+            <div className="modal-back" onClick={() => setPayFor(null)}>
+              <div className="modal" onClick={(e) => e.stopPropagation()}>
+                <h2>タップするマナを選ぶ</h2>
+                <p className="muted">
+                  {cardName(s, a.uid)} — {base.need}枚({base.civs.map((x) => CIV_NAME[x]).join('・')}を含める)。自動の候補を選んであります。
+                </p>
+                <PaymentWidget
+                  s={s}
+                  pending={{ id: 0, player: me, why: 'ack', input: null }}
+                  me={me}
+                  spec={{ shape: 'payment', need: base.need, mana }}
+                  initial={payFor.auto}
+                  onHover={setHover}
+                  onAnswer={(v) => {
+                    const pay = v as number[];
+                    const chk = planPlay(ctx, me, a.uid, a.from ?? 'hand', a.face ?? 0, { ...(a.extra ?? {}), pay }, false);
+                    if (!chk.ok) {
+                      setPayErr(chk.err ?? '支払えません');
+                      return;
+                    }
+                    setPayFor(null);
+                    g.perform({ ...a, extra: { ...(a.extra ?? {}), pay } });
+                  }}
+                />
+                {payErr && <div style={{ color: 'var(--bad)' }}>{payErr}</div>}
+                <div className="row" style={{ marginTop: 8 }}>
+                  <button
+                    onClick={() => {
+                      setPayFor(null);
+                      g.perform(a);
+                    }}
+                  >
+                    自動で払う
+                  </button>
+                  <button onClick={() => setPayFor(null)}>キャンセル</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {sideOpen && (
         <div className="side">

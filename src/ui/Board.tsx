@@ -3,10 +3,7 @@
 // ルール判定はせず、legalActions から作る「ドロップ先マップ」だけを使う(effects 11.3)。
 import { useMemo, useState } from 'react';
 import { CardView } from './CardView';
-import { PaymentWidget } from './Widgets';
-import { payChoice, planPlay } from '../engine/procs';
-import { mkCtx } from '../engine/state';
-import { CIV_NAME, cardName, reg } from './format';
+import { cardName, reg } from './format';
 import { useDrag } from './useDrag';
 import type { Action, GameState, PlayerId } from '../engine/types';
 
@@ -82,8 +79,6 @@ interface BoardProps {
   onSelect: (key: string | null) => void;
   /** 直近のイベントで動いたカード(強調表示) */
   flash?: Set<number>;
-  /** 支払いに選択があるときだけ、タップするマナを選ばせる(自明なら聞かない。spec 3.4) */
-  askPay?: boolean;
 }
 
 export function Board(b: BoardProps) {
@@ -92,37 +87,15 @@ export function Board(b: BoardProps) {
   const opp: PlayerId = viewer === 0 ? 1 : 0;
   const dropMap = useMemo(() => (interactive ? buildDropMap(s, b.legal) : new Map<string, Drop[]>()), [s, b.legal, interactive]);
   const [chooser, setChooser] = useState<Drop[] | null>(null);
-  const [payFor, setPayFor] = useState<{ drop: Drop; auto: number[] } | null>(null);
-  const [payErr, setPayErr] = useState<string | null>(null);
   const flashOf = (u: number) => !!b.flash?.has(u);
-  /** 行動を実行する。手動支払いが有効なら、先にマナの選択を挟む */
+  /** 行動を実行する(支払いの確認などは、呼び出し側の onAction で行う) */
   const act = (d: Drop) => {
     b.onSelect(null);
-    // 自明(払い方が1通り)なら聞かずに自動で払う。選べるときだけ、タップするマナを選ばせる
-    if (b.askPay && d.action.type === 'PLAY_CARD') {
-      const a = d.action;
-      const ch = payChoice(mkCtx(s, reg), viewer, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
-      if (ch.need > 0 && !ch.obvious && ch.auto.length === ch.need) {
-        setPayErr(null);
-        setPayFor({ drop: d, auto: ch.auto });
-        return;
-      }
-    }
     b.onAction(d.action);
   };
-  // ゾーンの折りたたみと一覧(reference_duel-hub 2.5)
-  const [fold, setFold] = useState<Record<string, boolean>>({});
+  // 一覧パネル(墓地・マナ・シールドの全体を見る。ダブルクリックでも開く)
   const [listOf, setListOf] = useState<{ p: PlayerId; zone: 'mana' | 'grave' | 'shield' } | null>(null);
-  const zoneTools = (p: PlayerId, zone: 'mana' | 'grave' | 'shield') => (
-    <>
-      <button className="small" onClick={(e) => { e.stopPropagation(); setFold((f) => ({ ...f, [p + zone]: !f[p + zone] })); }}>
-        {fold[p + zone] ? '展開' : '折りたたむ'}
-      </button>
-      <button className="small" onClick={(e) => { e.stopPropagation(); setListOf({ p, zone }); }}>
-        ≡ 一覧
-      </button>
-    </>
-  );
+  const openList = (p: PlayerId, zone: 'mana' | 'grave' | 'shield') => setListOf({ p, zone });
 
   const dropsFor = (src: string | null) => (src ? dropMap.get(src) ?? [] : []);
   const activeKey = b.selected;
@@ -158,8 +131,7 @@ export function Board(b: BoardProps) {
   const renderHand = (p: PlayerId, mine: boolean) => {
     const z = s.players[p];
     return (
-      <div className="zone grow">
-        <div className="zone-title">手札 {z.hand.length}枚</div>
+      <div className="zone hand grow">
         <div className="cards hscroll">
           {z.hand.map((u) => {
             const key = `hand:${u}`;
@@ -183,20 +155,27 @@ export function Board(b: BoardProps) {
               />
             );
           })}
+          {mine && z.hand.length === 0 && <span className="muted">手札なし</span>}
         </div>
       </div>
     );
   };
 
+  /** マナ: 小さなタイルで並べる(文明の色・コスト・タップ状態だけ。詳細はホバー/一覧) */
   const renderMana = (p: PlayerId, mine: boolean) => {
     const z = s.players[p];
+    const free = z.mana.filter((u) => !s.cards[u].tapped).length;
     return (
-      <div className={(mine ? zcls('zone:mana') : 'zone') + ' grow'} {...(mine ? zoneProps('zone:mana') : {})} style={{ flex: 1 }}>
-        <div className="zone-title">
-          マナゾーン {z.mana.length}枚(未使用 {z.mana.filter((u) => !s.cards[u].tapped).length}) {zoneTools(p, 'mana')}
+      <div
+        className={(mine ? zcls('zone:mana') : 'zone') + ' mana grow'}
+        {...(mine ? zoneProps('zone:mana') : {})}
+        onDoubleClick={() => openList(p, 'mana')}
+      >
+        <div className="zone-label">
+          マナ <b>{free}</b>/{z.mana.length}
         </div>
-        <div className="cards hscroll">
-          {(fold[p + 'mana'] ? [] : z.mana).map((u) => {
+        <div className="cards hscroll mana-cards">
+          {z.mana.map((u) => {
             const key = `mana:${u}`;
             const can = mine && interactive && dropMap.has(key);
             return (
@@ -204,7 +183,7 @@ export function Board(b: BoardProps) {
                 key={u}
                 s={s}
                 uid={u}
-                small
+                mini
                 tapped={s.cards[u].tapped}
                 flash={flashOf(u)}
                 draggable={can}
@@ -223,8 +202,7 @@ export function Board(b: BoardProps) {
   const renderBattle = (p: PlayerId, mine: boolean) => {
     const z = s.players[p];
     return (
-      <div className={(mine ? zcls('zone:battle') : 'zone') + ' grow'} {...(mine ? zoneProps('zone:battle') : {})} style={{ flex: 3 }}>
-        <div className="zone-title">バトルゾーン {z.battle.length}体</div>
+      <div className={(mine ? zcls('zone:battle') : 'zone') + ' battle grow'} {...(mine ? zoneProps('zone:battle') : {})}>
         <div className="cards">
           {z.battle.map((perm) => {
             const top = perm.cards[0];
@@ -254,7 +232,6 @@ export function Board(b: BoardProps) {
                   selectable={can && activeKey !== key}
                   badge={perm.cards.length > 1 ? `重${perm.cards.length}` : undefined}
                   onPointerDown={can ? begin(key) : undefined}
-                  onClick={mine && !can ? undefined : undefined}
                   onHover={b.onHover}
                 />
               </div>
@@ -265,69 +242,82 @@ export function Board(b: BoardProps) {
     );
   };
 
+  /** シールド: 枚数だけ(EXライフの枚数を添える)。相手のシールドは攻撃先 */
   const renderShield = (p: PlayerId, mine: boolean) => {
     const z = s.players[p];
     const isOppShield = !mine;
     const key = 'zone:oppShield';
+    const ex = z.shield.filter((u) => s.cards[u].ex).length;
+    const canPeek = mine && b.peek;
     return (
-      <div className={(isOppShield ? zcls(key) : 'zone') + ' '} {...(isOppShield ? zoneProps(key) : {})} style={{ minWidth: 150 }}>
-        <div className="zone-title">
-          シールド {z.shield.length}枚 {isOppShield && live && liveDrops.has(key) ? <span className="arrow-hint">← 攻撃</span> : null}
-          {zoneTools(p, 'shield')}
-        </div>
-        <div className="cards hscroll">
-          {(fold[p + 'shield'] ? [] : z.shield).map((u) => (
-            <CardView key={u} s={s} uid={u} small tiny={!(mine && b.peek)} hidden={!(mine && b.peek)} onHover={mine && b.peek ? b.onHover : undefined} />
-          ))}
-        </div>
+      <div
+        className={(isOppShield ? zcls(key, 'chip shield') : 'chip shield') + (canPeek ? ' clickable' : '')}
+        {...(isOppShield ? zoneProps(key) : {})}
+        onDoubleClick={canPeek ? () => openList(p, 'shield') : undefined}
+        title={canPeek ? 'ダブルクリックで一覧' : undefined}
+      >
+        <span className="chip-label">シールド</span>
+        <b>{z.shield.length}</b>
+        {ex > 0 && <span className="chip-sub">EX {ex}</span>}
+        {isOppShield && live && liveDrops.has(key) ? <span className="arrow-hint">← 攻撃</span> : null}
       </div>
     );
   };
 
+  /** 墓地: 一番上(最後に置かれた)カードだけ見せる。ダブルクリック/≡で一覧 */
   const renderGrave = (p: PlayerId, mine: boolean) => {
     const z = s.players[p];
+    const top = z.grave.length > 0 ? z.grave[z.grave.length - 1] : null;
+    const key = top !== null ? `grave:${top}` : '';
+    const can = top !== null && mine && interactive && dropMap.has(key);
     return (
-      <div className="zone" style={{ minWidth: 150, maxWidth: 360 }}>
-        <div className="zone-title">
-          墓地 {z.grave.length}枚 / 山札 {z.deck.length}枚 {zoneTools(p, 'grave')}
-        </div>
-        <div className="cards scroll">
-          {(fold[p + 'grave'] ? [] : z.grave)
-            .slice()
-            .reverse()
-            .map((u) => {
-              const key = `grave:${u}`;
-              const can = mine && interactive && dropMap.has(key);
-              return (
-                <CardView
-                  key={u}
-                  s={s}
-                  uid={u}
-                  small
-                  draggable={can}
-                  selected={activeKey === key}
-                  selectable={can && activeKey !== key}
-                  onPointerDown={can ? begin(key) : undefined}
-                  onHover={b.onHover}
-                />
-              );
-            })}
-        </div>
+      <div className="chip grave" onDoubleClick={() => openList(p, 'grave')} title="ダブルクリックで一覧">
+        <span className="chip-label">
+          墓地 <b>{z.grave.length}</b>
+          <button className="small icon" onClick={() => openList(p, 'grave')} aria-label="墓地の一覧">
+            ≡
+          </button>
+        </span>
+        {top !== null ? (
+          <CardView
+            s={s}
+            uid={top}
+            small
+            draggable={can}
+            selected={activeKey === key}
+            selectable={can && activeKey !== key}
+            onPointerDown={can ? begin(key) : undefined}
+            onHover={b.onHover}
+          />
+        ) : (
+          <span className="muted">なし</span>
+        )}
       </div>
     );
   };
 
   const side = (p: PlayerId, mine: boolean) => {
-    const top = (
-      <div className="zone-row" key="top">
+    const z = s.players[p];
+    const info = (
+      <div className="zone-row info" key="info">
+        {!mine && (
+          <div className="chip">
+            <span className="chip-label">手札</span>
+            <b>{z.hand.length}</b>
+          </div>
+        )}
+        <div className="chip">
+          <span className="chip-label">山札</span>
+          <b>{z.deck.length}</b>
+        </div>
         {renderShield(p, mine)}
-        {renderBattle(p, mine)}
         {renderGrave(p, mine)}
+        {renderMana(p, mine)}
       </div>
     );
-    const mana = (
-      <div className="zone-row" key="mana">
-        {renderMana(p, mine)}
+    const battle = (
+      <div className="zone-row battle-row" key="battle">
+        {renderBattle(p, mine)}
       </div>
     );
     const hand = (
@@ -335,7 +325,8 @@ export function Board(b: BoardProps) {
         {renderHand(p, mine)}
       </div>
     );
-    return <div className={'side-board' + (mine ? '' : ' opp')}>{mine ? [top, mana, hand] : [hand, mana, top]}</div>;
+    if (mine) return <div className="side-board">{[battle, info, hand]}</div>;
+    return <div className="side-board opp">{[b.showOppHand ? hand : null, info, battle]}</div>;
   };
 
   return (
@@ -364,53 +355,6 @@ export function Board(b: BoardProps) {
           </div>
         </div>
       )}
-      {payFor && payFor.drop.action.type === 'PLAY_CARD' && (() => {
-        const a = payFor.drop.action;
-        const label = payFor.drop.label;
-        const ctx = mkCtx(s, reg);
-        const base = planPlay(ctx, viewer, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
-        const mana = s.players[viewer].mana.filter((u) => !s.cards[u].tapped && u !== a.uid);
-        return (
-          <div className="modal-back" onClick={() => setPayFor(null)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <h2>タップするマナを選ぶ</h2>
-              <p className="muted">
-                {label} — {base.need}枚({base.civs.map((x) => CIV_NAME[x]).join("・")}を含める)。初めから自動の候補を選んであります。
-              </p>
-              <PaymentWidget
-                s={s}
-                pending={{ id: 0, player: viewer, why: 'ack', input: null }}
-                me={viewer}
-                spec={{ shape: 'payment', need: base.need, mana }}
-                initial={payFor.auto}
-                onHover={b.onHover}
-                onAnswer={(v) => {
-                  const pay = v as number[];
-                  const chk = planPlay(ctx, viewer, a.uid, a.from ?? 'hand', a.face ?? 0, { ...(a.extra ?? {}), pay }, false);
-                  if (!chk.ok) {
-                    setPayErr(chk.err ?? '支払えません');
-                    return;
-                  }
-                  setPayFor(null);
-                  b.onAction({ ...a, extra: { ...(a.extra ?? {}), pay } });
-                }}
-              />
-              {payErr && <div style={{ color: 'var(--bad)' }}>{payErr}</div>}
-              <div className="row" style={{ marginTop: 8 }}>
-                <button
-                  onClick={() => {
-                    setPayFor(null);
-                    b.onAction(a);
-                  }}
-                >
-                  自動で払う
-                </button>
-                <button onClick={() => setPayFor(null)}>キャンセル</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
       {listOf && (
         <div className="modal-back" onClick={() => setListOf(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -419,17 +363,30 @@ export function Board(b: BoardProps) {
               {s.players[listOf.p][listOf.zone].length}枚)
             </h2>
             <div className="cards">
-              {s.players[listOf.p][listOf.zone].map((u) => (
-                <CardView
-                  key={u}
-                  s={s}
-                  uid={u}
-                  tapped={false}
-                  hidden={listOf.zone === 'shield' && !(listOf.p === viewer && b.peek)}
-                  badge={listOf.zone === 'mana' && s.cards[u].tapped ? 'タップ' : undefined}
-                  onHover={b.onHover}
-                />
-              ))}
+              {(listOf.zone === 'grave' ? s.players[listOf.p].grave.slice().reverse() : s.players[listOf.p][listOf.zone]).map((u) => {
+                const key = `${listOf.zone}:${u}`;
+                const can = listOf.p === viewer && interactive && dropMap.has(key);
+                return (
+                  <CardView
+                    key={u}
+                    s={s}
+                    uid={u}
+                    tapped={false}
+                    hidden={listOf.zone === 'shield' && !(listOf.p === viewer && b.peek)}
+                    badge={listOf.zone === 'mana' && s.cards[u].tapped ? 'タップ' : undefined}
+                    selectable={can}
+                    onClick={
+                      can
+                        ? () => {
+                            setListOf(null);
+                            b.onSelect(key);
+                          }
+                        : undefined
+                    }
+                    onHover={b.onHover}
+                  />
+                );
+              })}
             </div>
             <div className="row" style={{ marginTop: 8 }}>
               <button onClick={() => setListOf(null)}>閉じる</button>
