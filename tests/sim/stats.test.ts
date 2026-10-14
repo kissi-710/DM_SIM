@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { deriveSeed } from '../../src/engine/prng';
 import { hypergeomAtLeast, hypergeomPmf, normalQuantile, wilson, zFamily } from '../../src/sim/stats';
 
 describe('wilson(95%信頼区間)', () => {
@@ -107,5 +108,24 @@ describe('normalQuantile / zFamily(同時比較の補正)', () => {
     expect(zFamily(4)).toBeGreaterThan(zFamily(1));
     expect(zFamily(16)).toBeCloseTo(normalQuantile(1 - 0.05 / 32), 12);
     expect(zFamily(0)).toBeCloseTo(zFamily(1), 12);
+  });
+});
+
+describe('deriveSeed(試合・試行のシードの派生)', () => {
+  it('同じ (base, index) なら同じ値。index が違えば違う値', () => {
+    expect(deriveSeed(1, 5)).toBe(deriveSeed(1, 5));
+    expect(deriveSeed(1, 5)).not.toBe(deriveSeed(1, 6));
+  });
+  it('base が隣り合っていても、シードの範囲が重ならない(seed=1 と seed=2 の実行が、ほとんど同じ試合にならない)', () => {
+    const range = (base: number) => new Set(Array.from({ length: 1000 }, (_, i) => deriveSeed(base, i)));
+    for (const [a, b] of [[1, 2], [0, 1], [100, 101], [-1, 0]] as const) {
+      const ra = range(a);
+      let overlap = 0;
+      for (const x of range(b)) if (ra.has(x)) overlap++;
+      expect(overlap).toBe(0);
+    }
+  });
+  it('連続する index は連続するシード(範囲を分けて実行しても、同じ試合は同じシード)', () => {
+    expect(deriveSeed(9, 11) - deriveSeed(9, 10)).toBe(1);
   });
 });

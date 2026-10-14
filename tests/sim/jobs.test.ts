@@ -91,15 +91,31 @@ describe('分割して実行 → 統合 = 直列実行', () => {
     const serial = runJob(reg, job) as CardStrength[];
     expect(viaPlan(job, 4)).toEqual(serial);
   });
-  it('チャンクには元のシード範囲が割り当てられる(重複・欠落がない)', () => {
+  it('チャンクには元の試行の通し番号の範囲が割り当てられる(重複・欠落がない)。シードは実行のシードのまま', () => {
     const job: SimJob = { type: 'prob', params: { deck: A, first: 0, goal, trials: 10, seed: 100 } };
     const plan = planJob(reg, job, 3);
     const seen: number[] = [];
     for (const c of plan.chunks) {
       if (c.type !== 'prob') throw new Error();
-      for (let i = 0; i < c.params.trials; i++) seen.push(c.params.seed + i);
+      expect(c.params.seed).toBe(100);
+      for (let i = 0; i < c.params.trials; i++) seen.push((c.params.startIndex ?? 0) + i);
     }
-    expect(seen).toEqual(Array.from({ length: 10 }, (_, i) => 100 + i));
+    expect(seen).toEqual(Array.from({ length: 10 }, (_, i) => i));
+  });
+  it('試合(バッチ)の分割も、通し番号の範囲で、シードは実行のシードのまま(複製対局は偶数の開始位置)', () => {
+    for (const first of ['alternate', 'duplicate'] as const) {
+      const job: SimJob = { type: 'batch', opts: [{ deckA: A, deckB: B, agentA: { kind: 'random' }, agentB: { kind: 'random' }, games: 12, seed: 7, first }] };
+      const plan = planJob(reg, job, 4);
+      const seen: number[] = [];
+      for (const c of plan.chunks) {
+        if (c.type !== 'batch') throw new Error();
+        const o = c.opts[0];
+        expect(o.seed).toBe(7);
+        if (first === 'duplicate') expect((o.startIndex ?? 0) % 2).toBe(0);
+        for (let i = 0; i < o.games; i++) seen.push((o.startIndex ?? 0) + i);
+      }
+      expect(seen.sort((x, y) => x - y)).toEqual(Array.from({ length: 12 }, (_, i) => i));
+    }
   });
   it('進捗は単位数(試合数・試行数)で報告される', () => {
     const job: SimJob = { type: 'batch', opts: [{ deckA: A, deckB: B, agentA: { kind: 'random' }, agentB: { kind: 'random' }, games: 6, seed: 1 }] };

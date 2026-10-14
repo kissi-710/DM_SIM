@@ -9,6 +9,7 @@ import { hashSeed } from '../engine/state';
 import type { Action, CardDB, Ev, GameState } from '../engine/types';
 import { FAIR, toPlayerView } from '../engine/view';
 import { FAR, goalDistance, goalHasNot, goalMaxTurn, GoalTracker, myTurnNo, nameMatches, type Goal } from './goal';
+import { deriveSeed } from '../engine/prng';
 import { mulberry } from './playGame';
 import { hypergeomAtLeast, wilson } from './stats';
 
@@ -28,6 +29,8 @@ export interface SolitaireParams {
   /** 0 = 先攻 / 1 = 後攻(先攻の1ターン目はドローしない) */
   first: 0 | 1;
   goal: Goal;
+  /** 試行の通し番号の開始位置(範囲を分けて並列に実行する時に、同じ試行が同じシードになるようにする。既定 0) */
+  startIndex?: number;
   /** 調べるターン数の上限(省略時は目標に含まれる最大ターン) */
   maxTurns?: number;
   trials: number;
@@ -434,7 +437,7 @@ export function runProbability(
   const doSearch = (p.maxNodes ?? 0) > 0;
   for (let i = 0; i < p.trials; i++) {
     if (hooks.shouldCancel?.()) break;
-    const seed = p.seed + i;
+    const seed = deriveSeed(p.seed, (p.startIndex ?? 0) + i);
     const run = runPolicyTrial(reg, p, seed);
     if (run.achievedTurn !== null) {
       achieved++;
@@ -561,7 +564,7 @@ export function runPatterns(
   let done = 0;
   for (let i = 0; i < p.trials; i++) {
     if (hooks.shouldCancel?.()) break;
-    const seed = p.seed + i;
+    const seed = deriveSeed(p.seed, (p.startIndex ?? 0) + i);
     const sr = searchTrial(reg, { ...p, maxNodes: p.maxNodes ?? 4000 }, seed, per);
     if (sr.found) achieved++;
     else if (sr.unknown) unknown++;

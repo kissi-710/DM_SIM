@@ -3,6 +3,7 @@ import { makeAgent, type Agent, type AgentSpec } from '../ai';
 import { registryOf } from '../engine/engine';
 import type { Registry } from '../engine/registry';
 import type { CardDB, GameConfig, PlayerId } from '../engine/types';
+import { deriveSeed } from '../engine/prng';
 import { mulberry, playGameSync } from './playGame';
 import { wilson } from './stats';
 
@@ -16,6 +17,8 @@ export interface MatchOpts {
   agentB: AgentSpec;
   games: number;
   seed: number;
+  /** 試合の通し番号の開始位置(範囲を分けて並列に実行する時に、同じ試合が同じシードになるようにする。既定 0) */
+  startIndex?: number;
   /** fixed: Aが常に先攻 / alternate: 交互 / random: 乱数 / duplicate: 同じシードで席を入れ替えて2回ずつ */
   first?: FirstMode;
   cfg?: Partial<GameConfig>;
@@ -83,13 +86,15 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
     if (o.shouldCancel?.()) break;
     // seat0 にだれを置くか
     // random は、試合のシードとは独立に派生した乱数で決める(連続する値の偶奇だと、交互と区別できない)
+    // 試合の通し番号(範囲を分けて実行しても、同じ試合は同じ番号になる)
+    const idx = (o.startIndex ?? 0) + i;
     const aSeat: PlayerId =
       first === 'alternate' || first === 'duplicate'
-        ? ((i % 2) as PlayerId)
+        ? ((idx % 2) as PlayerId)
         : first === 'fixed'
           ? 0
-          : ((mulberry((o.seed + i) ^ 0x7f4a7c15)() < 0.5 ? 0 : 1) as PlayerId);
-    const gameSeed = first === 'duplicate' ? o.seed + (i >> 1) : o.seed + i;
+          : ((mulberry(deriveSeed(o.seed, idx) ^ 0x7f4a7c15)() < 0.5 ? 0 : 1) as PlayerId);
+    const gameSeed = deriveSeed(o.seed, first === 'duplicate' ? idx >> 1 : idx);
     const decks: [string[], string[]] = aSeat === 0 ? [o.deckA, o.deckB] : [o.deckB, o.deckA];
     const agents = aSeat === 0 ? [agentA, agentB] : [agentB, agentA];
     // 先攻は席0
