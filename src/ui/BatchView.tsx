@@ -9,8 +9,12 @@ import { allDecks, findDeck } from './decks';
 import { runSimJob, type RunningJob } from './simClient';
 import { downloadText } from './util';
 
-/** カード単体の強さは、デッキの全種類ぶん対戦するので、指定の試合数をこの数までに制限する */
-const STRENGTH_MAX_GAMES = 300;
+/** シード欄が空なら、実行のたびにランダムに決める(結果に表示するので、同じ値を入れれば再現できる) */
+function resolveSeed(raw: string): number {
+  const t = raw.trim();
+  if (t === '') return Math.floor(Math.random() * 0x7fffffff);
+  return Math.floor(Number(t));
+}
 
 function policyOf(preset: InfoPreset): InfoPolicy {
   return {
@@ -48,24 +52,37 @@ export function BatchView() {
   const decks = allDecks();
   const [deckA, setDeckA] = useState('maruru');
   const [deckB, setDeckB] = useState('zardy');
-  const [kindA, setKindA] = useState<AgentKind>('rule');
-  const [kindB, setKindB] = useState<AgentKind>('random');
+  const [kindA, setKindA] = useState<AgentKind>('mcts');
+  const [kindB, setKindB] = useState<AgentKind>('mcts');
   const [infoA, setInfoA] = useState<InfoPreset>('fair');
   const [infoB, setInfoB] = useState<InfoPreset>('fair');
   const [games, setGames] = useState(500);
-  const [seed, setSeed] = useState(1);
+  const [seedText, setSeedText] = useState('');
+  const [iterations, setIterations] = useState(40);
   const [first, setFirst] = useState<FirstMode>('alternate');
   const [compare, setCompare] = useState(false);
   const [progress, setProgress] = useState<[number, number] | null>(null);
-  const [results, setResults] = useState<{ label: string; s: MatchStats }[] | null>(null);
-  const [strength, setStrength] = useState<CardStrength[] | null>(null);
+  const [results, setResults] = useState<{ label: string; seed: number; s: MatchStats }[] | null>(null);
+  const [strength, setStrength] = useState<{ seed: number; rows: CardStrength[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const job = useRef<RunningJob<any> | null>(null);
 
-  const spec = (k: AgentKind, i: InfoPreset): AgentSpec => ({ kind: k, policy: policyOf(i), iterations: 40 });
+  const spec = (k: AgentKind, i: InfoPreset): AgentSpec => ({ kind: k, policy: policyOf(i), iterations });
+
+  /** 入力のシードを数にする。空欄ならランダム。数でなければエラーにして null を返す */
+  const takeSeed = (): number | null => {
+    const v = resolveSeed(seedText);
+    if (!Number.isFinite(v)) {
+      setError('シードは整数で入力してください(空欄ならランダムになります)');
+      return null;
+    }
+    return v;
+  };
 
   const run = async () => {
     setError(null);
+    const seed = takeSeed();
+    if (seed === null) return;
     setResults(null);
     setProgress([0, 1]);
     try {
@@ -82,7 +99,7 @@ export function BatchView() {
         (d, t) => setProgress([d, t]),
       );
       const r: MatchStats[] = await job.current.promise;
-      setResults(r.map((s, i) => ({ label: variants[i].label, s })));
+      setResults(r.map((s, i) => ({ label: variants[i].label, seed, s })));
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -92,14 +109,16 @@ export function BatchView() {
 
   const runStrength = async () => {
     setError(null);
+    const seed = takeSeed();
+    if (seed === null) return;
     setStrength(null);
     setProgress([0, 1]);
     try {
       job.current = runSimJob<CardStrength[]>(
-        { type: 'strength', deck: findDeck(deckA).cards, opponent: findDeck(deckB).cards, agent: { kind: 'rule' }, games: Math.min(games, STRENGTH_MAX_GAMES), seed },
+        { type: 'strength', deck: findDeck(deckA).cards, opponent: findDeck(deckB).cards, agent: spec(kindA, infoA), games, seed },
         (d, t) => setProgress([d, t]),
       );
-      setStrength(await job.current.promise);
+      setStrength({ seed, rows: await job.current.promise });
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -156,9 +175,12 @@ export function BatchView() {
           <label>
             試合数 <input type="number" min={1} value={games} onChange={(e) => setGames(Math.max(1, Math.floor(Number(e.target.value)) || 1))} />
           </label>
-          <span className="muted">カードの強さの測定だけは、1回につき最大 {STRENGTH_MAX_GAMES} 試合に切り詰めます。</span>
+          <label title="モンテカルロ探索の1手あたりの反復回数。多いほど強く、遅くなります">
+            探索の反復回数{' '}
+            <input type="number" min={1} value={iterations} onChange={(e) => setIterations(Math.max(1, Math.floor(Number(e.target.value)) || 1))} />
+          </label>
           <label>
-            シード <input type="number" value={seed} onChange={(e) => setSeed(Math.floor(Number(e.target.value)) || 0)} />
+            シード <input type="number" placeholder="空欄ならランダム" value={seedText} onChange={(e) => setSeedText(e.target.value)} />
           </label>
           <label>
             先攻
@@ -178,7 +200,7 @@ export function BatchView() {
               <button className="primary" onClick={run}>
                 バッチ対戦を実行
               </button>
-              <button onClick={runStrength} title={`デッキの各カードを1枚抜いた時の勝率差(Aのデッキ vs Bのデッキ、ルールベース同士)。時間がかかるため、試合数は各${STRENGTH_MAX_GAMES}試合までに制限します`}>
+              <button onClick={runStrength} title="デッキの各カードを1枚抜いた時の勝率差(Aのデッキ vs Bのデッキ。両者ともAのAI・情報条件で対戦)。カードの種類数+1通りぶん対戦するので、時間がかかります">
                 カードの強さを測る
               </button>
             </>
@@ -197,6 +219,7 @@ export function BatchView() {
         {results && (
           <div className="panel col">
             <h3>結果</h3>
+            <p className="muted">シード {results[0].seed}(同じ値を入れると同じ結果になります)</p>
             <table>
               <thead>
                 <tr>
@@ -221,6 +244,9 @@ export function BatchView() {
         {strength && (
           <div className="panel col">
             <h3>カード単体の強さ(1枚を何もしないカードに入れ替えた時の勝率差)</h3>
+            <p className="muted">
+              シード {strength.seed} / {AGENT_LABEL[kindA]}同士・各 {games} 試合
+            </p>
             <table>
               <thead>
                 <tr>
@@ -231,7 +257,7 @@ export function BatchView() {
                 </tr>
               </thead>
               <tbody>
-                {strength.map((c) => (
+                {strength.rows.map((c) => (
                   <tr key={c.defId}>
                     <td>{c.name}</td>
                     <td>{c.copies}</td>
