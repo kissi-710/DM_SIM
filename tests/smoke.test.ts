@@ -11,8 +11,9 @@ describe('スモーク', () => {
       expect(d.length).toBe(40);
       expect(checkDeck(CARD_DB, d, true).ok).toBe(true);
     }
-    // 33種+ダミー+不明カード('?')
-    expect(Object.keys(loadRegistryFor().defs).length).toBe(35);
+    // 33種+ダミー(CARD_LIST)。レジストリはこれに、無能力カード(カード単体の強さの差し替え先)と不明カード('?')が加わる
+    expect(CARD_LIST.length).toBe(34);
+    expect(Object.keys(loadRegistryFor().defs).length).toBe(Object.keys(CARD_DB).length + 1);
   });
 
   it('デッキに含まれる異なるカードは33種', () => {

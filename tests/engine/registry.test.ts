@@ -98,7 +98,9 @@ describe('loadRegistry', () => {
   it('見えないカード「?」と、全カードが定義される', () => {
     expect(reg.defs['?']).toBeDefined();
     for (const c of CARD_LIST) expect(reg.defs[c.id]).toBeDefined();
-    expect(Object.keys(reg.defs)).toHaveLength(CARD_LIST.length + 1);
+    // 実在するカード + 無能力カード(カード単体の強さの差し替え先。engine/blank.ts) + '?'
+    expect(Object.keys(reg.defs)).toHaveLength(Object.keys(CARD_DB).length + 1);
+    expect(Object.keys(CARD_DB).length).toBeGreaterThan(CARD_LIST.length);
   });
   it('未知のカードの getFace / getInfo は例外。面が範囲外なら先頭の面', () => {
     expect(() => reg.getFace('nope', 0)).toThrow();

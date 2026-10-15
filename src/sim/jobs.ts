@@ -15,7 +15,7 @@ import {
   type SolitaireParams,
 } from './solitaire';
 import { addAcc, emptyAcc, estimateRate, wilson, type RateAcc } from './stats';
-import { composeStrength, strengthVariants, type CardStrength } from './strength';
+import { composeStrength, strengthDecks, type CardStrength } from './strength';
 
 export type MatchJobOpts = Omit<MatchOpts, 'onProgress' | 'shouldCancel'>;
 
@@ -56,7 +56,7 @@ export function runJob(reg: Registry, job: SimJob, onProgress?: Progress): JobRe
       });
     }
     case 'strength': {
-      const { decks } = strengthVariants(job.deck);
+      const [baseDeck, ...decks] = strengthDecks(job.deck, reg.defs);
       const total = (decks.length + 1) * job.games;
       let base = 0;
       const run = (deckA: string[]) => {
@@ -74,7 +74,7 @@ export function runJob(reg: Registry, job: SimJob, onProgress?: Progress): JobRe
         base += job.games;
         return r.winRateA;
       };
-      const baseRate = run(job.deck);
+      const baseRate = run(baseDeck);
       const rates = decks.map(run);
       return composeStrength(reg, job, baseRate, rates);
     }
@@ -168,8 +168,7 @@ function planChunks(reg: Pick<Registry, 'defs'>, job: SimJob, parts: number): Jo
     }
     case 'strength': {
       // 基準デッキと各変種の試合を、Worker の数に合わせて、試合の範囲で分ける(変種ごとに1チャンクだと、最後の巡で空きが出る)
-      const { decks } = strengthVariants(job.deck);
-      const variants = [job.deck, ...decks];
+      const variants = strengthDecks(job.deck, reg.defs);
       const per = Math.max(1, Math.ceil(parts / variants.length));
       const chunks: SimJob[] = [];
       const units: number[] = [];
