@@ -30,6 +30,50 @@ describe('D-13 キーナリーの誘発抑制の範囲', () => {
   });
 });
 
+/** オルゲイト(席0)に「コピーするか」と聞かれた回数。ほかの質問は、いいえ・先頭で進める */
+function orgateAsks(sim: Sim): number {
+  let n = 0;
+  let guard = 0;
+  while (sim.s.pending && sim.s.pending.why !== 'turnAction' && guard++ < 20) {
+    const p = sim.pending;
+    const inp: any = p.input;
+    if (p.player === 0 && p.why === 'may' && String(p.prompt).includes('オルゲイト')) n++;
+    if (inp.shape === 'yesno') sim.answer(false);
+    else if (inp.shape === 'order') sim.answer(inp.candidates[0]);
+    else sim.drain(1);
+  }
+  return n;
+}
+
+describe('L4 オルゲイトがコピーできる能力の範囲(公式 Q&A 46068・45938・44353)', () => {
+  const base = (hand: string[]) =>
+    new Sim({
+      active: 1,
+      p0: { battle: ['魔誕の斬将オルゲイト'], deck: [N, W, D, 'ダミー', 'ダミー', 'ダミー'] },
+      p1: { battle: [{ c: 'ヨビニオン・マルル', sick: false }], hand, mana: [W, W, W, W, W, W, D, N, N], deck: [W, D, N, 'ダミー', 'ダミー', 'ダミー', 'ダミー'] },
+    });
+  it('出たクリーチャー自身の能力がトリガーした時にコピーできる(そのターンの1体目のアクアン)', () => {
+    const sim = base([W]);
+    sim.play(W);
+    expect(orgateAsks(sim)).toBe(1);
+  });
+  it('別のクリーチャーが出たことでトリガーした能力(マルルの「2体目が出た時」)はコピーできず、出た自身の能力だけ', () => {
+    const sim = base([W, '天災 デドダム']);
+    sim.play(W);
+    orgateAsks(sim);
+    sim.play('天災 デドダム');
+    // マルルの能力もトリガーしているが、コピーできるのはデドダム自身の「出た時」の1回だけ
+    expect(orgateAsks(sim)).toBe(1);
+  });
+  it('マルル自身が2体目として出た時は、マルルの「2体目が出た時」もコピーできる(ヨビニオンと合わせて2回)', () => {
+    const sim = base([W, 'ヨビニオン・マルル']);
+    sim.play(W);
+    orgateAsks(sim);
+    sim.play('ヨビニオン・マルル');
+    expect(orgateAsks(sim)).toBe(2);
+  });
+});
+
 type Json = Record<string, unknown>;
 
 function walk(x: unknown, f: (o: Json) => void): void {

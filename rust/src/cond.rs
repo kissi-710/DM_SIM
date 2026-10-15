@@ -520,6 +520,18 @@ pub fn match_pattern(cc: &CC, pat: &Pattern, ev: &Ev) -> bool {
             return false;
         }
     }
+    if pat.cause_self {
+        // その能力の持ち主(SOURCE)が、原因のイベントのカード自身か
+        let cause_card = match ev.get(s::CAUSE) {
+            Some(Val::Ev(e)) => e.int(s::CARD),
+            Some(v @ Val::Obj(_)) => v.get(s::CARD).and_then(|x| x.as_int()),
+            _ => None,
+        };
+        let src = ev.int(s::SOURCE);
+        if src.is_none() || src != cause_card {
+            return false;
+        }
+    }
     if !rel_ok(pat.owner, ev.int(s::OWNER), cc.controller) {
         return false;
     }

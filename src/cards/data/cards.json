@@ -341,7 +341,7 @@
           },
           {
             "kind": "trigger", "optional": true, "label": "相手の「出た時」能力をコピーする",
-            "spec": { "on": { "type": "abilityTriggered", "controller": "opponent", "causeType": "entered" }, "subject": "any", "turn": "opponent" },
+            "spec": { "on": { "type": "abilityTriggered", "controller": "opponent", "causeType": "entered", "causeSelf": true }, "subject": "any", "turn": "opponent" },
             "steps": [{ "op": "act", "act": { "copyTrigger": {} } }]
           }
         ]

@@ -82,6 +82,8 @@ pub struct Pattern {
     pub paid: Option<i64>,
     pub free: Option<bool>,
     pub cause_type: Option<Sym>,
+    /// abilityTriggered: 能力の持ち主が、原因のイベントのカード自身か
+    pub cause_self: bool,
     pub owner: Option<Rel>,
     pub player: Option<Rel>,
     pub controller: Option<Rel>,
@@ -424,6 +426,7 @@ pub fn parse_pattern(j: &Json) -> R<Pattern> {
         paid: j.get("paid").and_then(|x| x.as_i64()),
         free: boolf("free"),
         cause_type: symf("causeType"),
+        cause_self: boolf("causeSelf").unwrap_or(false),
         owner: j.get("owner").and_then(rel_of),
         player: j.get("player").and_then(rel_of),
         controller: j.get("controller").and_then(rel_of),

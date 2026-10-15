@@ -282,6 +282,9 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
   if (pat.paid !== undefined && ev.paid !== pat.paid) return false;
   if (pat.free !== undefined && !!ev.free !== pat.free) return false;
   if (pat.causeType !== undefined && ev.cause?.type !== pat.causeType) return false;
+  // abilityTriggered: その能力の持ち主が、トリガーの原因のイベントのカード自身(出たクリーチャー自身の能力)か。
+  // 他のクリーチャーが出たことでトリガーした能力は含めない(オルゲイト: 公式 Q&A 46068。キーナリーの抑制と同じ範囲)
+  if (pat.causeSelf && (ev.cause?.card === undefined || ev.cause.card !== ev.source)) return false;
   if (!rel(pat.owner, ev.owner)) return false;
   if (!rel(pat.player, ev.player)) return false;
   if (!rel(pat.controller, ev.controller)) return false;
