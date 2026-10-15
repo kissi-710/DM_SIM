@@ -280,12 +280,14 @@ describe('同じ攻撃時に誘発した革命チェンジとインターステ�
       p0: { hand: ['轟く革命 レッドギラゾーン'], battle: [{ c: '偽りの月 インターステラ', sick: false }], hyper: [LOST], deck: [N, N] },
       p1: { hand: [N, N], shield: 5 },
     });
+  // 手札で誘発する革命チェンジは、どの効果を解決するより前に、使用宣言する(総合ルール 506.3b)
   it('革命チェンジを先に解決し、インターステラが手札に戻っても、攻撃時効果は(誘発済みなので)使える', () => {
     const sim = setup();
     sim.attack('偽りの月 インターステラ', 'player');
+    expect(sim.pending.why).toBe('may'); // 革命チェンジの使用宣言(解決より前)
+    sim.yes();
     expect(sim.pending.why).toBe('pickNext');
     sim.order('革命チェンジ'); // 革命チェンジを先に
-    sim.yes();
     expect(sim.has(0, 'hand', '偽りの月 インターステラ')).toBe(true);
     expect(sim.has(0, 'battle', '轟く革命 レッドギラゾーン')).toBe(true);
     // 続けて、手札に戻ったインターステラの攻撃時効果を解決できる
@@ -294,15 +296,23 @@ describe('同じ攻撃時に誘発した革命チェンジとインターステ�
     expect(sim.names(0, 'deck').at(-1)).toBe(LOST);
     expect(sim.count(1, 'grave')).toBe(2); // ロスト・Re:ソウルで相手の手札が捨てられた
   });
-  it('インターステラの攻撃時効果を先に解決してから、革命チェンジしてもよい', () => {
+  it('インターステラの攻撃時効果を先に解決しても、宣言済みの革命チェンジは取りやめられず、入れ替わる', () => {
     const sim = setup();
     sim.attack('偽りの月 インターステラ', 'player');
+    sim.yes(); // 革命チェンジの使用宣言
     sim.order('超次元ゾーンの呪文');
     sim.yes();
     expect(sim.count(0, 'hyper')).toBe(0);
-    expect(sim.pending.why).toBe('may'); // 革命チェンジの確認
-    sim.yes();
+    expect(sim.s.pending?.why).not.toBe('may'); // 革命チェンジの確認を重ねない
     expect(sim.has(0, 'battle', '轟く革命 レッドギラゾーン')).toBe(true);
     expect(sim.has(0, 'hand', '偽りの月 インターステラ')).toBe(true);
+  });
+  it('宣言しなければ、あとから革命チェンジは使えない(インターステラの効果の結果を見てから選べない)', () => {
+    const sim = setup();
+    sim.attack('偽りの月 インターステラ', 'player');
+    sim.no(); // 革命チェンジを宣言しない
+    settle(sim, { first: ['超次元ゾーンの呪文'], yes: true });
+    expect(sim.has(0, 'battle', '偽りの月 インターステラ')).toBe(true);
+    expect(sim.has(0, 'hand', '轟く革命 レッドギラゾーン')).toBe(true);
   });
 });

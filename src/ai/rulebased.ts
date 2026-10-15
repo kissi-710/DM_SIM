@@ -1,7 +1,7 @@
 // L1 ルールベースAI(design 7.2): 優先度つきの手続き。
 // ターン中の行動はルールで決め、効果の選択(対象・選択肢・任意)は1手先読みで決める。
 import { breakerCount, canBlock, charsLite, costOf, hasKeyword, isUnblockable, payNeed, powerOf } from '../engine/derive';
-import { step } from '../engine/engine';
+import { legalActions, step } from '../engine/engine';
 import { mkCtx } from '../engine/state';
 import type { Registry } from '../engine/registry';
 import type { Action, GameState, PlayerId } from '../engine/types';
@@ -204,7 +204,13 @@ function chooseAnswer(view: GameState, legal: Action[], ctx: AgentCtx, o: RuleOp
   for (const a of legal) {
     let v: number;
     try {
-      v = evaluate(step(det, a, ctx.reg).state, ctx.reg, me, w);
+      let st = step(det, a, ctx.reg).state;
+      // 使用宣言(革命チェンジ・侵略)は解決より前に聞かれる。解決順の質問で止まって見分けがつかなくならないよう、
+      // 順序は結果に影響しないものとして、先頭の候補で先へ進めてから評価する
+      for (let i = 0; i < 4 && st.pending?.why === 'pickNext' && st.winner === null; i++) {
+        st = step(st, legalActions(st, ctx.reg)[0], ctx.reg).state;
+      }
+      v = evaluate(st, ctx.reg, me, w);
     } catch (e) {
       o.onError?.(e, a);
       continue;
