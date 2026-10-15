@@ -228,6 +228,11 @@ export function canBlock(c: Ctx, perm: Permanent): boolean {
   return hasKeyword(c, perm, 'blocker');
 }
 
+/** ブロックを強制する効果を受けているか(総合ルール 507.1b: ブロックできるなら、必ず選ぶ) */
+export function mustBlock(c: Ctx, perm: Permanent): boolean {
+  return hasEffect(c, perm.pid, 'mustBlock');
+}
+
 // ───────────────────────── コスト ─────────────────────────
 
 export interface CostOpts {

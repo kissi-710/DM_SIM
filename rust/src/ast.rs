@@ -558,6 +558,7 @@ fn parse_mod(j: &Json) -> R<EffectMod> {
         Some("grant") => Ok(EffectMod::Grant(sym(s_of(j, "keyword").ok_or("grant.keyword")?))),
         Some("cannotBeChosen") => Ok(EffectMod::CannotBeChosen),
         Some("cannotBeAttacked") => Ok(EffectMod::CannotBeAttacked),
+        Some("mustBlock") => Ok(EffectMod::MustBlock),
         k => err(format!("未知の効果: {:?}", k)),
     }
 }
