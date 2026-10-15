@@ -662,6 +662,18 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
                 Some(pm) if pm.cards[0] == a_card => {}
                 _ => return Ok(()),
             }
+            // 入れ替える時にも、攻撃クリーチャーが条件(文明・種族・コストなど)を満たしている必要がある
+            // (革命チェンジの確認は、使用宣言と入れ替えの2回。侵略は宣言の1回だけ)
+            let reg = c.reg;
+            if let Ability::Trigger { spec, .. } = reg.ability(f.ability) {
+                if let Some(ac) = spec.on.first().and_then(|p| p.attacker_cond.as_ref()) {
+                    let cc = cc_of(c.env(), f);
+                    let sub = cc.sub(a_card, -1);
+                    if !eval_cond(&sub, ac) {
+                        return Ok(());
+                    }
+                }
+            }
             let fr_idx = c.s.cont.iter().rposition(|x| matches!(x, Frame::Proc(p) if p.name == ProcName::Attack && var_get(&p.vars, s::PID).and_then(|v| v.as_i32()) == Some(attacker)));
             let fr_idx = match fr_idx {
                 Some(i) => i,

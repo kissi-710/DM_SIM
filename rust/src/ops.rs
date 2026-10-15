@@ -222,6 +222,7 @@ fn try_trigger(c: &mut Ctx, ev: &Rc<Ev>, uid: i32, face: u8, idx: u16, spec: &Tr
         controller,
         event: Some(ev.clone()),
         st_layer: false,
+        declared: false,
     };
     c.s.pool.push(entry);
     // 「能力がトリガーした時」(オルゲイト)は、実際に誘発した能力だけを見る
