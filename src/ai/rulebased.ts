@@ -165,6 +165,7 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
           const pt = powerOf(c, tp);
           const tcost = charsLite(c, tp.cards[0], -1).cost;
           if (pa > pt) score = p.atkCreature + Math.min(tcost, 12) + pt / 2000;
+          else if (pa === pt && tcost - charsLite(c, pm.cards[0], -1).cost >= p.atkTrade) score = p.atkCreature - 10 + Math.min(tcost, 12); // 相打ち(自分より高いコストの相手なら、損にならない)
           if (hasKeyword(c, pm, 'blocker') && score > 0 && myShield <= p.keepBlockerShield) score -= p.atkCreatureBlockerPenalty;
         }
       }
@@ -185,14 +186,15 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
 function chooseAnswer(view: GameState, legal: Action[], ctx: AgentCtx, o: RuleOpts): Action {
   if (legal.length === 1) return legal[0];
   const me = view.pending!.player;
+  const pr = withL1(o.params);
+  const w = pr.ansMana === RULE_WEIGHTS.mana ? RULE_WEIGHTS : { ...RULE_WEIGHTS, mana: pr.ansMana };
   const det = determinize(view, me, { rand: ctx.rand, reg: ctx.reg, policy: o.policy ?? FAIR, candidateDecks: o.candidateDecks });
   let best = legal[0];
   let bs = -Infinity;
   for (const a of legal) {
     let v: number;
     try {
-      const r = step(det, a, ctx.reg);
-      v = evaluate(r.state, ctx.reg, me, RULE_WEIGHTS);
+      v = evaluate(step(det, a, ctx.reg).state, ctx.reg, me, w);
     } catch (e) {
       o.onError?.(e, a);
       continue;

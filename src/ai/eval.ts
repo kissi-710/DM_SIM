@@ -45,6 +45,8 @@ export interface RewardWeights extends EvalWeights {
   trajStart?: number;
   /** 世界の抽出を対称(antithetic)にする: 2つ組のラウンドで、同じ種の反転列を使う(1 で有効) */
   anti?: number;
+  /** プレイアウトの L1: 相打ちでも、相手のコスト − 自分のコスト がこの値以上なら攻撃する(l1.atkTrade と同じ。99 で無効) */
+  atkTrade?: number;
 }
 
 /**

@@ -105,6 +105,9 @@ for (const g of games) {
     if (k % 5 === 2) Object.assign(wts, { eps: 0.2, traj: 0.7, trajDecay: 0.6 });
     if (k % 5 === 4) Object.assign(wts, { traj: 1 });
     if (k % 7 === 3) Object.assign(wts, { anti: 1 });
+    // 相打ちの攻撃(既定 0)を、無効(99)・常に許す(-99)にした場合も確かめる
+    if (k % 6 === 1) Object.assign(wts, { atkTrade: 99 });
+    if (k % 6 === 4) Object.assign(wts, { atkTrade: -99 });
     const env: SearchEnv = { view, legal, me, policy: FAIR, candidateDecks: undefined, horizon: k % 4 === 3 ? 99 : 3, weights: Object.keys(wts).length ? (wts as SearchEnv['weights']) : undefined };
     const seeds = [1, 2, 3, 4].map((r) => roundSeed(77 + i, r));
     const alive = legal.map((_, k) => k);

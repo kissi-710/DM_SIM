@@ -36,6 +36,8 @@ pub struct EvalWeights {
     pub traj_start: bool,
     /// 世界の抽出を対称にする(src/ai/eval.ts の anti)
     pub anti: bool,
+    /// プレイアウトの L1: 相打ち(パワー同値)でも、相手のコスト − 自分のコスト がこの値以上なら攻撃する(99 で無効。src/ai/eval.ts の atkTrade)
+    pub atk_trade: i32,
     /// 学習した価値関数(src/ai/valueModel.ts)。あれば、打ち切りの報酬はこれが返す勝つ確率になる
     pub model: Option<std::rc::Rc<ValueModel>>,
 }
@@ -43,7 +45,7 @@ pub struct EvalWeights {
 impl Default for EvalWeights {
     fn default() -> Self {
         // src/ai/eval.ts の DEFAULT_WEIGHTS と同じ
-        EvalWeights { creature: 3.0, power_div: 2500.0, blocker: 1.5, speed_attacker: 0.5, stack: 0.5, shield: 4.0, hand: 1.6, mana: 3.5, hand_cost: 0.05, deck_out: 3.0, scale: 30.0, eps: 0.0, traj: 1.0, traj_decay: 1.0, traj_start: false, anti: false, model: None }
+        EvalWeights { creature: 3.0, power_div: 2500.0, blocker: 1.5, speed_attacker: 0.5, stack: 0.5, shield: 4.0, hand: 1.6, mana: 3.5, hand_cost: 0.05, deck_out: 3.0, scale: 30.0, eps: 0.0, traj: 1.0, traj_decay: 1.0, traj_start: false, anti: false, atk_trade: 0, model: None }
     }
 }
 
@@ -73,6 +75,7 @@ impl EvalWeights {
                     "trajDecay" => w.traj_decay = x,
                     "trajStart" => w.traj_start = x > 0.0,
                     "anti" => w.anti = x > 0.0,
+                    "atkTrade" => w.atk_trade = x as i32,
                     _ => {}
                 }
             }
@@ -304,6 +307,15 @@ pub fn model_prob(e: Env, me: PlayerId, m: &ValueModel) -> f64 {
 
 // ───────────────────────── ルールベースの手の選択(ターン中の行動) ─────────────────────────
 
+// プレイアウトの方針の調整値(EvalWeights から、ラウンドの評価の入口で設定する。WASM は単一スレッド)
+thread_local! {
+    static ATK_TRADE: std::cell::Cell<i32> = std::cell::Cell::new(0);
+}
+
+fn apply_policy(w: &EvalWeights) {
+    ATK_TRADE.with(|c| c.set(w.atk_trade));
+}
+
 fn keep_score(e: Env, uid: i32, me: PlayerId) -> f64 {
     let s = e.s;
     let card = &s.cards[uid as usize];
@@ -497,6 +509,8 @@ pub fn choose_turn_action(e: Env, legal: &[Action], me: PlayerId) -> usize {
                             let tcost = chars_lite(e, tp.cards[0], -1).cost;
                             if pa > pt {
                                 score = 30.0 + (tcost.min(12)) as f64 + pt as f64 / 2000.0;
+                            } else if pa == pt && tcost - chars_lite(e, pm.cards[0], -1).cost >= ATK_TRADE.with(|c| c.get()) {
+                                score = 20.0 + (tcost.min(12)) as f64;
                             }
                             if has_keyword(e, pm, Kw::Blocker) && score > 0.0 && my_shield <= 3 {
                                 score -= 8.0;
@@ -939,6 +953,7 @@ fn world_seed(seed: u32, anti: bool) -> (u32, bool) {
 
 pub fn eval_round(reg: &Registry, env: &SearchEnv, seed: u32, alive: &[usize]) -> Vec<f64> {
     crate::prof!(0);
+    apply_policy(&env.weights);
     let q_def = reg.def_index("?").unwrap_or(u16::MAX);
     let (ws, wa) = world_seed(seed, env.weights.anti);
     let mut rr = SeededRand::new_anti(ws, wa);
@@ -1111,6 +1126,7 @@ impl Tree {
 
     /// 反復を done から target まで行う(標準の ISMCTS)
     pub fn run(&mut self, reg: &Registry, env: &SearchEnv, base: u32, target: u32, o: TreeOpts) {
+        apply_policy(&env.weights);
         let q_def = reg.def_index("?").unwrap_or(u16::MAX);
         let end_turn = env.view.turn + env.horizon;
         while self.done < target {
@@ -1138,6 +1154,7 @@ impl Tree {
 
     /// ペア比較の1ラウンド(src/ai/tree.ts の PairedTree.round)。手ごとの報酬(alive でない手・失敗した手は NaN)
     pub fn paired_round(&mut self, reg: &Registry, env: &SearchEnv, seed: u32, alive: &[usize], o: TreeOpts) -> Vec<f64> {
+        apply_policy(&env.weights);
         let q_def = reg.def_index("?").unwrap_or(u16::MAX);
         let end_turn = env.view.turn + env.horizon;
         let (ws, wa) = world_seed(seed, env.weights.anti);

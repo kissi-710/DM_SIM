@@ -45,10 +45,11 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
     expect(match({ kind: 'rule' }, { kind: 'rule' }, 60, 1)).toEqual({
       // ワクムテラスのパワーを公式の 4000 に訂正・ジャオウガの身代わりをバトルゾーンのカードだけに・
       // 呪文の空振り判定を、説明文の正規表現からカードのデータに(各1〜2試合が変わった)
-      winsA: 46,
-      winsB: 14,
+      // ルールベースの相打ち攻撃・効果の選択のマナの重みを変えた時に更新した固定値(docs/ai-quality-plan.md §10)
+      winsA: 47,
+      winsB: 13,
       draws: 0,
-      avgTurns: 11.9,
+      avgTurns: 11.816666666666666,
       reasons: { ダイレクトアタック: 60 },
     });
   });
@@ -56,10 +57,10 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
   // 報酬を軌跡平均(traj=1。§8)にした時に更新した固定値
   it('バッチ対戦: MCTS(20反復) 対 ルールベース 6試合', () => {
     expect(match({ kind: 'mcts', iterations: 20, ms: 100000 }, { kind: 'rule' }, 6, 1)).toEqual({
-      winsA: 6,
-      winsB: 0,
+      winsA: 5,
+      winsB: 1,
       draws: 0,
-      avgTurns: 12.833333333333334,
+      avgTurns: 13,
       reasons: { ダイレクトアタック: 6 },
     });
   });
@@ -68,7 +69,7 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
       const r = playGameSync(reg, [makeAgent({ kind }), makeAgent({ kind })], { decks: [A, B], seed });
       return [r.actions.length, hash(JSON.stringify(r.actions)), r.winner, r.turns, r.state.seq, r.state.rng, hash(JSON.stringify(r.state.cards))];
     };
-    expect(play('rule', 5)).toEqual([51, 3895777216, 0, 11, 297, -1527012423, 257919613]);
+    expect(play('rule', 5)).toEqual([50, 3096645315, 0, 11, 274, 1440342336, 1477984376]);
     expect(play('random', 9)).toEqual([96, 1152920333, 0, 25, 470, 1504283537, 3871052353]);
   });
   it('確率調査: 方針プレイと探索(40試行)', () => {

@@ -12,6 +12,7 @@ import type { Action, GameState, PlayerId } from '../engine/types';
 import { FAIR } from '../engine/view';
 import { determinize } from './determinize';
 import { withWeights } from './eval';
+import { withL1 } from './l1params';
 import { HARD_MAX_ITERATIONS, nativeUnsupported, planSearch, rollout, roundSeed, runSearch, seededRand, worldSeed, type MctsOpts, type SearchEnv, type TreeOpts } from './mcts';
 export type { TreeOpts } from './mcts';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
@@ -76,7 +77,7 @@ function descend(env: SearchEnv, reg: Registry, o: TreeOpts, start: GameState, s
     if (expand) {
       chosen = untried[0];
       if (p.why === 'turnAction') {
-        const l1 = chooseTurnAction(state, legal, { reg, rand: () => 0 });
+        const l1 = chooseTurnAction(state, legal, { reg, rand: () => 0 }, env.weights?.atkTrade === undefined ? undefined : withL1({ atkTrade: env.weights.atkTrade }));
         const j = legal.findIndex((a) => keyOf(a) === keyOf(l1));
         if (j >= 0 && untried.includes(j)) chosen = j;
       }
