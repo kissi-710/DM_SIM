@@ -33,11 +33,12 @@ const goal: Goal = { op: 'pred', timing: { turn: 6, at: 'byTurn' }, pred: { kind
 describe('ゴールデン(シード固定の結果が変わらない)', () => {
   it('バッチ対戦: ランダム同士 60試合', () => {
     expect(match({ kind: 'random' }, { kind: 'random' }, 60, 1)).toEqual({
-      winsA: 31,
-      winsB: 29,
+      // ジャオウガの身代わりをバトルゾーンのカードだけにした(公式 Q&A 41461)ので、山札切れが 15 → 13 に
+      winsA: 29,
+      winsB: 31,
       draws: 0,
       avgTurns: 23.266666666666666,
-      reasons: { ダイレクトアタック: 45, 山札切れ: 15 },
+      reasons: { ダイレクトアタック: 47, 山札切れ: 13 },
     });
   });
   it('バッチ対戦: ルールベース同士 60試合', () => {
@@ -45,7 +46,7 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
       winsA: 47, // ワクムテラスのパワーを公式の 4000 に訂正(旧 3000)して、1試合変わった
       winsB: 13,
       draws: 0,
-      avgTurns: 11.816666666666666,
+      avgTurns: 11.75,
       reasons: { ダイレクトアタック: 60 },
     });
   });
@@ -53,10 +54,10 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
   // 報酬を軌跡平均(traj=1。§8)にした時に更新した固定値
   it('バッチ対戦: MCTS(20反復) 対 ルールベース 6試合', () => {
     expect(match({ kind: 'mcts', iterations: 20, ms: 100000 }, { kind: 'rule' }, 6, 1)).toEqual({
-      winsA: 5,
-      winsB: 1,
+      winsA: 6,
+      winsB: 0,
       draws: 0,
-      avgTurns: 13,
+      avgTurns: 11.833333333333334,
       reasons: { ダイレクトアタック: 6 },
     });
   });

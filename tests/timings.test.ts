@@ -185,7 +185,7 @@ describe('タイミングの表現(spec 3.13-2)', () => {
   });
   it('ゲームに負ける時(置換)', () => {
     const sim = new Sim({
-      p0: { battle: ['CRYMAX ジャオウガ'], mana: mana(4), deck: 0 },
+      p0: { battle: ['CRYMAX ジャオウガ', 'ヨビニオン・マルル', '天災 デドダム', 'アクアン'], mana: mana(4), deck: 0 },
       p1: { deck: 10 },
     }, R);
     sim.endTurn();
@@ -194,6 +194,7 @@ describe('タイミングの表現(spec 3.13-2)', () => {
     expect(sim.s.winner).toBeNull();
     expect(sim.has(0, 'battle', 'CRYMAX ジャオウガ')).toBe(true);
     expect(sim.count(0, 'grave')).toBe(3);
+    expect(sim.count(0, 'mana')).toBe(4); // マナゾーンは対象外(破壊できるのはバトルゾーンのカードだけ)
   });
 });
 

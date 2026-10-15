@@ -91,41 +91,76 @@ describe('A11 CRYMAX ジャオウガ', () => {
   it('離れる時、かわりに自分の表向きのカード3枚を破壊してもよい(置換)', () => {
     const sim = new Sim({
       active: 1,
-      p0: { battle: ['CRYMAX ジャオウガ'], mana: mana(4) },
+      p0: { battle: ['CRYMAX ジャオウガ', 'ヨビニオン・マルル', '天災 デドダム', 'ティンパニ=シンバリー'], mana: mana(4) },
       p1: { hand: ['修羅の死神フミシュナ'], mana: mana(5, W), deck: 5 },
     });
     sim.play('修羅の死神フミシュナ', { face: 1 });
     sim.option(0, 1); // カードを引く+相手のクリーチャーを手札に戻す
+    sim.pick('CRYMAX ジャオウガ');
     // 置換の選択(持ち主=p0)
     expect(sim.pending.why).toBe('replaceChoice');
     expect(sim.pending.player).toBe(0);
     sim.option(0);
     expect(sim.has(0, 'battle', 'CRYMAX ジャオウガ')).toBe(true);
+    // 他のバトルゾーンのカード3枚(ちょうど3枚なので、選択の余地はない)が破壊される。マナゾーンは対象外
     expect(sim.count(0, 'grave')).toBe(3);
-    expect(sim.count(0, 'mana')).toBe(1);
+    expect(sim.count(0, 'battle')).toBe(1);
+    expect(sim.count(0, 'mana')).toBe(4);
+  });
+  it('破壊できるのはバトルゾーンのカードだけ: 他に3枚なければ、マナゾーンが何枚あっても身代わりにできない(公式 Q&A 41461)', () => {
+    const sim = new Sim({
+      active: 1,
+      p0: { battle: ['CRYMAX ジャオウガ', 'ヨビニオン・マルル'], mana: mana(8) },
+      p1: { hand: ['修羅の死神フミシュナ'], mana: mana(5, W), deck: 5 },
+    });
+    sim.play('修羅の死神フミシュナ', { face: 1 });
+    sim.option(0, 1);
+    sim.pick('CRYMAX ジャオウガ');
+    // 置換の質問は出ず、そのまま手札に戻る
+    expect(sim.has(0, 'hand', 'CRYMAX ジャオウガ')).toBe(true);
+    expect(sim.count(0, 'mana')).toBe(8);
+  });
+  it('他のクリーチャーが4体以上いる時は、破壊する3枚を持ち主が選ぶ', () => {
+    const sim = new Sim({
+      active: 1,
+      p0: { battle: ['CRYMAX ジャオウガ', 'ヨビニオン・マルル', '天災 デドダム', 'ティンパニ=シンバリー', 'アクアン'], mana: mana(2) },
+      p1: { hand: ['修羅の死神フミシュナ'], mana: mana(5, W), deck: 5 },
+    });
+    sim.play('修羅の死神フミシュナ', { face: 1 });
+    sim.option(0, 1);
+    sim.pick('CRYMAX ジャオウガ');
+    expect(sim.pending.why).toBe('replaceChoice');
+    sim.option(0);
+    expect(sim.pending.why).toBe('select');
+    expect(sim.pending.player).toBe(0);
+    sim.pick('ヨビニオン・マルル', 'アクアン', '天災 デドダム');
+    expect(sim.has(0, 'battle', 'ティンパニ=シンバリー')).toBe(true);
+    expect(sim.has(0, 'grave', 'アクアン')).toBe(true);
+    expect(sim.count(0, 'grave')).toBe(3);
   });
   it('置換しなければ、そのまま手札に戻る', () => {
     const sim = new Sim({
       active: 1,
-      p0: { battle: ['CRYMAX ジャオウガ'], mana: mana(4) },
+      p0: { battle: ['CRYMAX ジャオウガ', 'ヨビニオン・マルル', '天災 デドダム', 'ティンパニ=シンバリー'], mana: mana(4) },
       p1: { hand: ['修羅の死神フミシュナ'], mana: mana(5, W), deck: 5 },
     });
     sim.play('修羅の死神フミシュナ', { face: 1 });
-    sim.option(1, 0);
+    sim.option(0, 1);
+    sim.pick('CRYMAX ジャオウガ');
     sim.option(1); // 置換しない
     expect(sim.has(0, 'hand', 'CRYMAX ジャオウガ')).toBe(true);
   });
   it('身代わりの「破壊」は、さらに置換されない(ジャオウガの身代わりにトライブの置換は使えない)', () => {
     const sim = new Sim({
       active: 1,
-      p0: { battle: ['CRYMAX ジャオウガ', 'ヨビニオン・トライブ'], mana: mana(2) },
+      p0: { battle: ['CRYMAX ジャオウガ', 'ヨビニオン・トライブ', '天災 デドダム', 'アクアン'], mana: mana(2) },
       p1: { hand: ['修羅の死神フミシュナ'], mana: mana(5, W), deck: 5 },
     });
     sim.play('修羅の死神フミシュナ', { face: 1 });
     sim.option(0, 1);
-    // 対象は2体(ジャオウガ・トライブ)。ジャオウガを選ぶ
+    // 対象は4体(ジャオウガ・トライブ・デドダム・アクアン)。ジャオウガを選ぶ
     sim.pick('CRYMAX ジャオウガ');
-    sim.option(0); // 置換する: トライブ+マナ2枚が破壊される
+    sim.option(0); // 置換する: トライブ・デドダム・アクアンが破壊される
     expect(sim.has(0, 'grave', 'ヨビニオン・トライブ')).toBe(true);
     expect(sim.has(0, 'mana', 'ヨビニオン・トライブ')).toBe(false);
   });

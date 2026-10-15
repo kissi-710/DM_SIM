@@ -103,6 +103,33 @@ describe('D-5/L10 同時に離れたクリーチャーの誘発(R 603.5d)', () =
   });
 });
 
+describe('D-12 自身が移動した時の誘発・D-10 EXライフの付与範囲', () => {
+  it('「このクリーチャーが(バトルゾーンから)置かれた時」に誘発する能力を持つカードは、28枚にない(D-12)', () => {
+    const found: string[] = [];
+    for (const card of CARD_LIST) {
+      walk(card.faces, (o) => {
+        const spec = o.spec as { on?: Json | Json[]; subject?: string } | undefined;
+        if (o.kind !== 'trigger' || !spec) return;
+        const ons = Array.isArray(spec.on) ? spec.on : spec.on ? [spec.on] : [];
+        if (ons.some((on) => on.type === 'moved') && (spec.subject === 'self' || ons.some((on) => on.self === true))) found.push(card.id);
+      });
+    }
+    // dmrp17-km2(ドルファディロム)は「出た時、または EXライフのシールドが離れた時」で、自身の移動ではない
+    expect(found).toEqual(['dmrp17-km2']);
+  });
+  it('EXライフを持つ進化クリーチャーはない。進化元の EXライフを進化先が使う場面(公式 Q&A 42663)は、28枚では起きない(D-10)', () => {
+    const evoWithEx: string[] = [];
+    for (const card of CARD_LIST) {
+      for (const f of card.faces) {
+        const isEvo = f.type === 'evolution' || f.type === 'smaxEvolution';
+        const hasEx = (f.abilities ?? []).some((a) => (a as { kind?: string; name?: string }).kind === 'keyword' && (a as { name?: string }).name === 'exLife');
+        if (isEvo && hasEx) evoWithEx.push(card.id);
+      }
+    }
+    expect(evoWithEx).toEqual([]);
+  });
+});
+
 describe('D-6/L9 山札切れの判定時点(R 104.2b)', () => {
   it('山札のカードを山札の外に出して、同じ効果の中で山札に戻す能力はない(一瞬でも0枚になる場面がない)', () => {
     // 山札へ移す原始操作(move / put の to: deck)と、「唱えた後山札の下に置く」(after: deckBottom。解決後の1回の移動)だけ。

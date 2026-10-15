@@ -814,7 +814,22 @@ fn apply_replacements(c: &mut Ctx, p: &mut Proposal) -> Res<()> {
             p.to = to;
             p.cause = s::REPLACED;
         }
-        Cand::Smax { picks, .. } => {
+        Cand::Smax { picks: pool, .. } => {
+            // 3枚ちょうどなら選択の余地がない。それより多ければ、持ち主が破壊する3枚を選ぶ
+            let picks: Vec<i32> = if pool.len() == 3 {
+                pool
+            } else {
+                let ans = ask(
+                    c,
+                    NeedInput {
+                        player: owner,
+                        why: Why::Select,
+                        input: Some(InputSpec::Pick { candidates: pool, min: 3, max: 3 }),
+                        source: Some(ObjRef { uid: p.uid, ep }),
+                    },
+                )?;
+                ans.to_i32s()
+            };
             p.cancelled = true;
             p.also = Some(Also::SmaxSacrifice(picks));
         }
@@ -826,32 +841,15 @@ fn apply_replacements(c: &mut Ctx, p: &mut Proposal) -> Res<()> {
     Ok(())
 }
 
-/// ジャオウガの身代わり: 自分の表向きのカード3枚(バトルゾーン・マナゾーン)
-fn smax_victims(c: &Ctx, owner: PlayerId, self_uid: i32) -> Option<Vec<i32>> {
-    let mut face_up: Vec<i32> = Vec::new();
-    for perm in &c.s.players[owner as usize].battle {
-        if perm.cards[0] == self_uid {
-            continue;
-        }
-        face_up.push(perm.cards[0]);
+/// ジャオウガの身代わりで破壊できる、自分の表向きのカード(自身を除く)。3枚に満たなければ None。
+/// 公式 Q&A 41461: 「表向きでバトルゾーンに存在するカードを破壊できます」。マナゾーンのカードは含まない。
+pub fn smax_victims(c: &Ctx, owner: PlayerId, self_uid: i32) -> Option<Vec<i32>> {
+    let pool: Vec<i32> = c.s.players[owner as usize].battle.iter().map(|perm| perm.cards[0]).filter(|&u| u != self_uid).collect();
+    if pool.len() < 3 {
+        None
+    } else {
+        Some(pool)
     }
-    for &u in &c.s.players[owner as usize].mana {
-        face_up.push(u);
-    }
-    if face_up.len() < 3 {
-        return None;
-    }
-    // 選択はコストの小さいものから(価値の低いマナ・クリーチャーを優先)
-    let e = c.env();
-    let mut scored: Vec<(i32, f64)> = face_up.iter().map(|&u| (u, value_of(e, u))).collect();
-    scored.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-    Some(scored.iter().take(3).map(|x| x.0).collect())
-}
-
-fn value_of(e: Env, u: i32) -> f64 {
-    let card = &e.s.cards[u as usize];
-    let ch = chars_of(e, u, -1);
-    (if card.zone == Zone::Battle { 10.0 + ch.power as f64 / 1000.0 } else { 0.0 }) + ch.cost as f64
 }
 
 // ───────────────────────── 基本操作 ─────────────────────────

@@ -25,6 +25,7 @@ import {
   enterBattle,
   moveCards,
   setTapped,
+  smaxVictims,
 } from './ops';
 import type { Ctx } from './state';
 import { nextId, opponentOf, permByPid, rngInt, snapOf } from './state';
@@ -858,10 +859,8 @@ function lossReplacement(c: Ctx, p: PlayerId): boolean {
     const info = infoOf(c, uid);
     for (const r of info.replaces) {
       if (r.ability.apply.type !== 'smaxSacrifice' || r.ability.match.type !== 'gameLoss') continue;
-      const faceUp: number[] = [];
-      for (const q of s.players[p].battle) if (q.cards[0] !== uid) faceUp.push(q.cards[0]);
-      for (const u of s.players[p].mana) faceUp.push(u);
-      if (faceUp.length < 3) continue;
+      const pool = smaxVictims(c, p, uid);
+      if (!pool) continue;
       const use = ask<number[]>(c, {
         player: p,
         why: 'replaceChoice',
@@ -870,12 +869,17 @@ function lossReplacement(c: Ctx, p: PlayerId): boolean {
         prompt: `${c.reg.defs[s.cards[uid].defId].name}: ゲームに負ける時、かわりに表向きのカード3枚を破壊してもよい`,
       });
       if (use[0] !== 0) return false;
-      // 価値の低いカード(マナ・コストの小さいもの)から3枚
-      const scored = faceUp
-        .map((u) => ({ u, v: (s.cards[u].zone === 'battle' ? 100 : 0) + charsOf(c, u, -1).cost }))
-        .sort((a, b) => a.v - b.v)
-        .slice(0, 3)
-        .map((x) => x.u);
+      // 3枚ちょうどなら選択の余地がない。それより多ければ、破壊する3枚を選ぶ(破壊できるのはバトルゾーンのカードだけ)
+      const scored =
+        pool.length === 3
+          ? pool
+          : ask<number[]>(c, {
+              player: p,
+              why: 'select',
+              input: { shape: 'pick', candidates: pool, min: 3, max: 3 },
+              source: { uid, ep: s.cards[uid].ep },
+              prompt: `${c.reg.defs[s.cards[uid].defId].name}: かわりに破壊する表向きのカードを3枚選んでください`,
+            });
       s.usage[key] = 1;
       moveCards(c, scored, { to: 'grave', cause: 'destroy', noReplace: true });
       return true;

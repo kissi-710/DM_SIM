@@ -1052,18 +1052,10 @@ fn loss_replacement(c: &mut Ctx, p: PlayerId) -> Res<bool> {
             if !matches!(apply, ReplaceApply::SmaxSacrifice) || m.ty != s::GAME_LOSS {
                 continue;
             }
-            let mut face_up: Vec<i32> = Vec::new();
-            for q in &c.s.players[p as usize].battle {
-                if q.cards[0] != uid {
-                    face_up.push(q.cards[0]);
-                }
-            }
-            for &u in &c.s.players[p as usize].mana {
-                face_up.push(u);
-            }
-            if face_up.len() < 3 {
-                continue;
-            }
+            let pool = match smax_victims(c, p, uid) {
+                Some(v) => v,
+                None => continue,
+            };
             let ep = c.s.cards[uid as usize].ep;
             let use_ = ask(
                 c,
@@ -1083,14 +1075,21 @@ fn loss_replacement(c: &mut Ctx, p: PlayerId) -> Res<bool> {
             if use_.to_i32s().first().copied().unwrap_or(1) != 0 {
                 return Ok(false);
             }
-            // 価値の低いカード(マナ・コストの小さいもの)から3枚
-            let e = c.env();
-            let mut scored: Vec<(i32, i32)> = face_up
-                .iter()
-                .map(|&u| (u, (if c.s.cards[u as usize].zone == Zone::Battle { 100 } else { 0 }) + chars_lite(e, u, -1).cost))
-                .collect();
-            scored.sort_by_key(|x| x.1);
-            let picks: Vec<i32> = scored.iter().take(3).map(|x| x.0).collect();
+            // 3枚ちょうどなら選択の余地がない。それより多ければ、破壊する3枚を選ぶ(破壊できるのはバトルゾーンのカードだけ)
+            let picks: Vec<i32> = if pool.len() == 3 {
+                pool
+            } else {
+                let ans = ask(
+                    c,
+                    NeedInput {
+                        player: p,
+                        why: Why::Select,
+                        input: Some(InputSpec::Pick { candidates: pool, min: 3, max: 3 }),
+                        source: Some(ObjRef { uid, ep }),
+                    },
+                )?;
+                ans.to_i32s()
+            };
             c.s.usage_set(&key, 1);
             let mut o = MoveOpts::new(Zone::Grave, s::DESTROY);
             o.no_replace = true;

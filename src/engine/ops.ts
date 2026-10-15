@@ -482,12 +482,23 @@ function applyReplacements(c: Ctx, p: Proposal): void {
         },
       });
     } else if (a.apply.type === 'smaxSacrifice') {
-      const picks = smaxVictims(c, owner, p.uid);
-      if (picks) {
+      const pool = smaxVictims(c, owner, p.uid);
+      if (pool) {
         cands.push({
           label: a.label ?? 'かわりに表向きのカード3枚を破壊する',
           optional: true,
           apply: (pp) => {
+            // 3枚ちょうどなら選択の余地がない。それより多ければ、持ち主が破壊する3枚を選ぶ
+            const picks =
+              pool.length === 3
+                ? pool
+                : ask<number[]>(c, {
+                    player: owner,
+                    why: 'select',
+                    input: { shape: 'pick', candidates: pool, min: 3, max: 3 },
+                    source: { uid: p.uid, ep: card.ep },
+                    prompt: `${c.reg.defs[card.defId].name}: かわりに破壊する表向きのカードを3枚選んでください`,
+                  });
             pp.cancelled = true;
             pp.also = { kind: 'smaxSacrifice', picks };
           },
@@ -531,25 +542,18 @@ function applyReplacements(c: Ctx, p: Proposal): void {
   p.replaced = true;
 }
 
-/** ジャオウガの身代わり: 自分の表向きのカード3枚(バトルゾーン・マナゾーン) */
-function smaxVictims(c: Ctx, owner: PlayerId, self: number): number[] | null {
-  const s = c.s;
-  const faceUp: number[] = [];
-  for (const perm of s.players[owner].battle) {
+/**
+ * ジャオウガの身代わりで破壊できる、自分の表向きのカード(自身を除く)。3枚に満たなければ null。
+ * 公式 Q&A 41461: 「表向きでバトルゾーンに存在するカードを破壊できます」。破壊はバトルゾーンのカードを墓地に置くことなので、
+ * マナゾーンのカードは含まない。進化クリーチャーは山ごと1枚として数える。
+ */
+export function smaxVictims(c: Ctx, owner: PlayerId, self: number): number[] | null {
+  const pool: number[] = [];
+  for (const perm of c.s.players[owner].battle) {
     if (perm.cards[0] === self) continue;
-    faceUp.push(perm.cards[0]);
+    pool.push(perm.cards[0]);
   }
-  for (const u of s.players[owner].mana) faceUp.push(u);
-  if (faceUp.length < 3) return null;
-  // 選択はコストの小さいものから(価値の低いマナ・クリーチャーを優先)
-  const scored = faceUp.map((u) => ({ u, v: valueOf(c, u) })).sort((a, b) => a.v - b.v);
-  return scored.slice(0, 3).map((x) => x.u);
-}
-
-function valueOf(c: Ctx, u: number): number {
-  const card = c.s.cards[u];
-  const ch = charsOf(c, u, -1);
-  return (card.zone === 'battle' ? 10 + (ch.power ?? 0) / 1000 : 0) + ch.cost;
+  return pool.length >= 3 ? pool : null;
 }
 
 // ───────────────────────── 基本操作 ─────────────────────────
