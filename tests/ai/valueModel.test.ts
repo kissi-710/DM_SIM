@@ -19,12 +19,14 @@ const MODEL: ValueModel = {
 function midGame() {
   let s = createGame(reg, { decks: [deckCards('maruru'), deckCards('zardy')], seed: 3, first: 0 }).state;
   const rand = mulberry(3);
+  let last = s; // 決着していない最後の盤面
   for (let i = 0; i < 120 && s.winner === null; i++) {
     const legal = legalActions(s, reg);
     if (legal.length === 0) break;
     s = step(s, legal[Math.floor(rand() * legal.length)], reg).state;
+    if (s.winner === null) last = s;
   }
-  return s;
+  return last;
 }
 
 describe('価値関数', () => {

@@ -184,6 +184,8 @@ export interface PoolEntry {
   event: Ev | null;
   /** S・トリガー層で処理されるか */
   stLayer: boolean;
+  /** 非公開ゾーンで誘発した「してもよい」の能力を、使用宣言済みか(宣言したものは解決時に取りやめられない。506.3b) */
+  declared?: boolean;
 }
 
 export type Duration =
