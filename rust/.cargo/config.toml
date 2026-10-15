@@ -1,0 +1,5 @@
+# WASM 版のビルド設定。インライン展開のしきい値を上げると、プレイアウトが約 16% 速くなる
+# (しきい値 250 / 500 / 1000 / 2500 / 6000 で 19.3k / 20.8k / 21.1k / 20.6k / 20.6k 回/秒。既定は 18.2k。サイズは 676KB → 894KB)。
+# 環境変数 RUSTFLAGS を設定すると、この設定は無視される。
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "llvm-args=-inline-threshold=1000"]
