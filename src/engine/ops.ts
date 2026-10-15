@@ -2,7 +2,7 @@
 // 規約: 入力待ち(ask)は、状態を変更する前に行う。再実行しても二重に変更されない。
 import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
-import { charsOf, infoOf, payNeed } from './derive';
+import { charsLite, infoOf, payNeed } from './derive';
 import type { Ctx } from './state';
 import { nextId, opponentOf, permByPid, rngInt, shuffleInPlace, snapOf } from './state';
 import {
@@ -314,7 +314,7 @@ export function moveCards(c: Ctx, uids: number[], opts: MoveOpts): MoveResult[] 
 
 /** マナゾーンに置かれる時にタップ状態か。多色カード(ツインパクトは両面の和集合)はタップして置く(spec 3.4.1 M-1)。 */
 function entersManaTapped(c: Ctx, uid: number, opts: MoveOpts): boolean {
-  return charsOf(c, uid, -1).civs.length > 1 || !!opts.tapped;
+  return charsLite(c, uid, -1).civs.length > 1 || !!opts.tapped;
 }
 
 /** 実際の移動(置換は済んでいる)。進化の山は下のカードも一緒に動かす。 */
@@ -323,7 +323,7 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
   const card = s.cards[uid];
   const from = card.zone;
   const snap = snapOf(c, uid);
-  const kind = charsOf(c, uid, card.zone === 'battle' || card.zone === 'limbo' ? card.face : -1).type === 'spell' ? 'spell' : 'creature';
+  const kind = charsLite(c, uid, card.zone === 'battle' || card.zone === 'limbo' ? card.face : -1).type === 'spell' ? 'spell' : 'creature';
   const wasEx = card.ex;
   // 山(進化元)を一緒に動かす
   let under: number[] = [];

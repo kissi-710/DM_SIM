@@ -1,6 +1,6 @@
 // L1 ルールベースAI(design 7.2): 優先度つきの手続き。
 // ターン中の行動はルールで決め、効果の選択(対象・選択肢・任意)は1手先読みで決める。
-import { breakerCount, canBlock, charsOf, costOf, hasKeyword, payNeed, powerOf } from '../engine/derive';
+import { breakerCount, canBlock, charsLite, costOf, hasKeyword, payNeed, powerOf } from '../engine/derive';
 import { step } from '../engine/engine';
 import { mkCtx } from '../engine/state';
 import type { Registry } from '../engine/registry';
@@ -32,7 +32,7 @@ export interface RuleOpts {
 export function keepScore(view: GameState, reg: Registry, uid: number, me: PlayerId, p: L1Params): number {
   const c = mkCtx(view, reg);
   const card = view.cards[uid];
-  const ch = charsOf(c, uid, -1);
+  const ch = charsLite(c, uid, -1);
   const manaN = view.players[me].mana.length;
   let v = ch.cost <= manaN + 2 ? p.keepNear : p.keepFar;
   v -= ch.cost * p.keepCost;
@@ -40,11 +40,11 @@ export function keepScore(view: GameState, reg: Registry, uid: number, me: Playe
   const info = reg.getInfo(card.defId, ch.faceIdx);
   if (info.shieldTriggers.length) v += p.keepTrigger;
   const have = new Set<string>();
-  for (const m of view.players[me].mana) for (const cv of charsOf(c, m, -1).civs) have.add(cv);
+  for (const m of view.players[me].mana) for (const cv of charsLite(c, m, -1).civs) have.add(cv);
   const need = new Set<string>();
   for (const h of view.players[me].hand) {
     if (h === uid) continue;
-    for (const cv of charsOf(c, h, -1).civs) if (!have.has(cv)) need.add(cv);
+    for (const cv of charsLite(c, h, -1).civs) if (!have.has(cv)) need.add(cv);
   }
   // 手札の他のカードが必要とする文明は、マナに足せるなら置きたい。マナにない文明を足すのも良い
   for (const cv of ch.civs) {
@@ -98,7 +98,7 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
     if (skip && manaN >= p.skipManaFrom) {
       let maxCost = 0;
       for (const u of view.players[me].hand) {
-        const cost = charsOf(c, u, -1).cost;
+        const cost = charsLite(c, u, -1).cost;
         if (cost < 99) maxCost = Math.max(maxCost, cost);
       }
       if (manaN >= maxCost) return skip;
@@ -163,7 +163,7 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
         const tp = view.players[opp].battle.find((p) => p.pid === targetPid);
         if (tp) {
           const pt = powerOf(c, tp);
-          const tcost = charsOf(c, tp.cards[0], -1).cost;
+          const tcost = charsLite(c, tp.cards[0], -1).cost;
           if (pa > pt) score = p.atkCreature + Math.min(tcost, 12) + pt / 2000;
           if (hasKeyword(c, pm, 'blocker') && score > 0 && myShield <= p.keepBlockerShield) score -= p.atkCreatureBlockerPenalty;
         }
