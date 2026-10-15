@@ -676,6 +676,11 @@ button.icon {
   margin: -3px -4px -5px;
   scrollbar-width: thin;
 }
+/* タッチ: カードは touch-action: none(ドラッグのため)だが、横にスクロールする列では、横の動きは列のスクロールにする。
+   縦・斜めの動きはドラッグ(カードを上のゾーンへ)になる。タップは選択のまま */
+.cards.hscroll .card {
+  touch-action: pan-x;
+}
 .cards.scroll {
   max-height: 92px;
   overflow: auto;
