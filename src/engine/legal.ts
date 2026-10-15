@@ -24,6 +24,27 @@ export function legalActions(s: GameState, reg: Registry): Action[] {
   return enumerateAnswers(p).map((value) => ({ type: 'ANSWER', id: p.id, value }));
 }
 
+/**
+ * 同名の札を1枚に間引いた合法手(legalActions。AI の分岐を減らすため)を、
+ * 手札・マナ・墓地にある同名の他の札へも広げる。UI は札(uid)ごとに行き先を引くので、
+ * 間引かれたままだと、2枚目以降の同名カードをチャージ・召喚・詠唱できない。
+ */
+export function expandSameNameActions(s: GameState, reg: Registry, actions: Action[]): Action[] {
+  const out = actions.slice();
+  for (const a of actions) {
+    if (a.type !== 'CHARGE_MANA' && a.type !== 'PLAY_CARD') continue;
+    const card = s.cards[a.uid];
+    const zone = a.type === 'CHARGE_MANA' ? 'hand' : a.from ?? 'hand';
+    if (zone !== 'hand' && zone !== 'mana' && zone !== 'grave') continue;
+    for (const u of s.players[card.owner][zone]) {
+      if (u === a.uid || s.cards[u].defId !== card.defId) continue;
+      const b: Action = { ...a, uid: u };
+      if (validateAction(s, reg, b) === null) out.push(b);
+    }
+  }
+  return out;
+}
+
 // ───────────────────────── ターン中の行動 ─────────────────────────
 
 function turnActions(c: Ctx, player: PlayerId): Action[] {

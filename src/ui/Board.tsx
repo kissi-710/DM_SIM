@@ -2,6 +2,7 @@
 // すべてのクリック代替(札をクリック → 強調された行き先/ボタンをクリック)を提供する。
 // ルール判定はせず、legalActions から作る「ドロップ先マップ」だけを使う(effects 11.3)。
 import { useMemo, useState } from 'react';
+import { expandSameNameActions } from '../engine/legal';
 import { CardView } from './CardView';
 import { cardName, reg } from './format';
 import { useDrag } from './useDrag';
@@ -22,7 +23,8 @@ export function buildDropMap(s: GameState, legal: Action[]): Map<string, Drop[]>
     map.set(src, l);
   };
   const N = (u: number) => cardName(s, u);
-  for (const a of legal) {
+  // legalActions は同名の札を1枚に間引いているので、他の同名の札にも行き先を付ける
+  for (const a of expandSameNameActions(s, reg, legal)) {
     if (a.type === 'CHARGE_MANA') {
       add(`hand:${a.uid}`, { dropKey: 'zone:mana', action: a, label: 'マナチャージ' });
     } else if (a.type === 'PLAY_CARD') {
