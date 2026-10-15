@@ -123,15 +123,27 @@ export function pairedVerdict(n: number, dsum: number, dsq: number, bonusGap: nu
 }
 
 /** プレイアウトの乱数(1ラウンド内の全候補手で同じ列にするため、シードから作る) */
-export function seededRand(seed: number): () => number {
+export function seededRand(seed: number, anti = false): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
     let t = a;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    const raw = (t ^ (t >>> 14)) >>> 0;
+    // 対称(antithetic): 同じ列の反転(1 − u − 2^-32)。0 以上 1 未満
+    return (anti ? 4294967295 - raw : raw) / 4294967296;
   };
+}
+
+/** 世界の乱数の種と対称の向き。anti の時は、奇数番目のラウンドが、前のラウンドと同じ種の反転列を使う */
+export function worldSeed(seed: number, anti: boolean): [number, boolean] {
+  return anti ? [(seed & ~1) >>> 0, (seed & 1) === 1] : [seed, false];
+}
+
+/** ラウンド r の種(anti の時は、2つ組で同じ種に低位ビットだけ違う値) */
+export function seedOfRound(base: number, r: number, anti: boolean): number {
+  return anti ? (((roundSeed(base, r >> 1) & ~1) | (r & 1)) >>> 0) : roundSeed(base, r);
 }
 
 export function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number, w: RewardWeights): number {
@@ -220,10 +232,11 @@ export function evalRound(env: SearchEnv, reg: Registry, seed: number, alive: nu
       // 外部の評価器(Rust 版)が使えない入力の時は、TS 版で評価する
     }
   }
-  const rr = seededRand(seed);
+  const w = withWeights(env.weights);
+  const [ws, wa] = worldSeed(seed, (w.anti ?? 0) > 0);
+  const rr = seededRand(ws, wa);
   const det = determinize(env.view, env.me, { rand: rr, reg, policy: env.policy, candidateDecks: env.candidateDecks });
   const rolloutSeed = Math.floor(rr() * 0x7fffffff);
-  const w = withWeights(env.weights);
   const r = new Array<number>(env.legal.length).fill(NaN);
   for (const k of alive) {
     try {
@@ -430,7 +443,7 @@ export function runSearch(
   const t0 = Date.now();
   const search = newSearch(plan);
   while (!search.finished && !(search.rounds > 0 && Date.now() - t0 >= plan.ms)) {
-    const seed = roundSeed(plan.base, search.rounds);
+    const seed = seedOfRound(plan.base, search.rounds, (plan.env.weights?.anti ?? 0) > 0);
     search.feed(round ? round(seed, search.alive) : evalRound(plan.env, reg, seed, search.alive));
   }
   onSearch?.(infoOf(search, plan, Date.now() - t0, 1));
@@ -457,7 +470,8 @@ export async function runSearchParallel(
   const wave = Math.max(2, parallelism * waveFactor);
   while (!search.finished && !(search.rounds > 0 && Date.now() - t0 >= plan.ms)) {
     const room = plan.timeDriven ? wave : Math.max(1, Math.min(wave, Math.floor((plan.maxIt - search.it) / search.alive.length)));
-    const seeds = Array.from({ length: room }, (_, i) => roundSeed(plan.base, search.rounds + i));
+    const anti = (plan.env.weights?.anti ?? 0) > 0;
+    const seeds = Array.from({ length: room }, (_, i) => seedOfRound(plan.base, search.rounds + i, anti));
     const rows = await dispatch(seeds, search.alive.slice());
     for (const r of rows) {
       if (!search.canStart) break;

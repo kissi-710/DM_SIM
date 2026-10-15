@@ -43,6 +43,8 @@ export interface RewardWeights extends EvalWeights {
   trajDecay?: number;
   /** 軌跡平均に、プレイアウトの開始時点の報酬も入れる(1 で有効) */
   trajStart?: number;
+  /** 世界の抽出を対称(antithetic)にする: 2つ組のラウンドで、同じ種の反転列を使う(1 で有効) */
+  anti?: number;
 }
 
 /**

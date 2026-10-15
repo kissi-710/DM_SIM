@@ -895,17 +895,23 @@ impl Mulberry {
 /// mcts.ts の seededRand(mulberry32 の別実装。プレイアウト用)
 pub struct SeededRand {
     a: u32,
+    /// 対称(antithetic): 出力を 1 − u − 2^-32 に反転する(src/ai/mcts.ts の seededRand の anti)
+    anti: bool,
 }
 
 impl SeededRand {
     pub fn new(seed: u32) -> SeededRand {
-        SeededRand { a: seed }
+        SeededRand { a: seed, anti: false }
+    }
+    pub fn new_anti(seed: u32, anti: bool) -> SeededRand {
+        SeededRand { a: seed, anti }
     }
     pub fn next(&mut self) -> f64 {
         self.a = self.a.wrapping_add(0x6d2b79f5);
         let mut t = self.a;
         t = (t ^ (t >> 15)).wrapping_mul(t | 1);
         t ^= t.wrapping_add((t ^ (t >> 7)).wrapping_mul(t | 61));
-        ((t ^ (t >> 14)) as f64) / 4294967296.0
+        let raw = t ^ (t >> 14);
+        (if self.anti { 4294967295u32 - raw } else { raw } as f64) / 4294967296.0
     }
 }

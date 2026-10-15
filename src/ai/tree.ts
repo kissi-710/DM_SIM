@@ -12,7 +12,7 @@ import type { Action, GameState, PlayerId } from '../engine/types';
 import { FAIR } from '../engine/view';
 import { determinize } from './determinize';
 import { withWeights } from './eval';
-import { HARD_MAX_ITERATIONS, nativeUnsupported, planSearch, rollout, roundSeed, runSearch, seededRand, type MctsOpts, type SearchEnv, type TreeOpts } from './mcts';
+import { HARD_MAX_ITERATIONS, nativeUnsupported, planSearch, rollout, roundSeed, runSearch, seededRand, worldSeed, type MctsOpts, type SearchEnv, type TreeOpts } from './mcts';
 export type { TreeOpts } from './mcts';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
 import type { Agent, AgentCtx } from './types';
@@ -212,7 +212,8 @@ export class PairedTree {
       }
     }
     const { env, reg, o } = this;
-    const rr = seededRand(seed);
+    const [ws, wa] = worldSeed(seed, (this.w.anti ?? 0) > 0);
+    const rr = seededRand(ws, wa);
     const det = determinize(env.view, env.me, { rand: rr, reg, policy: env.policy, candidateDecks: env.candidateDecks });
     const rolloutSeed = Math.floor(rr() * 0x7fffffff);
     const out = new Array<number>(env.legal.length).fill(NaN);

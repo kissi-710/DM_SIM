@@ -34,6 +34,8 @@ pub struct EvalWeights {
     pub traj_decay: f64,
     /// 軌跡平均に、開始時点の報酬も入れる(src/ai/eval.ts の trajStart)
     pub traj_start: bool,
+    /// 世界の抽出を対称にする(src/ai/eval.ts の anti)
+    pub anti: bool,
     /// 学習した価値関数(src/ai/valueModel.ts)。あれば、打ち切りの報酬はこれが返す勝つ確率になる
     pub model: Option<std::rc::Rc<ValueModel>>,
 }
@@ -41,7 +43,7 @@ pub struct EvalWeights {
 impl Default for EvalWeights {
     fn default() -> Self {
         // src/ai/eval.ts の DEFAULT_WEIGHTS と同じ
-        EvalWeights { creature: 3.0, power_div: 2500.0, blocker: 1.5, speed_attacker: 0.5, stack: 0.5, shield: 4.0, hand: 1.6, mana: 3.5, hand_cost: 0.05, deck_out: 3.0, scale: 30.0, eps: 0.0, traj: 1.0, traj_decay: 1.0, traj_start: false, model: None }
+        EvalWeights { creature: 3.0, power_div: 2500.0, blocker: 1.5, speed_attacker: 0.5, stack: 0.5, shield: 4.0, hand: 1.6, mana: 3.5, hand_cost: 0.05, deck_out: 3.0, scale: 30.0, eps: 0.0, traj: 1.0, traj_decay: 1.0, traj_start: false, anti: false, model: None }
     }
 }
 
@@ -70,6 +72,7 @@ impl EvalWeights {
                     "traj" => w.traj = x,
                     "trajDecay" => w.traj_decay = x,
                     "trajStart" => w.traj_start = x > 0.0,
+                    "anti" => w.anti = x > 0.0,
                     _ => {}
                 }
             }
@@ -925,10 +928,20 @@ pub fn determinize(reg: &Registry, env: &SearchEnv, rand: &mut SeededRand, q_def
 
 /// 1ラウンド: 種から世界を1つ作り、alive の手を同じ世界・同じ乱数で評価する。
 /// 戻り値は手ごとの報酬(alive でない手・例外を出した手は NaN)。
+/// 世界の乱数の種と対称の向き(src/ai/mcts.ts の worldSeed)
+fn world_seed(seed: u32, anti: bool) -> (u32, bool) {
+    if anti {
+        (seed & !1u32, seed & 1 == 1)
+    } else {
+        (seed, false)
+    }
+}
+
 pub fn eval_round(reg: &Registry, env: &SearchEnv, seed: u32, alive: &[usize]) -> Vec<f64> {
     crate::prof!(0);
     let q_def = reg.def_index("?").unwrap_or(u16::MAX);
-    let mut rr = SeededRand::new(seed);
+    let (ws, wa) = world_seed(seed, env.weights.anti);
+    let mut rr = SeededRand::new_anti(ws, wa);
     let det = determinize(reg, env, &mut rr, q_def);
     let rollout_seed = (rr.next() * 2147483647.0).floor() as u32;
     let mut r = vec![f64::NAN; env.legal.len()];
@@ -1127,7 +1140,8 @@ impl Tree {
     pub fn paired_round(&mut self, reg: &Registry, env: &SearchEnv, seed: u32, alive: &[usize], o: TreeOpts) -> Vec<f64> {
         let q_def = reg.def_index("?").unwrap_or(u16::MAX);
         let end_turn = env.view.turn + env.horizon;
-        let mut rr = SeededRand::new(seed);
+        let (ws, wa) = world_seed(seed, env.weights.anti);
+        let mut rr = SeededRand::new_anti(ws, wa);
         let det = determinize(reg, env, &mut rr, q_def);
         let rollout_seed = (rr.next() * 2147483647.0).floor() as u32;
         let mut out = vec![f64::NAN; env.legal.len()];
