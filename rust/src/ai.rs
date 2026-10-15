@@ -458,19 +458,27 @@ pub fn choose_turn_action(e: Env, legal: &[Action], me: PlayerId) -> usize {
         let max_block = opp_blockers.iter().map(|p| power_of(e, p)).fold(0, |m, x| m.max(x));
         let opp_shield = s.players[o as usize].shield.len() as i32;
         let my_shield = s.players[me as usize].shield.len() as i32;
-        // 勝ちが確定する攻撃(S・トリガーは考えない): ブロッカーに止められない攻撃のブレイク数が、シールド+1以上
+        // 勝ちが確定する攻撃(S・トリガーは考えない)。ブロッカーに止められない攻撃のうち、
+        // 最後の1体(ダイレクトアタック役。ブレイク数の最小のもの)を除いたブレイク数が、シールド以上
         let mine: Vec<&Perm> = s.players[me as usize]
             .battle
             .iter()
             .filter(|p| attacks.iter().any(|&i| matches!(&legal[i], Action::Attack { attacker, target: Target::Player } if *attacker == p.pid)))
             .collect();
-        let mut by_breaks: Vec<(&Perm, i32)> = mine.iter().map(|p| (*p, breaker_count(e, p))).collect();
-        by_breaks.sort_by(|x, y| y.1.cmp(&x.1)); // 安定(ブレイク数の多い順)
+        // (ブレイク数, pid, ブロックされないか)
+        let mut by_breaks: Vec<(i32, i32, bool)> = mine.iter().map(|p| (breaker_count(e, p), p.pid, is_unblockable(e, p))).collect();
+        by_breaks.sort_by(|x, y| y.0.cmp(&x.0)); // 安定(ブレイク数の多い順)
+        // ブロックされるのは、ブロックされない攻撃を除き、ブレイク数の多い順(ブロッカー1体で1回だけ止められる)
         let nb = opp_blockers.len();
-        if by_breaks.len() > nb {
-            let through = &by_breaks[nb..];
-            if !through.is_empty() && through.iter().map(|x| x.1).sum::<i32>() >= opp_shield + 1 {
-                let lethal_pid = by_breaks[0].0.pid;
+        let mut through: Vec<(i32, i32)> = by_breaks.iter().filter(|x| x.2).map(|x| (x.0, x.1)).collect();
+        through.extend(by_breaks.iter().filter(|x| !x.2).skip(nb).map(|x| (x.0, x.1)));
+        if !through.is_empty() {
+            let sum: i32 = through.iter().map(|x| x.0).sum();
+            let last = through.iter().map(|x| x.0).min().unwrap_or(0);
+            if opp_shield == 0 || (through.len() >= 2 && sum - last >= opp_shield) {
+                // 先にブレイク数の多いものから攻撃し、最後の1体を残す(攻撃のたびに、この判定をやり直す)
+                through.sort_by(|x, y| y.0.cmp(&x.0));
+                let lethal_pid = through[0].1;
                 if let Some(i) = attacks.iter().copied().find(|&i| matches!(&legal[i], Action::Attack { attacker, target: Target::Player } if *attacker == lethal_pid)) {
                     return i;
                 }
@@ -489,9 +497,11 @@ pub fn choose_turn_action(e: Env, legal: &[Action], me: PlayerId) -> usize {
                 match target {
                     Target::Player => {
                         let breakers = breaker_count(e, pm);
-                        if opp_shield == 0 && opp_blockers.is_empty() {
+                        // 「ブロックされない」攻撃は、相手のブロッカーに止められない
+                        let no_blockers = opp_blockers.is_empty() || is_unblockable(e, pm);
+                        if opp_shield == 0 && no_blockers {
                             score = 100.0;
-                        } else if opp_blockers.is_empty() {
+                        } else if no_blockers {
                             score = 20.0 + breakers as f64;
                         } else if max_block < pa {
                             score = 12.0 + breakers as f64; // ブロックされても負けない

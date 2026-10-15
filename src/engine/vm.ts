@@ -463,6 +463,14 @@ function execAct(c: Ctx, f: EffectFrame, cc: CC, act: ActDef): void {
       if (card.ep !== f.source.ep || card.zone !== 'hand') return;
       const pm = permByPid(s, trig.attacker);
       if (!pm || pm.perm.cards[0] !== trig.card) return;
+      // 入れ替える時にも、攻撃クリーチャーが条件(文明・種族・コストなど)を満たしている必要がある
+      // (革命チェンジの確認は、使用宣言と入れ替えの2回。侵略は宣言の1回だけ)
+      const trigAb = c.reg.ability(f.ability);
+      if (trigAb.kind === 'trigger') {
+        const on = Array.isArray(trigAb.spec.on) ? trigAb.spec.on[0] : trigAb.spec.on;
+        const cond = on?.attackerCond;
+        if (cond && !evalCond({ ...cc, it: trig.card, itFace: -1 }, cond as Cond)) return;
+      }
       const fr = [...s.cont].reverse().find((x) => x.kind === 'proc' && x.name === 'attack' && x.vars.pid === trig.attacker);
       if (!fr) return;
       const fi = creatureFace(c, uid);

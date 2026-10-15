@@ -376,6 +376,7 @@ pub fn state_from_json(reg: &Registry, j: &Json) -> R<State> {
                 Some(v) => Some(Rc::new(ev_from_json(reg, v)?)),
             },
             st_layer: gb(e, "stLayer")?,
+            declared: e.get("declared").and_then(|x| x.as_bool()).unwrap_or(false),
         });
     }
     let mut effects = Vec::new();
@@ -562,7 +563,7 @@ pub fn state_to_json(reg: &Registry, s: &State) -> Json {
         s.pool
             .iter()
             .map(|e| {
-                Json::obj(vec![
+                let mut fields = vec![
                     ("id", Json::int(e.id as i64)),
                     ("batch", Json::int(e.batch as i64)),
                     ("ability", e.ability.map_or(Json::Null, |a| ability_json(reg, a))),
@@ -579,7 +580,12 @@ pub fn state_to_json(reg: &Registry, s: &State) -> Json {
                     ("controller", Json::int(e.controller as i64)),
                     ("event", e.event.as_ref().map_or(Json::Null, |v| v.to_json(&n))),
                     ("stLayer", Json::Bool(e.st_layer)),
-                ])
+                ];
+                // 使用宣言済みの時だけ書く(TS 側は、宣言した時に declared: true を足す)
+                if e.declared {
+                    fields.push(("declared", Json::Bool(true)));
+                }
+                Json::obj(fields)
             })
             .collect(),
     );

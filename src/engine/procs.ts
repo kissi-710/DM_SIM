@@ -683,6 +683,55 @@ export function pickNextCandidates(c: Ctx): { player: PlayerId; entries: PoolEnt
   return { player: opponentOf(s.active), entries: group };
 }
 
+/** 使用宣言が必要な、非公開ゾーン(手札・山札・シールド)で誘発する能力のいるゾーン */
+const HIDDEN_ZONES: ReadonlySet<string> = new Set(['hand', 'deck', 'shield']);
+
+/**
+ * 非公開ゾーンで誘発した「してもよい」の能力(侵略・革命チェンジなど)は、どれも解決する前に、
+ * まとめて使用宣言する。ターン・プレイヤー側から宣言し、宣言したものは解決時に取りやめられない。
+ * 宣言しなかったものは、誘発しなかったことになる(総合ルール 506.3b・507.3、公式Q&A 40435 / 42940)。
+ * 質問(ask)は、状態を変更する前に、全員分をまとめて行う。
+ */
+function declareHidden(c: Ctx): boolean {
+  const s = c.s;
+  const need: PoolEntry[] = [];
+  for (const e of s.pool) {
+    if (e.kind !== 'ability' || e.declared || !e.ability) continue;
+    const a = c.reg.ability(e.ability);
+    if (a.kind !== 'trigger' || !a.optional) continue;
+    const card = s.cards[e.source.uid];
+    if (card.ep !== e.source.ep || !HIDDEN_ZONES.has(card.zone)) continue;
+    // いま条件を満たさない能力は、解決しても何も起こらないので、宣言を聞かない(選択の余地がない質問は出さない)
+    if (!triggerConditionHolds(c, e)) continue;
+    need.push(e);
+  }
+  if (need.length === 0) return false;
+  const answers = new Map<number, boolean>();
+  for (const player of [s.active, opponentOf(s.active)]) {
+    for (const e of need) {
+      if (e.controller !== player) continue;
+      const a = c.reg.ability(e.ability!) as { label?: string };
+      answers.set(
+        e.id,
+        ask<boolean>(c, {
+          player,
+          why: 'may',
+          input: { shape: 'yesno' },
+          source: e.source,
+          prompt: `${c.reg.defs[e.lki.defId]?.name ?? ''}: ${a.label ?? '効果を使いますか?'}`,
+        }),
+      );
+    }
+  }
+  // プールの要素は、元の状態と共有されている(step は入力を書き換えない)ので、置き換える
+  for (const e of need) {
+    const i = s.pool.indexOf(e);
+    if (answers.get(e.id)) s.pool[i] = { ...e, declared: true };
+    else s.pool.splice(i, 1);
+  }
+  return true;
+}
+
 function runSettle(c: Ctx, f: ProcFrame): void {
   const s = c.s;
   // 状況起因処理(1回につき1つの変更を行い、再びここへ戻る)
@@ -691,6 +740,8 @@ function runSettle(c: Ctx, f: ProcFrame): void {
     popFrame(c, f);
     return;
   }
+  // 宣言を確定したら、いったんここで終える(質問は状態を変更する前に行う規約。次の回で解決順を聞く)
+  if (declareHidden(c)) return;
   const pick = pickNextCandidates(c);
   if (!pick) {
     popFrame(c, f);
@@ -749,19 +800,26 @@ function triggerLabel(on: Pattern | Pattern[]): string {
 }
 
 /** 待機していた能力を解決するフレームを積む */
+/**
+ * 条件を持つ誘発型能力が、いま条件を満たしているか。解決の時点で満たしていれば解決される
+ * (総合ルール 603.4。誘発した時点で満たしているかは問わない)。
+ */
+function triggerConditionHolds(c: Ctx, e: PoolEntry): boolean {
+  if (e.kind !== 'ability' || !e.ability) return true;
+  const a0 = c.reg.ability(e.ability);
+  if (a0.kind === 'trigger' && (a0.spec.if || a0.spec.ifAtResolve)) {
+    const cc0 = { ...mkCC(c, e.controller, { self: e.source.uid, selfSnap: e.lki, event: e.event }), it: e.event?.card ?? null, itFace: -1 };
+    if (a0.spec.if && !evalCond(cc0, a0.spec.if)) return false;
+    if (a0.spec.ifAtResolve && !evalCond(cc0, a0.spec.ifAtResolve)) return false;
+  }
+  return true;
+}
+
 function resolveEntry(c: Ctx, e: PoolEntry): void {
   const s = c.s;
   const card = s.cards[e.source.uid];
-  // 条件を持つ誘発型能力は、解決の時点で条件を満たしていれば解決される(総合ルール 603.4。
-  // 誘発した時点で満たしているかは問わない)。満たさなければ、何も起こさず(ログにも出さず)終える
-  if (e.kind === 'ability' && e.ability) {
-    const a0 = c.reg.ability(e.ability);
-    if (a0.kind === 'trigger' && (a0.spec.if || a0.spec.ifAtResolve)) {
-      const cc0 = { ...mkCC(c, e.controller, { self: e.source.uid, selfSnap: e.lki, event: e.event }), it: e.event?.card ?? null, itFace: -1 };
-      if (a0.spec.if && !evalCond(cc0, a0.spec.if)) return;
-      if (a0.spec.ifAtResolve && !evalCond(cc0, a0.spec.ifAtResolve)) return;
-    }
-  }
+  // 条件を満たさなければ、何も起こさず(ログにも出さず)終える
+  if (!triggerConditionHolds(c, e)) return;
   const prevCause = c.cause;
   c.cause = e.event?.id ?? null;
   const logged = emit(c, 'resolve', {
@@ -800,6 +858,8 @@ function resolveEntry(c: Ctx, e: PoolEntry): void {
     pc: 0,
     vars: {},
     trigger: e.event,
+    // 使用宣言したものは、解決時に取りやめられない(「してもよい」の確認を重ねない)
+    ...(e.declared ? { noOptional: true } : {}),
   });
 }
 

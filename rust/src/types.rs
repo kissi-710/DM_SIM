@@ -599,6 +599,8 @@ pub struct PoolEntry {
     pub controller: PlayerId,
     pub event: Option<Rc<Ev>>,
     pub st_layer: bool,
+    /// 非公開ゾーンで誘発した「してもよい」の能力を、使用宣言済みか(宣言したものは解決時に取りやめられない。506.3b)
+    pub declared: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

@@ -531,6 +531,8 @@ design.md 5.2 を、イベントとプールを使った形に書き直す。
 ```
 proc:"attack"
   A0 宣言     : 攻撃クリーチャーをタップ → emit attackDeclared → settle                  // 「攻撃する時」の誘発、侵略
+                (settle の最初に、非公開ゾーンで誘発した「してもよい」の能力[侵略・革命チェンジ]を
+                 ターン・プレイヤー側から全て使用宣言する。宣言済みは取りやめられない。506.3b / `declareHidden`)
   A1 ブロック  : 相手に blocker 候補があれば pending(pick 1 or none)。ブロックなら blocked → settle
   A2 対象別    : creature / blocker → battle(パワー比較。同値は相打ち。勝敗は SBA で破壊)→ battleEnded → settle
                  player → proc:"breakShields"(ブレイカー数)

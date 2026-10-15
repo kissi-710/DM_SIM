@@ -764,6 +764,7 @@ fn run_break(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                     controller: defender,
                     event: None,
                     st_layer: true,
+                    declared: false,
                 });
             }
             f.stage = 2;
@@ -846,6 +847,10 @@ fn run_settle(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
     if c.s.winner != Winner::None {
         return pop_frame(c, f.id);
     }
+    // 宣言を確定したら、いったんここで終える(質問は状態を変更する前に行う規約。次の回で解決順を聞く)
+    if declare_hidden(c)? {
+        return Ok(());
+    }
     let (player, entries) = match pick_next_candidates(c) {
         Some(x) => x,
         None => return pop_frame(c, f.id),
@@ -870,37 +875,102 @@ fn run_settle(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
     resolve_entry(c, chosen)
 }
 
-/// 待機していた能力を解決するフレームを積む
-fn resolve_entry(c: &mut Ctx, e: PoolEntry) -> Res<()> {
-    let reg = c.reg;
-    let (card_ep, card_zone) = {
-        let card = &c.s.cards[e.source.uid as usize];
-        (card.ep, card.zone)
-    };
-    // 条件を持つ誘発型能力は、解決の時点で条件を満たしていれば解決される(総合ルール 603.4)。
-    // 満たさなければ、何も起こさず(ログにも出さず)終える
-    if e.kind == PoolKind::Ability {
-        if let Some(ar) = e.ability {
-            if let Ability::Trigger { spec, .. } = reg.ability(ar) {
-                if spec.if_.is_some() || spec.if_at_resolve.is_some() {
-                    let env = c.env();
-                    let mut cc = CC::new(env, e.controller).with_self(e.source.uid);
-                    cc.self_snap = Some(&e.lki);
-                    cc.it = e.event.as_ref().and_then(|ev| ev.get(s::CARD)).and_then(|v| v.as_i32());
-                    cc.it_face = -1;
-                    if let Some(cnd) = &spec.if_ {
-                        if !eval_cond(&cc, cnd) {
-                            return Ok(());
-                        }
+/// 条件を持つ誘発型能力が、いま条件を満たしているか。解決の時点で満たしていれば解決される
+/// (総合ルール 603.4。誘発した時点で満たしているかは問わない)。
+fn trigger_condition_holds(c: &Ctx, e: &PoolEntry) -> bool {
+    if e.kind != PoolKind::Ability {
+        return true;
+    }
+    if let Some(ar) = e.ability {
+        if let Ability::Trigger { spec, .. } = c.reg.ability(ar) {
+            if spec.if_.is_some() || spec.if_at_resolve.is_some() {
+                let env = c.env();
+                let mut cc = CC::new(env, e.controller).with_self(e.source.uid);
+                cc.self_snap = Some(&e.lki);
+                cc.it = e.event.as_ref().and_then(|ev| ev.get(s::CARD)).and_then(|v| v.as_i32());
+                cc.it_face = -1;
+                if let Some(cnd) = &spec.if_ {
+                    if !eval_cond(&cc, cnd) {
+                        return false;
                     }
-                    if let Some(cnd) = &spec.if_at_resolve {
-                        if !eval_cond(&cc, cnd) {
-                            return Ok(());
-                        }
+                }
+                if let Some(cnd) = &spec.if_at_resolve {
+                    if !eval_cond(&cc, cnd) {
+                        return false;
                     }
                 }
             }
         }
+    }
+    true
+}
+
+/// 非公開ゾーン(手札・山札・シールド)で誘発した「してもよい」の能力(侵略・革命チェンジなど)は、
+/// どれも解決する前に、まとめて使用宣言する。ターン・プレイヤー側から宣言し、宣言したものは解決時に取りやめられない。
+/// 宣言しなかったものは、誘発しなかったことになる(総合ルール 506.3b・507.3、公式Q&A 40435 / 42940)。
+/// 質問(ask)は、状態を変更する前に、全員分をまとめて行う。何か変更したら true。
+fn declare_hidden(c: &mut Ctx) -> Res<bool> {
+    let mut need: Vec<usize> = Vec::new();
+    for (i, e) in c.s.pool.iter().enumerate() {
+        if e.kind != PoolKind::Ability || e.declared {
+            continue;
+        }
+        let ar = match e.ability {
+            Some(a) => a,
+            None => continue,
+        };
+        if !matches!(c.reg.ability(ar), Ability::Trigger { optional: true, .. }) {
+            continue;
+        }
+        let card = &c.s.cards[e.source.uid as usize];
+        if card.ep != e.source.ep || !matches!(card.zone, Zone::Hand | Zone::Deck | Zone::Shield) {
+            continue;
+        }
+        // いま条件を満たさない能力は、解決しても何も起こらないので、宣言を聞かない
+        if !trigger_condition_holds(c, e) {
+            continue;
+        }
+        need.push(i);
+    }
+    if need.is_empty() {
+        return Ok(false);
+    }
+    let mut answers: Vec<(usize, bool)> = Vec::new();
+    let active = c.s.active;
+    for player in [active, opp(active)] {
+        for &i in &need {
+            let (ctrl, src) = (c.s.pool[i].controller, c.s.pool[i].source);
+            if ctrl != player {
+                continue;
+            }
+            let ans = ask(c, NeedInput { player, why: Why::May, input: Some(InputSpec::YesNo), source: Some(src) })?;
+            answers.push((i, ans.as_bool() == Some(true)));
+        }
+    }
+    let mut remove: Vec<usize> = Vec::new();
+    for (i, yes) in answers {
+        if yes {
+            c.s.pool[i].declared = true;
+        } else {
+            remove.push(i);
+        }
+    }
+    remove.sort_unstable_by(|a, b| b.cmp(a));
+    for i in remove {
+        c.s.pool.remove(i);
+    }
+    Ok(true)
+}
+
+/// 待機していた能力を解決するフレームを積む
+fn resolve_entry(c: &mut Ctx, e: PoolEntry) -> Res<()> {
+    let (card_ep, card_zone) = {
+        let card = &c.s.cards[e.source.uid as usize];
+        (card.ep, card.zone)
+    };
+    // 条件を満たさなければ、何も起こさず(ログにも出さず)終える
+    if !trigger_condition_holds(c, &e) {
+        return Ok(());
     }
     let prev_cause = c.cause;
     c.cause = e.event.as_ref().map(|ev| ev.id);
@@ -956,7 +1026,8 @@ fn resolve_entry(c: &mut Ctx, e: PoolEntry) -> Res<()> {
         pc: 0,
         vars: vec![],
         trigger: e.event.clone(),
-        no_optional: false,
+        // 使用宣言したものは、解決時に取りやめられない(「してもよい」の確認を重ねない)
+        no_optional: e.declared,
     }));
     Ok(())
 }
