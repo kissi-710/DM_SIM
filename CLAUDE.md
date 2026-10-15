@@ -64,6 +64,8 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 | `npx tsx src/cli/aiquality.ts match --a "mcts:iter=300,algo=ptree" --b "mcts:iter=300" --games 100` | AI の質の測定(新旧の直接対戦。複製対局・全デッキの組。設定は `kind:キー=値,...`)。**AI を変えたら、既定にする前にこれで旧と比べる**(docs/ai-quality-plan.md §5 の基準) |
 | `npx tsx src/cli/aiquality.ts teacher --agents "rule;mcts:iter=120"` | 教師(ゲーム終了までの高ラウンド評価)との損失・一致率。低ノイズだが、L1 で続ける前提なので、採否は match で決める |
 | `npx tsx src/cli/trainValue.ts --games 12000 --out <path>` | 価値関数(ロジスティック回帰)の学習。評価は `value=<path>` で使う |
+| `npx tsx scripts/bench-batch.ts [rule|random|mcts] [試合数]` | バッチ対戦の速度の測定(1スレッド。試合/秒と勝敗の要約。最適化の前後で勝敗が変わらないことの確認用) |
+| `npx tsx scripts/bench-accuracy.ts [試合数] [繰り返し]` | バッチ対戦の精度の測定(別シードで繰り返し、推定の SD・区間の半幅・被覆率) |
 | `npm run build:wasm` | Rust 版エンジンを WASM にビルドして `src/wasm/dmsim.wasm` に置く(要 Rust。あれば AI の探索が自動で使う。無ければ TS 版) |
 | `npm run test:rust` | Rust 版と TS 版の差分テスト。正解データ(`rust/fixtures/games.json`)を TS 版で作り直してから `cargo test --release` を実行する。ルール・カード・プレイアウトを変えたら必ず回す(フィクスチャが無いとテストはスキップされる) |
 
