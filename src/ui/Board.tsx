@@ -2,7 +2,9 @@
 // すべてのクリック代替(札をクリック → 強調された行き先/ボタンをクリック)を提供する。
 // ルール判定はせず、legalActions から作る「ドロップ先マップ」だけを使う(effects 11.3)。
 import { useEffect, useMemo, useState } from 'react';
+import { powerOf } from '../engine/derive';
 import { expandSameNameActions } from '../engine/legal';
+import { mkCtx } from '../engine/state';
 import { CardView } from './CardView';
 import { cardName, reg } from './format';
 import { Kbd } from './Kbd';
@@ -13,6 +15,23 @@ export interface Drop {
   dropKey: string;
   action: Action;
   label: string;
+}
+
+/**
+ * 攻撃先のクリーチャーの表記。名前に、パワー・タップ状態を添える。同名が並んでいる時は左から何体目かも添える
+ * (キーボードでは見分けがつかないため)。
+ */
+export function targetLabel(s: GameState, pid: number): string {
+  const owner = [0, 1].find((p) => s.players[p].battle.some((x) => x.pid === pid));
+  if (owner === undefined) return 'クリーチャー';
+  const row = s.players[owner].battle;
+  const idx = row.findIndex((x) => x.pid === pid);
+  const pm = row[idx];
+  const name = cardName(s, pm.cards[0]);
+  const same = row.filter((x) => cardName(s, x.cards[0]) === name).length > 1;
+  const power = powerOf(mkCtx(s, reg), pm);
+  const notes = [`パワー${power}`, pm.tapped ? 'タップ' : 'アンタップ', same ? `左から${idx + 1}体目` : null].filter(Boolean);
+  return `${name}(${notes.join('・')})`;
 }
 
 /** ドラッグ元のキー → 行き先 */
@@ -55,11 +74,11 @@ export function buildDropMap(s: GameState, legal: Action[]): Map<string, Drop[]>
     } else if (a.type === 'ATTACK') {
       const pid = a.attacker;
       if (a.target.kind === 'player') {
-        add(`pile:${pid}`, { dropKey: 'zone:oppShield', action: a, label: 'プレイヤーを攻撃' });
+        const defender = s.players[0].battle.some((p) => p.pid === pid) ? 1 : 0;
+        add(`pile:${pid}`, { dropKey: 'zone:oppShield', action: a, label: `プレイヤーを攻撃(シールド ${s.players[defender].shield.length}枚)` });
       } else {
         const targetPid = a.target.pid;
-        const pm = s.players[0].battle.concat(s.players[1].battle).find((p) => p.pid === targetPid);
-        add(`pile:${pid}`, { dropKey: `opp-pile:${a.target.pid}`, action: a, label: `${pm ? N(pm.cards[0]) : 'クリーチャー'}を攻撃` });
+        add(`pile:${pid}`, { dropKey: `opp-pile:${a.target.pid}`, action: a, label: `${targetLabel(s, targetPid)}を攻撃` });
       }
     }
   }
