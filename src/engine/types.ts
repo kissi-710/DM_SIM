@@ -199,6 +199,8 @@ export type EffectMod =
   | { kind: 'grant'; keyword: string }
   | { kind: 'cannotBeChosen' }
   | { kind: 'cannotBeAttacked' }
+  /** ブロックを強制する(攻撃された時、ブロッカーとして選ばなければならない。総合ルール 507.1b) */
+  | { kind: 'mustBlock' }
   /** プレイヤー単位(ContEffect.pid = -1): 発生源の持ち主の相手は呪文を唱えられない */
   | { kind: 'cannotCast' }
   /** プレイヤー単位: 発生源の持ち主の相手は、コストが n のカードを実行できない */

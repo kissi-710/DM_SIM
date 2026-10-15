@@ -68,6 +68,7 @@ const EFFECT_LABEL: Record<string, string> = {
   cannotAttack: '攻撃できない',
   cannotBeChosen: '相手に選ばれない',
   cannotBeAttacked: '攻撃されない',
+  mustBlock: 'ブロックしなければならない',
 };
 
 /** 現在のコスト・パワー・付与された能力(画像なしなので、全文と一緒に派生値を出す) */

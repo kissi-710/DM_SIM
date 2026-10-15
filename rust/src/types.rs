@@ -37,6 +37,7 @@ syms! {
     BATTLE_ENDED => "battleEnded", SHIELD_BROKEN => "shieldBroken", TRIGGER_DECLARED => "triggerDeclared",
     TAPPED => "tapped", UNTAPPED => "untapped", STEP_START => "stepStart", ABILITY_TRIGGERED => "abilityTriggered",
     RESOLVE => "resolve", GAME_OVER => "gameOver", SKIP_TURN => "skipTurn", GAME_LOSS => "gameLoss",
+    BATTLE_STARTED => "battleStarted", AFTER_BATTLE => "afterBattle", BEFORE_BREAK => "beforeBreak", DEFENDER_CARD => "defenderCard",
     // イベントのフィールド
     CARD => "card", OWNER => "owner", FROM => "from", TO => "to", CAUSE => "cause", KIND => "kind", EX => "ex",
     LKI => "lki", VIA => "via", UNDERNEATH => "underneath", PAID => "paid", COST => "cost", FREE => "free",
@@ -617,6 +618,8 @@ pub enum EffectMod {
     Grant(Sym),
     CannotBeChosen,
     CannotBeAttacked,
+    /// ブロックを強制する(総合ルール 507.1b)
+    MustBlock,
     /// プレイヤー単位(pid = -1): 発生源の持ち主の相手は呪文を唱えられない
     CannotCast,
     /// プレイヤー単位: 発生源の持ち主の相手は、コストが n のカードを実行できない

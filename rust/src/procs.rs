@@ -474,7 +474,43 @@ fn run_play(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                     o.no_replace = true;
                     move_cards(c, &[uid], &o)?;
                 } else {
-                    let mut o = MoveOpts::new(Zone::Grave, s::CAST);
+                    // 呪文自身の効果が、自身の移動を置換する(チャージャーなど)。他の置換効果より優先する(409.2b / 609.8a)。
+                    // 質問は、状態を変更する前に行う
+                    let face = p.get(s::FACE).and_then(|x| x.as_int()).unwrap_or(0) as i32;
+                    let (def, owner, ep) = {
+                        let cd = &c.s.cards[uid as usize];
+                        (cd.def, cd.owner, cd.ep)
+                    };
+                    let reg = c.reg;
+                    let mut dest: Option<Zone> = None;
+                    for &ri in &reg.info(def, face).replaces {
+                        if let Ability::Replace { match_, apply, optional, while_, .. } = &reg.face(def, face).abilities[ri as usize] {
+                            let to = match apply {
+                                ReplaceApply::ChangeDest(to) => *to,
+                                _ => continue,
+                            };
+                            if match_.ty != s::MOVED || match_.cause != Some(s::CAST) {
+                                continue;
+                            }
+                            if let Some(w) = while_ {
+                                if !eval_cond(&CC::new(c.env(), owner).with_self(uid), w) {
+                                    continue;
+                                }
+                            }
+                            if *optional {
+                                let ans = ask(c, NeedInput { player: owner, why: Why::May, input: Some(InputSpec::YesNo), source: Some(ObjRef { uid, ep }) })?;
+                                if ans.as_bool() != Some(true) {
+                                    continue;
+                                }
+                            }
+                            dest = Some(to);
+                            break;
+                        }
+                    }
+                    let mut o = match dest {
+                        Some(z) => MoveOpts::new(z, s::REPLACED),
+                        None => MoveOpts::new(Zone::Grave, s::CAST),
+                    };
                     o.no_replace = true;
                     move_cards(c, &[uid], &o)?;
                 }
@@ -488,6 +524,11 @@ fn run_play(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
 }
 
 // ───────────────────────── 攻撃 ─────────────────────────
+
+/// そのイベントの種類を監視する能力が、カードのどこかにあるか(なければ、イベントを発行しない)
+fn has_listener(c: &Ctx, ty: Sym) -> bool {
+    c.reg.trig_by_def.get(ty.0 as usize).map_or(false, |o| o.is_some())
+}
 
 fn run_attack(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
     let pid = vi(&f.vars, s::PID) as i32;
@@ -542,15 +583,30 @@ fn run_attack(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                     c.s.players[defender as usize].battle.iter().filter(|p| p.pid != attacked && can_block(e, p)).map(|p| p.cards[0]).collect()
                 }
             };
+            // ブロッカーは、複数体を同時に選べる(507.1a / 507.2)。ブロックを強制する効果を受けているものは、必ず選ぶ(507.1b)。
+            // 選んだ全員がタップし、最後に解決した1体だけが、攻撃先を変更してブロッククリーチャーになる(507.2a)
+            let forced: Vec<i32> = {
+                let e = c.env();
+                cands
+                    .iter()
+                    .copied()
+                    .filter(|&u| c.s.perm(c.s.cards[u as usize].pid).map_or(false, |p| must_block(e, p)))
+                    .collect()
+            };
+            let mut chosen: Vec<i32> = Vec::new();
+            if !forced.is_empty() {
+                chosen = forced;
+            } else if !cands.is_empty() {
+                let n = cands.len() as i32;
+                let ans = ask(c, NeedInput { player: defender, why: Why::Block, input: Some(InputSpec::Pick { candidates: cands, min: 0, max: n }), source: None })?;
+                chosen = ans.to_i32s();
+            }
             let mut blocker: Option<i32> = None;
-            if !cands.is_empty() {
-                let ans = ask(
-                    c,
-                    NeedInput { player: defender, why: Why::Block, input: Some(InputSpec::Pick { candidates: cands, min: 0, max: 1 }), source: None },
-                )?;
-                if let Some(&b) = ans.to_i32s().first() {
-                    blocker = Some(b);
-                }
+            if chosen.len() == 1 {
+                blocker = Some(chosen[0]);
+            } else if chosen.len() > 1 {
+                let ans = ask(c, NeedInput { player: defender, why: Why::Block, input: Some(InputSpec::Pick { candidates: chosen.clone(), min: 1, max: 1 }), source: None })?;
+                blocker = ans.to_i32s().first().copied();
             }
             if let Some(b) = blocker {
                 let bpid = c.s.cards[b as usize].pid;
@@ -558,7 +614,9 @@ fn run_attack(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                     Some(p) => p.pid,
                     None => return fail("ブロッカーの山がありません"),
                 };
-                set_tapped(c, b, true);
+                for &u in &chosen {
+                    set_tapped(c, u, true);
+                }
                 var_set(&mut f.vars, s::TARGET, target_to_val(&Target::Creature(bperm_pid)));
                 var_set(&mut f.vars, s::BLOCKED, Val::Bool(true));
                 let (aperm_pid, atop) = {
@@ -613,6 +671,53 @@ fn run_attack(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                     Ok(())
                 }
                 Target::Creature(tp) => {
+                    let (dop, di) = match c.s.perm_by_pid(tp) {
+                        Some(x) => x,
+                        None => return pop_frame(c, f.id),
+                    };
+                    // 「バトルする時」の誘発は、パワーを比べる前に解決する(総合ルール 115.2 / 701.13a)。
+                    // 聞き手のいるカードがある時だけ、イベントを発行する(段階を増やさず、既存の対戦の記録を変えない)
+                    f.stage = 4;
+                    if has_listener(c, s::BATTLE_STARTED) {
+                        let d_top = c.s.players[dop as usize].battle[di].cards[0];
+                        let ev = emit(
+                            c,
+                            s::BATTLE_STARTED,
+                            vec![
+                                (s::ATTACKER, Val::Int(a_pid as i64)),
+                                (s::DEFENDER, Val::Int(tp as i64)),
+                                (s::ATTACKER_CARD, Val::Int(a_top as i64)),
+                                (s::DEFENDER_CARD, Val::Int(d_top as i64)),
+                                (s::OWNER, Val::Int(po as i64)),
+                            ],
+                        );
+                        c.s.batch_no += 1;
+                        collect_batch(c, &[ev]);
+                        push_proc(c, ProcName::Settle, vec![]);
+                    }
+                    Ok(())
+                }
+            }
+        }
+        4 => {
+            // バトル。「バトルする時」の効果の解決で、どちらかが場を離れていれば、バトルは行われない(115.3a)
+            if c.s.winner != Winner::None || c.s.skip_turn {
+                return pop_frame(c, f.id);
+            }
+            let (po, pi) = match c.s.perm_by_pid(pid) {
+                Some(x) => x,
+                None => return pop_frame(c, f.id),
+            };
+            let target = var_get(&f.vars, s::TARGET).and_then(target_from_val).unwrap_or(Target::Player);
+            let tp = match target {
+                Target::Creature(tp) => tp,
+                Target::Player => return pop_frame(c, f.id),
+            };
+            let (a_pid, a_top) = {
+                let pm = &c.s.players[po as usize].battle[pi];
+                (pm.pid, pm.cards[0])
+            };
+            {
                     let (dop, di) = match c.s.perm_by_pid(tp) {
                         Some(x) => x,
                         None => return pop_frame(c, f.id),
@@ -672,11 +777,38 @@ fn run_attack(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                     let ev = emit(c, s::BATTLE_ENDED, fv);
                     c.s.batch_no += 1;
                     collect_batch(c, &[ev]);
-                    f.stage = 3;
+                    // 「バトルの後」の誘発のために、バトルの当事者を残す(聞き手がいる時だけ)
+                    if has_listener(c, s::AFTER_BATTLE) {
+                        var_set(
+                            &mut f.vars,
+                            sym("battle"),
+                            Val::Obj(Rc::new(vec![
+                                (s::ATTACKER, Val::Int(a_pid as i64)),
+                                (s::DEFENDER, Val::Int(d_pid as i64)),
+                                (s::ATTACKER_CARD, Val::Int(a_top as i64)),
+                                (s::DEFENDER_CARD, Val::Int(d_top as i64)),
+                                (s::OWNER, Val::Int(a_owner as i64)),
+                            ])),
+                        );
+                    }
+                    f.stage = 5;
                     push_proc(c, ProcName::Settle, vec![]);
                     Ok(())
+            }
+        }
+        5 => {
+            // 「バトルの後」の誘発(総合ルール 701.13d)。勝敗の誘発を解決し終えた後に誘発する
+            if has_listener(c, s::AFTER_BATTLE) && c.s.winner == Winner::None && !c.s.skip_turn {
+                if let Some(Val::Obj(o)) = var_get(&f.vars, sym("battle")).cloned() {
+                    let ev = emit(c, s::AFTER_BATTLE, o.iter().map(|(k, v)| (*k, v.clone())).collect());
+                    c.s.batch_no += 1;
+                    collect_batch(c, &[ev]);
+                    f.stage = 3;
+                    push_proc(c, ProcName::Settle, vec![]);
+                    return Ok(());
                 }
             }
+            pop_frame(c, f.id)
         }
         3 => pop_frame(c, f.id),
         _ => Ok(()),
@@ -713,6 +845,43 @@ fn run_break(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                 broken.push(pool.remove(i));
             }
             var_set(&mut f.vars, s::BROKEN, Val::ints(&broken));
+            // 「ブレイクする前に」の誘発は、ブレイクするシールドを選んだ後、ブレイクする前に解決する(総合ルール 509.3 / 509.4)。
+            // 聞き手のいるカードがある時だけ、イベントを発行する(既存の対戦の記録を変えない)
+            f.stage = 3;
+            if has_listener(c, s::BEFORE_BREAK) {
+                let by = vi(&f.vars, s::PID);
+                let ev = emit(
+                    c,
+                    s::BEFORE_BREAK,
+                    vec![
+                        (s::ATTACKER, Val::Int(by)),
+                        (s::OWNER, Val::Int(attacker_owner as i64)),
+                        (sym("defenderOwner"), Val::Int(defender as i64)),
+                        (s::CARDS, Val::ints(&broken)),
+                    ],
+                );
+                c.s.batch_no += 1;
+                collect_batch(c, &[ev]);
+                push_proc(c, ProcName::Settle, vec![]);
+            }
+            Ok(())
+        }
+        3 => {
+            // 「ブレイクする前に」の効果の解決でクリーチャーが場を離れても、すでに選んだシールドはブレイクされる(509.4c)。
+            // シールドゾーンから離れたカードだけは、ブレイクできない
+            let broken: Vec<i32> = var_get(&f.vars, s::BROKEN)
+                .map(|v| v.to_i32s())
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|&u| {
+                    let cd = &c.s.cards[u as usize];
+                    cd.zone == Zone::Shield && cd.owner == defender
+                })
+                .collect();
+            var_set(&mut f.vars, s::BROKEN, Val::ints(&broken));
+            if broken.is_empty() {
+                return pop_frame(c, f.id);
+            }
             c.s.breaking = broken.clone();
             let by = vi(&f.vars, s::PID);
             let mut evs: Vec<Rc<Ev>> = Vec::new();
@@ -935,10 +1104,18 @@ fn declare_hidden(c: &mut Ctx) -> Res<bool> {
     if need.is_empty() {
         return Ok(false);
     }
-    let mut answers: Vec<(usize, bool)> = Vec::new();
+    // ターン・プレイヤー側が先に宣言し、その待機中の効果を解決し終えてから、非ターン・プレイヤー側が宣言する(506.3b〜e)
     let active = c.s.active;
+    let mut group: Vec<usize> = need.iter().copied().filter(|&i| c.s.pool[i].controller == active).collect();
+    if group.is_empty() {
+        if c.s.pool.iter().any(|e| e.controller == active) {
+            return Ok(false); // ターン・プレイヤーの効果を先に解決する
+        }
+        group = need.clone();
+    }
+    let mut answers: Vec<(usize, bool)> = Vec::new();
     for player in [active, opp(active)] {
-        for &i in &need {
+        for &i in &group {
             let (ctrl, src) = (c.s.pool[i].controller, c.s.pool[i].source);
             if ctrl != player {
                 continue;

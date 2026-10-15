@@ -375,6 +375,11 @@ pub fn can_block(e: Env, perm: &Perm) -> bool {
     has_keyword(e, perm, Kw::Blocker)
 }
 
+/// ブロックを強制する効果を受けているか(総合ルール 507.1b)
+pub fn must_block(e: Env, perm: &Perm) -> bool {
+    has_effect(e, perm.pid, &EffectMod::MustBlock)
+}
+
 // ───────────────────────── コスト ─────────────────────────
 
 /// 召喚・詠唱するカードの最終コスト(0未満にならない)。

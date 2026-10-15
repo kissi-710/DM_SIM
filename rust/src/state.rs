@@ -237,6 +237,7 @@ fn mod_from_json(j: &Json) -> R<EffectMod> {
         "grant" => EffectMod::Grant(sym(gs(j, "keyword")?)),
         "cannotBeChosen" => EffectMod::CannotBeChosen,
         "cannotBeAttacked" => EffectMod::CannotBeAttacked,
+        "mustBlock" => EffectMod::MustBlock,
         "cannotCast" => EffectMod::CannotCast,
         "cannotUseCost" => EffectMod::CannotUseCost(gi(j, "n")? as i32),
         k => return Err(format!("未知の効果: {}", k)),
@@ -250,6 +251,7 @@ fn mod_to_json(m: &EffectMod) -> Json {
         EffectMod::Grant(k) => Json::obj(vec![("kind", Json::str("grant")), ("keyword", Json::Str(k.name().to_string()))]),
         EffectMod::CannotBeChosen => Json::obj(vec![("kind", Json::str("cannotBeChosen"))]),
         EffectMod::CannotBeAttacked => Json::obj(vec![("kind", Json::str("cannotBeAttacked"))]),
+        EffectMod::MustBlock => Json::obj(vec![("kind", Json::str("mustBlock"))]),
         EffectMod::CannotCast => Json::obj(vec![("kind", Json::str("cannotCast"))]),
         EffectMod::CannotUseCost(n) => Json::obj(vec![("kind", Json::str("cannotUseCost")), ("n", Json::int(*n as i64))]),
     }
