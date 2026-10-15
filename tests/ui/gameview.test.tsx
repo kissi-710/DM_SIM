@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // GameView(対戦画面): 人間の手番の表示と操作
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deckCards } from '../../src/cards';
@@ -86,5 +86,118 @@ describe('GameView', () => {
       />,
     );
     expect(screen.queryByRole('button', { name: /マナチャージしない/ })).toBeNull();
+  });
+});
+
+describe('GameView: キーボード操作', () => {
+  const mount = (over: Partial<GameSetup> = {}, onExit: () => void = () => {}) =>
+    render(<GameView setup={setup(over)} onExit={onExit} onRematch={() => {}} />);
+  const chip = () => document.querySelector('.status-chip')!.textContent ?? '';
+
+  it('M でマナチャージを飛ばしてメインに進む', async () => {
+    mount();
+    await userEvent.keyboard('m');
+    await waitFor(() => expect(chip()).toMatch(/メイン/));
+  });
+  it('日本語 IME が ON(key が Process)でも、物理キーで操作できる', async () => {
+    mount();
+    fireEvent.keyDown(document.body, { key: 'Process', code: 'KeyM', keyCode: 229 });
+    await waitFor(() => expect(chip()).toMatch(/メイン/));
+  });
+  it('押しっぱなし(キーリピート)は無視する', async () => {
+    mount();
+    fireEvent.keyDown(document.body, { key: 'm', repeat: true });
+    expect(chip()).toMatch(/マナチャージ/);
+  });
+  it('マナステップから E: 1回目は確認、2回目でマナチャージを飛ばしてそのままターンを終える', async () => {
+    mount();
+    await userEvent.keyboard('e');
+    expect(await screen.findByRole('button', { name: /もう一度で終了/ })).toBeInTheDocument();
+    expect(chip()).toMatch(/あなた/);
+    await userEvent.keyboard('e');
+    await waitFor(() => expect(chip()).toMatch(/相手/));
+  });
+  it('矢印キーで手札のカードを選び、↑ ↓ は列がなければ動かない', async () => {
+    mount();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(document.querySelectorAll('.card.selected').length).toBe(1);
+    await userEvent.keyboard('{ArrowUp}');
+    expect(document.querySelectorAll('.card.selected').length).toBe(1);
+    await userEvent.keyboard('{Escape}');
+    expect(document.querySelectorAll('.card.selected').length).toBe(0);
+  });
+  it('Q は2回押してメニューへ戻る(1回目は確認)', async () => {
+    const onExit = vi.fn();
+    mount({}, onExit);
+    await userEvent.keyboard('q');
+    expect(onExit).not.toHaveBeenCalled();
+    await userEvent.keyboard('q');
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+  it('? でヘルプが開き、Esc で閉じる。ボタンの kbd は読み上げの名前に混ざらない', async () => {
+    mount();
+    await userEvent.keyboard('?');
+    expect(await screen.findByRole('dialog', { name: '操作ヘルプ' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '操作ヘルプ' })).toBeNull());
+    expect(screen.getByRole('button', { name: 'マナチャージしない' })).toBeInTheDocument();
+  });
+  it('G で自分の墓地の一覧が開く', async () => {
+    mount();
+    await userEvent.keyboard('g');
+    expect(await screen.findByRole('heading', { name: /自分の墓地/ })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('heading', { name: /自分の墓地/ })).toBeNull());
+  });
+  it('棋譜ダイアログは、テキスト欄にフォーカスがあっても Esc で閉じる', async () => {
+    mount();
+    await userEvent.keyboard('k');
+    const ta = await screen.findByRole('textbox');
+    ta.focus();
+    expect(document.activeElement).toBe(ta);
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
+  });
+  it('設定のチェックボックスにフォーカスがある時の矢印・Space は、ゲーム側のキーとして働かない', async () => {
+    mount();
+    await userEvent.keyboard('o');
+    const box = (await screen.findAllByRole('checkbox'))[0] as HTMLInputElement;
+    box.focus();
+    const before = box.checked;
+    await userEvent.keyboard('{ArrowRight}');
+    expect(document.querySelectorAll('.card.selected').length).toBe(0);
+    await userEvent.keyboard(' ');
+    expect(box.checked).toBe(!before);
+  });
+});
+
+describe('GameView: 使えないカード', () => {
+  it('メインステップで出せないカードをクリックすると、理由が出る', async () => {
+    render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
+    await userEvent.click(screen.getByRole('button', { name: /マナチャージしない/ }));
+    await waitFor(() => expect(document.querySelector('.status-chip')!.textContent).toMatch(/メイン/));
+    const dim = document.querySelector<HTMLElement>('.hand .card.dim, .zone.hand .card.dim');
+    expect(dim).not.toBeNull();
+    await userEvent.click(dim!);
+    await waitFor(() => expect(document.querySelector('.rail-hint.warn')?.textContent ?? '').toMatch(/マナが足りません|進化元|文明/));
+  });
+  it('カードは Tab で届き、Enter で選べる(Space でも)', async () => {
+    render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
+    const card = document.querySelector<HTMLElement>('.zone.hand .card.selectable')!;
+    expect(card.getAttribute('tabindex')).toBe('0');
+    card.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(document.querySelectorAll('.card.selected').length).toBe(1);
+    await userEvent.keyboard('{Escape}');
+    card.focus();
+    await userEvent.keyboard(' ');
+    expect(document.querySelectorAll('.card.selected').length).toBe(1);
+  });
+  it('「一気に進める」は人間の手番でも出ていて、F で切り替わる(ヘッダーが揺れない)', async () => {
+    render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
+    const btn = screen.getByRole('button', { name: /一気に進める/ });
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.keyboard('f');
+    expect(screen.getByRole('button', { name: /一気に進める/ })).toHaveAttribute('aria-pressed', 'true');
   });
 });

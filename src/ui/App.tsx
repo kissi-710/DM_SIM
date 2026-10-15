@@ -34,11 +34,14 @@ export function App() {
   }, []);
   const [setup, setSetup] = useState<GameSetup | null>(null);
   const [gameKey, setGameKey] = useState(0);
+  // 対戦の途中でメニューに戻った(自動保存から再開できることを、メニューで伝える)
+  const [leftGame, setLeftGame] = useState(false);
 
   const home = () => setScreen('menu');
   const start = (s: GameSetup) => {
     setSetup(s);
     setGameKey((k) => k + 1);
+    setLeftGame(false);
     setScreen('game');
   };
 
@@ -51,7 +54,7 @@ export function App() {
         {screen !== 'menu' && screen !== 'game' && <button onClick={home}>メニュー</button>}
       </div>
       <ErrorBoundary key={screen + gameKey} onReset={home}>
-      {screen === 'menu' && <Menu go={setScreen} onResume={(a) => start({ ...a.setup, resume: a.actions })} />}
+      {screen === 'menu' && <Menu go={setScreen} leftGame={leftGame} onResume={(a) => start({ ...a.setup, resume: a.actions })} />}
       {screen === 'play-setup' && (
         <div className="page">
           <SetupScreen mode="play" onBack={home} onStart={start} />
@@ -67,7 +70,10 @@ export function App() {
           <GameView
             key={gameKey}
             setup={setup}
-            onExit={home}
+            onExit={() => {
+              setLeftGame(true);
+              home();
+            }}
             onRematch={() => {
               setSetup({ ...setup, seed: Math.floor(Math.random() * 1e9) });
               setGameKey((k) => k + 1);
@@ -85,16 +91,22 @@ export function App() {
   );
 }
 
-function Menu({ go, onResume }: { go: (s: Screen) => void; onResume: (a: NonNullable<ReturnType<typeof loadAutosave>>) => void }) {
+function Menu({ go, leftGame, onResume }: { go: (s: Screen) => void; leftGame: boolean; onResume: (a: NonNullable<ReturnType<typeof loadAutosave>>) => void }) {
   const [saved, setSaved] = useState(loadAutosave);
   return (
     <div className="page">
       <div className="menu">
         <h2>メニュー</h2>
+        {saved && leftGame && (
+          <p className="panel" role="status">
+            対戦を中断しました。1手ごとに自動保存されているので、下の「続きから遊ぶ」で、この続きから再開できます。
+          </p>
+        )}
         <div className="menu-grid">
           {saved && (
             <div className="tile resume">
               <h3>対戦を再開</h3>
+              <p className="muted">対戦は1手ごとに自動保存されます(勝敗が出ると消えます)。</p>
               <p>
                 {saved.setup.deckNames[0]} vs {saved.setup.deckNames[1]}({saved.actions.length}手目まで・{new Date(saved.at).toLocaleString()})
               </p>
