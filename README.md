@@ -20,6 +20,8 @@ npm run typecheck  # tsc --noEmit
 npm run lint       # ESLint
 ```
 
+**Rust 版エンジン(任意・推奨)**: `npm run build:wasm`(Rust と `wasm32-unknown-unknown` ターゲットが必要)で `src/wasm/dmsim.wasm` を作ると、CPU(モンテカルロ探索)・バッチ・強さ測定が約 6 倍速くなります(同じ思考時間で、より多く探索できます)。`dmsim.wasm` は git の管理外なので、ビルドの前に作ってください(CI は作ってからビルドします)。無ければ TS 版で動きます(結果は同じ。対戦の設定画面に、使っているエンジンが出ます)。
+
 公開する場合は、`DM_SIM_BASE=/DM_SIM/ npm run build` のように `base` を公開パスに合わせます(既定は相対パス `./`)。`dist/` をそのまま静的ホスティングに置けます。(Windows の Git Bash では、パスが書き換わるので `MSYS_NO_PATHCONV=1` を先頭に付けてください。)
 
 ## 画面と操作

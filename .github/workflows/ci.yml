@@ -17,6 +17,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # 配布物に Rust 版エンジン(WASM)を含める。無いと、ブラウザの CPU の探索が TS 版になり、約 6 倍遅くなる
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: npm run build:wasm
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
