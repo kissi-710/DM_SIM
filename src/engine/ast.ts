@@ -68,6 +68,8 @@ export type StepDef =
       min?: Expr;
       max?: Expr;
       random?: boolean;
+      /** 変数に、選んだものを追記する(既にあれば、その後ろに足す)。両者が選んでから一括で処理する時に使う */
+      append?: boolean;
       prompt?: string;
     }
   | { op: 'may'; then: StepDef[]; else?: StepDef[]; prompt?: string }

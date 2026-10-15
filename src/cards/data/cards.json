@@ -301,10 +301,10 @@
               {
                 "op": "forPlayers",
                 "body": [
-                  { "op": "select", "as": "$keep", "who": "iter", "from": { "zone": "shield", "owner": "iter" }, "min": 3, "max": 3, "prompt": "残すシールドを3枚選んでください(裏向き)" },
-                  { "op": "act", "act": { "move": { "sel": { "zone": "shield", "owner": "iter", "except": "$keep" }, "to": "grave", "cause": "trash" } } }
+                  { "op": "select", "as": "$keep", "append": true, "who": "iter", "from": { "zone": "shield", "owner": "iter" }, "min": 3, "max": 3, "prompt": "残すシールドを3枚選んでください(裏向き)" }
                 ]
-              }
+              },
+              { "op": "act", "act": { "move": { "sel": { "zone": "shield", "owner": "any", "except": "$keep" }, "to": "grave", "cause": "trash" } } }
             ]
           },
           {

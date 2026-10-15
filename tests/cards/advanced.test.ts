@@ -70,6 +70,9 @@ describe('A11 CRYMAX ジャオウガ', () => {
     expect(sim.pending.player).toBe(0);
     sim.pick(W, D, N);
     expect(sim.pending.player).toBe(1);
+    // 両者が選んでから、一括で墓地に置く(先に選んだ側のシールドは、まだ墓地に置かれていない)
+    expect(sim.count(0, 'shield')).toBe(5);
+    expect(sim.count(0, 'grave')).toBe(0);
     sim.pick(N, W, D);
     expect(sim.count(0, 'shield')).toBe(3);
     expect(sim.count(1, 'shield')).toBe(3);

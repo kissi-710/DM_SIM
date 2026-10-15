@@ -183,7 +183,8 @@ function execSelect(c: Ctx, f: EffectFrame, cc: CC, st: Extract<StepDef, { op: '
     });
     picked = ans;
   }
-  f.vars[st.as] = picked.map((u) => ref(c, u));
+  const picks = picked.map((u) => ref(c, u));
+  f.vars[st.as] = st.append ? [...((f.vars[st.as] as ObjRef[] | undefined) ?? []), ...picks] : picks;
   if (picked.length) {
     // 選んだものの公開(相手が選んだものなど)は、ログのためにイベントにする
     emit(c, 'chosen', { cards: picked, by: chooser, source: f.source.uid });

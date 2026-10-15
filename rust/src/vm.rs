@@ -265,7 +265,17 @@ fn exec_select(c: &mut Ctx, f: &mut EffectFrame, st: &SelectStep) -> Res<()> {
         picked = ans.to_i32s();
     }
     let refs = refs_of(c, &picked);
-    var_set(&mut f.vars, st.as_, Val::refs(&refs));
+    let val = if st.append {
+        let mut items: Vec<Val> = match var_get(&f.vars, st.as_) {
+            Some(Val::List(l)) => l.as_ref().clone(),
+            _ => Vec::new(),
+        };
+        items.extend(refs.iter().map(|r| Val::from_ref(*r)));
+        Val::List(Rc::new(items))
+    } else {
+        Val::refs(&refs)
+    };
+    var_set(&mut f.vars, st.as_, val);
     if !picked.is_empty() {
         // 選んだものの公開(相手が選んだものなど)は、ログのためにイベントにする
         emit(

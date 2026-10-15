@@ -208,6 +208,8 @@ pub struct SelectStep {
     pub min: Option<Expr>,
     pub max: Option<Expr>,
     pub random: bool,
+    /// 変数に、選んだものを追記する(両者が選んでから一括で処理する時に使う)
+    pub append: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -694,6 +696,7 @@ fn parse_step(j: &Json) -> R<StepDef> {
                 None => None,
             },
             random: j.get("random").and_then(|x| x.as_bool()).unwrap_or(false),
+            append: j.get("append").and_then(|x| x.as_bool()).unwrap_or(false),
         }),
         "may" => StepDef::May { then: opt_steps(j.get("then"))?, else_: opt_steps(j.get("else"))? },
         "if" => StepDef::If { cond: parse_cond(j.get("cond").ok_or("if.cond")?)?, then: opt_steps(j.get("then"))?, else_: opt_steps(j.get("else"))? },
