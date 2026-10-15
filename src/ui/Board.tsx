@@ -85,6 +85,8 @@ interface BoardProps {
   flash?: Set<number>;
   /** キーボードからの一覧の表示要求(n が変わるたびに開く) */
   listReq?: { p: PlayerId; zone: 'mana' | 'grave' | 'shield'; n: number } | null;
+  /** 今は使えない手札のカードがクリックされた(理由を出す) */
+  onExplain?: (uid: number) => void;
 }
 
 export function Board(b: BoardProps) {
@@ -159,6 +161,7 @@ export function Board(b: BoardProps) {
                 draggable={can}
                 selected={activeKey === key}
                 dim={mine && interactive && !can}
+                onClick={mine && interactive && !can ? () => b.onExplain?.(u) : undefined}
                 selectable={can && activeKey !== key}
                 onPointerDown={can ? begin(key) : undefined}
                 onHover={hidden ? undefined : b.onHover}

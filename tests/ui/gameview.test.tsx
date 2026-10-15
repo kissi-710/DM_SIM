@@ -147,3 +147,15 @@ describe('GameView: キーボード操作', () => {
     expect(box.checked).toBe(!before);
   });
 });
+
+describe('GameView: 使えないカード', () => {
+  it('メインステップで出せないカードをクリックすると、理由が出る', async () => {
+    render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
+    await userEvent.click(screen.getByRole('button', { name: /マナチャージしない/ }));
+    await waitFor(() => expect(document.querySelector('.status-chip')!.textContent).toMatch(/メイン/));
+    const dim = document.querySelector<HTMLElement>('.hand .card.dim, .zone.hand .card.dim');
+    expect(dim).not.toBeNull();
+    await userEvent.click(dim!);
+    await waitFor(() => expect(document.querySelector('.rail-hint.warn')?.textContent ?? '').toMatch(/マナが足りません|進化元|文明/));
+  });
+});

@@ -1111,3 +1111,9 @@ textarea.json {
 body.dragging .action-pop {
   display: none;
 }
+
+.rail-hint.warn {
+  color: var(--text);
+  border-color: var(--accent2);
+  background: rgba(255, 180, 84, 0.12);
+}

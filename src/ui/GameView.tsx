@@ -8,6 +8,7 @@ import { Board, buildDropMap, selectedActions } from './Board';
 import { CardView, civGradient } from './CardView';
 import { buildLogTree, cardName, CIV_NAME, recentFeed, reg, type LogNode } from './format';
 import { endTurnWarning } from './endTurn';
+import { whyUnplayable } from './unplayable';
 import { Kbd } from './Kbd';
 import { digitOf, KEY, keyToken, SHORTCUTS } from './keymap';
 import { InputWidget, PaymentWidget } from './Widgets';
@@ -254,6 +255,13 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   // ターン終了の確認: まだ出せる・チャージできるカードがあるまま終えようとした時の1回目は止める
   // ターン終了の確認(endTurn.ts): 理由の文言が入っている間は「もう一度押せば終了」。設定で消せる
   const [endWarn, setEndWarn] = useState<string | null>(null);
+  // 使えないカードをクリックした時の理由(数秒で消える。選択・手番の変化でも消える)
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (notice === null) return;
+    const t = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(t);
+  }, [notice]);
   const [confirmOn, setConfirmOn] = useState(() => loadJson<boolean>('dmsim.confirmEnd', true));
   const toggleConfirm = () =>
     setConfirmOn((v) => {
@@ -271,6 +279,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   useEffect(() => {
     setSelected(null);
     setEndWarn(null);
+    setNotice(null);
   }, [pend?.id]);
 
   // 支払い: 払い方に選択があるときだけ、タップするマナを選ばせる(自明なら聞かずに自動で払う)
@@ -591,7 +600,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             ))}
           </div>
         ) : (
-          <div className="muted">このカードで今できる操作はありません。</div>
+          <div className="muted">{selUid !== null ? whyUnplayable(s, viewer, selUid) : 'このカードで今できる操作はありません。'}</div>
         )}
       </div>
   );
@@ -698,7 +707,14 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           peek={peek}
           showOppHand={showOpp}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={(k) => {
+            setNotice(null);
+            setSelected(k);
+          }}
+          onExplain={(u) => {
+            setSelected(null);
+            setNotice(`${cardName(s, u)}: ${whyUnplayable(s, viewer, u)}`);
+          }}
           flash={flash}
           listReq={listReq}
         />
@@ -773,7 +789,9 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
               {selected ? (
                 !popover ? actionPanel : <div className="rail-hint">選んだカードの隣に、できる操作を出しています</div>
               ) : (
-                <div className="rail-hint">カードを選ぶと、できる操作がここに出ます</div>
+                <div className={'rail-hint' + (notice ? ' warn' : '')} role="status">
+                  {notice ?? 'カードを選ぶと、できる操作がここに出ます'}
+                </div>
               )}
             </div>
           )}
