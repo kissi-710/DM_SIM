@@ -122,8 +122,24 @@ export function nameMatches(def: { id: string; name: string }, faceName: string,
   return n === def.id || n === def.name || n === faceName || def.name.includes(n) || faceName.includes(n);
 }
 
+// 面・実コストを指定しない照合は、カード定義(defId)だけで決まるので、(レジストリ, 条件, defId)ごとに結果を使い回す。
+// 探索は、子の状態ごとに全カードを照合する(predicateDistance)ので、ここが繰り返し呼ばれる。
+const matchCache = new WeakMap<Registry, WeakMap<CardMatcher, Map<string, boolean>>>();
+
 /** カード(uid)の、指定した面(省略時は全面のどれか)が条件に合うか。cost は実コストを渡せる。 */
 export function matchCard(reg: Registry, s: GameState, uid: number, m: CardMatcher, faceIdx?: number, effCost?: number): boolean {
+  if (faceIdx !== undefined || effCost !== undefined) return matchCardRaw(reg, s, uid, m, faceIdx, effCost);
+  const defId = s.cards[uid].defId;
+  let byMatcher = matchCache.get(reg);
+  if (!byMatcher) matchCache.set(reg, (byMatcher = new WeakMap()));
+  let byDef = byMatcher.get(m);
+  if (!byDef) byMatcher.set(m, (byDef = new Map()));
+  let r = byDef.get(defId);
+  if (r === undefined) byDef.set(defId, (r = matchCardRaw(reg, s, uid, m, undefined, undefined)));
+  return r;
+}
+
+function matchCardRaw(reg: Registry, s: GameState, uid: number, m: CardMatcher, faceIdx?: number, effCost?: number): boolean {
   const def = reg.defs[s.cards[uid].defId];
   const faces = faceIdx === undefined ? def.faces.map((_, i) => i) : [faceIdx];
   return faces.some((fi) => {
@@ -176,9 +192,34 @@ export function collectLeaves(g: Goal, out: Map<string, Leaf> = new Map()): Map<
 }
 
 export class GoalTracker {
-  leaves: Map<string, Leaf>;
-  constructor(public goal: Goal, private reg: Registry) {
-    this.leaves = collectLeaves(goal);
+  /** 述語ごとの記録(同じ内容の述語は、同じ記録を共有する) */
+  private leaves: Leaf[];
+  /** 目標の木にある述語(オブジェクト) → leaves の添字。目標は変わらないので、複製どうしで共有する */
+  private index: Map<Predicate, number>;
+
+  constructor(public goal: Goal, private reg: Registry, from?: GoalTracker) {
+    if (from) {
+      // 複製: 添字の対応は共有し、成立した記録だけをコピーする(JSON 化して葉を引き直さない)
+      this.index = from.index;
+      this.leaves = from.leaves.map((l) => ({ key: l.key, pred: l.pred, any: new Set(l.any), end: new Set(l.end) }));
+      return;
+    }
+    this.leaves = [...collectLeaves(goal).values()];
+    const pos = new Map<string, number>();
+    this.leaves.forEach((l, i) => pos.set(l.key, i));
+    this.index = new Map();
+    const walk = (g: Goal) => {
+      if (g.op === 'pred') this.index.set(g.pred, pos.get(JSON.stringify(g.pred))!);
+      else if (g.op === 'not') walk(g.arg);
+      else g.args.forEach(walk);
+    };
+    walk(goal);
+  }
+
+  private leafOf(p: Predicate): Leaf {
+    const i = this.index.get(p);
+    if (i === undefined) throw new Error('目標にない述語です');
+    return this.leaves[i];
   }
 
   /** 状態ベースの述語が、この状態で成立しているか */
@@ -217,7 +258,7 @@ export class GoalTracker {
 
   /** ゲーム開始時(初手)の状態 */
   observeInitial(s: GameState): void {
-    for (const l of this.leaves.values()) {
+    for (const l of this.leaves) {
       if (l.pred.kind === 'cast' || l.pred.kind === 'castable') continue;
       if (this.stateHolds(s, l.pred)) l.any.add(0);
     }
@@ -227,7 +268,7 @@ export class GoalTracker {
   observeState(s: GameState, legal?: Action[]): void {
     const n = myTurnNo(s);
     if (n === null || s.step !== 'main') return;
-    for (const l of this.leaves.values()) {
+    for (const l of this.leaves) {
       if (l.pred.kind === 'cast') continue;
       if (l.any.has(n)) continue;
       if (this.stateHolds(s, l.pred, legal)) l.any.add(n);
@@ -240,7 +281,7 @@ export class GoalTracker {
     if (n === null) return;
     if (action.type === 'END_TURN') {
       // ターン終了時の状態
-      for (const l of this.leaves.values()) {
+      for (const l of this.leaves) {
         if (l.pred.kind === 'cast') continue;
         if (l.end.has(n)) continue;
         if (l.pred.kind === 'castable') continue;
@@ -256,7 +297,7 @@ export class GoalTracker {
       if (ev.owner !== 0) continue;
       if (ev.type !== 'cast' && !(ev.type === 'entered' && ev.via === 'summon')) continue;
       if (ev.free) continue;
-      for (const l of this.leaves.values()) {
+      for (const l of this.leaves) {
         if (l.pred.kind !== 'cast' || l.any.has(turnNo)) continue;
         const fi: number = ev.face ?? 0;
         if (matchCard(this.reg, s, ev.card, l.pred.card, fi, ev.cost)) l.any.add(turnNo);
@@ -275,7 +316,7 @@ export class GoalTracker {
   }
 
   private leafHolds(t: Timing, p: Predicate, cap: number): boolean {
-    const l = this.leaves.get(JSON.stringify(p))!;
+    const l = this.leafOf(p);
     switch (t.at) {
       case 'opening':
         return l.any.has(0);
@@ -337,18 +378,12 @@ export class GoalTracker {
   /** 検索用: 記録の状態を文字列にする(状態ハッシュに含める) */
   signature(): string {
     let out = '';
-    for (const l of this.leaves.values()) out += `${[...l.any].sort().join('.')}/${[...l.end].sort().join('.')};`;
+    for (const l of this.leaves) out += `${[...l.any].sort().join('.')}/${[...l.end].sort().join('.')};`;
     return out;
   }
 
   clone(): GoalTracker {
-    const t = new GoalTracker(this.goal, this.reg);
-    for (const [k, l] of this.leaves) {
-      const m = t.leaves.get(k)!;
-      for (const x of l.any) m.any.add(x);
-      for (const x of l.end) m.end.add(x);
-    }
-    return t;
+    return new GoalTracker(this.goal, this.reg, this);
   }
 }
 

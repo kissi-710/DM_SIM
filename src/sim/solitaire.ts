@@ -183,22 +183,41 @@ export interface SearchResult {
   histories: { steps: HistoryStep[]; actions: Action[] }[];
 }
 
+// カード定義ID → 小さな整数(状態キーを、短い数の並びで作るため。定義の数は限られる)
+const defIndex = new Map<string, number>();
+function defIx(id: string): number {
+  let i = defIndex.get(id);
+  if (i === undefined) {
+    i = defIndex.size;
+    defIndex.set(id, i);
+  }
+  return i;
+}
+
+/** 並びを問わない集まりのキー(数を昇順にして連結する) */
+function bagKey(list: number[], f: (u: number) => number): string {
+  const a = list.map(f);
+  a.sort((x, y) => x - y);
+  return a.join(',');
+}
+
 function stateKey(s: GameState): string {
   const z = s.players[0];
-  const def = (u: number) => s.cards[u].defId;
+  const cards = s.cards;
+  const def = (u: number) => defIx(cards[u].defId);
   const parts: (string | number)[] = [s.turn, s.step, s.manaCharged ? 1 : 0];
   parts.push(z.deck.map(def).join(','));
-  parts.push(z.hand.map(def).sort().join(','));
-  parts.push(z.mana.map((u) => def(u) + (s.cards[u].tapped ? 't' : '')).sort().join(','));
+  parts.push(bagKey(z.hand, def));
+  parts.push(bagKey(z.mana, (u) => def(u) * 2 + (cards[u].tapped ? 1 : 0)));
   parts.push(
     z.battle
       .map((b) => b.cards.map(def).join('+') + (b.tapped ? 'T' : '') + (b.sick ? 's' : ''))
       .sort()
       .join(','),
   );
-  parts.push(z.grave.map(def).sort().join(','));
-  parts.push(z.hyper.map(def).sort().join(','));
-  parts.push(z.shield.map(def).sort().join(','));
+  parts.push(bagKey(z.grave, def));
+  parts.push(bagKey(z.hyper, def));
+  parts.push(bagKey(z.shield, def));
   parts.push(s.effects.length);
   if (s.pending && s.pending.why !== 'turnAction') {
     parts.push(JSON.stringify(s.cont.map((f) => (f.kind === 'effect' ? [f.ability, f.pc, f.vars] : [f.name, f.stage, f.vars]))));
