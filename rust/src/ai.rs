@@ -102,7 +102,7 @@ fn side(e: Env, p: PlayerId, w: &EvalWeights) -> f64 {
     v += z.hand.len() as f64 * w.hand;
     v += (z.mana.len().min(10)) as f64 * w.mana;
     for &u in &z.hand {
-        let cost = chars_of(e, u, -1).cost;
+        let cost = chars_lite(e, u, -1).cost;
         if cost < 99 {
             v += (cost.min(8)) as f64 * w.hand_cost;
         }
@@ -244,7 +244,7 @@ fn side_features(e: Env, p: PlayerId, f: &mut [f64; N_BASE], battle: &mut Vec<(u
     let mut hand_cost = 0.0;
     let mut playable = 0.0;
     for &u in &z.hand {
-        let cost = chars_of(e, u, -1).cost;
+        let cost = chars_lite(e, u, -1).cost;
         if cost < 99 {
             hand_cost += cost.min(8) as f64;
             if cost <= mana_n {
@@ -255,7 +255,7 @@ fn side_features(e: Env, p: PlayerId, f: &mut [f64; N_BASE], battle: &mut Vec<(u
     }
     let mut civs = 0u32;
     for &m in &z.mana {
-        for cv in chars_of(e, m, -1).civs {
+        for cv in chars_lite(e, m, -1).civs {
             civs |= 1 << (*cv as u32);
         }
     }
@@ -307,7 +307,7 @@ pub fn model_prob(e: Env, me: PlayerId, m: &ValueModel) -> f64 {
 fn keep_score(e: Env, uid: i32, me: PlayerId) -> f64 {
     let s = e.s;
     let card = &s.cards[uid as usize];
-    let ch = chars_of(e, uid, -1);
+    let ch = chars_lite(e, uid, -1);
     let mana_n = s.players[me as usize].mana.len() as i32;
     let mut v: f64 = if ch.cost <= mana_n + 2 { 4.5 } else { 3.0 };
     v -= ch.cost as f64 * 0.15;
@@ -320,7 +320,7 @@ fn keep_score(e: Env, uid: i32, me: PlayerId) -> f64 {
     }
     let mut have: Vec<Civ> = Vec::new();
     for &m in &s.players[me as usize].mana {
-        for cv in chars_of(e, m, -1).civs {
+        for cv in chars_lite(e, m, -1).civs {
             if !have.contains(cv) {
                 have.push(*cv);
             }
@@ -331,7 +331,7 @@ fn keep_score(e: Env, uid: i32, me: PlayerId) -> f64 {
         if h == uid {
             continue;
         }
-        for cv in chars_of(e, h, -1).civs {
+        for cv in chars_lite(e, h, -1).civs {
             if !have.contains(cv) && !need.contains(cv) {
                 need.push(*cv);
             }
@@ -401,7 +401,7 @@ pub fn choose_turn_action(e: Env, legal: &[Action], me: PlayerId) -> usize {
             if mana_n >= SKIP_MANA_FROM {
                 let mut max_cost = 0;
                 for &u in &s.players[me as usize].hand {
-                    let cost = chars_of(e, u, -1).cost;
+                    let cost = chars_lite(e, u, -1).cost;
                     if cost < 99 {
                         max_cost = max_cost.max(cost);
                     }
@@ -494,7 +494,7 @@ pub fn choose_turn_action(e: Env, legal: &[Action], me: PlayerId) -> usize {
                     Target::Creature(tpid) => {
                         if let Some(tp) = s.players[o as usize].battle.iter().find(|p| p.pid == *tpid) {
                             let pt = power_of(e, tp);
-                            let tcost = chars_of(e, tp.cards[0], -1).cost;
+                            let tcost = chars_lite(e, tp.cards[0], -1).cost;
                             if pa > pt {
                                 score = 30.0 + (tcost.min(12)) as f64 + pt as f64 / 2000.0;
                             }

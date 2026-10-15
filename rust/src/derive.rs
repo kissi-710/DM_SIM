@@ -45,14 +45,36 @@ pub fn chars_of<'a>(e: Env<'a>, uid: i32, hint: i32) -> Chars<'a> {
     Chars { face, face_idx: idx as i32, civs, cost: face.cost, power, ty: face.ty, races: &face.races }
 }
 
+/// chars_of の、パワーを計算しない版(パワーは面の基本値のまま)。コスト・面・文明・タイプだけ使う呼び出しは、こちらを使う
+/// (場のカードのパワーは、常在型能力・継続効果の走査が要るので、chars_of では重い)。
+pub fn chars_lite<'a>(e: Env<'a>, uid: i32, hint: i32) -> Chars<'a> {
+    let card = &e.s.cards[uid as usize];
+    let def = &e.reg.defs[card.def as usize];
+    let in_play = card.zone == Zone::Battle || card.zone == Zone::Limbo;
+    let idx: usize = if in_play {
+        if (card.face as usize) < def.faces.len() && card.face >= 0 {
+            card.face as usize
+        } else {
+            0
+        }
+    } else if hint >= 0 && (hint as usize) < def.faces.len() {
+        hint as usize
+    } else {
+        0
+    };
+    let face = &def.faces[idx];
+    let civs: &[Civ] = if in_play || hint >= 0 { &face.civs } else { &def.union_civs };
+    Chars { face, face_idx: idx as i32, civs, cost: face.cost, power: face.power.unwrap_or(0), ty: face.ty, races: &face.races }
+}
+
 /// 表記コスト(使用中の面。場以外は面0)
 pub fn cost_base(e: Env, uid: i32) -> i32 {
-    chars_of(e, uid, -1).face.cost
+    chars_lite(e, uid, -1).face.cost
 }
 
 pub fn info_of<'a>(e: Env<'a>, uid: i32) -> &'a FaceInfo {
     let card = &e.s.cards[uid as usize];
-    let ch = chars_of(e, uid, -1);
+    let ch = chars_lite(e, uid, -1);
     e.reg.info(card.def, ch.face_idx)
 }
 
@@ -76,7 +98,7 @@ pub fn active_statics<'a>(e: Env<'a>) -> Vec<ActiveStatic<'a>> {
             if info.statics.is_empty() {
                 continue;
             }
-            let face = e.reg.face(card.def, chars_of(e, uid, -1).face_idx);
+            let face = e.reg.face(card.def, chars_lite(e, uid, -1).face_idx);
             for &si in &info.statics {
                 if let Ability::Static { m, while_ } = &face.abilities[si as usize] {
                     if let Some(w) = while_ {
@@ -248,7 +270,7 @@ pub fn breaker_count(e: Env, perm: &Perm) -> i32 {
     let uid = perm.cards[0];
     let card = &e.s.cards[uid as usize];
     let info = info_of(e, uid);
-    let face = e.reg.face(card.def, chars_of(e, uid, -1).face_idx);
+    let face = e.reg.face(card.def, chars_lite(e, uid, -1).face_idx);
     let mut n = 1;
     for &bi in &info.breakers {
         if let Ability::Keyword { n: bn, while_, .. } = &face.abilities[bi as usize] {
@@ -294,7 +316,7 @@ pub fn is_sick(e: Env, perm: &Perm) -> bool {
     if !perm.sick {
         return false;
     }
-    !chars_of(e, perm.cards[0], -1).ty.is_evo()
+    !chars_lite(e, perm.cards[0], -1).ty.is_evo()
 }
 
 pub fn can_attack(e: Env, perm: &Perm, target: &crate::state::Target) -> bool {
@@ -393,7 +415,7 @@ pub fn pay_need(cost: i32, civ_count: i32) -> i32 {
 }
 
 pub fn mana_civs<'a>(e: Env<'a>, uid: i32) -> &'a [Civ] {
-    chars_of(e, uid, -1).civs
+    chars_lite(e, uid, -1).civs
 }
 
 /// 払えるか(plan_payment が Some を返す条件と同じ)だけを調べる。どのマナを払うかは計算しない(確保もしない)。
@@ -412,7 +434,7 @@ pub fn can_pay(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: &[i32
             return plan_payment(e, player, civs, need, exclude, &[]).is_some();
         }
         let mut m = 0u8;
-        for c in chars_of(e, u, -1).civs {
+        for c in chars_lite(e, u, -1).civs {
             m |= 1 << (*c as u8);
         }
         masks[n] = m;
@@ -458,7 +480,7 @@ pub fn plan_payment(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: 
     // 価値(残したいほど高い)
     let mut want = [0i32; 5];
     for &h in keep_for {
-        for civ in chars_of(e, h, -1).civs {
+        for civ in chars_lite(e, h, -1).civs {
             want[*civ as usize] += 1;
         }
     }

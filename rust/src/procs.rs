@@ -139,7 +139,7 @@ fn plan_play_inner(e: Env, player: PlayerId, uid: i32, from: Zone, face_idx: i32
             if po != player || pm.tapped {
                 return plan_fail(face_idx, "タップできないクリーチャーです");
             }
-            let cost = chars_of(e, pm.cards[0], -1).cost;
+            let cost = chars_lite(e, pm.cards[0], -1).cost;
             if seen.contains(&cost) {
                 return plan_fail(face_idx, "コストが互いに異なるクリーチャーを選んでください");
             }
@@ -187,7 +187,7 @@ fn plan_play_inner(e: Env, player: PlayerId, uid: i32, from: Zone, face_idx: i32
 
 /// 選んだマナが、必要な文明を1枚ずつ(1枚は1文明)満たせるか
 pub fn covers(e: Env, mana: &[i32], civs: &[Civ]) -> bool {
-    let cs: Vec<&[Civ]> = mana.iter().map(|&u| chars_of(e, u, -1).civs).collect();
+    let cs: Vec<&[Civ]> = mana.iter().map(|&u| chars_lite(e, u, -1).civs).collect();
     let mut used = vec![false; mana.len()];
     fn go(i: usize, civs: &[Civ], cs: &[&[Civ]], used: &mut Vec<bool>) -> bool {
         if i == civs.len() {
@@ -1012,7 +1012,7 @@ pub fn run_sba(c: &mut Ctx) -> Res<bool> {
     for p in 0..2usize {
         let smax: Vec<i32> = {
             let e = c.env();
-            c.s.players[p].battle.iter().filter(|perm| chars_of(e, perm.cards[0], -1).ty == FaceType::SmaxEvolution).map(|x| x.cards[0]).collect()
+            c.s.players[p].battle.iter().filter(|perm| chars_lite(e, perm.cards[0], -1).ty == FaceType::SmaxEvolution).map(|x| x.cards[0]).collect()
         };
         if smax.len() >= 2 {
             let ans = ask(
@@ -1039,7 +1039,7 @@ fn loss_replacement(c: &mut Ctx, p: PlayerId) -> Res<bool> {
             let e = c.env();
             let info = info_of(e, uid);
             let card = &c.s.cards[uid as usize];
-            let face = reg.face(card.def, chars_of(e, uid, -1).face_idx);
+            let face = reg.face(card.def, chars_lite(e, uid, -1).face_idx);
             info.replaces
                 .iter()
                 .filter_map(|&ri| match &face.abilities[ri as usize] {
@@ -1087,7 +1087,7 @@ fn loss_replacement(c: &mut Ctx, p: PlayerId) -> Res<bool> {
             let e = c.env();
             let mut scored: Vec<(i32, i32)> = face_up
                 .iter()
-                .map(|&u| (u, (if c.s.cards[u as usize].zone == Zone::Battle { 100 } else { 0 }) + chars_of(e, u, -1).cost))
+                .map(|&u| (u, (if c.s.cards[u as usize].zone == Zone::Battle { 100 } else { 0 }) + chars_lite(e, u, -1).cost))
                 .collect();
             scored.sort_by_key(|x| x.1);
             let picks: Vec<i32> = scored.iter().take(3).map(|x| x.0).collect();

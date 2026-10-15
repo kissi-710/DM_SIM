@@ -95,7 +95,8 @@ pub fn collect(c: &mut Ctx, ev: &Rc<Ev>) {
     // 誘発能力を持つ定義のカードだけを、uid の昇順で調べる(全カードの走査と同じ順序)
     let mut cands: Vec<usize> = Vec::new();
     if let Some(Some(defs)) = reg.trig_defs.get(ev.ty.0 as usize) {
-        let by = c.s.cards_by_def.clone();
+        // 定義ごとのカード一覧は、複製せずに借りて、uid だけを取り出す
+        let by = &c.s.cards_by_def;
         for &d in defs {
             cands.extend(by[d as usize].iter().map(|&u| u as usize));
         }
@@ -259,7 +260,7 @@ fn suppresses_trigger(c: &Ctx, ev: &Rc<Ev>, src_uid: i32, controller: PlayerId) 
                 continue;
             }
             let card = &c.s.cards[uid as usize];
-            let face = reg.face(card.def, chars_of(e, uid, -1).face_idx);
+            let face = reg.face(card.def, chars_lite(e, uid, -1).face_idx);
             for &ri in &info.replaces {
                 if let Ability::Replace { match_, apply: ReplaceApply::CancelTrigger, while_, .. } = &face.abilities[ri as usize] {
                     if let Some(w) = while_ {
@@ -476,7 +477,7 @@ pub fn move_cards(c: &mut Ctx, uids: &[i32], opts: &MoveOpts) -> Res<Vec<MoveRes
 
 /// マナゾーンに置かれる時にタップ状態か。多色カード(ツインパクトは両面の和集合)はタップして置く(spec 3.4.1 M-1)。
 fn enters_mana_tapped(c: &Ctx, uid: i32, opts: &MoveOpts) -> bool {
-    chars_of(c.env(), uid, -1).civs.len() > 1 || opts.tapped
+    chars_lite(c.env(), uid, -1).civs.len() > 1 || opts.tapped
 }
 
 /// 実際の移動(置換は済んでいる)。進化の山は下のカードも一緒に動かす。
@@ -488,7 +489,7 @@ fn do_move(c: &mut Ctx, uid: i32, to: Zone, cause: Sym, pos: Option<bool>, evs: 
     let e = c.env();
     let snap = Rc::new(snap_of(e, uid));
     let hint = if from == Zone::Battle || from == Zone::Limbo { face } else { -1 };
-    let kind = if chars_of(e, uid, hint).ty == FaceType::Spell { s::SPELL } else { s::CREATURE };
+    let kind = if chars_lite(e, uid, hint).ty == FaceType::Spell { s::SPELL } else { s::CREATURE };
     // 山(進化元)を一緒に動かす
     let mut under: Vec<i32> = Vec::new();
     if from == Zone::Battle && to != Zone::Battle && !opts.alone {
@@ -730,7 +731,7 @@ fn apply_replacements(c: &mut Ctx, p: &mut Proposal) -> Res<()> {
     }
     let e = c.env();
     let info = info_of(e, p.uid);
-    let face_def = reg.face(def, chars_of(e, p.uid, -1).face_idx);
+    let face_def = reg.face(def, chars_lite(e, p.uid, -1).face_idx);
     let mut cands: Vec<Cand> = Vec::new();
     // カード自身の置換効果(破壊 → マナゾーン / S-MAX進化の身代わり)
     for &ri in &info.replaces {

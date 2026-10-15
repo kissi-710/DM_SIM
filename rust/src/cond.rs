@@ -195,7 +195,7 @@ pub fn eval_cond(cc: &CC, cond: &Cond) -> bool {
         Cond::FiveCivs(sel) => {
             let mut set: Vec<Civ> = Vec::new();
             for u in select_cards(cc, sel) {
-                for civ in chars_of(cc.e, u, -1).civs.iter() {
+                for civ in chars_lite(cc.e, u, -1).civs.iter() {
                     if !set.contains(civ) {
                         set.push(*civ);
                     }
@@ -206,7 +206,7 @@ pub fn eval_cond(cc: &CC, cond: &Cond) -> bool {
         Cond::CivsPresent { sel, civs } => {
             let mut set: Vec<Civ> = Vec::new();
             for u in select_cards(cc, sel) {
-                for civ in chars_of(cc.e, u, -1).civs.iter() {
+                for civ in chars_lite(cc.e, u, -1).civs.iter() {
                     if !set.contains(civ) {
                         set.push(*civ);
                     }
@@ -314,7 +314,7 @@ pub fn eval_cond(cc: &CC, cond: &Cond) -> bool {
                     if refs.is_empty() {
                         return false;
                     }
-                    let civs = chars_of(cc.e, refs[0], -1).civs;
+                    let civs = chars_lite(cc.e, refs[0], -1).civs;
                     ch.civs.iter().any(|x| civs.contains(x))
                 }
                 _ => false,

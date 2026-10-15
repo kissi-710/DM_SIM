@@ -152,7 +152,7 @@ fn extra_variants(e: Env, player: PlayerId, uid: i32, _from: Zone, fi: i32) -> V
         let free: Vec<&Perm> = s.players[player as usize].battle.iter().filter(|p| !p.tapped).collect();
         let mut by_cost: Vec<(i32, Vec<&Perm>)> = Vec::new();
         for p in free {
-            let cost = chars_of(e, p.cards[0], -1).cost;
+            let cost = chars_lite(e, p.cards[0], -1).cost;
             match by_cost.iter_mut().find(|(c, _)| *c == cost) {
                 Some((_, l)) => l.push(p),
                 None => by_cost.push((cost, vec![p])),
