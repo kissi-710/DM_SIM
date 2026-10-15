@@ -5,7 +5,7 @@ import type { Registry } from '../engine/registry';
 import type { CardDB, GameConfig, PlayerId } from '../engine/types';
 import { deriveSeed } from '../engine/prng';
 import { mulberry, playGameSync } from './playGame';
-import { wilson } from './stats';
+import { emptyAcc, estimateRate, type RateAcc } from './stats';
 
 /** duplicate: 同じシードの対局を、A の席を入れ替えて2回行う(同じデッキ同士なら配られる手札が同一になり、運の差が打ち消される)。games は偶数 */
 export type FirstMode = 'fixed' | 'alternate' | 'random' | 'duplicate';
@@ -33,8 +33,11 @@ export interface MatchStats {
   winsA: number;
   winsB: number;
   draws: number;
+  /** A の勝率の推定値(引分は 0.5。席で層化・複製対局はペア単位。stats.ts の estimateRate) */
   winRateA: number;
   ci95A: [number, number];
+  /** 推定の十分統計量(範囲を分けた実行の統合に使う) */
+  acc: RateAcc;
   avgTurns: number;
   /** 先攻側の勝率 */
   firstPlayerWinRate: number;
@@ -80,6 +83,8 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
   let aFirstWins = 0;
   let aSecondGames = 0;
   let aSecondWins = 0;
+  const acc = emptyAcc();
+  let pairScore = 0;
   const reasons: Record<string, number> = {};
   let done = 0;
   for (let i = 0; i < o.games; i++) {
@@ -110,6 +115,24 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
     const aFirst = aSeat === 0;
     if (aFirst) aFirstGames++;
     else aSecondGames++;
+    const score = r.winner === 'draw' || r.winner === null ? 0.5 : r.winner === aSeat ? 1 : 0;
+    if (aFirst) {
+      acc.nF++;
+      acc.sF += score;
+    } else {
+      acc.nS++;
+      acc.sS += score;
+    }
+    if (first === 'duplicate') {
+      // 2試合(席を入れ替えた同じシード)で1ペア。範囲の先頭が奇数番号なら、最初の1試合は相方が範囲外なので数えない
+      if (idx % 2 === 0) pairScore = score;
+      else if (i > 0) {
+        const ps = (pairScore + score) / 2;
+        acc.m++;
+        acc.pSum += ps;
+        acc.pSq += ps * ps;
+      }
+    }
     if (r.winner === 'draw' || r.winner === null) draws++;
     else {
       if (r.winner === 0) firstWins++;
@@ -123,13 +146,15 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
     o.onProgress?.(done, o.games);
   }
   const n = Math.max(1, done);
+  const est = estimateRate(acc);
   return {
     games: done,
     winsA,
     winsB,
     draws,
-    winRateA: winsA / n,
-    ci95A: wilson(winsA, done),
+    winRateA: est.rate,
+    ci95A: est.ci,
+    acc,
     avgTurns: turns / n,
     firstPlayerWinRate: firstWins / n,
     winRateAFirst: aFirstGames ? aFirstWins / aFirstGames : null,

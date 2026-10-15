@@ -55,3 +55,59 @@ export function hypergeomAtLeast(N: number, K: number, n: number, min: number): 
   for (let k = min; k <= Math.min(K, n); k++) p += hypergeomPmf(N, K, n, k);
   return Math.min(1, p);
 }
+
+/** 勝率の推定のための十分統計量(試合の範囲を分けて実行して、足し合わせて統合できる) */
+export interface RateAcc {
+  /** A が先攻の試合の数と得点(勝ち 1・引分 0.5) */
+  nF: number;
+  sF: number;
+  /** A が後攻の試合の数と得点 */
+  nS: number;
+  sS: number;
+  /** 複製対局のペア(席を入れ替えた2試合)の数と、ペアの得点(2試合の平均)の合計・2乗和 */
+  m: number;
+  pSum: number;
+  pSq: number;
+}
+
+export const emptyAcc = (): RateAcc => ({ nF: 0, sF: 0, nS: 0, sS: 0, m: 0, pSum: 0, pSq: 0 });
+
+export function addAcc(a: RateAcc, b: RateAcc): RateAcc {
+  return { nF: a.nF + b.nF, sF: a.sF + b.sF, nS: a.nS + b.nS, sS: a.sS + b.sS, m: a.m + b.m, pSum: a.pSum + b.pSum, pSq: a.pSq + b.pSq };
+}
+
+/** 有効サンプル数 nEff の Wilson 区間(推定値 p を中心に)。分散 v から nEff = p(1−p)/v */
+function wilsonEff(p: number, v: number): [number, number] {
+  const pc = Math.min(1 - 1e-9, Math.max(1e-9, p));
+  const nEff = Math.max(1, (pc * (1 - pc)) / Math.max(v, 1e-12));
+  return wilson(pc * nEff, nEff);
+}
+
+/**
+ * 勝率の推定値と95%区間。
+ *  - 複製対局(ペアが2組以上): ペア単位の得点の平均と分散(同じ配りの2試合は相関するので、試合を独立と見ない)
+ *  - 先攻・後攻の両方がある: 席で層化(各 1/2 の重み)。席の違いによるばらつきを取り除く
+ *  - それ以外: 得点(引分は 0.5)の割合と Wilson 区間
+ */
+export function estimateRate(a: RateAcc): { rate: number; ci: [number, number] } {
+  const n = a.nF + a.nS;
+  if (n === 0) return { rate: 0, ci: [0, 1] };
+  if (a.m >= 2 && a.m * 2 >= n * 0.9) {
+    const p = a.pSum / a.m;
+    // 事前に、標準偏差 0.25 のペアが 1 つあるとみなして、分散の下限を与える(全ペアが同じ得点でも区間が潰れない)
+    const s2 = (a.pSq - a.m * p * p + 0.0625) / a.m;
+    return { rate: p, ci: wilsonEff(p, s2 / a.m) };
+  }
+  if (a.nF > 0 && a.nS > 0) {
+    const pF = a.sF / a.nF;
+    const pS = a.sS / a.nS;
+    const p = 0.5 * (pF + pS);
+    const sm = (s: number, k: number) => (s + 0.5) / (k + 1);
+    const qF = sm(a.sF, a.nF);
+    const qS = sm(a.sS, a.nS);
+    const v = 0.25 * ((qF * (1 - qF)) / a.nF + (qS * (1 - qS)) / a.nS);
+    return { rate: p, ci: wilsonEff(p, v) };
+  }
+  const s = a.sF + a.sS;
+  return { rate: s / n, ci: wilson(s, n) };
+}

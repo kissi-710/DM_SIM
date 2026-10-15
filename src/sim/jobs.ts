@@ -14,7 +14,7 @@ import {
   type ProbResult,
   type SolitaireParams,
 } from './solitaire';
-import { wilson } from './stats';
+import { addAcc, emptyAcc, estimateRate, wilson, type RateAcc } from './stats';
 import { composeStrength, strengthVariants, type CardStrength } from './strength';
 
 export type MatchJobOpts = Omit<MatchOpts, 'onProgress' | 'shouldCancel'>;
@@ -213,6 +213,7 @@ export function mergeMatches(parts: MatchStats[], ms?: number): MatchStats {
   let aSecondGames = 0;
   let aSecondWins = 0;
   let msSum = 0;
+  let acc: RateAcc = emptyAcc();
   const reasons: Record<string, number> = {};
   let think: MatchStats['think'];
   for (const p of parts) {
@@ -223,6 +224,7 @@ export function mergeMatches(parts: MatchStats[], ms?: number): MatchStats {
       think.msB += p.think.msB;
       think.nB += p.think.nB;
     }
+    acc = addAcc(acc, p.acc ?? emptyAcc());
     games += p.games;
     winsA += p.winsA;
     winsB += p.winsB;
@@ -238,13 +240,15 @@ export function mergeMatches(parts: MatchStats[], ms?: number): MatchStats {
     for (const [k, v] of Object.entries(p.reasons)) reasons[k] = (reasons[k] ?? 0) + v;
   }
   const n = Math.max(1, games);
+  const est = estimateRate(acc);
   return {
     games,
     winsA,
     winsB,
     draws,
-    winRateA: winsA / n,
-    ci95A: wilson(winsA, games),
+    winRateA: est.rate,
+    ci95A: est.ci,
+    acc,
     avgTurns: turns / n,
     firstPlayerWinRate: firstWins / n,
     winRateAFirst: aFirstGames ? aFirstWins / aFirstGames : null,
