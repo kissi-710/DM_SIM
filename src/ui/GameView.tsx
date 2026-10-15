@@ -471,7 +471,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         else setConfirmQuit(true);
         return done();
       }
-      if (k === KEY.fast && g.me !== null && g.cpuTurn) {
+      if (k === KEY.fast && g.me !== null) {
         g.setFast(!g.fast);
         return done();
       }
@@ -652,8 +652,9 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             </label>
           </>
         )}
-        {g.me !== null && g.cpuTurn && (
-          <button className={g.fast ? 'on' : ''} onClick={() => g.setFast(!g.fast)} title="CPU の手の間隔をなくして、一気に進めます">
+        {/* CPU の手番だけ出し入れすると、ヘッダーのレイアウトが揺れる。常に出して、効くのは CPU の手番(人間の番にも切り替えておける) */}
+        {g.me !== null && (
+          <button className={g.fast ? 'on' : ''} aria-pressed={g.fast} onClick={() => g.setFast(!g.fast)} title="CPU の手の間隔をなくして、一気に進めます(切り替えておくと、CPU の手番から効きます)">
             ⏩ 一気に進める <Kbd k={KEY.fast} />
           </button>
         )}

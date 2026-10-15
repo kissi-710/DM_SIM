@@ -170,4 +170,11 @@ describe('GameView: 使えないカード', () => {
     await userEvent.keyboard(' ');
     expect(document.querySelectorAll('.card.selected').length).toBe(1);
   });
+  it('「一気に進める」は人間の手番でも出ていて、F で切り替わる(ヘッダーが揺れない)', async () => {
+    render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
+    const btn = screen.getByRole('button', { name: /一気に進める/ });
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.keyboard('f');
+    expect(screen.getByRole('button', { name: /一気に進める/ })).toHaveAttribute('aria-pressed', 'true');
+  });
 });
