@@ -4,6 +4,7 @@ import { DECK_PRESETS, CARD_DB, deckCards } from '../cards';
 import { checkHypotheses, hypothesisProblems, makePolicy } from '../ai/policy';
 import type { AgentKind } from '../ai';
 import { formatStats, type FirstMode, type MatchStats } from '../sim/batch';
+import { mergeMatches } from '../sim/jobs';
 import type { CardStrength } from '../sim/strength';
 import { runParallel } from './parallel';
 
@@ -33,7 +34,8 @@ function usage(): never {
   --games <n>      試合数  既定 1000
   --jobs <n>       並列数  既定: コア数-1(最大8)。1なら直列。結果は並列数によらず同じ
   --seed <n>       シード  既定 1
-  --first <m>      fixed / alternate / random  既定 alternate
+  --first <m>      fixed / alternate / random / duplicate  既定 alternate(duplicate = 同じシードで席を入れ替えて2試合。games は偶数)
+  --precision <pt> 勝率の95%区間の半幅(%)がこの値以下になるまで、--games ごとに続ける(最大 --maxGames 試合)。差が大きい時は早く終わる
   --iterations <n> mcts の反復回数(これだけを指定すると再現できる。既定 120)
   --ms <n>         mcts の最大思考時間(指定すると実行環境の速さ・負荷で結果が変わる)
   --strength       カード単体の強さ(1枚を入れ替えた時の勝率差)を測る(デッキA vs デッキB、ルールベース同士)
@@ -77,7 +79,10 @@ const kindB = oneOf('agentB', ['random', 'rule', 'mcts'] as const, 'random')! as
 const infos = ['fair', 'partial', 'hypothesis', 'full'] as const;
 const infoA = oneOf('infoA', infos, undefined);
 const infoB = oneOf('infoB', infos, undefined);
-const first = oneOf('first', ['fixed', 'alternate', 'random'] as const, 'alternate')! as FirstMode;
+const first = oneOf('first', ['fixed', 'alternate', 'random', 'duplicate'] as const, 'alternate')! as FirstMode;
+const precision = num('precision', undefined, 0.01);
+const maxGames = Math.floor(num('maxGames', 20000, 1)!);
+if (first === 'duplicate' && games % 2 !== 0) fail('--first duplicate の時、--games は偶数にしてください');
 const iterations = num('iterations', undefined, 1);
 const ms = num('ms', undefined, 1);
 
@@ -111,23 +116,41 @@ if (args.strength) {
   process.exit(0);
 }
 
-const [stats] = (await runParallel(
-  {
-    type: 'batch',
-    opts: [
-      {
-        deckA: deckCards(deckA),
-        deckB: deckCards(deckB),
-        agentA: { kind: kindA, policy: policyA, iterations, ms },
-        agentB: { kind: kindB, policy: policyB, iterations, ms },
-        games,
-        seed,
-        first,
-      },
-    ],
-  },
-  jobs,
-)) as MatchStats[];
+/** 試合の範囲 [start, start + n) を実行する(範囲を分けても、同じ試合は同じシード) */
+async function runRange(start: number, n: number): Promise<MatchStats> {
+  const [s] = (await runParallel(
+    {
+      type: 'batch',
+      opts: [
+        {
+          deckA: deckCards(deckA),
+          deckB: deckCards(deckB),
+          agentA: { kind: kindA, policy: policyA, iterations, ms },
+          agentB: { kind: kindB, policy: policyB, iterations, ms },
+          games: n,
+          seed,
+          first,
+          startIndex: start,
+        },
+      ],
+    },
+    jobs,
+  )) as MatchStats[];
+  return s;
+}
+
+// --precision: 区間が目標より広い間、games 試合ずつ足す(シードは通し番号で決まるので、一括で実行した結果と一致する)
+let stats = await runRange(0, games);
+if (precision !== undefined) {
+  let done = games;
+  const parts: MatchStats[] = [stats];
+  while ((stats.ci95A[1] - stats.ci95A[0]) * 50 > precision && done < maxGames) {
+    const n = Math.min(games, maxGames - done);
+    parts.push(await runRange(done, n % 2 === 0 || first !== 'duplicate' ? n : n - 1));
+    done += n;
+    stats = mergeMatches(parts);
+  }
+}
 
 if (args.json) console.log(JSON.stringify(stats, null, 2));
 else console.log(formatStats(`${deckA}(${kindA}) vs ${deckB}(${kindB}) seed=${seed}`, stats));

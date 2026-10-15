@@ -112,7 +112,7 @@ export function BatchView() {
       const running = runSimJob<MatchStats[]>(
         {
           type: 'batch',
-          opts: variants.map((v) => ({ deckA: a, deckB: b, agentA: spec(kindA, v.info, hy.a), agentB: spec(kindB, infoB, hy.b), games, seed, first })),
+          opts: variants.map((v) => ({ deckA: a, deckB: b, agentA: spec(kindA, v.info, hy.a), agentB: spec(kindB, infoB, hy.b), games: first === 'duplicate' ? games + (games % 2) : games, seed, first })),
         },
         (d, t) => setProgress([d, t]),
       );
@@ -221,6 +221,7 @@ export function BatchView() {
               <option value="alternate">交互</option>
               <option value="fixed">Aが常に先攻</option>
               <option value="random">ランダム</option>
+              <option value="duplicate">複製対局(同じ配りで席を入れ替え)</option>
             </select>
           </label>
           <label>
