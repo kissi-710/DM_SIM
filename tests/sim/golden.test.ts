@@ -72,10 +72,11 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
     const r = runProbability(reg, { deck: A, first: 0, goal, trials: 40, seed: 1, maxNodes: 3000 });
     expect(r.policy.achieved).toBe(13);
     expect(r.policy.byTurn).toEqual([0, 0, 0, 0.075, 0.25, 0.3, 0.325]);
-    // 限定食い違い探索 + 目標までの距離の順序づけ(旧: 到達 16 / 不明 24 / 平均 2000 ノード)
-    expect(r.search?.achieved).toBe(32);
-    expect(r.search?.unknown).toBe(8);
-    expect(r.search?.avgNodes).toBe(864.625);
+    // 限定食い違い探索 + 目標までの距離の順序づけ(旧: 到達 16 / 不明 24 / 平均 2000 ノード)。
+    // 予算の 2/3 を LDS に、残りを 1 回の全探索に使う(到達不可の確定を速くする。到達 32 / 不明 8 → 31 / 9)
+    expect(r.search?.achieved).toBe(31);
+    expect(r.search?.unknown).toBe(9);
+    expect(r.search?.avgNodes).toBe(855.15);
   });
   it('パターン調査(12試行)', () => {
     const r = runPatterns(reg, { deck: A, first: 0, goal, trials: 12, seed: 1, maxNodes: 3000 }, { granularity: 'set', maxHistoriesPerTrial: 2 });

@@ -274,7 +274,9 @@ export function searchTrial(reg: Registry, p: SolitaireParams, trialSeed: number
   const s0 = buildGame(reg, p, trialSeed);
   const t0 = new GoalTracker(p.goal, reg);
   t0.observeInitial(s0);
-  const visited = new Set<string>();
+  // 状態 → (探索し終えた時の残り食い違い数, その下に、食い違い数の不足で切った枝があったか)。
+  // 食い違い数の上限を増やして探索し直す時に、同じ以上の残りで探索し終えた状態は省く(重複を避ける)。
+  const visited = new Map<string, { disc: number; pruned: boolean }>();
   const result: SearchResult = { found: false, unknown: false, nodes: 0, histories: [] };
   const seenKeys = new Set<string>();
   const path: Action[] = [];
@@ -289,11 +291,14 @@ export function searchTrial(reg: Registry, p: SolitaireParams, trialSeed: number
 
   // 限定食い違い探索(LDS): 目標に近い順の第1候補から外れる回数(disc)の上限を 0, 1, 2… と増やして探索する。
   // 少ない食い違いで届く解を先に見つけられ、上限で枝を切らずに終われば全探索(= 届かないと確定)になる。
+  // 前のパスで探索し終えた状態は、残りの食い違い数が同じ以上なら省く(省いた下に切った枝があれば、それも引き継ぐ)。
   let prunedByDisc: boolean;
+  // ノード数の上限。前半(LDS)は半分まで使い、後半(1回の全探索)で残りを使う
+  let nodeCap = Math.ceil((maxNodes * 2) / 3);
 
   const explore = (s: GameState, tr: GoalTracker, disc: number): boolean => {
     // true を返したら、探索を打ち切る(必要な履歴が集まった)
-    if (result.nodes++ > maxNodes) {
+    if (result.nodes++ > nodeCap) {
       result.unknown = true;
       return true;
     }
@@ -316,9 +321,17 @@ export function searchTrial(reg: Registry, p: SolitaireParams, trialSeed: number
       record();
       return result.histories.length >= maxHistories;
     }
-    const key = stateKey(s) + '#' + tr.signature() + '@' + disc;
-    if (visited.has(key)) return false;
-    visited.add(key);
+    const key = stateKey(s) + '#' + tr.signature();
+    const seen = visited.get(key);
+    if (seen && seen.disc >= disc) {
+      if (seen.pruned) prunedByDisc = true;
+      return false;
+    }
+    // この状態の下で枝を切ったかを、この状態だけについて数える
+    const prunedOutside = prunedByDisc;
+    prunedByDisc = false;
+    // 探索中の状態に戻ってきた時(同じ状態の繰り返し)に、再帰しないよう先に印を付ける(切った枝があるものとして扱う)
+    visited.set(key, { disc, pruned: true });
     const mt = myTurnNo(s);
     // 子の状態を先に作り、目標に近い順に探索する。期限切れ・必要なカードが無い枝は探索しない(足切り)
     type Child = { a: Action; r: { state: GameState; events: Ev[] }; t2: GoalTracker; h: number; i: number };
@@ -351,13 +364,27 @@ export function searchTrial(reg: Registry, p: SolitaireParams, trialSeed: number
       if (d) steps.pop();
       if (stop) return true;
     }
+    visited.set(key, { disc, pruned: prunedByDisc });
+    prunedByDisc ||= prunedOutside;
     return false;
   };
+  let finished = false;
   for (let limit = 0; ; limit++) {
-    visited.clear();
     prunedByDisc = false;
     if (explore(s0, t0, limit)) break; // 履歴が集まった、またはノード数の上限
-    if (!prunedByDisc) break; // 枝を切らずに終わった = 全探索
+    if (!prunedByDisc) {
+      finished = true; // 枝を切らずに終わった = 全探索
+      break;
+    }
+  }
+  if (!finished && result.unknown && result.histories.length < maxHistories) {
+    // 到達できない試行の確定には、食い違い数を増やして重複して探索するより、1回の全探索の方が少ない(4〜6倍)。
+    // LDS の半分の予算で見つからなければ、残りで枝を切らない全探索をする
+    result.unknown = false;
+    visited.clear();
+    nodeCap = maxNodes;
+    prunedByDisc = false;
+    explore(s0, t0, Infinity);
   }
   return result;
 }
