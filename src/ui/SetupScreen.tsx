@@ -7,6 +7,7 @@ import { CARD_DB } from '../cards';
 import { INFO_PRESET_LABEL, type InfoPreset } from '../engine/view';
 import { allDecks, findDeck } from './decks';
 import type { GameSetup, Seat } from './useGame';
+import { loadFxEnabled, saveFxEnabled } from './fx';
 import { loadJson, saveJson } from './util';
 import { errorMessage } from '../engine/types';
 import { aiEngine, onAiEngine, warmAi, type AiEngine } from './aiClient';
@@ -39,6 +40,8 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
   const [seed, setSeed] = useState(saved?.seed ?? '');
   const [autoOrder, setAutoOrder] = useState(saved?.autoOrder ?? false);
   const [undo, setUndo] = useState(saved?.undo ?? true);
+  // 演出(対戦画面の「演出を表示する」と同じ設定)
+  const [fx, setFx] = useState(loadFxEnabled);
   const [delay, setDelay] = useState(saved?.delay ?? (mode === 'watch' ? 600 : 500));
   // モンテカルロ探索の最大の思考時間。手の優劣がはっきりすれば、これより早く打ち切る
   const [think, setThink] = useState(saved?.think ?? 1200);
@@ -194,6 +197,17 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
         <label className="row">
           CPUの手の間隔(ms)
           <input type="number" value={delay} min={0} max={3000} step={100} onChange={(e) => setDelay(Number(e.target.value))} />
+        </label>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={fx}
+            onChange={(e) => {
+              setFx(e.target.checked);
+              saveFxEnabled(e.target.checked);
+            }}
+          />
+          演出を表示する(ターンの切り替わり・攻撃・シールドブレイクなど。オフにすると、演出のための CPU の待ち時間もなくなります)
         </label>
         {mode === 'play' && (
         <>

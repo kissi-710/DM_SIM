@@ -3,7 +3,7 @@
 デュエル・マスターズをブラウザで遊べるシミュレータです。**CPU対戦**・**CPU同士の観戦**・**確率シミュレータ**(確率調査・パターン調査)・**AI同士のバッチ対戦**を備えています。
 
 - 対象カード: スターターデッキ DM26-SD1「25の王道」の2デッキ(マルル / 5cザーディ)の**全28種**と、追加デッキ「インターステラ型マルル」の新規4種(docs/decks.md 第8章)。効果・タイミング処理は汎用エンジンで実装しています。
-- 設計・仕様: [docs/](./docs/)(overview / spec / design / effects / decks)。進捗: [ROADMAP.md](./ROADMAP.md)。
+- 設計・仕様: [docs/](./docs/)(overview / spec / design / effects / decks / ui-effects)。進捗: [ROADMAP.md](./ROADMAP.md)。
 - 画像はありません(テキストのみ)。データに任意項目 `image` を足すと表示されます。
 
 ## 起動

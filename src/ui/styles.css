@@ -861,6 +861,23 @@ button.icon {
   border-radius: 4px;
   padding: 0 3px;
 }
+.card .num-badge {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--accent2);
+  border-radius: 8px;
+  z-index: 2;
+  pointer-events: none;
+}
 .card.ex::after {
   content: 'EX';
   position: absolute;
@@ -1093,4 +1110,173 @@ textarea.json {
 }
 body.dragging .action-pop {
   display: none;
+}
+
+/* ───────── 演出(docs/ui-effects.md)─────────
+   見た目だけの層。.game.fx(演出が有効)の時だけ動く。無効の時は、動いたカードを静止した枠で示すだけ。 */
+.game:not(.fx) .card.flash {
+  animation: none;
+  box-shadow: 0 0 0 3px var(--accent2);
+}
+.game:not(.fx) .chip.hit {
+  animation: none;
+}
+.game.fx .card {
+  transition: transform 0.25s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+}
+.game.fx .card.flash {
+  animation: flash 1.6s ease-out, fx-pop 0.4s ease-out;
+}
+@keyframes fx-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.game.fx .chip.hit {
+  animation: fx-hit 0.7s ease-out;
+}
+@keyframes fx-hit {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-5px);
+    box-shadow: 0 0 0 3px var(--bad), 0 0 18px var(--bad);
+  }
+  30% {
+    transform: translateX(5px);
+  }
+  45% {
+    transform: translateX(-3px);
+  }
+  60% {
+    transform: translateX(3px);
+  }
+}
+.game.fx .input-panel.result {
+  animation: fx-result 0.6s ease-out;
+}
+@keyframes fx-result {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.fx-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+.fx-cue {
+  min-width: 100%;
+  padding: 14px 24px;
+  text-align: center;
+  color: #fff;
+  background: linear-gradient(90deg, transparent, rgba(18, 21, 28, 0.88) 18%, rgba(18, 21, 28, 0.88) 82%, transparent);
+  border-top: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  animation: fx-band 1s ease-in-out both;
+}
+.fx-title {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.fx-sub {
+  margin-top: 2px;
+  font-size: 15px;
+  color: var(--muted);
+}
+/* 誰の出来事か */
+.fx-cue.fx-side-opp,
+.fx-cue.fx-side-p1 {
+  border-color: var(--bad);
+}
+.fx-cue.fx-side-me,
+.fx-cue.fx-side-p0 {
+  border-color: var(--accent);
+}
+/* 種類ごとの強さ */
+.fx-cue.fx-turn {
+  padding: 22px 24px;
+}
+.fx-cue.fx-turn .fx-title {
+  font-size: 40px;
+}
+.fx-cue.fx-shield,
+.fx-cue.fx-attack {
+  border-color: var(--bad);
+}
+.fx-cue.fx-shield .fx-title {
+  color: #ffd0d0;
+}
+.fx-cue.fx-trigger {
+  border-color: var(--accent2);
+}
+.fx-cue.fx-trigger .fx-title {
+  color: var(--accent2);
+  font-size: 34px;
+}
+.fx-cue.fx-block {
+  border-color: var(--good);
+}
+.fx-cue.fx-cast .fx-title,
+.fx-cue.fx-summon .fx-title,
+.fx-cue.fx-invade .fx-title {
+  font-size: 26px;
+}
+@keyframes fx-band {
+  0% {
+    transform: translateX(-30%) scaleY(0.2);
+    opacity: 0;
+  }
+  15% {
+    transform: translateX(0) scaleY(1);
+    opacity: 1;
+  }
+  85% {
+    transform: translateX(0) scaleY(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(30%) scaleY(0.2);
+    opacity: 0;
+  }
+}
+
+.rail-hint.warn {
+  color: var(--text);
+  border-color: var(--accent2);
+  background: rgba(255, 180, 84, 0.12);
+}
+.card.cursor {
+  outline: 2px dashed var(--accent2);
+  outline-offset: 3px;
+}
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

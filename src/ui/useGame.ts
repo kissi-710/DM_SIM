@@ -10,6 +10,7 @@ import { AiCancelled, cancelAi, chooseWithWorker } from './aiClient';
 import { RECORD_VERSION, type GameRecord } from './record';
 import { clearAutosave, writeAutosave, type SaveStatus } from './autosave';
 import { errorMessage } from '../engine/types';
+import { cpuSeed, cpuWaitMs, cuesOf, fxTotalMs, MIN_CPU_GAP_MS } from './fx';
 
 export type { GameRecord } from './record';
 
@@ -38,8 +39,7 @@ export { clearAutosave, loadAutosave, type Autosave, type SaveStatus } from './a
 
 const reg = loadRegistry(CARD_DB);
 
-/** 人間と対戦する時の、CPU の手の最低間隔(ms) */
-export const MIN_CPU_GAP_MS = 300;
+export { MIN_CPU_GAP_MS };
 
 function configOf(setup: GameSetup): Partial<GameConfig> {
   const human = (p: PlayerId) => setup.seats[p].kind === 'human';
@@ -78,7 +78,10 @@ export function makeRecord(setup: GameSetup, session: Session): GameRecord {
   };
 }
 
-export function useGame(setup: GameSetup) {
+/**
+ * @param fxEnabled 演出が有効か(演出スキップ設定の逆)。CPU の手の「待ち時間」にだけ影響し、手の選択には影響しない(fx.ts)。
+ */
+export function useGame(setup: GameSetup, fxEnabled = false) {
   const [session, setSession] = useState<Session>(() => {
     const g = createGame(reg, {
       decks: setup.decks,
@@ -138,6 +141,9 @@ export function useGame(setup: GameSetup) {
   const snapshots = useRef<Snapshot[]>([]);
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  // 演出の切り替えで CPU の手番の effect を作り直さない(待ち時間の計算の時点の値を読む)
+  const fxRef = useRef(fxEnabled);
+  fxRef.current = fxEnabled;
   const stamp = useRef(0);
 
   const humanSeats = ([0, 1] as PlayerId[]).filter((p) => setup.seats[p].kind === 'human');
@@ -187,12 +193,20 @@ export function useGame(setup: GameSetup) {
     setSession((s) => (s.thinking ? s : { ...s, thinking: true }));
     const run = async () => {
       // 人間と対戦する時は、CPU の連続した手を見失わないよう、最低限の間隔をあける
-      const wait = fast ? 0 : me !== null ? Math.max(speed, MIN_CPU_GAP_MS) : speed;
+      // 待ち時間だけが演出の影響を受ける。何を打つかは、状態とシード(cpuSeed)だけで決まる
+      const cur = sessionRef.current;
+      const wait = cpuWaitMs({
+        speedMs: speed,
+        fast,
+        vsHuman: me !== null,
+        fxEnabled: fxRef.current,
+        fxHoldMs: fxRef.current ? fxTotalMs(cuesOf(cur.state, cur.last, me)) : 0,
+      });
       await new Promise((r) => setTimeout(r, wait));
       if (cancelled) return;
       try {
         const spec = setup.seats[pend!.player].agent;
-        const seed = hashSeed(setup.seed) ^ (sessionRef.current.actions.length * 2654435761);
+        const seed = cpuSeed(hashSeed(setup.seed), sessionRef.current.actions.length);
         const a = await chooseWithWorker({ state: sessionRef.current.state, spec, seed });
         if (cancelled || stamp.current !== my) return;
         perform(a);
@@ -222,7 +236,7 @@ export function useGame(setup: GameSetup) {
     void (async () => {
       try {
         const spec = setup.seats[cur.state.pending!.player].agent;
-        const seed = hashSeed(setup.seed) ^ (cur.actions.length * 2654435761);
+        const seed = cpuSeed(hashSeed(setup.seed), cur.actions.length);
         const a = await chooseWithWorker({ state: cur.state, spec, seed });
         // 待っている間に状態が変わった(別の操作・再開)なら、古い状態向けの手は捨てる
         if (sessionRef.current.state === cur.state) perform(a);
