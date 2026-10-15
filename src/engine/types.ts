@@ -227,7 +227,7 @@ export interface GameState {
   usage: Record<string, number>;
   pending: Pending | null;
   /** 入力待ちの回答(再実行で消費する) */
-  rans: any[];
+  rans: AnswerValue[];
   rng: number;
   seq: number;
   nextPid: number;

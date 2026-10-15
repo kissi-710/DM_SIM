@@ -63,7 +63,7 @@ export function BatchView() {
   const [results, setResults] = useState<{ label: string; seed: number; s: MatchStats }[] | null>(null);
   const [strength, setStrength] = useState<{ seed: number; rows: CardStrength[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const job = useRef<RunningJob<any> | null>(null);
+  const job = useRef<RunningJob<unknown> | null>(null);
 
   const spec = (k: AgentKind, i: InfoPreset, hypothesisIds: string[] = []): AgentSpec => ({ kind: k, policy: makePolicy(i, { hypotheses: hypothesisIds }), iterations });
 
@@ -109,14 +109,15 @@ export function BatchView() {
       const variants: { label: string; info: InfoPreset }[] = compare
         ? (['fair', 'partial', 'full'] as InfoPreset[]).map((i) => ({ label: `A: ${INFO_PRESET_LABEL[i]}`, info: i }))
         : [{ label: `A(${AGENT_LABEL[kindA]}) vs B(${AGENT_LABEL[kindB]})`, info: infoA }];
-      job.current = runSimJob<MatchStats[]>(
+      const running = runSimJob<MatchStats[]>(
         {
           type: 'batch',
           opts: variants.map((v) => ({ deckA: a, deckB: b, agentA: spec(kindA, v.info, hy.a), agentB: spec(kindB, infoB, hy.b), games, seed, first })),
         },
         (d, t) => setProgress([d, t]),
       );
-      const r: MatchStats[] = await job.current.promise;
+      job.current = running;
+      const r: MatchStats[] = await running.promise;
       setResults(r.map((s, i) => ({ label: variants[i].label, seed, s })));
     } catch (e) {
       setError(errorMessage(e));
@@ -134,11 +135,12 @@ export function BatchView() {
     setStrength(null);
     setProgress([0, 1]);
     try {
-      job.current = runSimJob<CardStrength[]>(
+      const running = runSimJob<CardStrength[]>(
         { type: 'strength', deck: findDeck(deckA).cards, opponent: findDeck(deckB).cards, agent: spec(kindA, infoA, hy.a), games, seed },
         (d, t) => setProgress([d, t]),
       );
-      setStrength({ seed, rows: await job.current.promise });
+      job.current = running;
+      setStrength({ seed, rows: await running.promise });
     } catch (e) {
       setError(errorMessage(e));
     } finally {

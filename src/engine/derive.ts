@@ -1,5 +1,5 @@
 // 派生ビュー: コスト・パワー・文明・能力・攻撃可否など(effects 7)。状態を書き換えない。
-import type { Cond } from './ast';
+import type { Ability, Cond } from './ast';
 import { evalCond, mkCC } from './cond';
 import type { FaceInfo } from './registry';
 import type { Ctx } from './state';
@@ -71,7 +71,7 @@ export function effectsOnPerm(c: Ctx, pid: number): ContEffect[] {
 interface ActiveStatic {
   src: number;
   controller: PlayerId;
-  ability: any;
+  ability: Extract<Ability, { kind: 'static' }>;
 }
 
 /** バトルゾーンの一番上のカードが持つ常在型能力 */
@@ -118,7 +118,7 @@ export function hasKeyword(c: Ctx, perm: Permanent, kw: KwName): boolean {
   const info = infoOf(c, uid);
   if (kw === 'shieldTrigger') {
     if (info.shieldTriggers.length > 0) return true;
-  } else if ((info as any)[kw]) return true;
+  } else if ((info as unknown as Record<string, unknown>)[kw]) return true;
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'grant' && e.mod.keyword === kw) return true;
   return grantedByStatic(c, perm, kw);
 }

@@ -1,7 +1,7 @@
 // 重い調査(確率・パターン・バッチ・カード強さ)の「ジョブ」。実行・分割・統合をまとめる。
 //  - runJob: 1つのジョブをその場で実行する(Worker の中身・テスト・CLI 共通)
 //  - planJob: ジョブを独立な小さなジョブ(チャンク)に分け、結果を統合する merge を返す。
-//    試合・試行はシードが seed + i で独立なので、範囲を分けて実行しても、統合した結果は直列実行と一致する。
+//    試合・試行のシードは、実行のシードと通し番号(startIndex + i)から決まるので、範囲を分けて実行しても、統合した結果は直列実行と一致する。
 import type { AgentSpec } from '../ai';
 import type { Registry } from '../engine/registry';
 import { runMatches, type MatchOpts, type MatchStats } from './batch';
@@ -131,7 +131,7 @@ function planChunks(reg: Pick<Registry, 'defs'>, job: SimJob, parts: number): Jo
     case 'prob': {
       const sizes = splitCounts(job.params.trials, parts);
       const st = starts(sizes);
-      const chunks: SimJob[] = sizes.map((n, i) => ({ type: 'prob', params: { ...job.params, trials: n, seed: job.params.seed + st[i] } }));
+      const chunks: SimJob[] = sizes.map((n, i) => ({ type: 'prob', params: { ...job.params, trials: n, startIndex: (job.params.startIndex ?? 0) + st[i] } }));
       return { chunks, units: sizes, merge: (r, ms) => mergeProb(r as ProbResult[], ms) };
     }
     case 'patterns': {
@@ -139,7 +139,7 @@ function planChunks(reg: Pick<Registry, 'defs'>, job: SimJob, parts: number): Jo
       const st = starts(sizes);
       const chunks: SimJob[] = sizes.map((n, i) => ({
         type: 'patterns',
-        params: { ...job.params, trials: n, seed: job.params.seed + st[i] },
+        params: { ...job.params, trials: n, startIndex: (job.params.startIndex ?? 0) + st[i] },
         opts: job.opts,
       }));
       return { chunks, units: sizes, merge: (r, ms) => mergePatterns(r as PatternResult[], ms) };
@@ -154,9 +154,8 @@ function planChunks(reg: Pick<Registry, 'defs'>, job: SimJob, parts: number): Jo
         const sizes = splitCounts(o.games, per, true);
         const st = starts(sizes);
         sizes.forEach((n, i) => {
-          // 複製対局は、2試合が1つのシード(席の入れ替え)。開始位置は偶数なので、シードの進みは半分
-          const off = o.first === 'duplicate' ? st[i] / 2 : st[i];
-          chunks.push({ type: 'batch', opts: [{ ...o, games: n, seed: o.seed + off }] });
+          // 試合の通し番号の開始位置を渡す(複製対局の席の入れ替え・シードの進みは、バッチ側が通し番号から決める。開始位置は偶数)
+          chunks.push({ type: 'batch', opts: [{ ...o, games: n, startIndex: (o.startIndex ?? 0) + st[i] }] });
           units.push(n);
           owner.push(k);
         });

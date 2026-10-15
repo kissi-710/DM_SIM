@@ -9,9 +9,11 @@ export default defineConfig({
   worker: { format: 'es' },
   build: { target: 'es2022' },
   test: {
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.{ts,tsx}'],
     environment: 'node',
     testTimeout: 60000,
+    // コンポーネントのテスト(tests/**/*.test.tsx)は、ファイル先頭の // @vitest-environment jsdom で DOM を使う
+    setupFiles: ['tests/setup-dom.ts'],
     // npm run test:coverage(カバレッジの計測。結果は coverage/ に出る。git の管理外)
     coverage: {
       provider: 'v8',

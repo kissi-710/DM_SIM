@@ -97,7 +97,7 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
             {mode === 'play' && (
               <label className="row">
                 操作
-                <select value={seats[i].kind} onChange={(e) => setSeat(i, { kind: e.target.value as any })}>
+                <select value={seats[i].kind} onChange={(e) => setSeat(i, { kind: e.target.value as SeatForm['kind'] })}>
                   <option value="human">人間</option>
                   <option value="cpu">CPU</option>
                 </select>

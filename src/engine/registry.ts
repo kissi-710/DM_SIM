@@ -149,8 +149,10 @@ const KNOWN_KEYWORD = new Set([
   'sympathy', 'hyperEnergy', 'yobinion', 'invasion', 'slayer', 'revolutionChange',
 ]);
 
-function checkCond(c: any, where: string, errs: string[]) {
-  if (c == null) return;
+/** 条件(カードデータの JSON)の検査。形がまだ信用できない入力なので、型は緩く受ける */
+function checkCond(input: unknown, where: string, errs: string[]) {
+  if (input == null) return;
+  const c = input as { all?: Cond[]; any?: Cond[]; not?: Cond } & Record<string, unknown>;
   const keys = Object.keys(c).filter((k) => KNOWN_COND.has(k) || !['gte', 'lte', 'eq'].includes(k));
   if (keys.length === 0) errs.push(`${where}: 条件が空です`);
   for (const k of keys) {
@@ -173,7 +175,7 @@ function checkSteps(steps: StepDef[] | undefined, where: string, errs: string[])
       }
       case 'select':
         if (!st.as) errs.push(`${where}: select に as がありません`);
-        if ((st.from as any).where) checkCond((st.from as any).where, where, errs);
+        if ((st.from as { where?: unknown }).where) checkCond((st.from as { where?: unknown }).where, where, errs);
         break;
       case 'may':
         checkSteps(st.then, where, errs);
@@ -198,7 +200,7 @@ function checkSteps(steps: StepDef[] | undefined, where: string, errs: string[])
         if (!KNOWN_CUSTOM.has(st.handler)) errs.push(`${where}: 未対応の custom '${st.handler}'`);
         break;
       default:
-        errs.push(`${where}: 未知のステップ '${(st as any).op}'`);
+        errs.push(`${where}: 未知のステップ '${(st as { op?: unknown }).op}'`);
     }
   }
 }
@@ -237,7 +239,7 @@ export function validateCardDb(db: CardDB): string[] {
           case 'permission':
             break;
           default:
-            errs.push(`${wa}: 未知の能力 kind '${(a as any).kind}'`);
+            errs.push(`${wa}: 未知の能力 kind '${(a as { kind?: unknown }).kind}'`);
         }
       });
     });
@@ -481,7 +483,7 @@ export function loadRegistry(origDb: CardDB): Registry {
         p = [];
         const optional = a.kind === 'trigger' && a.optional && !noOptional;
         if (optional) {
-          const m: Instr = { o: 'may', no: -1, prompt: (a as any).label };
+          const m: Instr = { o: 'may', no: -1, prompt: (a as { label?: string }).label };
           p.push(m);
           compileSteps(abilitySteps(a), p);
           m.no = p.length;

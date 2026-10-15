@@ -33,6 +33,8 @@ export interface AiTuning {
   treeC?: number;
   /** tree: 木の深さの上限 */
   treeDepth?: number;
+  /** 学習した価値関数のファイル(測定用。仕様文字列 value=<path> で指定する) */
+  modelPath?: string;
 }
 
 /** 探索の方式の既定(docs/ai-quality-plan.md §6.4 の結果で決める) */

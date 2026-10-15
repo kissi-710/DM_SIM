@@ -1,5 +1,6 @@
 // 手続きフレーム: ターン進行・プレイ・攻撃・シールドブレイク・チェックポイント・状況起因処理
 // (effects 5, 9, 10)。各ステージは「質問 → 変更」の順で書き、再実行しても二重に変更されない。
+import type { Pattern } from './ast';
 import { evalCond, mkCC } from './cond';
 import {
   breakerCount,
@@ -42,7 +43,7 @@ import type {
 
 // ───────────────────────── フレームの積み方 ─────────────────────────
 
-export function pushProc(c: Ctx, name: ProcName, vars: Record<string, any> = {}): ProcFrame {
+export function pushProc(c: Ctx, name: ProcName, vars: Record<string, unknown> = {}): ProcFrame {
   const f: ProcFrame = { kind: 'proc', id: nextId(c.s), causedBy: c.cause, name, stage: 0, vars };
   c.s.cont.push(f);
   return f;
@@ -725,7 +726,7 @@ export function entryLabel(c: Ctx, e: PoolEntry): string {
   return `${name}: ${lab}`;
 }
 
-function triggerLabel(on: any): string {
+function triggerLabel(on: Pattern | Pattern[]): string {
   const o = Array.isArray(on) ? on[0] : on;
   const m: Record<string, string> = {
     entered: '出た時',

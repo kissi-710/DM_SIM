@@ -33,29 +33,29 @@ const goal: Goal = { op: 'pred', timing: { turn: 6, at: 'byTurn' }, pred: { kind
 describe('ゴールデン(シード固定の結果が変わらない)', () => {
   it('バッチ対戦: ランダム同士 60試合', () => {
     expect(match({ kind: 'random' }, { kind: 'random' }, 60, 1)).toEqual({
-      winsA: 35,
-      winsB: 25,
+      winsA: 31,
+      winsB: 29,
       draws: 0,
-      avgTurns: 24.15,
-      reasons: { ダイレクトアタック: 40, 山札切れ: 20 },
+      avgTurns: 23.266666666666666,
+      reasons: { ダイレクトアタック: 45, 山札切れ: 15 },
     });
   });
   it('バッチ対戦: ルールベース同士 60試合', () => {
     expect(match({ kind: 'rule' }, { kind: 'rule' }, 60, 1)).toEqual({
-      winsA: 49,
-      winsB: 11,
+      winsA: 46,
+      winsB: 14,
       draws: 0,
-      avgTurns: 12.183333333333334,
+      avgTurns: 11.766666666666667,
       reasons: { ダイレクトアタック: 60 },
     });
   });
   // 探索の既定を、根はペア比較・2手目以降は木(ptree。docs/ai-quality-plan.md §6.4)にした時に更新した固定値
   it('バッチ対戦: MCTS(20反復) 対 ルールベース 6試合', () => {
     expect(match({ kind: 'mcts', iterations: 20, ms: 100000 }, { kind: 'rule' }, 6, 1)).toEqual({
-      winsA: 4,
-      winsB: 2,
+      winsA: 5,
+      winsB: 1,
       draws: 0,
-      avgTurns: 13.5,
+      avgTurns: 15,
       reasons: { ダイレクトアタック: 6 },
     });
   });
@@ -70,16 +70,16 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
   it('確率調査: 方針プレイと探索(40試行)', () => {
     const r = runProbability(reg, { deck: A, first: 0, goal, trials: 40, seed: 1, maxNodes: 3000 });
     expect(r.policy.achieved).toBe(13);
-    expect(r.policy.byTurn).toEqual([0, 0, 0, 0.1, 0.175, 0.25, 0.325]);
+    expect(r.policy.byTurn).toEqual([0, 0, 0, 0.075, 0.25, 0.3, 0.325]);
     // 限定食い違い探索 + 目標までの距離の順序づけ(旧: 到達 16 / 不明 24 / 平均 2000 ノード)
-    expect(r.search?.achieved).toBe(35);
-    expect(r.search?.unknown).toBe(5);
-    expect(r.search?.avgNodes).toBe(710.825);
+    expect(r.search?.achieved).toBe(32);
+    expect(r.search?.unknown).toBe(8);
+    expect(r.search?.avgNodes).toBe(864.625);
   });
   it('パターン調査(12試行)', () => {
     const r = runPatterns(reg, { deck: A, first: 0, goal, trials: 12, seed: 1, maxNodes: 3000 }, { granularity: 'set', maxHistoriesPerTrial: 2 });
     // 旧: パターン 6 / 達成 5 / 不明 7
-    expect([r.patterns.length, r.achievedTrials, r.unknownTrials]).toEqual([20, 12, 0]);
-    expect(hash(JSON.stringify(r.patterns.map((x) => [x.key, x.count, x.sampleSeed])))).toBe(1470697928);
+    expect([r.patterns.length, r.achievedTrials, r.unknownTrials]).toEqual([17, 11, 1]);
+    expect(hash(JSON.stringify(r.patterns.map((x) => [x.key, x.count, x.sampleSeed])))).toBe(2396495186);
   });
 });

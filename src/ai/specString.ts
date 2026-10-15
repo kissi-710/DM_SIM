@@ -45,7 +45,7 @@ export function parseSpec(text: string): AgentSpec {
     else throw new Error(`未知の設定キー: ${k}`);
   }
   if (Object.keys(weights).length) tuning.weights = { ...tuning.weights, ...(weights as Partial<RewardWeights>) };
-  if (modelPath) (tuning as any).modelPath = modelPath;
+  if (modelPath) tuning.modelPath = modelPath;
   if (Object.keys(tuning).length) spec.tuning = tuning;
   return spec;
 }
@@ -61,6 +61,6 @@ export function specLabel(spec: AgentSpec): string {
   if (t?.treeC !== undefined) parts.push(`c=${t.treeC}`);
   if (t?.treeDepth !== undefined) parts.push(`depth=${t.treeDepth}`);
   for (const [k, v] of Object.entries(t?.weights ?? {})) if (k !== 'model') parts.push(`w.${k}=${v}`);
-  if ((t as any)?.modelPath) parts.push(`value=${(t as any).modelPath}`);
+  if (t?.modelPath) parts.push(`value=${t.modelPath}`);
   return parts.length ? `${spec.kind}:${parts.join(',')}` : spec.kind;
 }

@@ -9,7 +9,8 @@ export default tseslint.config(
   {
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
+      // any は、カードデータ(JSON)の境界のファイルだけに許す(下の overrides)。それ以外では増やさない
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'no-empty': 'off',
       'prefer-const': 'warn',
@@ -37,5 +38,11 @@ export default tseslint.config(
       }],
       'no-restricted-globals': ['error', 'window', 'document', 'localStorage', 'navigator', 'Worker'],
     },
+  },
+  {
+    // カードデータ(JSON)・イベントなど、形が実行時に決まる境界。ここだけ any を許す(registry.ts が読み込み時に検証する)。
+    // 型を絞るには、原始操作(ActDef)を操作ごとの判別可能な共用体にする必要がある(ISSUES.md ISSUE-14)。
+    files: ['src/engine/ast.ts', 'src/engine/cond.ts', 'src/engine/types.ts', 'src/engine/registry.ts', 'src/engine/vm.ts', 'src/engine/ops.ts', 'src/engine/derive.ts', 'src/engine/legal.ts', 'tests/**/*.ts'],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
   },
 );

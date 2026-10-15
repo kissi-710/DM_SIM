@@ -90,7 +90,7 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
   // 自分への質問で提示されたカードは見える(デドダムの上3枚など)
   const p = state.pending;
   if (p && p.player === player && p.input) {
-    const inp: any = p.input;
+    const inp = p.input;
     // order の candidates は能力のIDなので、カードを指す形式だけを対象にする
     const show: number[] =
       inp.shape === 'pick'
@@ -100,16 +100,15 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
           : inp.shape === 'ack'
             ? inp.shown
             : inp.shape === 'option'
-              ? inp.seen ?? []
+              ? (inp.seen ?? [])
               : [];
     for (const u of show) v.cards[u].defId = state.cards[u].defId;
   }
   // イベントに残る最後の情報(lki)から、隠れたカードが漏れないようにする
   v.turnLog = v.turnLog.map((e) => {
     if (!('lki' in e)) return e;
-    const c = { ...e };
-    delete (c as any).lki;
-    return c;
+    const { lki: _lki, ...rest } = e;
+    return rest as typeof e;
   });
   v.rng = 1;
   if (!policy.knowOpponentDecklist) {

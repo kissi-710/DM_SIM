@@ -78,7 +78,7 @@ function MatcherEditor({ m, onChange }: { m: CardMatcher; onChange: (m: CardMatc
         <label>
           ≦ <input type="number" value={m.cost?.lte ?? ''} onChange={(e) => setCost('lte', e.target.value)} />
         </label>
-        <select value={m.costBasis ?? 'printed'} onChange={(e) => set({ costBasis: e.target.value as any })}>
+        <select value={m.costBasis ?? 'printed'} onChange={(e) => set({ costBasis: e.target.value as NonNullable<CardMatcher['costBasis']> })}>
           <option value="printed">表記コスト</option>
           <option value="effective">実コスト(軽減後)</option>
         </select>
@@ -100,12 +100,12 @@ function MatcherEditor({ m, onChange }: { m: CardMatcher; onChange: (m: CardMatc
             {CIV_NAME[c]}
           </label>
         ))}
-        <select value={m.type ?? ''} onChange={(e) => set({ type: (e.target.value || undefined) as any })}>
+        <select value={m.type ?? ''} onChange={(e) => set({ type: (e.target.value || undefined) as CardMatcher['type'] })}>
           <option value="">種類を問わない</option>
           <option value="creature">クリーチャー</option>
           <option value="spell">呪文</option>
         </select>
-        <select value={m.face ?? ''} onChange={(e) => set({ face: (e.target.value || undefined) as any })}>
+        <select value={m.face ?? ''} onChange={(e) => set({ face: (e.target.value || undefined) as CardMatcher['face'] })}>
           <option value="">ツインパクト: 面を問わない</option>
           <option value="creature">クリーチャー面</option>
           <option value="spell">呪文面</option>
@@ -155,7 +155,7 @@ function LeafEditor({ leaf, onChange, onRemove }: { leaf: Leaf; onChange: (l: Le
           <label>
             枚数 ≧ <input type="number" min={0} value={p.min} onChange={(e) => onChange({ ...leaf, pred: { ...p, min: Number(e.target.value) } })} />
           </label>
-          <select value={p.civ ?? ''} onChange={(e) => onChange({ ...leaf, pred: { ...p, civ: (e.target.value || undefined) as any } })}>
+          <select value={p.civ ?? ''} onChange={(e) => onChange({ ...leaf, pred: { ...p, civ: (e.target.value || undefined) as Civ | undefined } })}>
             <option value="">文明を問わない</option>
             {CIVS.map((c) => (
               <option key={c} value={c}>
@@ -167,7 +167,7 @@ function LeafEditor({ leaf, onChange, onRemove }: { leaf: Leaf; onChange: (l: Le
       )}
       {p.kind === 'zoneHas' && (
         <div className="row">
-          <select value={p.zone} onChange={(e) => onChange({ ...leaf, pred: { ...p, zone: e.target.value as any } })}>
+          <select value={p.zone} onChange={(e) => onChange({ ...leaf, pred: { ...p, zone: e.target.value as Extract<Predicate, { kind: 'zoneHas' }>['zone'] } })}>
             <option value="hand">手札</option>
             <option value="mana">マナゾーン</option>
             <option value="battle">バトルゾーン</option>
@@ -232,7 +232,7 @@ export function GoalBuilder({ goal, onChange }: { goal: Goal; onChange: (g: Goal
       {form.leaves.length > 1 && (
         <label className="row">
           条件の組み合わせ
-          <select value={form.op} onChange={(e) => update({ ...form, op: e.target.value as any })}>
+          <select value={form.op} onChange={(e) => update({ ...form, op: e.target.value as Form['op'] })}>
             <option value="and">すべて満たす(AND)</option>
             <option value="or">どれかを満たす(OR)</option>
           </select>

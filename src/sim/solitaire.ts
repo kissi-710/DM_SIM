@@ -9,6 +9,7 @@ import { hashSeed } from '../engine/state';
 import type { Action, CardDB, Ev, GameState } from '../engine/types';
 import { FAIR, toPlayerView } from '../engine/view';
 import { FAR, goalDistance, goalHasNot, goalMaxTurn, GoalTracker, myTurnNo, nameMatches, type Goal } from './goal';
+import { deriveSeed } from '../engine/prng';
 import { mulberry } from './playGame';
 import { hypergeomAtLeast, wilson } from './stats';
 
@@ -28,6 +29,8 @@ export interface SolitaireParams {
   /** 0 = 先攻 / 1 = 後攻(先攻の1ターン目はドローしない) */
   first: 0 | 1;
   goal: Goal;
+  /** 試行の通し番号の開始位置(範囲を分けて並列に実行する時に、同じ試行が同じシードになるようにする。既定 0) */
+  startIndex?: number;
   /** 調べるターン数の上限(省略時は目標に含まれる最大ターン) */
   maxTurns?: number;
   trials: number;
@@ -244,7 +247,7 @@ function describeAction(reg: Registry, s: GameState, a: Action): HistoryStep | n
     case 'ANSWER': {
       const p = s.pending;
       if (!p || !p.input) return null;
-      const inp: any = p.input;
+      const inp = p.input;
       const src = p.source ? nameOf(p.source.uid) : '';
       let detail: string;
       if (inp.shape === 'yesno') detail = a.value ? 'はい' : 'いいえ';
@@ -253,7 +256,7 @@ function describeAction(reg: Registry, s: GameState, a: Action): HistoryStep | n
       else if (inp.shape === 'assign') {
         const m = a.value as Record<string, number[]>;
         detail = Object.entries(m)
-          .map(([k, v]) => `${inp.slots.find((x: any) => x.id === k)?.label ?? k}:${v.map(nameOf).join(',')}`)
+          .map(([k, v]) => `${inp.slots.find((x) => x.id === k)?.label ?? k}:${v.map(nameOf).join(',')}`)
           .join(' / ');
       } else return null;
       return { turn: mt, kind: 'choice', name: src, detail };
@@ -393,11 +396,11 @@ export function exactDrawProbability(reg: Registry, p: Pick<SolitaireParams, 'de
   const m = g.pred.card;
   const K = p.deck.filter((id) => {
     const def = reg.defs[id];
-    const c: any = m;
-    if (c.names?.length && !c.names.some((n: string) => def.faces.some((f) => nameMatches(def, f.name, n)))) return false;
+    const c = m;
+    if (c.names?.length && !c.names.some((n) => def.faces.some((f) => nameMatches(def, f.name, n)))) return false;
     const f = def.faces[0];
     if (c.type && (c.type === 'creature') !== (f.type !== 'spell')) return false;
-    if (c.civs?.length && !c.civs.some((x: string) => (f.civs as string[]).includes(x))) return false;
+    if (c.civs?.length && !c.civs.some((x) => f.civs.includes(x))) return false;
     if (c.cost) {
       if (c.cost.eq !== undefined && f.cost !== c.cost.eq) return false;
       if (c.cost.gte !== undefined && f.cost < c.cost.gte) return false;
@@ -435,7 +438,7 @@ export function runProbability(
   const doSearch = (p.maxNodes ?? 0) > 0;
   for (let i = 0; i < p.trials; i++) {
     if (hooks.shouldCancel?.()) break;
-    const seed = p.seed + i;
+    const seed = deriveSeed(p.seed, (p.startIndex ?? 0) + i);
     const run = runPolicyTrial(reg, p, seed);
     if (run.achievedTurn !== null) {
       achieved++;
@@ -562,7 +565,7 @@ export function runPatterns(
   let done = 0;
   for (let i = 0; i < p.trials; i++) {
     if (hooks.shouldCancel?.()) break;
-    const seed = p.seed + i;
+    const seed = deriveSeed(p.seed, (p.startIndex ?? 0) + i);
     const sr = searchTrial(reg, { ...p, maxNodes: p.maxNodes ?? 4000 }, seed, per);
     if (sr.found) achieved++;
     else if (sr.unknown) unknown++;

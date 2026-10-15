@@ -25,7 +25,9 @@ type Mode = 'prob' | 'patterns';
 
 export function SimView() {
   const decks = allDecks();
-  const saved = loadJson<any>('dmsim.sim', {});
+  /** 前回の入力(localStorage)。項目は増減しうるので、すべて任意として読む */
+  type Saved = Partial<{ deckId: string; first: 0 | 1; goal: Goal; trials: number; seed: number; maxNodes: number; agent: 'rule' | 'random'; must: string; exclude: string; topFixed: string }>;
+  const saved = loadJson<Saved>('dmsim.sim', {});
   const [deckId, setDeckId] = useState<string>(saved.deckId ?? 'maruru');
   const [first, setFirst] = useState<0 | 1>(saved.first ?? 0);
   const [goal, setGoal] = useState<Goal>(saved.goal ?? GOAL_PRESETS[0].goal);
@@ -47,7 +49,7 @@ export function SimView() {
   const [filterIn, setFilterIn] = useState('');
   const [filterOut, setFilterOut] = useState('');
   const [filterHand, setFilterHand] = useState('');
-  const job = useRef<RunningJob<any> | null>(null);
+  const job = useRef<RunningJob<unknown> | null>(null);
 
   const list = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
   const params = (): SolitaireParams => ({
@@ -74,13 +76,15 @@ export function SimView() {
       const problems = initialProblems(reg, p.deck, p.initial);
       if (problems.length) throw new Error('初期条件を確認してください: ' + problems.join(' / '));
       if (mode === 'prob') {
-        job.current = runSimJob<ProbResult>({ type: 'prob', params: p }, (d, t) => setProgress([d, t]));
-        setProb(await job.current.promise);
+        const running = runSimJob<ProbResult>({ type: 'prob', params: p }, (d, t) => setProgress([d, t]));
+        job.current = running;
+        setProb(await running.promise);
       } else {
-        job.current = runSimJob<PatternResult>({ type: 'patterns', params: p, opts: { granularity: gran, maxHistoriesPerTrial: 24 } }, (d, t) =>
+        const running = runSimJob<PatternResult>({ type: 'patterns', params: p, opts: { granularity: gran, maxHistoriesPerTrial: 24 } }, (d, t) =>
           setProgress([d, t]),
         );
-        setPats(await job.current.promise);
+        job.current = running;
+        setPats(await running.promise);
       }
     } catch (e) {
       setError(errorMessage(e));
@@ -189,7 +193,7 @@ export function SimView() {
             {mode === 'prob' && (
               <label className="row">
                 方針プレイのAI
-                <select value={agent} onChange={(e) => setAgent(e.target.value as any)}>
+                <select value={agent} onChange={(e) => setAgent(e.target.value as 'rule' | 'random')}>
                   <option value="rule">ルールベース(現実的な打ち方)</option>
                   <option value="random">ランダム</option>
                 </select>
