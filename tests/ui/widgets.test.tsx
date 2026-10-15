@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // 入力ウィジェット7種・ErrorBoundary のコンポーネントテスト(Testing Library)
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deckCards } from '../../src/cards';
@@ -79,7 +79,7 @@ describe('InputWidget: yesno / ack / order', () => {
   });
   it('同時に誘発した能力は、選んだものの ID を返す', async () => {
     const { onAnswer, user } = setup({ shape: 'order', candidates: [11, 12], labels: ['出た時: ドロー', '出た時: ブースト'] });
-    await user.click(screen.getByRole('button', { name: /2\. 出た時: ブースト/ }));
+    await user.click(screen.getByRole('button', { name: /^出た時: ブースト/ }));
     expect(onAnswer).toHaveBeenCalledWith(12);
   });
 });
@@ -89,8 +89,8 @@ describe('InputWidget: option', () => {
     const { onAnswer, user } = setup({ shape: 'option', options: ['ドローする', 'ブーストする', '破壊する'], pick: 2, repeat: false, allIf: false });
     const confirm = screen.getByRole('button', { name: '確定' });
     expect(confirm).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: /3\. 破壊する/ }));
-    await user.click(screen.getByRole('button', { name: /1\. ドローする/ }));
+    await user.click(screen.getByRole('button', { name: /^破壊する/ }));
+    await user.click(screen.getByRole('button', { name: /^ドローする/ }));
     await user.click(confirm);
     expect(onAnswer).toHaveBeenCalledWith([2, 0]);
   });
@@ -101,10 +101,10 @@ describe('InputWidget: option', () => {
   });
   it('同じものを何度でも選べる設定では、回数が増える', async () => {
     const { onAnswer, user } = setup({ shape: 'option', options: ['A', 'B'], pick: 3, repeat: true, allIf: false });
-    const b = screen.getByRole('button', { name: /2\. B/ });
+    const b = screen.getByRole('button', { name: /^B/ });
     await user.click(b);
     await user.click(b);
-    await user.click(screen.getByRole('button', { name: /1\. A/ }));
+    await user.click(screen.getByRole('button', { name: /^A/ }));
     await user.click(screen.getByRole('button', { name: '確定' }));
     expect(onAnswer).toHaveBeenCalledWith([1, 1, 0]);
   });
@@ -187,5 +187,60 @@ describe('ErrorBoundary', () => {
     );
     expect(screen.getByText('正常な画面')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('InputWidget: キーボード操作の部品', () => {
+  it('0〜1枚を選ぶ質問(ブロックなど)は、カードをクリックした時点で回答する。「選ばない」はキー N', async () => {
+    const s0 = game();
+    const [a, b] = s0.players[0].hand;
+    const { onAnswer, user } = setup({ shape: 'pick', candidates: [a, b], min: 0, max: 1 });
+    expect(screen.getByRole('button', { name: /選ばない/ })).toHaveAttribute('data-key', 'n');
+    await user.click(screen.getAllByRole('button').filter((x) => x.classList.contains('card'))[1]);
+    expect(onAnswer).toHaveBeenCalledWith([b]);
+  });
+  it('候補のカードには、数字キーの番号が出る', () => {
+    const s0 = game();
+    const [a, b, c] = s0.players[0].hand;
+    setup({ shape: 'pick', candidates: [a, b, c], min: 1, max: 2 });
+    expect([...document.querySelectorAll('.num-badge')].map((x) => x.textContent)).toEqual(['1', '2', '3']);
+  });
+  it('複数枚を選ぶ質問は、選んだあとで「選び直す」(R)ができる', async () => {
+    const s0 = game();
+    const [a, b] = s0.players[0].hand;
+    const { user } = setup({ shape: 'pick', candidates: [a, b], min: 1, max: 2 });
+    expect(screen.queryByRole('button', { name: /選び直す/ })).toBeNull();
+    await user.click(screen.getAllByRole('button').filter((x) => x.classList.contains('card'))[0]);
+    const redo = screen.getByRole('button', { name: /選び直す/ });
+    expect(redo).toHaveAttribute('data-key', 'r');
+    await user.click(redo);
+    expect(screen.getByRole('button', { name: '確定' })).toBeDisabled();
+  });
+  it('はい・いいえは Y / N のキーを持つ(Esc の「いいえ」は N のボタンを押す)', () => {
+    setup({ shape: 'yesno' });
+    expect(screen.getByRole('button', { name: 'はい' })).toHaveAttribute('data-key', 'y');
+    expect(screen.getByRole('button', { name: 'いいえ' })).toHaveAttribute('data-key', 'n');
+  });
+  it('割り振り: 札は数字キー(click の detail が 0)で選び、枠は Q W E で入れられる', async () => {
+    const s0 = game();
+    const [a, b] = s0.players[0].hand;
+    const { onAnswer, user } = setup({
+      shape: 'assign',
+      items: [a, b],
+      slots: [
+        { id: 'x', to: 'hand', label: 'X', count: 1 },
+        { id: 'y', to: 'grave', label: 'Y', count: 1 },
+      ],
+    });
+    const slots = [...document.querySelectorAll<HTMLElement>('.slot')];
+    expect(slots.map((x) => x.getAttribute('data-key'))).toEqual(['q', 'w']);
+    const items = () => [...document.querySelectorAll<HTMLElement>('.cards.items .card')];
+    // キーボードの番号キーは el.click()(detail 0)で届く
+    fireEvent.click(items()[0]);
+    fireEvent.click(slots[0]);
+    fireEvent.click(items()[0]);
+    fireEvent.click(slots[1]);
+    await user.click(screen.getByRole('button', { name: '確定' }));
+    expect(onAnswer).toHaveBeenCalledWith({ x: [a], y: [b] });
   });
 });

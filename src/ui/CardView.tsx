@@ -1,5 +1,5 @@
 // カード1枚の表示(テキストのみ。image があれば表示する)。
-import type { CSSProperties, PointerEvent, ReactNode } from 'react';
+import type { CSSProperties, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { charsOf, hasKeyword, powerOf } from '../engine/derive';
 import { mkCtx, permByPid } from '../engine/state';
 import type { GameState } from '../engine/types';
@@ -24,7 +24,9 @@ export interface CardProps {
   /** 直近のイベントで動いたカード(強調表示) */
   flash?: boolean;
   badge?: ReactNode;
-  onClick?: () => void;
+  /** 数字キーで選べる番号(1〜9)。画面に出して、キーボードで選べることを示す */
+  num?: number;
+  onClick?: (e: MouseEvent) => void;
   onPointerDown?: (e: PointerEvent) => void;
   onHover?: (uid: number | null) => void;
   dragKey?: string;
@@ -67,12 +69,17 @@ export function CardView(p: CardProps) {
     'aria-pressed': p.selected ? true : undefined,
     'aria-label': undefined as string | undefined,
   };
+  const num = p.num !== undefined && p.num >= 1 && p.num <= 9 ? (
+    <span className="num-badge" aria-hidden="true">
+      {p.num}
+    </span>
+  ) : null;
   if (p.hidden || !card || card.defId === '?') {
     cls.push('back');
     handlers['aria-label'] = '裏向きのカード';
     return (
       <div className={cls.join(' ')} {...handlers}>
-        ?
+        ?{num}
       </div>
     );
   }
@@ -126,6 +133,7 @@ export function CardView(p: CardProps) {
         <span>{def.faces.length > 1 && !inPlay ? 'ツイン' : ''}</span>
       </div>
       {p.badge ? <span className="badge">{p.badge}</span> : null}
+      {num}
     </div>
   );
 }

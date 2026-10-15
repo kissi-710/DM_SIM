@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import type { AnswerValue, GameState, InputSpec, Pending } from '../engine/types';
 import { CardView } from './CardView';
 import { cardName } from './format';
+import { Kbd } from './Kbd';
+import { SLOT_KEYS } from './keymap';
 import { useDrag } from './useDrag';
 
 interface Props {
@@ -39,7 +41,8 @@ export function InputWidget(p: Props) {
 // ── pick: 候補を強調して選ぶ ──
 export function PickWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extract<InputSpec, { shape: 'pick' }> }) {
   const [sel, setSel] = useState<number[]>([]);
-  const instant = spec.min === 1 && spec.max === 1;
+  // 1枚だけ選ぶ時(0枚も選べる「ブロックしますか?」などを含む)は、クリックした時点で回答する
+  const instant = spec.min <= 1 && spec.max === 1;
   const toggle = (u: number) => {
     if (instant) return onAnswer([u]);
     setSel((cur) => (cur.includes(u) ? cur.filter((x) => x !== u) : cur.length < spec.max ? [...cur, u] : cur));
@@ -48,7 +51,7 @@ export function PickWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extra
   return (
     <>
       <div className="cards">
-        {spec.candidates.map((u) => (
+        {spec.candidates.map((u, i) => (
           <CardView
             key={u}
             s={s}
@@ -57,26 +60,35 @@ export function PickWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extra
             selectable
             selected={sel.includes(u)}
             hidden={s.cards[u].defId === '?'}
+            num={i + 1}
             onClick={() => toggle(u)}
             onHover={onHover}
           />
         ))}
       </div>
-      {!instant && (
-        <div className="row">
-          <span className="muted">
-            {spec.min === spec.max ? `${spec.min}枚` : `${spec.min}〜${spec.max}枚`}を選ぶ({sel.length}枚選択中)
-          </span>
-          <button className="primary" disabled={!ok} onClick={() => onAnswer(sel)}>
-            確定
-          </button>
-          {spec.min === 0 && (
-            <button data-key="n" onClick={() => onAnswer([])}>
-              選ばない <span className="kbd">N</span>
+      <div className="row">
+        {!instant && (
+          <>
+            <span className="muted">
+              {spec.min === spec.max ? `${spec.min}枚` : `${spec.min}〜${spec.max}枚`}を選ぶ({sel.length}枚選択中)
+            </span>
+            <button className="primary" disabled={!ok} onClick={() => onAnswer(sel)}>
+              確定 <Kbd k="Enter" />
             </button>
-          )}
-        </div>
-      )}
+            {sel.length > 0 && (
+              <button data-key="r" onClick={() => setSel([])}>
+                選び直す <Kbd k="r" />
+              </button>
+            )}
+          </>
+        )}
+        {instant && <span className="muted">カードをクリック(または番号キー)で選びます</span>}
+        {spec.min === 0 && (
+          <button data-key="n" onClick={() => onAnswer([])}>
+            選ばない <Kbd k="n" />
+          </button>
+        )}
+      </div>
     </>
   );
 }
@@ -110,10 +122,10 @@ export function AssignWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
     setAsg((cur) => Object.fromEntries(Object.entries(cur).map(([k, v]) => [k, v.filter((x) => x !== u)])) as Record<string, number[]>);
   return (
     <>
-      <div className="cards">
+      <div className="cards items">
         {spec.items
           .filter((u) => !placed.has(u))
-          .map((u) => (
+          .map((u, i) => (
             <CardView
               key={u}
               s={s}
@@ -122,6 +134,11 @@ export function AssignWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
               selectable
               selected={picked === u}
               draggable
+              num={i + 1}
+              // マウス・タッチの選択は useDrag が扱う。キーボードの番号キーからの click(detail が 0)だけをここで扱う
+              onClick={(e) => {
+                if (e.detail === 0) setPicked((cur) => (cur === u ? null : u));
+              }}
               onPointerDown={begin(`item:${u}`)}
               onHover={onHover}
             />
@@ -129,16 +146,17 @@ export function AssignWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
         {spec.items.every((u) => placed.has(u)) && <span className="muted">すべて割り振りました</span>}
       </div>
       <div className="slots">
-        {spec.slots.map((sl) => (
+        {spec.slots.map((sl, si) => (
           <div
             key={sl.id}
             className={'slot' + (asg[sl.id].length >= sl.count ? ' full' : '') + (drag ? ' drop-ok' : '')}
             data-drop={`slot:${sl.id}`}
+            data-key={SLOT_KEYS[si]}
             onClick={() => picked !== null && place(picked, sl.id)}
             style={{ cursor: picked !== null ? 'pointer' : undefined }}
           >
             <div className="muted">
-              {sl.label}({asg[sl.id].length}/{sl.count})
+              {SLOT_KEYS[si] && <Kbd k={SLOT_KEYS[si]} />} {sl.label}({asg[sl.id].length}/{sl.count})
             </div>
             <div className="cards">
               {asg[sl.id].map((u) => (
@@ -154,10 +172,21 @@ export function AssignWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
         </div>
       )}
       <div className="row">
-        <span className="muted">札をクリックして枠をクリック(またはドラッグ)。{need}枚を割り振ります。</span>
+        <span className="muted">札(数字キー)を選んで、枠(Q・W・E)に入れます。クリックやドラッグでも。{need}枚を割り振ります。</span>
         <button className="primary" disabled={placed.size !== need} onClick={() => onAnswer(asg)}>
-          確定
+          確定 <Kbd k="Enter" />
         </button>
+        {placed.size > 0 && (
+          <button
+            data-key="r"
+            onClick={() => {
+              setAsg(Object.fromEntries(spec.slots.map((x) => [x.id, []])));
+              setPicked(null);
+            }}
+          >
+            やり直す <Kbd k="r" />
+          </button>
+        )}
         <button
           data-key="a"
           onClick={() => {
@@ -168,7 +197,7 @@ export function AssignWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
             setAsg(out);
           }}
         >
-          自動で振る <span className="kbd">A</span>
+          自動で振る <Kbd k="a" />
         </button>
       </div>
     </>
@@ -207,7 +236,7 @@ export function OptionWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
         {spec.options.map((label, i) => (
           <div key={i} className="row">
             <button className={'choice' + (counts.get(i) ? ' on' : '')} onClick={() => add(i)}>
-              {i + 1}. {label}
+              {i < 9 && <Kbd k={String(i + 1)} />} {label}
               {counts.get(i) ? ` ×${counts.get(i)}` : ''}
             </button>
             {spec.repeat && counts.get(i) ? (
@@ -223,16 +252,16 @@ export function OptionWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
           {spec.pick}回選ぶ{spec.repeat ? '(同じものを何度でも)' : ''}。上に書かれたものから順に処理されます({sel.length}/{spec.pick})
         </span>
         <button className="primary" disabled={sel.length !== spec.pick} onClick={() => onAnswer(sel)}>
-          確定
+          確定 <Kbd k="Enter" />
         </button>
         {spec.allIf && (
           <button data-key="a" onClick={() => onAnswer(spec.options.map((_, i) => i))}>
-            すべて1回ずつ使う <span className="kbd">A</span>
+            すべて1回ずつ使う <Kbd k="a" />
           </button>
         )}
         {sel.length > 0 && (
           <button data-key="r" onClick={() => setSel([])}>
-            やり直す <span className="kbd">R</span>
+            やり直す <Kbd k="r" />
           </button>
         )}
       </div>
@@ -244,10 +273,12 @@ export function OptionWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
 export function YesNoWidget({ onAnswer }: { onAnswer: (v: AnswerValue) => void }) {
   return (
     <div className="row">
-      <button className="primary" onClick={() => onAnswer(true)}>
-        はい
+      <button className="primary" data-key="y" onClick={() => onAnswer(true)}>
+        はい <Kbd k="y" />
       </button>
-      <button onClick={() => onAnswer(false)}>いいえ</button>
+      <button data-key="n" onClick={() => onAnswer(false)}>
+        いいえ <Kbd k="n" />
+      </button>
     </div>
   );
 }
@@ -258,7 +289,7 @@ export function OrderWidget({ spec, onAnswer }: { spec: Extract<InputSpec, { sha
     <div className="col">
       {spec.candidates.map((id, i) => (
         <button key={id} className="choice" onClick={() => onAnswer(id)}>
-          {i + 1}. {spec.labels[i]}
+          {i < 9 && <Kbd k={String(i + 1)} />} {spec.labels[i]}
         </button>
       ))}
       <span className="muted">同時に誘発した能力は、好きな順に解決できます。</span>
@@ -272,7 +303,7 @@ export function PaymentWidget({ s, spec, onAnswer, onHover, initial }: Props & {
   return (
     <>
       <div className="cards">
-        {spec.mana.map((u) => (
+        {spec.mana.map((u, i) => (
           <CardView
             key={u}
             s={s}
@@ -280,6 +311,7 @@ export function PaymentWidget({ s, spec, onAnswer, onHover, initial }: Props & {
             small
             selectable
             selected={sel.includes(u)}
+            num={i + 1}
             onClick={() => setSel((c) => (c.includes(u) ? c.filter((x) => x !== u) : c.length < spec.need ? [...c, u] : c))}
             onHover={onHover}
           />
@@ -290,7 +322,7 @@ export function PaymentWidget({ s, spec, onAnswer, onHover, initial }: Props & {
           タップするマナを{spec.need}枚選ぶ({sel.length}/{spec.need})
         </span>
         <button className="primary" disabled={sel.length !== spec.need} onClick={() => onAnswer(sel)}>
-          確定
+          確定 <Kbd k="Enter" />
         </button>
       </div>
     </>
@@ -308,7 +340,7 @@ export function AckWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extrac
       </div>
       <div className="row">
         <button className="primary" onClick={() => onAnswer(true)}>
-          確認した
+          確認した <Kbd k="Enter" />
         </button>
       </div>
     </>

@@ -861,6 +861,23 @@ button.icon {
   border-radius: 4px;
   padding: 0 3px;
 }
+.card .num-badge {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--accent2);
+  border-radius: 8px;
+  z-index: 2;
+  pointer-events: none;
+}
 .card.ex::after {
   content: 'EX';
   position: absolute;

@@ -1,10 +1,11 @@
 // 盤面。ドラッグ(手札→マナ/バトルゾーン、クリーチャー→相手/シールド)と、
 // すべてのクリック代替(札をクリック → 強調された行き先/ボタンをクリック)を提供する。
 // ルール判定はせず、legalActions から作る「ドロップ先マップ」だけを使う(effects 11.3)。
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { expandSameNameActions } from '../engine/legal';
 import { CardView } from './CardView';
 import { cardName, reg } from './format';
+import { Kbd } from './Kbd';
 import { useDrag } from './useDrag';
 import type { Action, GameState, PlayerId } from '../engine/types';
 
@@ -82,6 +83,8 @@ interface BoardProps {
   onSelect: (key: string | null) => void;
   /** 直近のイベントで動いたカード(強調表示) */
   flash?: Set<number>;
+  /** キーボードからの一覧の表示要求(n が変わるたびに開く) */
+  listReq?: { p: PlayerId; zone: 'mana' | 'grave' | 'shield'; n: number } | null;
 }
 
 export function Board(b: BoardProps) {
@@ -99,6 +102,10 @@ export function Board(b: BoardProps) {
   // 一覧パネル(墓地・マナ・シールドの全体を見る。ダブルクリックでも開く)
   const [listOf, setListOf] = useState<{ p: PlayerId; zone: 'mana' | 'grave' | 'shield' } | null>(null);
   const openList = (p: PlayerId, zone: 'mana' | 'grave' | 'shield') => setListOf({ p, zone });
+  const reqN = b.listReq?.n;
+  useEffect(() => {
+    if (b.listReq) setListOf({ p: b.listReq.p, zone: b.listReq.zone });
+  }, [reqN]);
 
   const dropsFor = (src: string | null) => (src ? dropMap.get(src) ?? [] : []);
   const activeKey = b.selected;
@@ -351,10 +358,12 @@ export function Board(b: BoardProps) {
                     act(d);
                   }}
                 >
-                  {d.label}
+                  {i < 9 && <Kbd k={String(i + 1)} />} {d.label}
                 </button>
               ))}
-              <button onClick={() => setChooser(null)}>キャンセル</button>
+              <button data-key="c" onClick={() => setChooser(null)}>
+                キャンセル <Kbd k="c" />
+              </button>
             </div>
           </div>
         </div>
@@ -367,14 +376,19 @@ export function Board(b: BoardProps) {
               {s.players[listOf.p][listOf.zone].length}枚)
             </h2>
             <div className="cards">
-              {(listOf.zone === 'grave' ? s.players[listOf.p].grave.slice().reverse() : s.players[listOf.p][listOf.zone]).map((u) => {
+              {(() => {
+                // 選べるカードに、数字キーの番号を振る(上から・左から数えた順)
+                let n = 0;
+                return (listOf.zone === 'grave' ? s.players[listOf.p].grave.slice().reverse() : s.players[listOf.p][listOf.zone]).map((u) => {
                 const key = `${listOf.zone}:${u}`;
                 const can = listOf.p === viewer && interactive && dropMap.has(key);
+                if (can) n++;
                 return (
                   <CardView
                     key={u}
                     s={s}
                     uid={u}
+                    num={can ? n : undefined}
                     tapped={false}
                     hidden={listOf.zone === 'shield' && !(listOf.p === viewer && b.peek)}
                     badge={listOf.zone === 'mana' && s.cards[u].tapped ? 'タップ' : undefined}
@@ -390,10 +404,13 @@ export function Board(b: BoardProps) {
                     onHover={b.onHover}
                   />
                 );
-              })}
+                });
+              })()}
             </div>
             <div className="row" style={{ marginTop: 8 }}>
-              <button onClick={() => setListOf(null)}>閉じる</button>
+              <button className="primary" onClick={() => setListOf(null)}>
+                閉じる <Kbd k="Escape" />
+              </button>
             </div>
           </div>
         </div>

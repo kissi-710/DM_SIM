@@ -7,6 +7,8 @@ import type { Action, GameState, PlayerId } from '../engine/types';
 import { Board, buildDropMap, selectedActions } from './Board';
 import { CardView, civGradient } from './CardView';
 import { buildLogTree, cardName, CIV_NAME, recentFeed, reg, type LogNode } from './format';
+import { Kbd } from './Kbd';
+import { digitOf, KEY, keyToken, SHORTCUTS } from './keymap';
 import { InputWidget, PaymentWidget } from './Widgets';
 import { parseRecord, saveRecord } from './record';
 import { makeRecord, type GameSetup, type Session, useGame } from './useGame';
@@ -151,30 +153,13 @@ export function LogPanel({ s, log, me }: { s: GameState; log: Session['log']; me
   );
 }
 
-/** [場面, キー, 内容]。同じキーでも場面で意味が変わるので、場面ごとに分けて見せる */
-const SHORTCUTS: Array<[string, string, string]> = [
-  ['盤面', '← →', '自分の動かせるカードを順に選ぶ'],
-  ['盤面', '1 〜 9', '選んだカードの操作を、上から N 番目で実行'],
-  ['盤面', 'Enter', '操作が1つならそれを実行'],
-  ['盤面', 'M', 'マナチャージしない / メインを終える'],
-  ['盤面', 'E', 'ターン終了(出せるカードが残っていれば、もう一度押す)'],
-  ['盤面', 'Z', '1手戻す(練習用設定のとき)'],
-  ['入力パネル', 'Y / N', 'はい / いいえ'],
-  ['入力パネル', '1 〜 9', '選択肢・候補カードの上から N 番目を選ぶ'],
-  ['入力パネル', 'Enter', '「確定」「はい」'],
-  ['ダイアログ', 'A / N / R / C', '自動で払う・振る / 選ばない / やり直す / キャンセル'],
-  ['ダイアログ', 'Esc', '閉じる'],
-  ['観戦', 'Space', '一時停止 / 再開'],
-  ['観戦', 'N または →', '一時停止中に1手進める'],
-  ['結果', 'R', '「もう一度」'],
-  ['どこでも', 'L / O', 'ログ・詳細の表示切替 / 表示設定'],
-  ['どこでも', '? / H', 'このヘルプ'],
-];
+/** 質問が出てからこの間は、肯定のキー(Enter・Space・Y)を受け付けない(前の Enter の持ち越しで「はい」にならないように) */
+const ASK_GUARD_MS = 250;
 
 const TIPS = [
   'カードをクリックすると、できる操作が右下のパネルに出ます。ドラッグしても同じ操作ができます。',
-  '← → キーで手札やクリーチャーを順に選べます。数字キーで操作パネルの上から選べます。',
-  '「E」キーでターン終了、「M」キーでマナチャージを飛ばす・メインを終える。',
+  '← → ↑ ↓ キーで手札やクリーチャーを選べます。数字キーで操作パネルの上から選べます。',
+  '「E」キーでターン終了、「M」キーでマナチャージを飛ばす・メインを終える。質問には Enter(はい・確定)と Esc(いいえ・選ばない)で答えられます。',
   'カードにマウスを乗せると、右の「ログ・詳細」に現在のコストやパワーが出ます。',
   '手札やマナが増えたら、横にスクロールできます(トラックパッドや Shift+ホイール)。',
   'マナの払い方に選択があるときだけ、タップするマナを聞かれます。「⚙ 表示」で常に自動にもできます。',
@@ -184,7 +169,7 @@ const TIPS = [
 
 /** 観戦中に出す Tips(操作のヒントは出さない) */
 const WATCH_TIPS = [
-  'Space で一時停止、一時停止中は N または → で1手ずつ進められます。',
+  'Space で一時停止、一時停止中は → で1手ずつ進められます。',
   '「速度」のスライダーで、CPU の手の間隔を変えられます。',
   '「⚙ 表示」から、相手の手札の表示を切り替えられます。',
   'ログの「自動」「手動」タグで、効果の自動解決と、プレイヤーの操作を見分けられます。',
@@ -225,7 +210,7 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
         </div>
         <div className="row" style={{ marginTop: 8 }}>
           <button className="primary" onClick={onClose}>
-            閉じる(Esc)
+            閉じる <Kbd k="Escape" />
           </button>
         </div>
       </div>
@@ -322,20 +307,46 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const cpuOnly = setup.seats.every((x) => x.kind === 'cpu');
   const showHuman = humanTurn && pend!.why !== 'turnAction';
 
-  // ── ショートカットキー ──
-  // 選べるカードの並び(←→で順に選ぶ)
-  const cycleKeys = useMemo(() => {
-    if (!interactive) return [] as string[];
+  // ── ショートカットキー ──(キーの意味と割り当ては keymap.ts)
+  // 選べるカードの並び。列ごとに持つ(画面の上から: バトル・マナ・墓地・手札)。← → は列の中、↑ ↓ は列の移動
+  const cycleRows = useMemo(() => {
+    if (!interactive) return [] as string[][];
     const dm = buildDropMap(s, legal);
     const p = s.players[viewer];
-    const keys = [
-      ...p.hand.map((u) => `hand:${u}`),
-      ...p.mana.map((u) => `mana:${u}`),
-      ...p.battle.map((x) => `pile:${x.pid}`),
-      ...p.grave.map((u) => `grave:${u}`),
-    ];
-    return keys.filter((k) => dm.has(k));
+    return [
+      p.battle.map((x) => `pile:${x.pid}`),
+      p.mana.map((u) => `mana:${u}`),
+      p.grave.map((u) => `grave:${u}`),
+      p.hand.map((u) => `hand:${u}`),
+    ]
+      .map((row) => row.filter((k) => dm.has(k)))
+      .filter((row) => row.length > 0);
   }, [interactive, s, legal, viewer]);
+
+  // 前の質問に答えた Enter が次の質問に持ち越されて、意図せず「はい」にならないよう、質問が出た直後の肯定キーは受け付けない
+  const askedAt = useRef(0);
+  useEffect(() => {
+    askedAt.current = Date.now();
+  }, [pend?.id]);
+
+  // マナステップから E を押した時: マナチャージを飛ばしてメインに入ったら、続けてターンを終える
+  const endAfterSkip = useRef(false);
+  useEffect(() => {
+    if (!endAfterSkip.current) return;
+    endAfterSkip.current = false;
+    if (interactive && stepActs.endTurn) g.perform(stepActs.endTurn);
+  }, [pend?.id]);
+
+  // Q キー(メニューへ戻る)は、もう一度押して確定する(押し間違いで対戦を離れないように)
+  const [confirmQuit, setConfirmQuit] = useState(false);
+  useEffect(() => {
+    if (!confirmQuit) return;
+    const t = setTimeout(() => setConfirmQuit(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirmQuit]);
+
+  // 一覧(墓地・マナ・シールド)のキーボードからの表示要求
+  const [listReq, setListReq] = useState<{ p: PlayerId; zone: 'mana' | 'grave' | 'shield'; n: number } | null>(null);
 
   useEffect(() => {
     const clickNth = (sel: string, n: number) => {
@@ -346,67 +357,108 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = keyToken(e);
+      if (k === null) return;
+      const arrow = k.startsWith('Arrow');
+      // 押しっぱなし(キーリピート)は無視する。確認つきの操作(ターン終了)や、次の質問への「はい」が連続して通らないように。矢印だけは続けて動かせる
+      if (e.repeat && !arrow) return;
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || (t.tagName === 'INPUT' && !['checkbox', 'range'].includes((t as HTMLInputElement).type)))) return;
-      const k = e.key;
-      const digit = /^[1-9]$/.test(k) ? Number(k) - 1 : -1;
+      const tag = t?.tagName;
+      const inType = tag === 'INPUT' ? (t as HTMLInputElement).type : '';
+      const back = document.querySelector<HTMLElement>('.modal-back');
+      // 入力欄の中ではショートカットを使わない(ダイアログを閉じる Esc だけは通す)
+      if ((tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'INPUT' && inType !== 'checkbox' && inType !== 'range')) && !(k === 'Escape' && back)) return;
+      // スライダー・チェックボックスの操作(矢印・Space)は、その部品に任せる
+      if ((inType === 'range' || inType === 'checkbox') && (arrow || k === ' ')) return;
+      const digit = digitOf(k);
       const done = () => e.preventDefault();
 
       // 盤面のダイアログ(行き先の選択・マナの支払い・一覧・棋譜・ヘルプ)が開いているとき
-      const back = document.querySelector<HTMLElement>('.modal-back');
       if (back) {
         if (k === 'Escape') {
           back.click();
           return done();
         }
-        if (/^[a-z]$/i.test(k) && clickNth(`.modal-back [data-key="${k.toLowerCase()}"]`, 0)) return done();
-        if (digit >= 0 && clickNth('.modal-back .choice', digit)) return done();
-        if (k === 'Enter' && clickNth('.modal-back button.primary', 0)) return done();
+        if (/^[a-z]$/.test(k) && clickNth(`.modal-back [data-key="${k}"]`, 0)) return done();
+        if (digit >= 0 && clickNth('.modal-back .choice, .modal-back .card.selectable', digit)) return done();
+        if ((k === 'Enter' || k === ' ') && clickNth('.modal-back button.primary', 0)) return done();
         return;
       }
+      // Esc: 開いているものを閉じる → 選択を外す → 質問に「いいえ・選ばない・やり直す」と答える
       if (k === 'Escape') {
-        if (menuOpen) setMenuOpen(false);
-        else if (selected) setSelected(null);
-        else return;
-        return done();
+        if (menuOpen) {
+          setMenuOpen(false);
+          return done();
+        }
+        if (selected) {
+          setSelected(null);
+          return done();
+        }
+        if (showHuman && s.winner === null && clickNth('.input-panel [data-key="n"], .input-panel [data-key="r"]', 0)) return done();
+        return;
       }
-      if (k === '?' || (k === '/' && e.shiftKey) || k === 'h' || k === 'H') {
+      // 入力パネル(選ぶ・答える)。この中のキー(Q W E など)は、画面全体のキーより先に使う
+      if (showHuman && s.winner === null) {
+        const shape = (pend!.input as { shape: string } | null)?.shape;
+        const affirm = k === 'Enter' || k === ' ' || k === KEY.yes;
+        if (affirm && Date.now() - askedAt.current < ASK_GUARD_MS) return done();
+        if (/^[a-z]$/.test(k) && clickNth(`.input-panel [data-key="${k}"]`, 0)) return done();
+        if (digit >= 0) {
+          const sel = shape === 'option' || shape === 'order' ? '.input-panel .choice' : shape === 'assign' ? '.input-panel .cards.items .card' : '.input-panel .cards .card';
+          if (clickNth(sel, digit)) return done();
+        }
+        if ((k === 'Enter' || k === ' ') && clickNth('.input-panel button.primary', 0)) return done();
+      }
+      // 画面全体のキー
+      if (k === '?' || k === KEY.help) {
         setHelpOpen(true);
         return done();
       }
-      if (k === 'l' || k === 'L') {
+      if (k === KEY.log) {
         setSideOpen((v) => !v);
         return done();
       }
-      if (k === 'o' || k === 'O') {
+      if (k === KEY.options) {
         setMenuOpen((v) => !v);
         return done();
       }
+      if (k === KEY.record) {
+        setRecText(rec());
+        return done();
+      }
+      if (k === KEY.quit) {
+        if (confirmQuit) onExit();
+        else setConfirmQuit(true);
+        return done();
+      }
+      if (k === KEY.fast && g.me !== null && g.cpuTurn) {
+        g.setFast(!g.fast);
+        return done();
+      }
+      if (g.me !== null && k === KEY.peek) {
+        setPeek((v) => !v);
+        return done();
+      }
+      if (g.me !== null && k === KEY.askPay) {
+        setAskPay((v) => !v);
+        return done();
+      }
+      if (k === KEY.oppHand && g.me !== null) {
+        setShowOpp((v) => !v);
+        return done();
+      }
+      if (k === KEY.grave || k === KEY.manaList) {
+        // Shift を押すと相手の一覧
+        const who: PlayerId = e.shiftKey ? (viewer === 0 ? 1 : 0) : viewer;
+        setListReq((cur) => ({ p: who, zone: k === KEY.grave ? 'grave' : 'mana', n: (cur?.n ?? 0) + 1 }));
+        return done();
+      }
+      if (showHuman && s.winner === null) return;
       if (s.winner !== null) {
-        if (k === 'r' || k === 'R') {
+        if (k === 'Enter' && Date.now() - askedAt.current < ASK_GUARD_MS) return done();
+        if (k === 'Enter' || k === KEY.redo) {
           onRematch();
           return done();
-        }
-        return;
-      }
-      // 入力パネル(選ぶ・答える)
-      if (showHuman) {
-        const shape = (pend!.input as { shape: string } | null)?.shape;
-        if (shape === 'yesno' && (k === 'y' || k === 'Y' || k === 'Enter')) {
-          g.perform({ type: 'ANSWER', id: pend!.id, value: true });
-          return done();
-        }
-        if (shape === 'yesno' && (k === 'n' || k === 'N')) {
-          g.perform({ type: 'ANSWER', id: pend!.id, value: false });
-          return done();
-        }
-        if (/^[a-z]$/i.test(k) && clickNth(`.input-panel [data-key="${k.toLowerCase()}"]`, 0)) return done();
-        if (digit >= 0) {
-          const sel = shape === 'option' || shape === 'order' ? '.input-panel .choice' : '.input-panel .cards .card';
-          if (clickNth(sel, digit)) return done();
-        }
-        if (k === 'Enter' || k === ' ') {
-          if (clickNth('.input-panel button.primary', 0)) return done();
         }
         return;
       }
@@ -416,13 +468,13 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           g.setPaused(!g.paused);
           return done();
         }
-        if ((k === 'n' || k === 'N' || k === 'ArrowRight') && g.paused) {
+        if (k === 'ArrowRight' && g.paused) {
           g.stepOnce();
           return done();
         }
         return;
       }
-      if ((k === 'z' || k === 'Z') && setup.allowUndo && g.canUndo && humanTurn) {
+      if (k === KEY.undo && setup.allowUndo && g.canUndo && humanTurn) {
         g.undo();
         return done();
       }
@@ -436,20 +488,45 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         act(selActs[0].action);
         return done();
       }
-      if ((k === 'ArrowRight' || k === 'ArrowLeft') && cycleKeys.length > 0) {
-        const i = selected ? cycleKeys.indexOf(selected) : -1;
-        const n = cycleKeys.length;
-        const next = i < 0 ? (k === 'ArrowRight' ? 0 : n - 1) : (i + (k === 'ArrowRight' ? 1 : n - 1)) % n;
-        setSelected(cycleKeys[next]);
+      if (arrow) {
+        if (cycleRows.length === 0) return;
+        const r = selected ? cycleRows.findIndex((row) => row.includes(selected)) : -1;
+        if (r < 0) {
+          // 何も選んでいない時: 手札の列から始める(← ↑ は末尾、→ ↓ は先頭)
+          const hand = cycleRows.findIndex((row) => row[0].startsWith('hand:'));
+          const row = cycleRows[hand >= 0 ? hand : cycleRows.length - 1];
+          setSelected(k === 'ArrowLeft' || k === 'ArrowUp' ? row[row.length - 1] : row[0]);
+          return done();
+        }
+        const row = cycleRows[r];
+        const i = row.indexOf(selected!);
+        if (k === 'ArrowLeft' || k === 'ArrowRight') {
+          setSelected(row[(i + (k === 'ArrowRight' ? 1 : row.length - 1)) % row.length]);
+        } else {
+          const to = cycleRows[r + (k === 'ArrowDown' ? 1 : -1)];
+          if (to) setSelected(to[Math.min(i, to.length - 1)]);
+        }
         return done();
       }
-      if ((k === 'm' || k === 'M') && (stepActs.skipMana || stepActs.endMain)) {
+      if (k === KEY.skipMana && (stepActs.skipMana || stepActs.endMain)) {
         act((stepActs.skipMana ?? stepActs.endMain)!);
         return done();
       }
-      if ((k === 'e' || k === 'E') && stepActs.endTurn) {
-        act(stepActs.endTurn);
-        return done();
+      if (k === KEY.endTurn) {
+        if (stepActs.endTurn) {
+          act(stepActs.endTurn);
+          return done();
+        }
+        // マナステップ: マナチャージを飛ばして、そのままターンを終える(出せる・チャージできるカードがあれば、1回目は確認)
+        if (stepActs.skipMana) {
+          if (!confirmEnd && legal.some((x) => x.type === 'PLAY_CARD' || x.type === 'CHARGE_MANA')) {
+            setConfirmEnd(true);
+          } else {
+            endAfterSkip.current = true;
+            g.perform(stepActs.skipMana);
+          }
+          return done();
+        }
       }
     };
     // ボタンをクリックしたあとにフォーカスが残ると、Enter/Space でそのボタンが再度押されてしまう
@@ -494,7 +571,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           <div className="ap-actions">
             {selActs.map((d, i) => (
               <button key={i} className="choice big" onClick={() => act(d.action)}>
-                {i < 9 && <span className="kbd">{i + 1}</span>} {d.label}
+                {i < 9 && <Kbd k={String(i + 1)} />} {d.label}
               </button>
             ))}
           </div>
@@ -510,7 +587,9 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   return (
     <div className={'game' + (sideOpen ? '' : ' side-closed')}>
       <div className="game-head">
-        <button onClick={onExit}>← メニュー</button>
+        <button className={confirmQuit ? 'on' : ''} onClick={onExit} title="メニューへ戻ります(対戦は自動保存され、メニューから再開できます)。キーは Q を2回">
+          {confirmQuit ? 'もう一度 Q でメニューへ' : '← メニュー'} <Kbd k={KEY.quit} />
+        </button>
         <span className={'status-chip ' + (setup.seats[s.active].kind === 'human' ? 'me' : 'cpu')}>
           {Math.ceil(s.turn / 2)}ターン目 ・ {s.active === (g.me ?? 0) ? (g.me === null ? 'プレイヤー1' : 'あなた') : g.me === null ? 'プレイヤー2' : '相手'} ・{' '}
           {STEP_LABEL[s.step] ?? s.step}
@@ -519,9 +598,11 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         <span style={{ flex: 1 }} />
         {cpuOnly && (
           <>
-            <button onClick={() => g.setPaused(!g.paused)}>{g.paused ? '▶ 再開' : '⏸ 一時停止'}</button>
+            <button onClick={() => g.setPaused(!g.paused)}>
+              {g.paused ? '▶ 再開' : '⏸ 一時停止'} <Kbd k=" " />
+            </button>
             <button disabled={!g.paused} onClick={g.stepOnce}>
-              ⏭ 1手進める
+              ⏭ 1手進める <Kbd k="ArrowRight" />
             </button>
             <label className="speed">
               速度
@@ -531,7 +612,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         )}
         {g.me !== null && g.cpuTurn && (
           <button className={g.fast ? 'on' : ''} onClick={() => g.setFast(!g.fast)} title="CPU の手の間隔をなくして、一気に進めます">
-            ⏩ 一気に進める
+            ⏩ 一気に進める <Kbd k={KEY.fast} />
           </button>
         )}
         {setup.allowUndo && (
@@ -542,27 +623,28 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                   ? '戻せる手がありません(CPUに手番が移った後や、シールドのブレイク・公開などで情報が出た後は、それ以前に戻せません)'
                   : '1手戻す(Z)'
             }>
-            ↶ 1手戻す
+            ↶ 1手戻す <Kbd k={KEY.undo} />
           </button>
         )}
         <div className="pop-anchor">
           <button className={menuOpen ? 'on' : ''} onClick={() => setMenuOpen((v) => !v)}>
-            ⚙ 表示
+            ⚙ 表示 <Kbd k={KEY.options} />
           </button>
           {menuOpen && (
             <div className="popover">
               {g.me !== null && (
                 <label className="check">
-                  <input type="checkbox" checked={peek} onChange={(e) => setPeek(e.target.checked)} /> 自分のシールドを見る
+                  <input type="checkbox" checked={peek} onChange={(e) => setPeek(e.target.checked)} /> 自分のシールドを見る <Kbd k={KEY.peek} />
                 </label>
               )}
               {g.me !== null && (
                 <label className="check" title="オフにすると、常に自動でタップするマナを決めます">
-                  <input type="checkbox" checked={askPay} onChange={(e) => setAskPay(e.target.checked)} /> 選べるときはタップするマナを選ぶ
+                  <input type="checkbox" checked={askPay} onChange={(e) => setAskPay(e.target.checked)} /> 選べるときはタップするマナを選ぶ <Kbd k={KEY.askPay} />
                 </label>
               )}
               <label className="check">
-                <input type="checkbox" checked={showOpp} onChange={(e) => setShowOpp(e.target.checked)} /> 相手の手札を見る
+                <input type="checkbox" checked={showOpp} onChange={(e) => setShowOpp(e.target.checked)} /> 相手の手札を見る{' '}
+                {g.me !== null && <Kbd k={KEY.oppHand} />}
               </label>
               <button
                 onClick={() => {
@@ -570,7 +652,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                   setRecText(rec());
                 }}
               >
-                棋譜を見る・保存
+                棋譜を見る・保存 <Kbd k={KEY.record} />
               </button>
               <div className="muted" style={{ fontSize: 12 }}>
                 シード {setup.seed}
@@ -579,10 +661,10 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           )}
         </div>
         <button onClick={() => setHelpOpen(true)} title="ショートカットキーと Tips(?)">
-          ? ヘルプ
+          ? ヘルプ <Kbd k={KEY.help} />
         </button>
         <button className={sideOpen ? 'on' : ''} onClick={() => setSideOpen((v) => !v)} title="カードの詳細・待機中の能力・ログ(L)">
-          ログ
+          ログ <Kbd k={KEY.log} />
         </button>
       </div>
 
@@ -600,7 +682,8 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           selected={selected}
           onSelect={setSelected}
           flash={flash}
-                  />
+          listReq={listReq}
+        />
 
         {/* CPU が考えている間の表示 */}
         {!interactive && !showHuman && s.winner === null && pend && (
@@ -636,10 +719,14 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
               <p className="muted">({s.loseReason})</p>
               <div className="row" style={{ justifyContent: 'center' }}>
                 <button className="primary" onClick={onRematch}>
-                  もう一度
+                  もう一度 <Kbd k="Enter" />
                 </button>
-                <button onClick={() => setRecText(rec())}>棋譜を保存</button>
-                <button onClick={onExit}>メニューへ</button>
+                <button onClick={() => setRecText(rec())}>
+                  棋譜を保存 <Kbd k={KEY.record} />
+                </button>
+                <button onClick={onExit}>
+                  メニューへ <Kbd k={KEY.quit} />
+                </button>
               </div>
             </div>
           </div>
@@ -676,17 +763,32 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             <div className="dock">
               {stepActs.skipMana && (
                 <button onClick={() => act(stepActs.skipMana!)}>
-                  マナチャージしない <span className="kbd">M</span>
+                  マナチャージしない <Kbd k={KEY.skipMana} />
                 </button>
               )}
               {stepActs.endMain && (
                 <button onClick={() => act(stepActs.endMain!)}>
-                  メインを終える <span className="kbd">M</span>
+                  メインを終える <Kbd k={KEY.skipMana} />
                 </button>
               )}
               {stepActs.endTurn && (
                 <button className="primary" onClick={() => act(stepActs.endTurn!)}>
-                  {confirmEnd ? 'まだ出せるカードがあります。もう一度で終了' : 'ターン終了'} <span className="kbd">E</span>
+                  {confirmEnd ? 'まだ出せるカードがあります。もう一度で終了' : 'ターン終了'} <Kbd k={KEY.endTurn} />
+                </button>
+              )}
+              {/* マナステップからも、そのままターンを終えられる(マナチャージを飛ばして終了) */}
+              {stepActs.skipMana && !stepActs.endTurn && (
+                <button
+                  className="primary"
+                  onClick={() => {
+                    if (!confirmEnd && legal.some((x) => x.type === 'PLAY_CARD' || x.type === 'CHARGE_MANA')) setConfirmEnd(true);
+                    else {
+                      endAfterSkip.current = true;
+                      g.perform(stepActs.skipMana!);
+                    }
+                  }}
+                >
+                  {confirmEnd ? 'まだ出せるカードがあります。もう一度で終了' : 'ターン終了'} <Kbd k={KEY.endTurn} />
                 </button>
               )}
             </div>
@@ -769,10 +871,10 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                       g.perform(a);
                     }}
                   >
-                    自動で払う <span className="kbd">A</span>
+                    自動で払う <Kbd k={KEY.auto} />
                   </button>
                   <button data-key="c" onClick={() => setPayFor(null)}>
-                    キャンセル <span className="kbd">C</span>
+                    キャンセル <Kbd k={KEY.cancel} />
                   </button>
                 </div>
               </div>
@@ -795,7 +897,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             <textarea className="json" readOnly value={recText} onFocus={(e) => e.target.select()} />
             <div className="row" style={{ marginTop: 8 }}>
               <button className="primary" onClick={() => downloadText(`dm-sim-record-${setup.seed}.json`, recText)}>
-                ダウンロード
+                ダウンロード <Kbd k="Enter" />
               </button>
               <button
                 onClick={() => {
