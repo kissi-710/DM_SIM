@@ -8,8 +8,12 @@ import { createGame, legalActions, step } from '../../src/engine/engine';
 import { loadRegistry } from '../../src/engine/registry';
 import type { Ev } from '../../src/engine/types';
 import { FxLayer } from '../../src/ui/FxLayer';
+import { FxTicker } from '../../src/ui/FxTicker';
 import {
   cpuSeed,
+  drawCuesOf,
+  stepCueOf,
+  STEP_LABEL,
   cpuWaitMs,
   cuesOf,
   FX_KEY,
@@ -213,5 +217,51 @@ describe('FxLayer', () => {
     await screen.findByText('相手のターン');
     act(() => rerender(<FxLayer cues={cues} token={1} enabled={false} />));
     expect(container.querySelector('.fx-layer')).toBeNull();
+  });
+});
+
+describe('軽い演出(ドロー・ステップ)', () => {
+  const draw = (id: number, owner: number): Ev => ({ id, causedBy: null, type: 'moved', turn: 2, cause: 'draw', owner, card: id, from: 'deck', to: 'hand' });
+  it('ドローは、プレイヤーごとの枚数にまとめる。引いたカードの名前は出さない', () => {
+    const cues = drawCuesOf([draw(1, 0), draw(2, 0), draw(3, 1)], 0);
+    expect(cues.map((c) => c.title)).toEqual(['ドロー ×2', '相手がドロー ×1']);
+    expect(cues.map((c) => c.side)).toEqual(['me', 'opp']);
+    expect(drawCuesOf([draw(1, 0)], null)[0]).toMatchObject({ title: 'ドロー ×1', sub: 'プレイヤー1', side: 'p0' });
+  });
+  it('ドロー以外の移動は数えない', () => {
+    const ev: Ev = { id: 1, causedBy: null, type: 'moved', turn: 2, cause: 'charge', owner: 0, card: 1 };
+    expect(drawCuesOf([ev], 0)).toEqual([]);
+  });
+  it('ステップの表示は、ステップの名前と誰の番かを出す', () => {
+    expect(stepCueOf('main', 1, 0)).toMatchObject({ title: STEP_LABEL.main, sub: '相手', side: 'opp' });
+    expect(stepCueOf('mana', 0, 0)).toMatchObject({ title: 'マナチャージ', sub: 'あなた' });
+  });
+  it('軽い演出は、CPU の待ち時間に入らない(cpuWaitMs に渡す値は cuesOf だけ)', () => {
+    const s = playUntilTurn(3);
+    const heavy = s.flatMap((x) => cuesOf(x.state, x.events, 0));
+    expect(heavy.some((c) => (c.kind as string) === 'draw' || (c.kind as string) === 'step')).toBe(false);
+  });
+
+  const step = (key: string, s = 'main') => ({ key, step: s, active: 0, me: 0 as number | null });
+  const draws = [{ kind: 'draw' as const, title: 'ドロー ×1', side: 'me' as const, ms: 40 }];
+  it('無効なら何も描かない', () => {
+    const { container } = render(<FxTicker draws={draws} drawToken={1} step={step('a')} enabled={false} />);
+    expect(container.querySelector('.fx-ticker')).toBeNull();
+  });
+  it('最初の表示ではステップを出さず、切り替わった時に出して、自動で消える', async () => {
+    const { container, rerender } = render(<FxTicker draws={[]} drawToken={0} step={step('1:0:mana', 'mana')} enabled />);
+    expect(container.querySelector('.fx-ticker')).toBeNull();
+    rerender(<FxTicker draws={[]} drawToken={0} step={step('1:0:main', 'main')} enabled />);
+    expect(await screen.findByText('メイン')).toBeInTheDocument();
+    await waitFor(() => expect(container.querySelector('.fx-ticker')).toBeNull(), { timeout: 3000 });
+  });
+  it('ドローは1手につき一度だけ出る(StrictMode でも)', async () => {
+    const { container } = render(
+      <StrictMode>
+        <FxTicker draws={draws} drawToken={1} step={step('a')} enabled />
+      </StrictMode>,
+    );
+    await screen.findByText('ドロー ×1');
+    expect(container.querySelectorAll('.fx-chip')).toHaveLength(1);
   });
 });

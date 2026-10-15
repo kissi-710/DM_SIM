@@ -204,3 +204,61 @@ export function cpuWaitMs(i: CpuWaitInput): number {
 export function cpuSeed(setupSeedHash: number, actionsLen: number): number {
   return setupSeedHash ^ (actionsLen * 2654435761);
 }
+
+// ───────────────────────── 軽い演出(ドロー・ステップの切り替わり) ─────────────────────────
+// 画面の端に小さく出して、自動で消える。操作も CPU の進行も待たせない(待ち時間 `cpuWaitMs` には入れない)。
+// 無効にすると、これも出さない(FxTicker は enabled=false で何も描かない)。
+
+export const STEP_LABEL: Record<string, string> = {
+  start: 'ターン開始',
+  draw: 'ドロー',
+  mana: 'マナチャージ',
+  main: 'メイン',
+  attack: '攻撃',
+  end: 'ターン終了',
+};
+
+export type LightKind = 'draw' | 'step';
+
+export interface LightCue {
+  kind: LightKind;
+  title: string;
+  sub?: string;
+  side: FxCue['side'];
+  ms: number;
+}
+
+export const LIGHT_MS: Record<LightKind, number> = { draw: 1100, step: 1200 };
+
+/** 1手の中のドローを、プレイヤーごとの枚数にまとめる(引いたカードの名前は出さない) */
+export function drawCuesOf(events: Ev[], me: number | null): LightCue[] {
+  const n: Record<number, number> = {};
+  const order: number[] = [];
+  for (const e of events) {
+    if (e.type !== 'moved' || e.cause !== 'draw') continue;
+    const o = e.owner as number;
+    if (n[o] === undefined) {
+      n[o] = 0;
+      order.push(o);
+    }
+    n[o]++;
+  }
+  return order.map((o) => ({
+    kind: 'draw' as const,
+    title: me === null || o === me ? `ドロー ×${n[o]}` : `相手がドロー ×${n[o]}`,
+    sub: me === null ? `プレイヤー${o + 1}` : undefined,
+    side: sideOf(o, me),
+    ms: LIGHT_MS.draw,
+  }));
+}
+
+/** ステップが切り替わった時の表示(「相手 ▸ メイン」など) */
+export function stepCueOf(step: string, active: number, me: number | null): LightCue {
+  return {
+    kind: 'step',
+    title: STEP_LABEL[step] ?? step,
+    sub: me === null ? `プレイヤー${active + 1}` : active === me ? 'あなた' : '相手',
+    side: sideOf(active, me),
+    ms: LIGHT_MS.step,
+  };
+}

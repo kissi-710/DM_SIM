@@ -104,6 +104,8 @@ interface BoardProps {
   flash?: Set<number>;
   /** 直近のイベントでシールドが割られたプレイヤー(演出で揺らす) */
   hit?: Set<PlayerId>;
+  /** 直近のイベントで攻撃を宣言したカード(演出で前に出す) */
+  attackers?: Set<number>;
   /** キーボードからの一覧の表示要求(n が変わるたびに開く) */
   listReq?: { p: PlayerId; zone: 'mana' | 'grave' | 'shield'; n: number } | null;
   /** 今は使えない手札のカードがクリックされた(理由を出す) */
@@ -249,7 +251,7 @@ export function Board(b: BoardProps) {
             return (
               <div
                 key={perm.pid}
-                className={'pile' + (isTarget ? ' drop-ok' : '')}
+                className={'pile' + (isTarget ? ' drop-ok' : '') + (b.attackers?.has(top) ? (mine ? ' lunge-up' : ' lunge-down') : '')}
                 data-drop={pileDropKey}
                 onClick={() => {
                   if (activeKey && liveDrops.has(pileDropKey)) exec(activeKey, pileDropKey);
@@ -364,8 +366,9 @@ export function Board(b: BoardProps) {
         {renderHand(p, mine)}
       </div>
     );
-    if (mine) return <div className="side-board">{[battle, info, hand]}</div>;
-    return <div className="side-board opp">{[b.showOppHand ? hand : null, info, battle]}</div>;
+    const turnCls = s.active === p && s.winner === null ? ' turn-active' : '';
+    if (mine) return <div className={'side-board' + turnCls}>{[battle, info, hand]}</div>;
+    return <div className={'side-board opp' + turnCls}>{[b.showOppHand ? hand : null, info, battle]}</div>;
   };
 
   return (

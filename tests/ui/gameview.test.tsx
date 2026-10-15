@@ -32,6 +32,12 @@ describe('GameView の演出', () => {
     expect(container.querySelector('.game.fx')).not.toBeNull();
     expect(await screen.findByText('あなたのターン')).toBeInTheDocument();
   });
+  it('手番のプレイヤーの盤面に印が付く(演出が無効でも残る情報表示)', () => {
+    localStorage.setItem('dmsim.fx', JSON.stringify({ enabled: false }));
+    const { container } = render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
+    expect(container.querySelectorAll('.side-board.turn-active')).toHaveLength(1);
+    expect(container.querySelector('.fx-ticker')).toBeNull();
+  });
   it('演出スキップ(保存された設定が無効)なら、オーバーレイも fx の印も出ない', () => {
     localStorage.setItem('dmsim.fx', JSON.stringify({ enabled: false }));
     const { container } = render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
