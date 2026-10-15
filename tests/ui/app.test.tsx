@@ -95,6 +95,18 @@ describe('App: 対戦の開始と再開', () => {
     expect(saved.actions.length).toBeGreaterThan(0);
     expect(saved.tab).toBe(TAB_ID);
   });
+  it('対戦の途中でメニューへ戻ると、自動保存から再開できることを案内する', async () => {
+    location.hash = '#/play-setup';
+    render(<App />);
+    const firstSel = screen.getAllByRole('combobox').find((s) => [...(s as HTMLSelectElement).options].some((o) => o.textContent === '席1が先攻'))!;
+    await userEvent.selectOptions(firstSel, '0');
+    await userEvent.click(await screen.findByRole('button', { name: '対戦開始' }));
+    await userEvent.click(await screen.findByRole('button', { name: /マナチャージしない/ }));
+    await waitFor(() => expect(localStorage.getItem(AUTOSAVE_KEY)).not.toBeNull());
+    await userEvent.click(screen.getByRole('button', { name: /メニュー/ }));
+    expect(await screen.findByRole('status')).toHaveTextContent(/自動保存されているので/);
+    expect(screen.getByRole('button', { name: '続きから遊ぶ' })).toBeInTheDocument();
+  });
   it('「続きから遊ぶ」で、保存した行動列を再生して対戦画面に入る', async () => {
     saveAuto();
     render(<App />);
