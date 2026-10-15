@@ -58,10 +58,11 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
   // 報酬を軌跡平均(traj=1。§8)にした時に更新した固定値
   it('バッチ対戦: MCTS(20反復) 対 ルールベース 6試合', () => {
     expect(match({ kind: 'mcts', iterations: 20, ms: 100000 }, { kind: 'rule' }, 6, 1)).toEqual({
-      winsA: 5,
-      winsB: 1,
+      // ルールベースの勝ち確定の判定(最後の1体を残す・ブロックされない攻撃)を直した時に更新した固定値
+      winsA: 4,
+      winsB: 2,
       draws: 0,
-      avgTurns: 13,
+      avgTurns: 12.833333333333334,
       reasons: { ダイレクトアタック: 6 },
     });
   });

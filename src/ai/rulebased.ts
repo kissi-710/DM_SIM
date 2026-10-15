@@ -1,6 +1,6 @@
 // L1 ルールベースAI(design 7.2): 優先度つきの手続き。
 // ターン中の行動はルールで決め、効果の選択(対象・選択肢・任意)は1手先読みで決める。
-import { breakerCount, canBlock, charsLite, costOf, hasKeyword, payNeed, powerOf } from '../engine/derive';
+import { breakerCount, canBlock, charsLite, costOf, hasKeyword, isUnblockable, payNeed, powerOf } from '../engine/derive';
 import { step } from '../engine/engine';
 import { mkCtx } from '../engine/state';
 import type { Registry } from '../engine/registry';
@@ -136,12 +136,20 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
     const maxBlock = oppBlockers.reduce((m, p) => Math.max(m, powerOf(c, p)), 0);
     const oppShield = view.players[opp].shield.length;
     const myShield = view.players[me].shield.length;
-    // 勝ちが確定する攻撃(S・トリガーは考えない): ブロッカーに止められない攻撃のブレイク数が、シールド+1以上
+    // 勝ちが確定する攻撃(S・トリガーは考えない)。ブロッカーに止められない攻撃のうち、
+    // 最後の1体(ダイレクトアタック役。ブレイク数の最小のもの)を除いたブレイク数が、シールド以上
     const mine = view.players[me].battle.filter((p) => attacks.some((a) => a.target.kind === 'player' && a.attacker === p.pid));
-    const byBreaks = mine.map((p) => ({ p, b: breakerCount(c, p) })).sort((x, y) => y.b - x.b);
-    const through = byBreaks.slice(oppBlockers.length); // ブロックされるのは、ブレイク数の多い順
-    if (through.length > 0 && through.reduce((n, x) => n + x.b, 0) >= oppShield + 1) {
-      const lethal = attacks.find((x) => x.attacker === byBreaks[0].p.pid && x.target.kind === 'player');
+    const byBreaks = mine.map((p) => ({ p, b: breakerCount(c, p), open: isUnblockable(c, p) })).sort((x, y) => y.b - x.b);
+    // ブロックされるのは、ブロックされない攻撃を除き、ブレイク数の多い順(ブロッカー1体で1回だけ止められる)
+    const through = [...byBreaks.filter((x) => x.open), ...byBreaks.filter((x) => !x.open).slice(oppBlockers.length)];
+    const throughBreaks = through.map((x) => x.b);
+    const lastBreak = Math.min(...throughBreaks);
+    const lethalNow =
+      through.length > 0 && (oppShield === 0 || (through.length >= 2 && throughBreaks.reduce((n, b) => n + b, 0) - lastBreak >= oppShield));
+    if (lethalNow) {
+      // 先にブレイク数の多いものから攻撃し、最後の1体を残す(攻撃のたびに、この判定をやり直す)
+      const first = through.sort((x, y) => y.b - x.b)[0];
+      const lethal = attacks.find((x) => x.attacker === first.p.pid && x.target.kind === 'player');
       if (lethal) return lethal;
     }
     let best: Action | null = null;
@@ -152,8 +160,10 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
       let score = -1;
       if (a.target.kind === 'player') {
         const breakers = breakerCount(c, pm);
-        if (oppShield === 0 && oppBlockers.length === 0) score = 100;
-        else if (oppBlockers.length === 0) score = p.atkOpen + breakers;
+        // 「ブロックされない」攻撃は、相手のブロッカーに止められない
+        const noBlockers = oppBlockers.length === 0 || isUnblockable(c, pm);
+        if (oppShield === 0 && noBlockers) score = 100;
+        else if (noBlockers) score = p.atkOpen + breakers;
         else if (maxBlock < pa) score = p.atkOverBlock + breakers; // ブロックされても負けない
         else if (oppShield === 0) score = p.atkBait; // ブロッカーを引きつける
         // 自分のブロッカーは、シールドが少ない時は残す
