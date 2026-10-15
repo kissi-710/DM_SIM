@@ -717,6 +717,16 @@ describe('B13 SSS級天災 デッドダムド', () => {
     expect(sim.evs('entered').length).toBe(before); // entered は発行されない
     expect(sim.evs('evolved').length).toBe(1);
   });
+  it('侵略は、バトルゾーンのデッドダムド自身が攻撃する時には誘発しない(自分自身の上には重ねられない)', () => {
+    const sim = new Sim({
+      p0: { battle: [{ c: 'SSS級天災 デッドダムド', under: ['天災 デドダム'] }] },
+      p1: { battle: ['ティンパニ=シンバリー'], shield: 5 },
+    });
+    sim.attack('SSS級天災 デッドダムド', 'player');
+    // 侵略の確認(may)が出ず、そのまま攻撃が進む
+    expect(sim.pending?.why).not.toBe('may');
+    expect(sim.evs('abilityTriggered').length).toBe(0);
+  });
 });
 
 describe('配球の超人 / 記録的剛球', () => {

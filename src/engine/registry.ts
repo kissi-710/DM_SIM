@@ -119,7 +119,9 @@ function expandFace(face: Face): Face {
       const spec: TriggerSpec = {
         on: { type: 'attackDeclared', attackerCond: a.attacker, owner: 'self' },
         watch: ['battle', 'hand', 'grave', 'mana'],
-        subject: 'any',
+        // 自分自身が攻撃する時には誘発しない(自分自身の上には重ねられない)。
+        // バトルゾーンから侵略する場合の「別のクリーチャー」の攻撃だけが対象
+        subject: 'other',
       };
       out.push({
         kind: 'trigger',
