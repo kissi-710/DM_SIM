@@ -181,6 +181,7 @@ export function Board(b: BoardProps) {
                 selected={activeKey === key}
                 dim={mine && interactive && !can}
                 onClick={mine && interactive && !can ? () => b.onExplain?.(u) : undefined}
+                onActivate={can ? () => b.onSelect(activeKey === key ? null : key) : undefined}
                 selectable={can && activeKey !== key}
                 onPointerDown={can ? begin(key) : undefined}
                 onHover={hidden ? undefined : b.onHover}
@@ -221,6 +222,7 @@ export function Board(b: BoardProps) {
                 draggable={can}
                 selected={activeKey === key}
                 selectable={can && activeKey !== key}
+                onActivate={can ? () => b.onSelect(activeKey === key ? null : key) : undefined}
                 onPointerDown={can ? begin(key) : undefined}
                 onHover={b.onHover}
               />
@@ -263,6 +265,7 @@ export function Board(b: BoardProps) {
                   selected={activeKey === key}
                   selectable={can && activeKey !== key}
                   badge={perm.cards.length > 1 ? `重${perm.cards.length}` : undefined}
+                  onActivate={can ? () => b.onSelect(activeKey === key ? null : key) : undefined}
                   onPointerDown={can ? begin(key) : undefined}
                   onHover={b.onHover}
                 />
@@ -319,6 +322,7 @@ export function Board(b: BoardProps) {
             draggable={can}
             selected={activeKey === key}
             selectable={can && activeKey !== key}
+            onActivate={can ? () => b.onSelect(activeKey === key ? null : key) : undefined}
             onPointerDown={can ? begin(key) : undefined}
             onHover={b.onHover}
           />

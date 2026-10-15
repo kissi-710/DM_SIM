@@ -158,4 +158,16 @@ describe('GameView: 使えないカード', () => {
     await userEvent.click(dim!);
     await waitFor(() => expect(document.querySelector('.rail-hint.warn')?.textContent ?? '').toMatch(/マナが足りません|進化元|文明/));
   });
+  it('カードは Tab で届き、Enter で選べる(Space でも)', async () => {
+    render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
+    const card = document.querySelector<HTMLElement>('.zone.hand .card.selectable')!;
+    expect(card.getAttribute('tabindex')).toBe('0');
+    card.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(document.querySelectorAll('.card.selected').length).toBe(1);
+    await userEvent.keyboard('{Escape}');
+    card.focus();
+    await userEvent.keyboard(' ');
+    expect(document.querySelectorAll('.card.selected').length).toBe(1);
+  });
 });
