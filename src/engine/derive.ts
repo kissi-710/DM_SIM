@@ -29,8 +29,8 @@ function unionCivs(faces: Face[]): Civ[] {
   return r;
 }
 
-/** カードの特性。hint=-1 のとき、場以外のカードは面0(文明は全面の和集合)で見る。 */
-export function charsOf(c: Ctx, uid: number, hint: number = -1): Chars {
+/** カードの特性(パワーを計算しない軽量版)。power は面の基本パワー。コスト・面・文明・種類・種族だけを使う呼び出しはこちらを使う */
+export function charsLite(c: Ctx, uid: number, hint: number = -1): Chars {
   const card = c.s.cards[uid];
   const def = c.reg.defs[card.defId];
   const inPlay = card.zone === 'battle' || card.zone === 'limbo';
@@ -39,22 +39,28 @@ export function charsOf(c: Ctx, uid: number, hint: number = -1): Chars {
   else idx = hint >= 0 && def.faces[hint] ? hint : 0;
   const face = def.faces[idx];
   const civs = inPlay || hint >= 0 ? face.civs : unionCivs(def.faces);
-  let power = face.power ?? 0;
-  if (card.zone === 'battle' && c.s.cards[uid].pid >= 0) {
+  return { face, faceIdx: idx, civs, cost: face.cost, power: face.power ?? 0, type: face.type, races: face.races ?? [] };
+}
+
+/** カードの特性。hint=-1 のとき、場以外のカードは面0(文明は全面の和集合)で見る。power は、バトルゾーンの一番上のカードなら継続効果を含む */
+export function charsOf(c: Ctx, uid: number, hint: number = -1): Chars {
+  const ch = charsLite(c, uid, hint);
+  const card = c.s.cards[uid];
+  if (card.zone === 'battle' && card.pid >= 0) {
     const pm = permByPid(c.s, card.pid);
-    if (pm && pm.perm.cards[0] === uid) power = powerOf(c, pm.perm);
+    if (pm && pm.perm.cards[0] === uid) ch.power = powerOf(c, pm.perm);
   }
-  return { face, faceIdx: idx, civs, cost: face.cost, power, type: face.type, races: face.races ?? [] };
+  return ch;
 }
 
 /** 表記コスト(使用中の面。場以外は面0) */
 export function costBase(c: Ctx, uid: number): number {
-  return charsOf(c, uid, -1).face.cost;
+  return charsLite(c, uid, -1).face.cost;
 }
 
 export function infoOf(c: Ctx, uid: number): FaceInfo {
   const card = c.s.cards[uid];
-  const ch = charsOf(c, uid, -1);
+  const ch = charsLite(c, uid, -1);
   return c.reg.getInfo(card.defId, ch.faceIdx);
 }
 
@@ -185,7 +191,7 @@ function playerAttackBlockedByEntry(c: Ctx, perm: Permanent, owner: PlayerId): b
  */
 export function isSick(c: Ctx, perm: Permanent): boolean {
   if (!perm.sick) return false;
-  const t = charsOf(c, perm.cards[0], -1).type;
+  const t = charsLite(c, perm.cards[0], -1).type;
   return t !== 'evolution' && t !== 'smaxEvolution';
 }
 
@@ -259,7 +265,7 @@ export function payNeed(cost: number, civCount: number): number {
 }
 
 export function manaCivs(c: Ctx, uid: number): Civ[] {
-  return charsOf(c, uid, -1).civs;
+  return charsLite(c, uid, -1).civs;
 }
 
 /**
@@ -274,7 +280,7 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
   if (avail.length < need) return null;
   // 価値(残したいほど高い)
   const want: Record<string, number> = {};
-  for (const h of keepFor) for (const civ of charsOf(c, h, -1).civs) want[civ] = (want[civ] ?? 0) + 1;
+  for (const h of keepFor) for (const civ of charsLite(c, h, -1).civs) want[civ] = (want[civ] ?? 0) + 1;
   const mc = new Map<number, Civ[]>();
   const value = new Map<number, number>();
   for (const u of avail) {

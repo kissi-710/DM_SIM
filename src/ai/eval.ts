@@ -1,5 +1,5 @@
 // 盤面の評価関数(AIの先読み・プレイアウトの打ち切りで使う)。
-import { hasKeyword, powerOf, charsOf } from '../engine/derive';
+import { hasKeyword, powerOf, charsLite } from '../engine/derive';
 import { mkCtx } from '../engine/state';
 import type { Registry } from '../engine/registry';
 import type { GameState, PlayerId } from '../engine/types';
@@ -45,6 +45,8 @@ export interface RewardWeights extends EvalWeights {
   trajStart?: number;
   /** 世界の抽出を対称(antithetic)にする: 2つ組のラウンドで、同じ種の反転列を使う(1 で有効) */
   anti?: number;
+  /** プレイアウトの L1: 相打ちでも、相手のコスト − 自分のコスト がこの値以上なら攻撃する(l1.atkTrade と同じ。99 で無効) */
+  atkTrade?: number;
 }
 
 /**
@@ -89,7 +91,7 @@ function side(s: GameState, reg: Registry, p: PlayerId, w: EvalWeights): number 
   v += z.hand.length * w.hand;
   v += Math.min(z.mana.length, 10) * w.mana;
   for (const u of z.hand) {
-    const cost = charsOf(c, u, -1).cost;
+    const cost = charsLite(c, u, -1).cost;
     if (cost < 99) v += Math.min(cost, 8) * w.handCost;
   }
   // 山札が尽きそうなら不利

@@ -8,7 +8,7 @@ import {
   canBlock,
   canCast,
   canUseCost,
-  charsOf,
+  charsLite,
   costOf,
   hasKeyword,
   infoOf,
@@ -120,7 +120,7 @@ export function planPlay(
     for (const pid of taps) {
       const pm = permByPid(s, pid);
       if (!pm || pm.owner !== player || pm.perm.tapped) return fail('タップできないクリーチャーです');
-      const cost = charsOf(c, pm.perm.cards[0], -1).cost;
+      const cost = charsLite(c, pm.perm.cards[0], -1).cost;
       if (seen.has(cost)) return fail('コストが互いに異なるクリーチャーを選んでください');
       seen.add(cost);
     }
@@ -177,7 +177,7 @@ export function payChoice(c: Ctx, player: PlayerId, uid: number, from: ZoneName,
   const avail = s.players[player].mana.filter((u) => !s.cards[u].tapped && u !== uid);
   const groups = new Map<string, number[]>();
   for (const u of avail) {
-    const key = charsOf(c, u, -1).civs.slice().sort().join(',');
+    const key = charsLite(c, u, -1).civs.slice().sort().join(',');
     const g = groups.get(key);
     if (g) g.push(u);
     else groups.set(key, [u]);
@@ -206,7 +206,7 @@ export function payChoice(c: Ctx, player: PlayerId, uid: number, from: ZoneName,
 
 /** 選んだマナが、必要な文明を1枚ずつ(1枚は1文明)満たせるか */
 function covers(c: Ctx, mana: number[], civs: Civ[]): boolean {
-  const cs = mana.map((u) => charsOf(c, u, -1).civs);
+  const cs = mana.map((u) => charsLite(c, u, -1).civs);
   const used = new Set<number>();
   const go = (i: number): boolean => {
     if (i === civs.length) return true;
@@ -838,7 +838,7 @@ export function runSba(c: Ctx): boolean {
   }
   // S-MAX進化クリーチャーが2体以上いる場合、1体を残して手札に戻す
   for (const p of [0, 1] as PlayerId[]) {
-    const smax = s.players[p].battle.filter((perm) => charsOf(c, perm.cards[0], -1).type === 'smaxEvolution').map((x) => x.cards[0]);
+    const smax = s.players[p].battle.filter((perm) => charsLite(c, perm.cards[0], -1).type === 'smaxEvolution').map((x) => x.cards[0]);
     if (smax.length >= 2) {
       const keep = ask<number[]>(c, {
         player: p,

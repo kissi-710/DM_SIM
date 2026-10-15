@@ -146,8 +146,13 @@ export function seedOfRound(base: number, r: number, anti: boolean): number {
   return anti ? (((roundSeed(base, r >> 1) & ~1) | (r & 1)) >>> 0) : roundSeed(base, r);
 }
 
+/** プレイアウトの L1 の調整値(rl1 の指定に、atkTrade の指定を重ねる) */
+export function rolloutL1(w: RewardWeights): L1Params {
+  return withL1(w.atkTrade === undefined ? w.l1 : { ...w.l1, atkTrade: w.atkTrade });
+}
+
 export function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number, w: RewardWeights): number {
-  const l1 = withL1(w.l1);
+  const l1 = rolloutL1(w);
   const lookahead = w.lookahead === true;
   const eps = w.eps ?? 0;
   const traj = w.traj ?? 0;

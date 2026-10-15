@@ -1,6 +1,6 @@
 // 合法手の列挙と検証(design 5 / effects 12)。
 import { canAttack } from './derive';
-import { charsOf, costOf, hasKeyword, isSick } from './derive';
+import { charsLite, charsOf, costOf, hasKeyword, isSick } from './derive';
 import { evalCond, mkCC } from './cond';
 import { planPlay } from './procs';
 import type { Registry } from './registry';
@@ -117,7 +117,7 @@ function extraVariants(c: Ctx, player: PlayerId, uid: number, fi: number): (Play
     const free = s.players[player].battle.filter((p) => !p.tapped);
     const byCost = new Map<number, typeof free>();
     for (const p of free) {
-      const cost = charsOf(c, p.cards[0], -1).cost;
+      const cost = charsLite(c, p.cards[0], -1).cost;
       const l = byCost.get(cost) ?? [];
       l.push(p);
       byCost.set(cost, l);

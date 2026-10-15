@@ -52,6 +52,13 @@ export interface L1Params {
   /** クリーチャー攻撃: 自分がブロッカーの時の減点 */
   atkCreatureBlockerPenalty: number;
 
+  /** クリーチャー攻撃: 相打ち(パワー同値)でも、相手のコスト − 自分のコスト がこの値以上なら攻撃する(99 で相打ちは攻撃しない) */
+  atkTrade: number;
+
+  // ── 効果の選択(1手先読み) ──
+  /** 1手先の評価で使うマナの重み(探索の既定 3.5 と、旧 L1 の 1.1 の間。docs/ai-quality-plan.md §10) */
+  ansMana: number;
+
   // ── カードごとの補正(defId → 値。無いカードは 0。自己対戦・探索の手から学習する: cli/trainL1.ts) ──
   /** マナチャージの優先度への加算(正なら、マナに置かずに手札に残したい) */
   cardKeep: Record<string, number>;
@@ -83,6 +90,8 @@ export const L1_DEFAULT: L1Params = {
   atkBait: 8,
   atkCreature: 30,
   atkCreatureBlockerPenalty: 8,
+  atkTrade: 0,
+  ansMana: 2.5,
   cardKeep: {},
   cardPlay: {},
 };
