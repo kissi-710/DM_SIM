@@ -3,6 +3,7 @@ import { hasKeyword, powerOf, charsOf } from '../engine/derive';
 import { mkCtx } from '../engine/state';
 import type { Registry } from '../engine/registry';
 import type { GameState, PlayerId } from '../engine/types';
+import type { L1Params } from './l1params';
 import { modelProb, type ValueModel } from './valueModel';
 
 /** 評価の重み(自己対戦で調整できるように、外から差し替えられる。JSON 化できる) */
@@ -30,6 +31,18 @@ export interface EvalWeights {
 /** プレイアウトの報酬に使う設定: 評価の重み + (あれば)学習した価値関数。model があれば、打ち切りの報酬は評価の重みではなく、これが返す勝つ確率になる */
 export interface RewardWeights extends EvalWeights {
   model?: ValueModel;
+  /** プレイアウトの方針の設定(docs/ai-quality-plan.md §7)。ターン中の行動の優先度・しきい値(既定は L1_DEFAULT) */
+  l1?: Partial<L1Params>;
+  /** プレイアウトで、効果の選択(対象・任意・ブロックなど)を、1手先読みの評価で選ぶ(既定は軽い乱択) */
+  lookahead?: boolean;
+  /** プレイアウトで、ターン中の行動を、この確率で一様ランダムに指す(ε 乱択。既定 0) */
+  eps?: number;
+  /** 報酬を、最後の1点と、途中のターンの境目の報酬の平均とで混ぜる割合(0〜1。既定 0) */
+  traj?: number;
+  /** 軌跡平均で、後の境目ほど軽くする比(1 = 均等。0.5 = 1つ後ごとに半分) */
+  trajDecay?: number;
+  /** 軌跡平均に、プレイアウトの開始時点の報酬も入れる(1 で有効) */
+  trajStart?: number;
 }
 
 /**
@@ -37,7 +50,7 @@ export interface RewardWeights extends EvalWeights {
  * マナは「先の手番の選択肢」なので、3ターン先の評価で手札と同じ重さだと、探索が「溜めない」を選んでしまう。
  * 調整の記録: docs/ai-speed-and-strength.md の §2。
  */
-export const DEFAULT_WEIGHTS: EvalWeights = {
+export const DEFAULT_WEIGHTS: RewardWeights = {
   creature: 3,
   powerDiv: 2500,
   blocker: 1.5,
@@ -49,6 +62,8 @@ export const DEFAULT_WEIGHTS: EvalWeights = {
   handCost: 0.05,
   deckOut: 3,
   scale: 30,
+  // 報酬は、先読みの最後の1点ではなく、途中のターンの境目の評価との平均にする(docs/ai-quality-plan.md §8。対 旧 56〜58%)
+  traj: 1,
 };
 
 /** ルールベース(L1)の1手先の評価で使う重み。L1 は、この重みで調整されている(探索の既定とは別) */

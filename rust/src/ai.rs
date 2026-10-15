@@ -26,6 +26,14 @@ pub struct EvalWeights {
     pub hand_cost: f64,
     pub deck_out: f64,
     pub scale: f64,
+    /// プレイアウトで、ターン中の行動を一様ランダムに指す確率(ε 乱択。src/ai/eval.ts の eps)
+    pub eps: f64,
+    /// 報酬に、途中のターンの境目の報酬の平均を混ぜる割合(src/ai/eval.ts の traj)
+    pub traj: f64,
+    /// 軌跡平均の、後の境目ほど軽くする比(src/ai/eval.ts の trajDecay)
+    pub traj_decay: f64,
+    /// 軌跡平均に、開始時点の報酬も入れる(src/ai/eval.ts の trajStart)
+    pub traj_start: bool,
     /// 学習した価値関数(src/ai/valueModel.ts)。あれば、打ち切りの報酬はこれが返す勝つ確率になる
     pub model: Option<std::rc::Rc<ValueModel>>,
 }
@@ -33,7 +41,7 @@ pub struct EvalWeights {
 impl Default for EvalWeights {
     fn default() -> Self {
         // src/ai/eval.ts の DEFAULT_WEIGHTS と同じ
-        EvalWeights { creature: 3.0, power_div: 2500.0, blocker: 1.5, speed_attacker: 0.5, stack: 0.5, shield: 4.0, hand: 1.6, mana: 3.5, hand_cost: 0.05, deck_out: 3.0, scale: 30.0, model: None }
+        EvalWeights { creature: 3.0, power_div: 2500.0, blocker: 1.5, speed_attacker: 0.5, stack: 0.5, shield: 4.0, hand: 1.6, mana: 3.5, hand_cost: 0.05, deck_out: 3.0, scale: 30.0, eps: 0.0, traj: 1.0, traj_decay: 1.0, traj_start: false, model: None }
     }
 }
 
@@ -58,6 +66,10 @@ impl EvalWeights {
                     "handCost" => w.hand_cost = x,
                     "deckOut" => w.deck_out = x,
                     "scale" => w.scale = x,
+                    "eps" => w.eps = x,
+                    "traj" => w.traj = x,
+                    "trajDecay" => w.traj_decay = x,
+                    "trajStart" => w.traj_start = x > 0.0,
                     _ => {}
                 }
             }
@@ -615,6 +627,18 @@ pub fn rollout(reg: &Registry, start: State, me: PlayerId, rand: &mut SeededRand
     let mut st = start;
     let end_turn = st.turn + horizon;
     let mut guard = 0;
+    // 軌跡平均(src/ai/mcts.ts の rollout と同じ)
+    let mut acc = 0.0;
+    let mut wsum = 0.0;
+    let mut wt = 1.0;
+    let mut cnt = 0u32;
+    let mut last_turn = st.turn;
+    if w.traj > 0.0 && w.traj_start && st.winner == Winner::None {
+        acc += wt * reward(Env { s: &st, reg }, me, w);
+        wsum += wt;
+        wt *= w.traj_decay;
+        cnt += 1;
+    }
     while st.winner == Winner::None && st.turn < end_turn {
         guard += 1;
         if guard > MAX_ROLLOUT_STEPS {
@@ -625,7 +649,17 @@ pub fn rollout(reg: &Registry, start: State, me: PlayerId, rand: &mut SeededRand
             None => break,
         };
         let action = if pending.why == Why::TurnAction {
-            fast_turn_action(Env { s: &st, reg }, pending.player)
+            if w.eps > 0.0 && rand.next() < w.eps {
+                // ε 乱択: 一様ランダムな手
+                let mut legal = legal_actions(&st, reg);
+                if legal.is_empty() {
+                    break;
+                }
+                let i = (rand.next() * legal.len() as f64).floor() as usize;
+                legal.swap_remove(i)
+            } else {
+                fast_turn_action(Env { s: &st, reg }, pending.player)
+            }
         } else {
             let mut legal = legal_actions(&st, reg);
             if legal.is_empty() {
@@ -635,8 +669,19 @@ pub fn rollout(reg: &Registry, start: State, me: PlayerId, rand: &mut SeededRand
             legal.swap_remove(i)
         };
         st = step_owned(reg, st, &action)?;
+        if w.traj > 0.0 && st.turn != last_turn && st.turn < end_turn && st.winner == Winner::None {
+            last_turn = st.turn;
+            acc += wt * reward(Env { s: &st, reg }, me, w);
+            wsum += wt;
+            wt *= w.traj_decay;
+            cnt += 1;
+        }
     }
-    Ok(reward(Env { s: &st, reg }, me, w))
+    let fin = reward(Env { s: &st, reg }, me, w);
+    if w.traj > 0.0 && cnt > 0 {
+        return Ok((1.0 - w.traj) * fin + w.traj * ((acc + wt * fin) / (wsum + wt)));
+    }
+    Ok(fin)
 }
 
 // ───────────────────────── 決定化 ─────────────────────────

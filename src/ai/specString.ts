@@ -2,10 +2,14 @@
 //   rule / random
 //   mcts:iter=120,horizon=3,prior=0.005,w.mana=3.5
 // キー: algo=flat|tree|ptree c(木の探索定数) depth(木の深さ) iter(反復回数) ms(最大思考時間) horizon(先読みターン数。99でゲーム終了まで) prior(L1の手への上乗せ) w.<重み名>
+//       lookahead=1(プレイアウトの効果の選択を1手先読みで決める) rl1.<調整値名>=<値>(プレイアウトの L1 の調整値)
+//       l1.<調整値名>=<値>(rule: ai/l1params.ts の調整値)
+//       z=<外す判定の厳しさ。既定 2.5> sh=1(Sequential Halving)
 //       value=<パス>(学習した価値関数の JSON。trainValue の出力。Node の CLI 専用)
 import { readFileSync } from 'node:fs';
 import type { AgentKind, AgentSpec, AiTuning } from './index';
 import type { RewardWeights } from './eval';
+import { L1_DEFAULT, type L1Params } from './l1params';
 
 const KINDS: AgentKind[] = ['random', 'rule', 'mcts', 'pass'];
 
@@ -27,6 +31,35 @@ export function parseSpec(text: string): AgentSpec {
       continue;
     }
     if (!k || v === undefined || v === '') throw new Error(`設定は キー=値 の形で書いてください: ${kv}`);
+    if (k === 'l1file') {
+      if (!v) throw new Error('l1file= には JSON のパスを指定してください');
+      Object.assign((spec.l1 ??= {}), JSON.parse(readFileSync(v, 'utf8')));
+      continue;
+    }
+    if (k.startsWith('l1.')) {
+      const name = k.slice(3) as keyof L1Params;
+      if (!(name in L1_DEFAULT)) throw new Error('未知の L1 の調整値: ' + name);
+      if (!Number.isFinite(n)) throw new Error(k + ' は数で指定してください(指定値: ' + v + ')');
+      (spec.l1 as Record<string, number>) ??= {};
+      (spec.l1 as Record<string, number>)[name] = n;
+      continue;
+    }
+    if (k === 'lookahead') {
+      (tuning.weights ??= {}).lookahead = n !== 0;
+      continue;
+    }
+    if (k.startsWith('rl1.')) {
+      const name = k.slice(4) as keyof L1Params;
+      if (!(name in L1_DEFAULT)) throw new Error('未知の L1 の調整値: ' + name);
+      (((tuning.weights ??= {}).l1 ??= {}) as Record<string, number>)[name] = n;
+      continue;
+    }
+    if (k === 'z' || k === 'sh') {
+      if (!Number.isFinite(n)) throw new Error(`${k} は数で指定してください(指定値: ${v})`);
+      if (k === 'z') tuning.elimZ = n;
+      else tuning.halving = n !== 0;
+      continue;
+    }
     if (k === 'algo') {
       if (v !== 'flat' && v !== 'tree' && v !== 'ptree') throw new Error('algo は flat / tree / ptree のどれかです');
       tuning.algo = v;
@@ -60,7 +93,15 @@ export function specLabel(spec: AgentSpec): string {
   if (t?.algo !== undefined) parts.push(`algo=${t.algo}`);
   if (t?.treeC !== undefined) parts.push(`c=${t.treeC}`);
   if (t?.treeDepth !== undefined) parts.push(`depth=${t.treeDepth}`);
-  for (const [k, v] of Object.entries(t?.weights ?? {})) if (k !== 'model') parts.push(`w.${k}=${v}`);
+  if (t?.elimZ !== undefined) parts.push(`z=${t.elimZ}`);
+  if (t?.halving !== undefined) parts.push(`sh=${t.halving ? 1 : 0}`);
+  for (const [k, v] of Object.entries(t?.weights ?? {})) {
+    if (k === 'model') continue;
+    if (k === 'lookahead') parts.push('lookahead=' + (v ? 1 : 0));
+    else if (k === 'l1') for (const [kk, vv] of Object.entries(v as object)) parts.push('rl1.' + kk + '=' + vv);
+    else parts.push(`w.${k}=${v}`);
+  }
   if (t?.modelPath) parts.push(`value=${t.modelPath}`);
+  for (const [k, v] of Object.entries(spec.l1 ?? {})) parts.push('l1.' + k + '=' + v);
   return parts.length ? `${spec.kind}:${parts.join(',')}` : spec.kind;
 }

@@ -7,6 +7,7 @@ import type { Registry } from '../engine/registry';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { FAIR, type InfoPolicy } from '../engine/view';
 import { determinize } from './determinize';
+import { L1_DEFAULT, withL1, type L1Params } from './l1params';
 import { evaluate, RULE_WEIGHTS } from './eval';
 import type { Agent, AgentCtx } from './types';
 
@@ -18,6 +19,8 @@ export interface RuleOpts {
    * エンジンの不具合や非合法手があっても、AI が弱く見えるだけで気づけないのを防ぐ(テスト・CLI で数える)。
    */
   onError?: (error: unknown, action: Action) => void;
+  /** 優先度・しきい値の調整値(既定は L1_DEFAULT。自己対戦での調整・比較用) */
+  params?: Partial<L1Params>;
 }
 
 /**
@@ -25,16 +28,16 @@ export interface RuleOpts {
  * 方針: 呪文(特にS・トリガー)を先にマナへ置き、盤面に残るクリーチャーを手札に残す。
  * 文明が足りなければ、その文明のカードを優先して置く。
  */
-function keepScore(view: GameState, reg: Registry, uid: number, me: PlayerId): number {
+export function keepScore(view: GameState, reg: Registry, uid: number, me: PlayerId, p: L1Params): number {
   const c = mkCtx(view, reg);
   const card = view.cards[uid];
   const ch = charsOf(c, uid, -1);
   const manaN = view.players[me].mana.length;
-  let v = ch.cost <= manaN + 2 ? 4.5 : 3;
-  v -= ch.cost * 0.15;
-  if (ch.cost <= manaN) v -= 0.5; // 今でも使えるカードは、先にマナへ回してよい
+  let v = ch.cost <= manaN + 2 ? p.keepNear : p.keepFar;
+  v -= ch.cost * p.keepCost;
+  if (ch.cost <= manaN) v += p.keepCastable; // 今でも使えるカードは、先にマナへ回してよい
   const info = reg.getInfo(card.defId, ch.faceIdx);
-  if (info.shieldTriggers.length) v -= 2;
+  if (info.shieldTriggers.length) v += p.keepTrigger;
   const have = new Set<string>();
   for (const m of view.players[me].mana) for (const cv of charsOf(c, m, -1).civs) have.add(cv);
   const need = new Set<string>();
@@ -44,17 +47,18 @@ function keepScore(view: GameState, reg: Registry, uid: number, me: PlayerId): n
   }
   // 手札の他のカードが必要とする文明は、マナに足せるなら置きたい。マナにない文明を足すのも良い
   for (const cv of ch.civs) {
-    if (need.has(cv)) v -= 3;
-    if (!have.has(cv)) v -= 1;
+    if (need.has(cv)) v += p.keepCivNeed;
+    if (!have.has(cv)) v += p.keepCivNew;
   }
   // 同じカードが複数あれば1枚は置いてよい
   const dup = view.players[me].hand.filter((h) => view.cards[h].defId === card.defId).length;
-  if (dup > 1) v -= 1;
-  v += ch.face.type === 'spell' ? -1 : 1;
+  if (dup > 1) v += p.keepDup;
+  v += ch.face.type === 'spell' ? p.keepSpell : p.keepCreature;
+  v += p.cardKeep[card.defId] ?? 0;
   return v;
 }
 
-function playScore(view: GameState, reg: Registry, a: Extract<Action, { type: 'PLAY_CARD' }>, me: PlayerId): number {
+export function playScore(view: GameState, reg: Registry, a: Extract<Action, { type: 'PLAY_CARD' }>, me: PlayerId, p: L1Params): number {
   const c = mkCtx(view, reg);
   const card = view.cards[a.uid];
   const def = reg.defs[card.defId];
@@ -62,24 +66,22 @@ function playScore(view: GameState, reg: Registry, a: Extract<Action, { type: 'P
   const face = def.faces[fi];
   const taps = a.extra?.tap?.length ?? 0;
   const cost = costOf(c, a.uid, fi, { taps: a.extra?.tap });
-  let v = payNeed(cost, face.civs.length) * 1.0 + taps * 0.0 + (face.cost - cost) * 0.4;
-  if (face.type !== 'spell') v += 1.5; // 盤面に残るものを優先
+  let v = payNeed(cost, face.civs.length) * p.playNeed + (face.cost - cost) * p.playDiscount;
+  if (face.type !== 'spell') v += p.playBoard; // 盤面に残るものを優先
   // タップする分、攻撃できる数が減る
-  v -= taps * 0.8;
+  v += taps * p.playTap;
   // 墓地・マナからのプレイは手札を使わないので、同じコストなら少し優先
-  if ((a.from ?? 'hand') !== 'hand') v += 0.5;
+  if ((a.from ?? 'hand') !== 'hand') v += p.playFromOther;
   // 呪文は、対象がいなくて空振りしやすいものを避ける(相手の盤面が空)
   if (face.type === 'spell') {
     const opp = (1 - me) as PlayerId;
-    if (view.players[opp].battle.length === 0 && /戻|破壊|選び/.test(def.text ?? '')) v -= 3;
+    if (view.players[opp].battle.length === 0 && /戻|破壊|選び/.test(def.text ?? '')) v += p.playNoTarget;
   }
+  v += p.cardPlay[card.defId] ?? 0;
   return v;
 }
 
-/** マナがこの枚数以上で、手札を全部払えるなら、マナチャージをしない */
-const SKIP_MANA_FROM = 7;
-
-export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<AgentCtx, 'reg' | 'rand'>): Action {
+export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<AgentCtx, 'reg' | 'rand'>, p: L1Params = L1_DEFAULT): Action {
   const reg = ctx.reg;
   const me = view.pending!.player;
   const opp = (1 - me) as PlayerId;
@@ -92,7 +94,7 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
     // マナが十分にあり、手札のどのカードも払えるなら、これ以上マナを増やしても使い道がない(カードを手札に残す)
     const skip = legal.find((a) => a.type === 'SKIP_MANA');
     const manaN = view.players[me].mana.length;
-    if (skip && manaN >= SKIP_MANA_FROM) {
+    if (skip && manaN >= p.skipManaFrom) {
       let maxCost = 0;
       for (const u of view.players[me].hand) {
         const cost = charsOf(c, u, -1).cost;
@@ -103,7 +105,7 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
     let best = charges[0];
     let bs = Infinity;
     for (const a of charges) {
-      const s = keepScore(view, reg, a.uid, me);
+      const s = keepScore(view, reg, a.uid, me, p);
       if (s < bs) {
         bs = s;
         best = a;
@@ -118,7 +120,7 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
     let best = plays[0];
     let bs = -Infinity;
     for (const a of plays) {
-      const s = playScore(view, reg, a, me);
+      const s = playScore(view, reg, a, me, p);
       if (s > bs) {
         bs = s;
         best = a;
@@ -150,19 +152,19 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
       if (a.target.kind === 'player') {
         const breakers = breakerCount(c, pm);
         if (oppShield === 0 && oppBlockers.length === 0) score = 100;
-        else if (oppBlockers.length === 0) score = 20 + breakers;
-        else if (maxBlock < pa) score = 12 + breakers; // ブロックされても負けない
-        else if (oppShield === 0) score = 8; // ブロッカーを引きつける
+        else if (oppBlockers.length === 0) score = p.atkOpen + breakers;
+        else if (maxBlock < pa) score = p.atkOverBlock + breakers; // ブロックされても負けない
+        else if (oppShield === 0) score = p.atkBait; // ブロッカーを引きつける
         // 自分のブロッカーは、シールドが少ない時は残す
-        if (hasKeyword(c, pm, 'blocker') && myShield <= 3 && score < 100) score = -1;
+        if (hasKeyword(c, pm, 'blocker') && myShield <= p.keepBlockerShield && score < 100) score = -1;
       } else {
         const targetPid = a.target.pid;
         const tp = view.players[opp].battle.find((p) => p.pid === targetPid);
         if (tp) {
           const pt = powerOf(c, tp);
           const tcost = charsOf(c, tp.cards[0], -1).cost;
-          if (pa > pt) score = 30 + Math.min(tcost, 12) + pt / 2000;
-          if (hasKeyword(c, pm, 'blocker') && score > 0 && myShield <= 3) score -= 8;
+          if (pa > pt) score = p.atkCreature + Math.min(tcost, 12) + pt / 2000;
+          if (hasKeyword(c, pm, 'blocker') && score > 0 && myShield <= p.keepBlockerShield) score -= p.atkCreatureBlockerPenalty;
         }
       }
       if (score > bs) {
@@ -205,13 +207,14 @@ function chooseAnswer(view: GameState, legal: Action[], ctx: AgentCtx, o: RuleOp
 }
 
 export function makeRuleBased(o: RuleOpts = {}): Agent {
+  const params = withL1(o.params);
   return {
     name: 'ルールベース',
     policy: o.policy ?? FAIR,
     chooseAction(view, legal, ctx) {
       if (legal.length === 1) return legal[0];
       const p = view.pending!;
-      if (p.why === 'turnAction') return chooseTurnAction(view, legal, ctx);
+      if (p.why === 'turnAction') return chooseTurnAction(view, legal, ctx, params);
       return chooseAnswer(view, legal, ctx, o);
     },
   };

@@ -4,6 +4,7 @@ import type { RewardWeights } from './eval';
 import { makeMcts, type TreeOpts } from './mcts';
 import { DEFAULT_TREE_OPTS, makeTreeMcts } from './tree';
 import { randomAgent } from './random';
+import type { L1Params } from './l1params';
 import { makeRuleBased } from './rulebased';
 import type { Agent } from './types';
 
@@ -18,6 +19,8 @@ export interface AgentSpec {
   candidateDecks?: string[][];
   /** mcts: 調整用の設定(測定・自己対戦で使う。既定のままなら指定しない) */
   tuning?: AiTuning;
+  /** rule: 優先度・しきい値の調整値(自己対戦での調整・比較用。既定のままなら指定しない) */
+  l1?: Partial<L1Params>;
 }
 
 export interface AiTuning {
@@ -33,6 +36,10 @@ export interface AiTuning {
   treeC?: number;
   /** tree: 木の深さの上限 */
   treeDepth?: number;
+  /** 劣る手を外す判定の厳しさ(既定 2.5) */
+  elimZ?: number;
+  /** 予算を段階に分け、段階ごとに下位の半分を外す(反復回数を決めた時) */
+  halving?: boolean;
   /** 学習した価値関数のファイル(測定用。仕様文字列 value=<path> で指定する) */
   modelPath?: string;
 }
@@ -60,7 +67,7 @@ export function makeAgent(spec: AgentSpec): Agent {
     case 'pass':
       return passAgent;
     case 'rule':
-      return makeRuleBased({ policy: spec.policy, candidateDecks: spec.candidateDecks });
+      return makeRuleBased({ policy: spec.policy, candidateDecks: spec.candidateDecks, params: spec.l1 });
     case 'mcts': {
       const { algo = DEFAULT_ALGO, treeC, treeDepth, ...tuning } = spec.tuning ?? {};
       const base = { policy: spec.policy, iterations: spec.iterations, ms: spec.ms, candidateDecks: spec.candidateDecks, ...tuning };

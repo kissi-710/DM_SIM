@@ -12,7 +12,7 @@ import type { Action, GameState, PlayerId } from '../engine/types';
 import { FAIR } from '../engine/view';
 import { determinize } from './determinize';
 import { withWeights } from './eval';
-import { HARD_MAX_ITERATIONS, planSearch, rollout, roundSeed, runSearch, seededRand, type MctsOpts, type SearchEnv, type TreeOpts } from './mcts';
+import { HARD_MAX_ITERATIONS, nativeUnsupported, planSearch, rollout, roundSeed, runSearch, seededRand, type MctsOpts, type SearchEnv, type TreeOpts } from './mcts';
 export type { TreeOpts } from './mcts';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
 import type { Agent, AgentCtx } from './types';
@@ -135,7 +135,7 @@ export function setNativePairedRound(f: NativePairedRound | null): void {
 
 /** 標準の ISMCTS: 反復 [0, iterations) を行い、根の統計を返す(TS 基準)。木は呼び出しごとに作り直す(同じ引数なら同じ結果) */
 export function treeSearch(env: SearchEnv, reg: Registry, base: number, iterations: number, o: TreeOpts = DEFAULT_TREE_OPTS): TreeStats {
-  if (native) {
+  if (native && !nativeUnsupported(env.weights)) {
     try {
       return native(env, base, iterations, o);
     } catch {
@@ -204,7 +204,7 @@ export class PairedTree {
 
   /** 1ラウンド。手ごとの報酬(alive でない手・例外を出した手は NaN) */
   round(seed: number, alive: number[]): number[] {
-    if (nativePaired) {
+    if (nativePaired && !nativeUnsupported(this.env.weights)) {
       try {
         return nativePaired(this.env, seed, alive, this.o);
       } catch {

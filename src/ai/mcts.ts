@@ -10,7 +10,9 @@ import type { Action, GameState, PlayerId } from '../engine/types';
 import { FAIR, type InfoPolicy } from '../engine/view';
 import { determinize } from './determinize';
 import { reward, withWeights, type RewardWeights } from './eval';
+import { L1_DEFAULT, withL1, type L1Params } from './l1params';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
+import { evaluate, RULE_WEIGHTS } from './eval';
 import type { Agent, AgentCtx } from './types';
 
 /** ターン内の行動列を木にする探索の設定(tree.ts) */
@@ -36,14 +38,39 @@ export interface MctsOpts {
   weights?: Partial<RewardWeights>;
   /** 指定すると、ラウンドの評価を「根はペア比較・2手目以降は木」にする(tree.ts の PairedTree)。Worker にも env 経由で伝わる */
   tree?: TreeOpts;
+  /** 劣る手を外す判定の厳しさ(差が誤差の何倍以上か。既定 2.5) */
+  elimZ?: number;
+  /** 反復の予算を段階に分け、段階ごとに下位の半分を外す(Sequential Halving。反復回数が決まっている時だけ) */
+  halving?: boolean;
   /** 1回の探索が終わるたびに呼ばれる(計測・表示用) */
   onSearch?: (info: SearchInfo) => void;
 }
 
 /** プレイアウト用の素早い方針: ターン中の行動は L1 の手順、効果の選択は軽い規則 */
-export function rolloutPick(s: GameState, legal: Action[], reg: Registry, rand: () => number): Action {
+export function rolloutPick(s: GameState, legal: Action[], reg: Registry, rand: () => number, l1: L1Params = L1_DEFAULT, lookahead = false, eps = 0): Action {
   const p = s.pending!;
-  if (p.why === 'turnAction') return chooseTurnAction(s, legal, { reg, rand });
+  if (p.why === 'turnAction') {
+    // ε 乱択: 小さな確率で、L1 の手ではなく一様ランダムな手を指す(続きの方針の偏りをならす)
+    if (eps > 0 && rand() < eps) return legal[Math.floor(rand() * legal.length)];
+    return chooseTurnAction(s, legal, { reg, rand }, l1);
+  }
+  if (lookahead && p.why !== 'triggerDeclare') {
+    // 1手進めて、評価(L1 と同じ重み)が最も高い選択。同点は並びの先頭
+    let best = legal[0];
+    let bs = -Infinity;
+    for (const a of legal) {
+      try {
+        const v = evaluate(step(s, a, reg).state, reg, p.player, RULE_WEIGHTS);
+        if (v > bs) {
+          bs = v;
+          best = a;
+        }
+      } catch {
+        // その選択は候補から外す
+      }
+    }
+    return best;
+  }
   const pick = (arr: Action[]) => arr[Math.floor(rand() * arr.length)];
   switch (p.why) {
     case 'triggerDeclare': {
@@ -86,11 +113,11 @@ const MIN_ROUNDS = 8;
  * ahead: 差が誤差(約2.5σ)より大きい / precise: 差は判定できないが、これ以上反復しても精度は変わらない(2.5σ < 1.2pt) / open: まだ分からない。
  * 手ごとに別の世界を引くと、手の差より世界のばらつきが大きくなる。同じ世界・同じ乱数で比べる(ペア比較)と、その分が打ち消される。
  */
-export function pairedVerdict(n: number, dsum: number, dsq: number, bonusGap: number): 'ahead' | 'precise' | 'open' {
+export function pairedVerdict(n: number, dsum: number, dsq: number, bonusGap: number, z = 2.5): 'ahead' | 'precise' | 'open' {
   if (n < MIN_ROUNDS) return 'open';
   const mean = dsum / n;
   const se = Math.sqrt(Math.max(0.0025, dsq / n - mean * mean) / n);
-  if (mean + bonusGap > 2.5 * se) return 'ahead';
+  if (mean + bonusGap > z * se) return 'ahead';
   if (2.5 * se < 0.012) return 'precise';
   return 'open';
 }
@@ -108,16 +135,43 @@ export function seededRand(seed: number): () => number {
 }
 
 export function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number, w: RewardWeights): number {
+  const l1 = withL1(w.l1);
+  const lookahead = w.lookahead === true;
+  const eps = w.eps ?? 0;
+  const traj = w.traj ?? 0;
+  const decay = w.trajDecay ?? 1;
   let s = start;
   const endTurn = s.turn + horizon;
   let guard = 0;
+  // 軌跡平均: ターンの境目ごとの報酬も平均に入れる(最後の1点のばらつきと、遠い先への偏りを減らす)
+  let acc = 0;
+  let wsum = 0;
+  let wt = 1;
+  let cnt = 0;
+  let lastTurn = s.turn;
+  // 開始時点(根の手を指した直後・木の先)の評価も平均に入れる
+  if (traj > 0 && (w.trajStart ?? 0) > 0 && s.winner === null) {
+    acc += wt * reward(s, reg, me, w);
+    wsum += wt;
+    wt *= decay;
+    cnt++;
+  }
   while (s.winner === null && s.turn < endTurn && guard++ < MAX_ROLLOUT_STEPS) {
     const legal = legalActions(s, reg);
     if (legal.length === 0) break;
-    const a = rolloutPick(s, legal, reg, rand);
+    const a = rolloutPick(s, legal, reg, rand, l1, lookahead, eps);
     s = step(s, a, reg).state;
+    if (traj > 0 && s.turn !== lastTurn && s.turn < endTurn && s.winner === null) {
+      lastTurn = s.turn;
+      acc += wt * reward(s, reg, me, w);
+      wsum += wt;
+      wt *= decay;
+      cnt++;
+    }
   }
-  return reward(s, reg, me, w);
+  const fin = reward(s, reg, me, w);
+  if (traj > 0 && cnt > 0) return (1 - traj) * fin + traj * ((acc + wt * fin) / (wsum + wt));
+  return fin;
 }
 
 /** 世界(決定化)と乱数を作るための種から、そのラウンドの種を作る。ラウンドの結果は「環境・種・評価する手」だけで決まる。 */
@@ -149,12 +203,17 @@ export function setNativeRounds(f: NativeRounds | null): void {
   native = f;
 }
 
+/** Rust 版が持たない設定(プレイアウトの L1 の調整値・効果選択の先読み)を使う時は、TS 版で評価する(黙って無視しない) */
+export function nativeUnsupported(w?: Partial<RewardWeights>): boolean {
+  return !!w && (w.l1 !== undefined || w.lookahead === true);
+}
+
 /**
  * 1ラウンド: 種から世界を1つ作り、alive の手を同じ世界・同じ乱数で評価する。
  * 戻り値は手ごとの報酬(alive でない手・例外を出した手は NaN)。純関数なので、どの Worker で評価しても同じ。
  */
 export function evalRound(env: SearchEnv, reg: Registry, seed: number, alive: number[]): number[] {
-  if (native) {
+  if (native && !nativeUnsupported(env.weights)) {
     try {
       return native(env, seed, alive);
     } catch {
@@ -192,6 +251,10 @@ export class MctsSearch {
   private sq: number[];
   private cross: number[][];
   private bonus: number[];
+  /** Sequential Halving: 段の数・1段の反復数・今の段で使った反復数 */
+  private stages: number;
+  private stageBudget: number;
+  private stageIt = 0;
 
   constructor(
     readonly n: number,
@@ -201,6 +264,10 @@ export class MctsSearch {
     readonly maxIt: number,
     /** 時間主導か(true の時だけ、判定できる精度に達したら早期終了する) */
     readonly timeDriven: boolean,
+    /** 劣る手を外す判定の厳しさ */
+    readonly z = 2.5,
+    /** 段階ごとに下位の半分を外す(予算が決まっている時だけ) */
+    readonly halving = false,
   ) {
     this.alive = Array.from({ length: n }, (_, i) => i);
     this.sum = new Array(n).fill(0);
@@ -208,6 +275,8 @@ export class MctsSearch {
     this.cross = Array.from({ length: n }, () => new Array(n).fill(0));
     this.bonus = new Array(n).fill(0);
     this.bonus[baseIdx] = prior;
+    this.stages = Math.max(1, Math.ceil(Math.log2(Math.max(1, n))));
+    this.stageBudget = maxIt / this.stages;
   }
 
   /** 次のラウンドを始められるか(反復の上限) */
@@ -222,13 +291,14 @@ export class MctsSearch {
   private verdict(a: number, b: number) {
     const dsum = this.sum[a] - this.sum[b];
     const dsq = this.sq[a] + this.sq[b] - 2 * this.cross[a][b];
-    return pairedVerdict(this.rounds, dsum, dsq, this.bonus[a] - this.bonus[b]);
+    return pairedVerdict(this.rounds, dsum, dsq, this.bonus[a] - this.bonus[b], this.z);
   }
 
   /** 次のラウンドの結果を反映する(alive でない手の値は無視する) */
   feed(r: number[]): void {
     if (!this.canStart) return;
     this.it += this.alive.length;
+    this.stageIt += this.alive.length;
     const ok = this.alive.filter((k) => !Number.isNaN(r[k]));
     this.errors += this.alive.length - ok.length;
     this.alive = ok;
@@ -254,6 +324,12 @@ export class MctsSearch {
       this.decided = true;
       this.finished = true;
       return;
+    }
+    // Sequential Halving: 段の予算を使い切ったら、平均の下位の半分を外す
+    if (this.halving && !this.timeDriven && this.alive.length > 2 && this.stageIt >= this.stageBudget) {
+      const ranked = this.alive.slice().sort((x, y) => this.mean(y) - this.mean(x));
+      this.alive = ranked.slice(0, Math.max(2, Math.ceil(ranked.length / 2)));
+      this.stageIt = 0;
     }
     // 時間主導の時は、1位と2位が判定できる精度に達していれば打ち切る
     if (this.timeDriven && this.rounds % 4 === 0) {
@@ -300,6 +376,8 @@ export interface SearchPlan {
   timeDriven: boolean;
   /** ラウンドの種の元 */
   base: number;
+  elimZ?: number;
+  halving?: boolean;
 }
 
 export function planSearch(
@@ -330,10 +408,12 @@ export function planSearch(
     ms,
     timeDriven,
     base: Math.floor(ctx.rand() * 0x7fffffff),
+    elimZ: o.elimZ,
+    halving: o.halving,
   };
 }
 
-const newSearch = (p: SearchPlan) => new MctsSearch(p.env.legal.length, p.baseIdx, p.prior, p.maxIt, p.timeDriven);
+const newSearch = (p: SearchPlan) => new MctsSearch(p.env.legal.length, p.baseIdx, p.prior, p.maxIt, p.timeDriven, p.elimZ ?? 2.5, p.halving ?? false);
 
 function infoOf(s: MctsSearch, plan: SearchPlan, ms: number, workers: number): SearchInfo {
   return { iterations: s.it, ms, timeDriven: plan.timeDriven, decided: s.decided, arms: s.n, rounds: s.rounds, errors: s.errors, workers };

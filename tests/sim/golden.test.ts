@@ -49,13 +49,14 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
       reasons: { ダイレクトアタック: 60 },
     });
   });
-  // 探索の既定を、根はペア比較・2手目以降は木(ptree。docs/ai-quality-plan.md §6.4)にした時に更新した固定値
+  // 探索の既定を、根はペア比較・2手目以降は木(ptree。docs/ai-quality-plan.md §6.4)にした時と、
+  // 報酬を軌跡平均(traj=1。§8)にした時に更新した固定値
   it('バッチ対戦: MCTS(20反復) 対 ルールベース 6試合', () => {
     expect(match({ kind: 'mcts', iterations: 20, ms: 100000 }, { kind: 'rule' }, 6, 1)).toEqual({
       winsA: 5,
       winsB: 1,
       draws: 0,
-      avgTurns: 15,
+      avgTurns: 13,
       reasons: { ダイレクトアタック: 6 },
     });
   });
