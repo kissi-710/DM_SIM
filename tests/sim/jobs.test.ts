@@ -89,7 +89,9 @@ describe('分割して実行 → 統合 = 直列実行', () => {
     const deck = A.slice(0, 12).concat(Array(28).fill('dummy'));
     const job: SimJob = { type: 'strength', deck, opponent: B, agent: { kind: 'random' }, games: 6, seed: 1 };
     const serial = runJob(reg, job) as CardStrength[];
-    expect(viaPlan(job, 4)).toEqual(serial);
+    // 60: 変種ごとの試合も、範囲で分ける(チャンクが変種の数より多くなる)
+    for (const parts of [4, 60]) expect(viaPlan(job, parts)).toEqual(serial);
+    expect(planJob(reg, job, 60).chunks.length).toBeGreaterThan(new Set(deck).size + 1);
   });
   it('チャンクには元の試行の通し番号の範囲が割り当てられる(重複・欠落がない)。シードは実行のシードのまま', () => {
     const job: SimJob = { type: 'prob', params: { deck: A, first: 0, goal, trials: 10, seed: 100 } };

@@ -167,18 +167,31 @@ function planChunks(reg: Pick<Registry, 'defs'>, job: SimJob, parts: number): Jo
       };
     }
     case 'strength': {
-      // 基準デッキと各変種を、それぞれ1チャンクにする
+      // 基準デッキと各変種の試合を、Worker の数に合わせて、試合の範囲で分ける(変種ごとに1チャンクだと、最後の巡で空きが出る)
       const { decks } = strengthVariants(job.deck);
-      const mk = (deckA: string[]): SimJob => ({
-        type: 'batch',
-        opts: [{ deckA, deckB: job.opponent, agentA: job.agent, agentB: job.agent, games: job.games, seed: job.seed, first: 'alternate' }],
+      const variants = [job.deck, ...decks];
+      const per = Math.max(1, Math.ceil(parts / variants.length));
+      const chunks: SimJob[] = [];
+      const units: number[] = [];
+      const owner: number[] = [];
+      variants.forEach((deckA, k) => {
+        const sizes = splitCounts(job.games, per, true);
+        const st = starts(sizes);
+        sizes.forEach((n, i) => {
+          // 通し番号の開始位置は偶数(先攻後攻の交互の位相と、試合ごとのシードを、直列の実行と一致させる)
+          chunks.push({
+            type: 'batch',
+            opts: [{ deckA, deckB: job.opponent, agentA: job.agent, agentB: job.agent, games: n, startIndex: st[i], seed: job.seed, first: 'alternate' }],
+          });
+          units.push(n);
+          owner.push(k);
+        });
       });
-      const chunks = [job.deck, ...decks].map(mk);
       return {
         chunks,
-        units: chunks.map(() => job.games),
+        units,
         merge: (r) => {
-          const rates = (r as MatchStats[][]).map((x) => x[0].winRateA);
+          const rates = variants.map((_, k) => mergeMatches(r.flatMap((x, i) => (owner[i] === k ? (x as MatchStats[]) : []))).winRateA);
           return composeStrength(reg, job, rates[0], rates.slice(1));
         },
       };
