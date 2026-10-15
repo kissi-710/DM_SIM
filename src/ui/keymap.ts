@@ -93,6 +93,7 @@ export const KEY = {
   peek: 's',
   askPay: 'p',
   oppHand: 't',
+  confirmEnd: 'u',
   grave: 'g',
   manaList: 'v',
 } as const;

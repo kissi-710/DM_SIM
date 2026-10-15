@@ -7,12 +7,13 @@ import type { Action, GameState, PlayerId } from '../engine/types';
 import { Board, buildDropMap, selectedActions } from './Board';
 import { CardView, civGradient } from './CardView';
 import { buildLogTree, cardName, CIV_NAME, recentFeed, reg, type LogNode } from './format';
+import { endTurnWarning } from './endTurn';
 import { Kbd } from './Kbd';
 import { digitOf, KEY, keyToken, SHORTCUTS } from './keymap';
 import { InputWidget, PaymentWidget } from './Widgets';
 import { parseRecord, saveRecord } from './record';
 import { makeRecord, type GameSetup, type Session, useGame } from './useGame';
-import { downloadText } from './util';
+import { downloadText, loadJson, saveJson } from './util';
 
 const STEP_LABEL: Record<string, string> = {
   start: 'ターン開始',
@@ -251,10 +252,25 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const legal = g.legal;
 
   // ターン終了の確認: まだ出せる・チャージできるカードがあるまま終えようとした時の1回目は止める
-  const [confirmEnd, setConfirmEnd] = useState(false);
+  // ターン終了の確認(endTurn.ts): 理由の文言が入っている間は「もう一度押せば終了」。設定で消せる
+  const [endWarn, setEndWarn] = useState<string | null>(null);
+  const [confirmOn, setConfirmOn] = useState(() => loadJson<boolean>('dmsim.confirmEnd', true));
+  const toggleConfirm = () =>
+    setConfirmOn((v) => {
+      saveJson('dmsim.confirmEnd', !v);
+      return !v;
+    });
+  /** 確認を出して止めたなら true */
+  const holdEnd = (): boolean => {
+    if (!confirmOn || endWarn !== null) return false;
+    const w = endTurnWarning(s, legal, viewer);
+    if (w === null) return false;
+    setEndWarn(w);
+    return true;
+  };
   useEffect(() => {
     setSelected(null);
-    setConfirmEnd(false);
+    setEndWarn(null);
   }, [pend?.id]);
 
   // 支払い: 払い方に選択があるときだけ、タップするマナを選ばせる(自明なら聞かずに自動で払う)
@@ -262,10 +278,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [payErr, setPayErr] = useState<string | null>(null);
   const act = (a: Action) => {
     setSelected(null);
-    if (a.type === 'END_TURN' && !confirmEnd && legal.some((x) => x.type === 'PLAY_CARD' || x.type === 'CHARGE_MANA')) {
-      setConfirmEnd(true);
-      return;
-    }
+    if (a.type === 'END_TURN' && holdEnd()) return;
     if (askPay && a.type === 'PLAY_CARD' && g.me !== null && !a.extra?.pay) {
       const ch = payChoice(mkCtx(s, reg), g.me, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
       if (ch.need > 0 && !ch.obvious && ch.auto.length === ch.need) {
@@ -443,6 +456,10 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         setAskPay((v) => !v);
         return done();
       }
+      if (k === KEY.confirmEnd) {
+        toggleConfirm();
+        return done();
+      }
       if (k === KEY.oppHand && g.me !== null) {
         setShowOpp((v) => !v);
         return done();
@@ -519,9 +536,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         }
         // マナステップ: マナチャージを飛ばして、そのままターンを終える(出せる・チャージできるカードがあれば、1回目は確認)
         if (stepActs.skipMana) {
-          if (!confirmEnd && legal.some((x) => x.type === 'PLAY_CARD' || x.type === 'CHARGE_MANA')) {
-            setConfirmEnd(true);
-          } else {
+          if (!holdEnd()) {
             endAfterSkip.current = true;
             g.perform(stepActs.skipMana);
           }
@@ -642,6 +657,9 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                   <input type="checkbox" checked={askPay} onChange={(e) => setAskPay(e.target.checked)} /> 選べるときはタップするマナを選ぶ <Kbd k={KEY.askPay} />
                 </label>
               )}
+              <label className="check" title="出せるカードがあるのに何もせずにターンを終えようとした時などに、もう一度押すよう確認します">
+                <input type="checkbox" checked={confirmOn} onChange={toggleConfirm} /> ターン終了の確認を出す <Kbd k={KEY.confirmEnd} />
+              </label>
               <label className="check">
                 <input type="checkbox" checked={showOpp} onChange={(e) => setShowOpp(e.target.checked)} /> 相手の手札を見る{' '}
                 {g.me !== null && <Kbd k={KEY.oppHand} />}
@@ -773,7 +791,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
               )}
               {stepActs.endTurn && (
                 <button className="primary" onClick={() => act(stepActs.endTurn!)}>
-                  {confirmEnd ? 'まだ出せるカードがあります。もう一度で終了' : 'ターン終了'} <Kbd k={KEY.endTurn} />
+                  {endWarn !== null ? `${endWarn}。もう一度で終了` : 'ターン終了'} <Kbd k={KEY.endTurn} />
                 </button>
               )}
               {/* マナステップからも、そのままターンを終えられる(マナチャージを飛ばして終了) */}
@@ -781,14 +799,13 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                 <button
                   className="primary"
                   onClick={() => {
-                    if (!confirmEnd && legal.some((x) => x.type === 'PLAY_CARD' || x.type === 'CHARGE_MANA')) setConfirmEnd(true);
-                    else {
+                    if (!holdEnd()) {
                       endAfterSkip.current = true;
                       g.perform(stepActs.skipMana!);
                     }
                   }}
                 >
-                  {confirmEnd ? 'まだ出せるカードがあります。もう一度で終了' : 'ターン終了'} <Kbd k={KEY.endTurn} />
+                  {endWarn !== null ? `${endWarn}。もう一度で終了` : 'ターン終了'} <Kbd k={KEY.endTurn} />
                 </button>
               )}
             </div>
