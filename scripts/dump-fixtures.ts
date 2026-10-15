@@ -1,7 +1,8 @@
 // Rust 版エンジンの差分テスト用の正解データを書き出す(TS 版が基準)。
 //   npx tsx scripts/dump-fixtures.ts rust/fixtures/games.json
 // 内容: 展開済みのカード定義(registry.defs)と、数試合の「状態 → 合法手 → 行動」の列。
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { CARD_DB, deckCards } from '../src/cards';
 import { makeRuleBased } from '../src/ai/rulebased';
 import { randomAgent } from '../src/ai/random';
@@ -144,5 +145,6 @@ for (let i = 1; i < rounds.length && pairedTrees.length < 16; i += 4) {
   pairedTrees.push({ env, c, maxDepth, seeds, alives, rows });
 }
 const defs = plain(reg.defs);
+mkdirSync(dirname(out), { recursive: true }); // rust/fixtures/ は git の管理外(CI の新しい作業ツリーには無い)
 writeFileSync(out, JSON.stringify({ defs, games, rounds, trees, pairedTrees }));
 console.log('games', games.map((g) => g.actions.length).join(','), 'rounds', rounds.length);
