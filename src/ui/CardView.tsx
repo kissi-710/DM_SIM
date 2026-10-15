@@ -1,5 +1,5 @@
 // カード1枚の表示(テキストのみ。image があれば表示する)。
-import type { CSSProperties, PointerEvent, ReactNode } from 'react';
+import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { charsOf, hasKeyword, powerOf } from '../engine/derive';
 import { mkCtx, permByPid } from '../engine/state';
 import type { GameState } from '../engine/types';
@@ -24,7 +24,13 @@ export interface CardProps {
   /** 直近のイベントで動いたカード(強調表示) */
   flash?: boolean;
   badge?: ReactNode;
-  onClick?: () => void;
+  /** 数字キーで選べる番号(1〜9)。画面に出して、キーボードで選べることを示す */
+  num?: number;
+  /** キーボード(Tab で届いて Enter/Space)で操作された時。無ければ、DOM の click と同じ扱い */
+  onActivate?: () => void;
+  /** キーボードのカーソルがある(← → で候補を移して、詳細を読む) */
+  cursor?: boolean;
+  onClick?: (e: MouseEvent) => void;
   onPointerDown?: (e: PointerEvent) => void;
   onHover?: (uid: number | null) => void;
   dragKey?: string;
@@ -53,26 +59,45 @@ export function CardView(p: CardProps) {
   if (p.draggable) cls.push('draggable');
   if (p.dim) cls.push('dim');
   if (p.flash) cls.push('flash');
+  if (p.cursor) cls.push('cursor');
   if (p.sick) cls.push('sick');
   if (card?.ex) cls.push('ex');
+  const interactive = !!(p.onClick || p.onActivate || p.selectable || p.selected);
   const handlers = {
     onClick: p.onClick,
     onPointerDown: p.onPointerDown,
     onMouseEnter: () => p.onHover?.(uid),
     onMouseLeave: () => p.onHover?.(null),
     'data-drag': p.dragKey,
+    'data-uid': uid,
     style: p.style,
     // 支援技術向け: 操作できるカードはボタンとして、名前と状態を読み上げる
-    role: p.onClick || p.selectable ? ('button' as const) : undefined,
+    role: interactive ? ('button' as const) : undefined,
+    tabIndex: interactive ? 0 : undefined,
+    onKeyDown: interactive
+      ? (e: KeyboardEvent<HTMLDivElement>) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          // 対戦画面全体のキー(window)に渡さない。Tab で届いたカードへの Enter/Space は、そのカードの操作
+          e.preventDefault();
+          e.stopPropagation();
+          if (p.onActivate) p.onActivate();
+          else e.currentTarget.click();
+        }
+      : undefined,
     'aria-pressed': p.selected ? true : undefined,
     'aria-label': undefined as string | undefined,
   };
+  const num = p.num !== undefined && p.num >= 1 && p.num <= 9 ? (
+    <span className="num-badge" aria-hidden="true">
+      {p.num}
+    </span>
+  ) : null;
   if (p.hidden || !card || card.defId === '?') {
     cls.push('back');
     handlers['aria-label'] = '裏向きのカード';
     return (
       <div className={cls.join(' ')} {...handlers}>
-        ?
+        ?{num}
       </div>
     );
   }
@@ -126,6 +151,7 @@ export function CardView(p: CardProps) {
         <span>{def.faces.length > 1 && !inPlay ? 'ツイン' : ''}</span>
       </div>
       {p.badge ? <span className="badge">{p.badge}</span> : null}
+      {num}
     </div>
   );
 }
