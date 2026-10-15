@@ -11,6 +11,8 @@ import { InputWidget, PaymentWidget } from './Widgets';
 import { parseRecord, saveRecord } from './record';
 import { makeRecord, type GameSetup, type Session, useGame } from './useGame';
 import { downloadText } from './util';
+import { FxLayer } from './FxLayer';
+import { cuesOf, loadFxEnabled, saveFxEnabled } from './fx';
 
 const STEP_LABEL: Record<string, string> = {
   start: 'ターン開始',
@@ -234,7 +236,9 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
 }
 
 export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExit: () => void; onRematch: () => void }) {
-  const g = useGame(setup);
+  // 演出(オフにすると、オーバーレイ・アニメーション・演出のための CPU の待ち時間のすべてが無効になる)
+  const [fxOn, setFxOn] = useState(loadFxEnabled);
+  const g = useGame(setup, fxOn);
   const { session } = g;
   const s = session.state;
   const [hover, setHover] = useState<number | null>(null);
@@ -254,6 +258,16 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     }
     return set;
   }, [session.last]);
+
+  // 演出: 直近の1手のイベントから作る(開始直後は、最初のターンの開始を見せる)。「一気に進める」中は出さない
+  const fxActive = fxOn && !g.fast;
+  const fxEvents = session.actions.length === 0 ? session.log : session.last;
+  const fxCues = useMemo(() => (fxActive ? cuesOf(s, fxEvents, g.me) : []), [fxActive, fxEvents]);
+  const shieldHit = useMemo(() => {
+    const set = new Set<PlayerId>();
+    if (fxActive) for (const e of session.last) if (e.type === 'shieldBroken') set.add(e.owner as PlayerId);
+    return set;
+  }, [fxActive, session.last]);
 
   // 盤面の下に出す「直近の出来事」(CPU の手を目で追えるように)
   const feed = useMemo(() => recentFeed(s, session.log.slice(-80), g.me, 3), [s, session.log, g.me]);
@@ -508,7 +522,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const tip = tips[Math.floor(s.turn / 2) % tips.length];
 
   return (
-    <div className={'game' + (sideOpen ? '' : ' side-closed')}>
+    <div className={'game' + (sideOpen ? '' : ' side-closed') + (fxActive ? ' fx' : '')}>
       <div className="game-head">
         <button onClick={onExit}>← メニュー</button>
         <span className={'status-chip ' + (setup.seats[s.active].kind === 'human' ? 'me' : 'cpu')}>
@@ -561,6 +575,17 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                   <input type="checkbox" checked={askPay} onChange={(e) => setAskPay(e.target.checked)} /> 選べるときはタップするマナを選ぶ
                 </label>
               )}
+              <label className="check" title="ターンの切り替わり・攻撃・シールドブレイクなどの演出と、そのための CPU の待ち時間をまとめて切ります">
+                <input
+                  type="checkbox"
+                  checked={fxOn}
+                  onChange={(e) => {
+                    setFxOn(e.target.checked);
+                    saveFxEnabled(e.target.checked);
+                  }}
+                />{' '}
+                演出を表示する
+              </label>
               <label className="check">
                 <input type="checkbox" checked={showOpp} onChange={(e) => setShowOpp(e.target.checked)} /> 相手の手札を見る
               </label>
@@ -600,7 +625,9 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           selected={selected}
           onSelect={setSelected}
           flash={flash}
-                  />
+          hit={shieldHit}
+        />
+        <FxLayer cues={fxCues} token={session.last} enabled={fxActive} />
 
         {/* CPU が考えている間の表示 */}
         {!interactive && !showHuman && s.winner === null && pend && (

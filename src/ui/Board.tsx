@@ -82,6 +82,8 @@ interface BoardProps {
   onSelect: (key: string | null) => void;
   /** 直近のイベントで動いたカード(強調表示) */
   flash?: Set<number>;
+  /** 直近のイベントでシールドが割られたプレイヤー(演出で揺らす) */
+  hit?: Set<PlayerId>;
 }
 
 export function Board(b: BoardProps) {
@@ -254,7 +256,7 @@ export function Board(b: BoardProps) {
     const canPeek = mine && b.peek;
     return (
       <div
-        className={(isOppShield ? zcls(key, 'chip shield') : 'chip shield') + (canPeek ? ' clickable' : '')}
+        className={(isOppShield ? zcls(key, 'chip shield') : 'chip shield') + (canPeek ? ' clickable' : '') + (b.hit?.has(p) ? ' hit' : '')}
         {...(isOppShield ? zoneProps(key) : {})}
         onDoubleClick={canPeek ? () => openList(p, 'shield') : undefined}
         title={canPeek ? 'ダブルクリックで一覧' : undefined}

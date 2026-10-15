@@ -26,10 +26,33 @@ const setup = (over: Partial<GameSetup> = {}): GameSetup => ({
   ...over,
 });
 
+describe('GameView の演出', () => {
+  it('演出が有効なら、最初のターンの開始を見せ、盤面に fx の印が付く', async () => {
+    const { container } = render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
+    expect(container.querySelector('.game.fx')).not.toBeNull();
+    expect(await screen.findByText('あなたのターン')).toBeInTheDocument();
+  });
+  it('演出スキップ(保存された設定が無効)なら、オーバーレイも fx の印も出ない', () => {
+    localStorage.setItem('dmsim.fx', JSON.stringify({ enabled: false }));
+    const { container } = render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
+    expect(container.querySelector('.game.fx')).toBeNull();
+    expect(container.querySelector('.fx-layer')).toBeNull();
+  });
+  it('「演出を表示する」を切ると、その場で演出が消え、設定が保存される', async () => {
+    const { container } = render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
+    await screen.findByText('あなたのターン');
+    await userEvent.click(screen.getByRole('button', { name: /表示/ }));
+    await userEvent.click(screen.getByLabelText(/演出を表示する/));
+    expect(container.querySelector('.fx-layer')).toBeNull();
+    expect(container.querySelector('.game.fx')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('dmsim.fx')!)).toEqual({ enabled: false });
+  });
+});
+
 describe('GameView', () => {
   it('人間の手番では、手札のカードが操作できるボタンとして出て、ステップ・ターンが表示される', () => {
     render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
-    expect(screen.getByText(/1ターン目/)).toBeInTheDocument();
+    expect(document.querySelector('.status-chip')?.textContent).toMatch(/1ターン目/);
     expect(screen.getByText(/マナチャージ/, { selector: '.pill, .step, span, div' })).toBeInTheDocument();
     const hand = screen.getAllByRole('button').filter((b) => b.classList.contains('card'));
     expect(hand.length).toBeGreaterThanOrEqual(5);
