@@ -91,7 +91,8 @@ describe('分割して実行 → 統合 = 直列実行', () => {
     const serial = runJob(reg, job) as CardStrength[];
     // 60: 変種ごとの試合も、範囲で分ける(チャンクが変種の数より多くなる)
     for (const parts of [4, 60]) expect(viaPlan(job, parts)).toEqual(serial);
-    expect(planJob(reg, job, 60).chunks.length).toBeGreaterThan(new Set(deck).size + 1);
+    // 基準 + 旧方式の変種 + 新方式の変種
+    expect(planJob(reg, job, 60).chunks.length).toBeGreaterThan(new Set(deck).size * 2 + 1);
   });
   it('チャンクには元の試行の通し番号の範囲が割り当てられる(重複・欠落がない)。シードは実行のシードのまま', () => {
     const job: SimJob = { type: 'prob', params: { deck: A, first: 0, goal, trials: 10, seed: 100 } };

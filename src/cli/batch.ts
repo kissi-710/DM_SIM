@@ -38,7 +38,7 @@ function usage(): never {
   --precision <pt> 勝率の95%区間の半幅(%)がこの値以下になるまで、--games ごとに続ける(最大 --maxGames 試合)。差が大きい時は早く終わる
   --iterations <n> mcts の反復回数(これだけを指定すると再現できる。既定 120)
   --ms <n>         mcts の最大思考時間(指定すると実行環境の速さ・負荷で結果が変わる)
-  --strength       カード単体の強さ(1枚を入れ替えた時の勝率差)を測る(デッキA vs デッキB、ルールベース同士)
+  --strength       カード単体の強さを測る(デッキA vs デッキB、ルールベース同士)。全コピーを同コスト・文明の無能力カードに替えた時の勝率差(推奨)と、1枚だけを dummy に替えた時(旧方式)を並べる。変種は種類数×2 通り
   --json           JSONで出力`);
   process.exit(0);
 }
@@ -109,9 +109,17 @@ if (args.strength) {
     { type: 'strength', deck: deckCards(deckA), opponent: deckCards(deckB), agent: { kind: 'rule' }, games, seed },
     jobs,
   )) as CardStrength[];
+  const pt = (x: number, w = 6) => (x * 100).toFixed(1).padStart(w);
   console.log(`■ カード単体の強さ: ${deckA} vs ${deckB}(ルールベース同士・各${games}試合)`);
+  console.log('  全枚数: そのカードの全コピーを、同じコスト・文明の無能力クリーチャーに替えた時の勝率差(推奨。並びもこの順)');
+  console.log('  1枚あたり: 全枚数の差 ÷ 枚数 / 1枚→dummy: 最初の1枚だけを何もしない dummy に替えた時(旧方式。枚数の少ないカードが大きく出る)');
+  console.log(`  ${'全枚数'.padStart(8)} ${'1枚あたり'.padStart(8)} ${'1枚→dummy'.padStart(8)}`);
   for (const r of res) {
-    console.log(`  ${(r.delta * 100).toFixed(1).padStart(6)}pt  ${r.name} ×${r.copies}  (95%信頼区間 ${(r.ci95[0] * 100).toFixed(1)} 〜 ${(r.ci95[1] * 100).toFixed(1)}、同時比較 ${(r.ciFamily[0] * 100).toFixed(1)} 〜 ${(r.ciFamily[1] * 100).toFixed(1)})`);
+    const a = r.all;
+    console.log(
+      `  ${pt(a.delta, 6)}pt ${pt(a.perCopy, 6)}pt ${pt(r.one.delta, 6)}pt  ${r.name} ×${r.copies}  ` +
+        `(全枚数: 95%信頼区間 ${pt(a.ci95[0], 0)} 〜 ${pt(a.ci95[1], 0)}、同時比較 ${pt(a.ciFamily[0], 0)} 〜 ${pt(a.ciFamily[1], 0)})`,
+    );
   }
   process.exit(0);
 }

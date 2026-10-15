@@ -1,10 +1,16 @@
 // カードDBとデッキリスト(decks.md)。engine は CardDB を引数で受け取るだけなので、ここで束ねる。
+import { blankDefsFor } from '../engine/blank';
 import type { CardDB, CardDef } from '../engine/types';
 import raw from './data/cards.json';
 
+/** 実在するカード(一覧・デッキ構築に出る) */
 export const CARD_LIST = raw as unknown as CardDef[];
 
-export const CARD_DB: CardDB = Object.fromEntries(CARD_LIST.map((c) => [c.id, c]));
+/**
+ * カードDB。CARD_LIST に加えて、カード単体の強さの測定で差し替える「無能力」カード(blank-コスト-文明)を持つ。
+ * 無能力カードは、探索用の WASM にも渡る(定義を1回だけ読む)ので、DB に入れておく。一覧(CARD_LIST)には出ない。
+ */
+export const CARD_DB: CardDB = Object.fromEntries([...CARD_LIST, ...blankDefsFor(CARD_LIST)].map((c) => [c.id, c]));
 
 export interface DeckPreset {
   id: string;

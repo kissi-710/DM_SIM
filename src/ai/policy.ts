@@ -1,4 +1,5 @@
 // 情報条件(InfoPolicy)の作成と、決め打ち(仮説)のカード名の解決。画面・CLI で共通に使う。
+import { isBlankId } from '../engine/blank';
 import type { CardDB } from '../engine/types';
 import type { InfoPolicy, InfoPreset } from '../engine/view';
 
@@ -33,7 +34,7 @@ export function resolveCardId(db: CardDB, name: string): string | undefined {
   const n = name.trim();
   if (!n) return undefined;
   if (db[n]) return n;
-  const defs = Object.values(db).filter((d) => d.id !== '?' && d.id !== 'dummy');
+  const defs = Object.values(db).filter((d) => d.id !== '?' && d.id !== 'dummy' && !isBlankId(d.id));
   return (
     defs.find((d) => d.name === n || d.faces.some((f) => f.name === n))?.id ??
     defs.find((d) => d.name.includes(n) || d.faces.some((f) => f.name.includes(n)))?.id

@@ -234,7 +234,7 @@ export function BatchView() {
               <button className="primary" onClick={run}>
                 バッチ対戦を実行
               </button>
-              <button onClick={runStrength} title="デッキの各カードを1枚抜いた時の勝率差(Aのデッキ vs Bのデッキ。両者ともAのAI・情報条件で対戦)。カードの種類数+1通りぶん対戦するので、時間がかかります">
+              <button onClick={runStrength} title="デッキの各カードを、全枚数まとめて同コスト・文明の無能力カードに替えた時の勝率差(Aのデッキ vs Bのデッキ。両者ともAのAI・情報条件で対戦)。旧方式(1枚だけ dummy)も並べます。カードの種類数×2+1通りぶん対戦するので、時間がかかります">
                 カードの強さを測る
               </button>
             </>
@@ -277,18 +277,22 @@ export function BatchView() {
         )}
         {strength && (
           <div className="panel col">
-            <h3>カード単体の強さ(1枚を何もしないカードに入れ替えた時の勝率差)</h3>
+            <h3>カード単体の強さ(カードの全枚数を、同じコスト・文明の無能力カードに替えた時の勝率差)</h3>
             <p className="muted">
-              シード {strength.seed} / {AGENT_LABEL[kindA]}同士・各 {games} 試合
+              シード {strength.seed} / {AGENT_LABEL[kindA]}同士・各 {games} 試合。並びは「全枚数」の勝率差の順。
+              無能力カードは、元のカードと同じコスト・文明で、パワーはコスト × 1000 のクリーチャー(マナカーブと文明を保ち、能力だけが消える)。
+              「1枚→dummy」は旧方式(最初の1枚だけを、唱えられずマナにしかならないカードに替える)で、枚数の少ないカードが大きく出るので、比べる用に並べています。
             </p>
             <table>
               <thead>
                 <tr>
                   <th>カード</th>
                   <th>枚数</th>
-                  <th>勝率差</th>
+                  <th title="全コピーを無能力カードに替えた時の勝率差(基準 − 替えた時)。正ならそのカードは強い">全枚数の差</th>
+                  <th title="全枚数の差 ÷ 枚数">1枚あたり</th>
                   <th>95%信頼区間</th>
                   <th title="全カードを同時に比べるための区間(全体で95%)。順位を読む時はこちらを見る">同時比較の区間</th>
+                  <th title="旧方式: 最初の1枚だけを dummy に替えた時の勝率差">1枚→dummy</th>
                 </tr>
               </thead>
               <tbody>
@@ -296,13 +300,15 @@ export function BatchView() {
                   <tr key={c.defId}>
                     <td>{c.name}</td>
                     <td>{c.copies}</td>
-                    <td style={{ color: c.delta > 0 ? 'var(--good)' : 'var(--bad)' }}>{(c.delta * 100).toFixed(1)}pt</td>
+                    <td style={{ color: c.all.delta > 0 ? 'var(--good)' : 'var(--bad)' }}>{(c.all.delta * 100).toFixed(1)}pt</td>
+                    <td>{(c.all.perCopy * 100).toFixed(1)}pt</td>
                     <td className="muted">
-                      {(c.ci95[0] * 100).toFixed(1)} 〜 {(c.ci95[1] * 100).toFixed(1)}
+                      {(c.all.ci95[0] * 100).toFixed(1)} 〜 {(c.all.ci95[1] * 100).toFixed(1)}
                     </td>
                     <td className="muted">
-                      {(c.ciFamily[0] * 100).toFixed(1)} 〜 {(c.ciFamily[1] * 100).toFixed(1)}
+                      {(c.all.ciFamily[0] * 100).toFixed(1)} 〜 {(c.all.ciFamily[1] * 100).toFixed(1)}
                     </td>
+                    <td className="muted">{(c.one.delta * 100).toFixed(1)}pt</td>
                   </tr>
                 ))}
               </tbody>
