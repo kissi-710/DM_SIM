@@ -1,5 +1,6 @@
 // 調査結果のエクスポート(JSON / CSV)と、テキスト整形(spec 6.6)。
 import type { PatternResult, ProbResult } from './solitaire';
+import { wilson } from './stats';
 
 const esc = (v: string | number) => {
   const s = String(v);
@@ -16,9 +17,11 @@ export function probToCsv(r: ProbResult): string {
   rows.push(['95%信頼区間(下)', r.policy.ci95[0]]);
   rows.push(['95%信頼区間(上)', r.policy.ci95[1]]);
   if (r.search) {
-    rows.push(['探索による上限(達成率)', r.search.rate]);
+    // 到達を確認した割合(下限)と、未判定を含めた最大値。判定できた中の割合は、未判定が多いと高く偏る
+    rows.push(['探索による上限(到達を確認した割合)', r.search.achieved / Math.max(1, r.trials)]);
     rows.push(['探索による上限(未判定を含めた最大値)', r.search.maxRate]);
     rows.push(['探索: 未判定の試行', r.search.unknown]);
+    rows.push(['探索: 判定できた中の割合(参考。未判定を除くので偏る)', r.search.rate]);
   }
   if (r.exact) rows.push(['超幾何分布の厳密値', r.exact.value]);
   return rows.map((row) => row.map(esc).join(',')).join('\n');
@@ -37,8 +40,12 @@ export function formatProb(r: ProbResult): string {
   lines.push(`試行 ${r.trials} 回 / 調査ターン ${r.maxTurns} / ${r.ms}ms`);
   lines.push(`方針プレイ: ${pct(r.policy.rate)}(95%信頼区間 ${pct(r.policy.ci95[0])} 〜 ${pct(r.policy.ci95[1])})`);
   if (r.search) {
+    // 「確認できた割合 〜 確認できた+未判定の割合」を出す。判定できた中の割合は、到達できる試行ほど早く確定するので、
+    // 未判定が多いと高く偏る(参考として添える)
+    const lower = r.search.achieved / Math.max(1, r.trials);
+    const [lo, hi] = wilson(r.search.achieved, r.trials);
     lines.push(
-      `探索による上限: ${pct(r.search.rate)}${r.search.unknown > 0 ? `〜${pct(r.search.maxRate)}` : ''}(95%信頼区間 ${pct(r.search.ci95[0])} 〜 ${pct(r.search.ci95[1])}、未判定 ${r.search.unknown} 回、平均 ${r.search.avgNodes.toFixed(0)} ノード)`,
+      `探索による上限: ${pct(lower)}${r.search.unknown > 0 ? `〜${pct(r.search.maxRate)}` : ''}(確認できた割合の95%信頼区間 ${pct(lo)} 〜 ${pct(hi)}、未判定 ${r.search.unknown} 回、判定できた中の割合 ${pct(r.search.rate)}、平均 ${r.search.avgNodes.toFixed(0)} ノード)`,
     );
   }
   if (r.exact) lines.push(`厳密値(超幾何分布): ${pct(r.exact.value, 2)} … ${r.exact.note}`);

@@ -59,7 +59,9 @@ describe('probToCsv', () => {
         exact: { value: 0.25, note: 'メモ' },
       }),
     );
-    expect(csv).toContain('探索による上限(達成率),0.5');
+    // 下限は、判定できた中の割合(0.5)ではなく、到達を確認した試行 5 / 全 100 試行
+    expect(csv).toContain('探索による上限(到達を確認した割合),0.05');
+    expect(csv).toContain('探索: 判定できた中の割合(参考。未判定を除くので偏る),0.5');
     expect(csv).toContain('探索: 未判定の試行,2');
     expect(csv).toContain('探索による上限(未判定を含めた最大値),0.7');
     expect(csv).toContain('超幾何分布の厳密値,0.25');
@@ -79,6 +81,15 @@ describe('patternsToCsv', () => {
   });
 });
 
+describe('formatProb(未判定が多い時の上限)', () => {
+  it('未判定を除いた割合が 100% でも、下限は到達を確認した試行 / 全試行になる', () => {
+    // 30 試行のうち 19 が到達と確認、11 が未判定(実際の CLI の出力で 100.0%〜100.0% になっていた)
+    const t = formatProb(prob({ trials: 30, search: { achieved: 19, unknown: 11, judged: 19, rate: 1, ci95: [0.83, 1], avgNodes: 3647, maxRate: 1 } }));
+    expect(t).toContain('探索による上限: 63.3%〜100.0%');
+    expect(t).not.toContain('100.0%〜100.0%');
+  });
+});
+
 describe('formatProb', () => {
   it('試行回数・達成率・累積の行が出る(0ターン目は出さない)', () => {
     const t = formatProb(prob());
@@ -90,14 +101,15 @@ describe('formatProb', () => {
   });
   it('未判定がなければ、探索の上限に範囲(最大値)は付かない', () => {
     const t = formatProb(prob({ search: { achieved: 5, unknown: 0, judged: 10, rate: 0.5, ci95: [0.2, 0.8], avgNodes: 10, maxRate: 0.5 } }));
-    expect(t).toContain('探索による上限: 50.0%(95%信頼区間');
-    expect(t).not.toContain('50.0%〜');
+    expect(t).toContain('探索による上限: 5.0%(確認できた割合の95%信頼区間');
+    expect(t).not.toContain('5.0%〜');
   });
   it('探索・厳密値の行は、あるときだけ出る', () => {
     expect(formatProb(prob())).not.toContain('探索による上限');
     const t = formatProb(prob({ search: { achieved: 5, unknown: 2, judged: 8, rate: 0.5, ci95: [0.1, 0.9], avgNodes: 10, maxRate: 0.7 }, exact: { value: 0.123, note: 'N' } }));
-    expect(t).toContain('探索による上限: 50.0%〜70.0%');
+    expect(t).toContain('探索による上限: 5.0%〜70.0%');
     expect(t).toContain('未判定 2 回');
+    expect(t).toContain('判定できた中の割合 50.0%');
     expect(t).toContain('厳密値(超幾何分布): 12.30% … N');
   });
 });
