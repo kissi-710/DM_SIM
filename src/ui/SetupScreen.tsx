@@ -1,5 +1,5 @@
 // 対戦設定: 座席ごとの人間/CPU・強さ・情報条件・デッキ・先攻後攻・シード(spec 5.1)。
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AGENT_LABEL, type AgentKind } from '../ai';
 import { checkHypotheses, hypothesisProblems, makePolicy } from '../ai/policy';
 import { checkDeck } from '../engine/engine';
@@ -9,6 +9,7 @@ import { allDecks, findDeck } from './decks';
 import type { GameSetup, Seat } from './useGame';
 import { loadJson, saveJson } from './util';
 import { errorMessage } from '../engine/types';
+import { aiEngine, onAiEngine, warmAi, type AiEngine } from './aiClient';
 
 interface SeatForm {
   kind: 'human' | 'cpu';
@@ -43,6 +44,17 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
   const [think, setThink] = useState(saved?.think ?? 1200);
   const [strict, setStrict] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  // モンテカルロの CPU がいる時は、探索の Worker を先に起動し、どのエンジン(Rust 版 / TS 版)で探索するかを知らせる
+  const usesMcts = seats.some((x) => (mode === 'watch' || x.kind === 'cpu') && x.agent === 'mcts');
+  const [engine, setEngine] = useState<AiEngine>(aiEngine());
+  useEffect(() => {
+    if (!usesMcts) return;
+    const off = onAiEngine(setEngine);
+    warmAi();
+    setEngine(aiEngine());
+    return off;
+  }, [usesMcts]);
 
   const setSeat = (i: number, patch: Partial<SeatForm>) => setSeats((cur) => cur.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
@@ -170,6 +182,15 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
           <input type="number" value={think} min={50} max={20000} step={100} onChange={(e) => setThink(Math.max(50, Number(e.target.value) || 1200))} />
         </label>
         <span className="muted">1手ごとの上限です。手の優劣がはっきりすれば、早めに打ち切ります。長いほど強くなります。</span>
+        {usesMcts && (
+          <span className="muted" role="status">
+            {engine === 'native'
+              ? '探索エンジン: Rust 版(WASM)'
+              : engine === 'ts'
+                ? '探索エンジン: TS 版。Rust 版(WASM)が見つからないため、同じ思考時間で約 6 分の 1 の探索しかできず、CPU は弱くなります(npm run build:wasm で Rust 版を作れます)'
+                : '探索エンジン: 確認中…'}
+          </span>
+        )}
         <label className="row">
           CPUの手の間隔(ms)
           <input type="number" value={delay} min={0} max={3000} step={100} onChange={(e) => setDelay(Number(e.target.value))} />

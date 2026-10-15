@@ -14,6 +14,32 @@ export function aiParallelism(): number {
   return Math.max(1, Math.min(8, (hc ?? 4) - 1));
 }
 
+/** 探索に使うエンジン: Rust 版(WASM)/ TS 版(WASM がない・読み込めない。約 6 倍遅い)/ まだ分からない */
+export type AiEngine = 'unknown' | 'native' | 'ts';
+let engine: AiEngine = 'unknown';
+const engineListeners = new Set<(e: AiEngine) => void>();
+
+export function aiEngine(): AiEngine {
+  return engine;
+}
+
+/** エンジンの種類が分かった時・変わった時に呼ばれる。戻り値で購読をやめる */
+export function onAiEngine(cb: (e: AiEngine) => void): () => void {
+  engineListeners.add(cb);
+  return () => engineListeners.delete(cb);
+}
+
+function setEngine(e: AiEngine): void {
+  if (e === engine) return;
+  engine = e;
+  for (const cb of engineListeners) cb(e);
+}
+
+/** Worker を先に起動しておく(最初の CPU の手で、起動を待たせない)。種類は onAiEngine で分かる */
+export function warmAi(): void {
+  if (getPool(aiParallelism()).length === 0) setEngine('ts');
+}
+
 type Waiting = { resolve: (m: AiWorkerOut & { ok: true }) => void; reject: (e: Error) => void };
 
 const pool: Worker[] = [];
@@ -27,6 +53,12 @@ function spawn(): Worker | null {
     const w = new Worker(new URL('../workers/ai.worker.ts', import.meta.url), { type: 'module' });
     w.onmessage = (e: MessageEvent<AiWorkerOut>) => {
       const m = e.data;
+      if (!('ok' in m)) {
+        // どれか 1 本でも Rust 版なら、Rust 版(全員が同じビルドなので、通常は揃う)
+        if (m.native) setEngine('native');
+        else if (engine === 'unknown') setEngine('ts');
+        return;
+      }
       const p = waiting.get(m.id);
       if (!p) return;
       waiting.delete(m.id);
@@ -86,7 +118,10 @@ export function cancelAi(): void {
 export function chooseWithWorker(req: DecideReq): Promise<Action> {
   const n = canParallelize(CARD_DB, req) ? aiParallelism() : 1;
   const ws = getPool(n);
-  if (ws.length === 0) return Promise.resolve().then(() => decide(CARD_DB, req));
+  if (ws.length === 0) {
+    setEngine('ts');
+    return Promise.resolve().then(() => decide(CARD_DB, req));
+  }
   if (ws.length === 1 || n === 1) {
     return call(ws[0], (id) => ({ id, req })).then((m) => {
       if (!('action' in m)) throw new Error('不正な応答');

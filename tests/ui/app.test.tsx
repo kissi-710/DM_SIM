@@ -124,6 +124,14 @@ describe('SetupScreen', () => {
     expect(start).toHaveBeenCalledTimes(1);
     expect(start.mock.calls[0][0].seed).toBe(0);
   });
+  it('モンテカルロの CPU を選ぶと、探索エンジンの種類を出す(Worker がない環境は TS 版)', async () => {
+    render(<SetupScreen mode="watch" onBack={() => {}} onStart={start} />);
+    expect(screen.queryByText(/探索エンジン/)).toBeNull();
+    const strength = screen.getAllByRole('combobox').find((s) => [...(s as HTMLSelectElement).options].some((o) => o.value === 'mcts'))!;
+    await userEvent.selectOptions(strength, 'mcts');
+    expect(await screen.findByText(/探索エンジン: TS 版/)).toBeInTheDocument();
+    expect(screen.getByText(/npm run build:wasm/)).toBeInTheDocument();
+  });
   it('決め打ちを選んだ時は、仮説のカードの入力欄が出て、空のままでは始められない', async () => {
     render(<SetupScreen mode="watch" onBack={() => {}} onStart={start} />);
     expect(screen.queryByText('仮説のカード')).toBeNull();

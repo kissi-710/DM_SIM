@@ -18,6 +18,8 @@ export type AiWorkerIn =
   /** 並列探索のラウンドを評価する。rows[i] は seeds[i] の結果 */
   | { kind: 'rounds'; id: number; sid: number; seeds: number[]; alive: number[] };
 export type AiWorkerOut =
+  /** 起動の完了。native は Rust 版(WASM)で探索するか(読み込めなければ TS 版) */
+  | { kind: 'ready'; native: boolean }
   | { id: number; ok: true; action: Action; ms: number }
   | { id: number; ok: true; rows: number[][]; ms: number }
   | { id: number; ok: false; error: string };
@@ -30,19 +32,22 @@ const post = (m: AiWorkerOut) => (self as unknown as Worker).postMessage(m);
 
 // Rust 版(WASM)。ビルドされていなければ何もしない
 const wasmUrls = import.meta.glob<string>('../wasm/dmsim.wasm', { query: '?url', import: 'default', eager: true });
-const nativeReady: Promise<void> = (async () => {
+const nativeReady: Promise<boolean> = (async () => {
   const url = Object.values(wasmUrls)[0];
-  if (!url) return;
+  if (!url) return false;
   const bytes = await (await fetch(url)).arrayBuffer();
   const eng = await DmEngine.create(bytes, JSON.stringify(reg.defs));
   setNativeRounds(eng.asNativeRounds());
   setNativeTree(eng.asNativeTree());
   setNativePairedRound(eng.asNativePairedRound());
   console.info('[ai.worker] Rust 版エンジン(WASM)で探索します');
+  return true;
 })().catch((e) => {
   // 読み込めなければ TS 版で動く
   console.warn('[ai.worker] Rust 版エンジン(WASM)を読み込めませんでした。TS 版で動きます:', e);
+  return false;
 });
+void nativeReady.then((native) => post({ kind: 'ready', native }));
 
 self.onmessage = async (e: MessageEvent<AiWorkerIn>) => {
   await nativeReady;
