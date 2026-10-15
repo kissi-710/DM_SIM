@@ -32,7 +32,7 @@ export interface PlayOpts {
 }
 
 function viewFor(s: GameState, who: PlayerId, ag: Agent, reg: Registry): GameState {
-  if (ag.needsView === false) return s;
+  if (ag.needsView === false || ag.viewless?.(s)) return s;
   return toPlayerView(s, who, ag.policy ?? FAIR, reg);
 }
 

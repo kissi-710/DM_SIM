@@ -23,10 +23,15 @@ function shuffled<T>(arr: T[], rand: () => number): T[] {
 }
 
 function subtractKnown(list: string[], known: string[]): string[] {
-  const rest = list.slice();
-  for (const k of known) {
-    const i = rest.indexOf(k);
-    if (i >= 0) rest.splice(i, 1);
+  // known の各カードにつき、list の先頭側の同じ定義を1枚ずつ取り除く(定義の同じカードは区別がないので、先頭の k 枚を飛ばせばよい)
+  if (known.length === 0) return list.slice();
+  const skip = new Map<string, number>();
+  for (const k of known) skip.set(k, (skip.get(k) ?? 0) + 1);
+  const rest: string[] = [];
+  for (const d of list) {
+    const n = skip.get(d);
+    if (n) skip.set(d, n - 1);
+    else rest.push(d);
   }
   return rest;
 }

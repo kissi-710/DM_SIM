@@ -211,6 +211,8 @@ export function makeRuleBased(o: RuleOpts = {}): Agent {
   return {
     name: 'ルールベース',
     policy: o.policy ?? FAIR,
+    // ターン中の行動は、数と自分の手札・場だけを見る(相手の手札・シールド・山札の中身は読まない)ので、ビューの複製を省ける
+    viewless: (s) => s.pending?.why === 'turnAction',
     chooseAction(view, legal, ctx) {
       if (legal.length === 1) return legal[0];
       const p = view.pending!;

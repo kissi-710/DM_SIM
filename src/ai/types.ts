@@ -19,5 +19,10 @@ export interface Agent {
   policy?: InfoPolicy;
   /** false なら、マスクしていない状態を渡す(ランダムAIなど、隠れた情報を読まないもの) */
   needsView?: boolean;
+  /**
+   * 入力待ちによっては、マスクしていない状態を渡してよい(隠れた情報を読まない手番の判断)ことを示す。
+   * true を返す時、ランナーは toPlayerView(状態の複製)を省いて、状態をそのまま渡す(エージェントは書き換えない)。
+   */
+  viewless?: (s: GameState) => boolean;
   chooseAction(view: PlayerView, legal: Action[], ctx: AgentCtx): Action | Promise<Action>;
 }
