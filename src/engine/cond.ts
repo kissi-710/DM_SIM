@@ -263,8 +263,19 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
   if (pat.self && ev.card !== cc.self) return false;
   if (pat.role) {
     // blocked: attacker / blocker、battleEnded: winner / loser(その能力の発生源がその役割か)
+    // battleStarted / afterBattle: attacker / defender(バトルの攻撃側 / 攻撃された側)
     const want =
-      ev.type === 'blocked' ? (pat.role === 'attacker' ? ev.attackerCard : ev.card) : pat.role === 'winner' ? ev.winnerCard : ev.loserCard;
+      ev.type === 'blocked'
+        ? pat.role === 'attacker'
+          ? ev.attackerCard
+          : ev.card
+        : ev.type === 'battleStarted' || ev.type === 'afterBattle'
+          ? pat.role === 'attacker'
+            ? ev.attackerCard
+            : ev.defenderCard
+          : pat.role === 'winner'
+            ? ev.winnerCard
+            : ev.loserCard;
     if (want === null || want === undefined || want !== cc.self) return false;
   }
   const rel = (want: any, actual: PlayerId | undefined): boolean => {

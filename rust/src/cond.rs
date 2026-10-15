@@ -458,6 +458,13 @@ pub fn match_pattern(cc: &CC, pat: &Pattern, ev: &Ev) -> bool {
             } else {
                 s::CARD
             }
+        } else if ev.ty == s::BATTLE_STARTED || ev.ty == s::AFTER_BATTLE {
+            // attacker / defender(バトルの攻撃側 / 攻撃された側)
+            if role == s::ATTACKER {
+                s::ATTACKER_CARD
+            } else {
+                s::DEFENDER_CARD
+            }
         } else if role == s::WINNER {
             s::WINNER_CARD
         } else {

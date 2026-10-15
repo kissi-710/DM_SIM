@@ -92,8 +92,11 @@ export function rolloutPick(s: GameState, legal: Action[], reg: Registry, rand: 
     }
     case 'block': {
       // 半分はブロックする
+      // 複数体のブロッカーを選ぶと、余分にタップするだけで損なので、1体の選択を優先する(507.1a)
       const blocks = legal.filter((a) => a.type === 'ANSWER' && Array.isArray(a.value) && a.value.length > 0);
-      return blocks.length && rand() < 0.5 ? pick(blocks) : legal[0];
+      const single = blocks.filter((a) => (a as { value: unknown[] }).value.length === 1);
+      const pool = single.length ? single : blocks;
+      return pool.length && rand() < 0.5 ? pick(pool) : legal[0];
     }
     default:
       return pick(legal);
