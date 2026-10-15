@@ -1117,3 +1117,7 @@ body.dragging .action-pop {
   border-color: var(--accent2);
   background: rgba(255, 180, 84, 0.12);
 }
+.card.cursor {
+  outline: 2px dashed var(--accent2);
+  outline-offset: 3px;
+}

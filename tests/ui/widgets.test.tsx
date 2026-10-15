@@ -244,3 +244,34 @@ describe('InputWidget: キーボード操作の部品', () => {
     expect(onAnswer).toHaveBeenCalledWith({ x: [a], y: [b] });
   });
 });
+
+describe('InputWidget: 候補の詳細を読んでから選ぶ', () => {
+  it('カーソルのある候補には印が付き、data-uid で詳細に結び付けられる', () => {
+    const s0 = game();
+    const [a, b] = s0.players[0].hand;
+    render(<InputWidget s={s0} pending={pend({ shape: 'pick', candidates: [a, b], min: 1, max: 1 })} me={0} cursor={1} onAnswer={() => {}} />);
+    const cards = [...document.querySelectorAll<HTMLElement>('.cards .card')];
+    expect(cards.map((c) => c.classList.contains('cursor'))).toEqual([false, true]);
+    expect(cards.map((c) => c.getAttribute('data-uid'))).toEqual([String(a), String(b)]);
+  });
+  it('ホバーできない端末(タッチ)では、1回目のタップで詳細を出し、2回目で決める', async () => {
+    const orig = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: q.includes('hover: none'), media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    try {
+      const s0 = game();
+      const [a, b] = s0.players[0].hand;
+      const onAnswer = vi.fn<(v: AnswerValue) => void>();
+      const onHover = vi.fn();
+      render(<InputWidget s={s0} pending={pend({ shape: 'pick', candidates: [a, b], min: 1, max: 1 })} me={0} onHover={onHover} onAnswer={onAnswer} />);
+      const user = userEvent.setup();
+      const card = screen.getAllByRole('button').filter((x) => x.classList.contains('card'))[0];
+      await user.click(card);
+      expect(onAnswer).not.toHaveBeenCalled();
+      expect(onHover).toHaveBeenCalledWith(a);
+      await user.click(card);
+      expect(onAnswer).toHaveBeenCalledWith([a]);
+    } finally {
+      window.matchMedia = orig;
+    }
+  });
+});

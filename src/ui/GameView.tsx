@@ -255,6 +255,13 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   // ターン終了の確認: まだ出せる・チャージできるカードがあるまま終えようとした時の1回目は止める
   // ターン終了の確認(endTurn.ts): 理由の文言が入っている間は「もう一度押せば終了」。設定で消せる
   const [endWarn, setEndWarn] = useState<string | null>(null);
+  // 質問の候補の上のカーソル(← → で動かし、右レールに詳細を出す。Enter で選ぶ)
+  const [pickCursor, setPickCursor] = useState<number | null>(null);
+  useEffect(() => {
+    if (pickCursor === null) return;
+    const uid = document.querySelectorAll<HTMLElement>('.input-panel .cards .card')[pickCursor]?.getAttribute('data-uid');
+    if (uid) setHover(Number(uid));
+  }, [pickCursor]);
   // 使えないカードをクリックした時の理由(数秒で消える。選択・手番の変化でも消える)
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
@@ -280,6 +287,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     setSelected(null);
     setEndWarn(null);
     setNotice(null);
+    setPickCursor(null);
   }, [pend?.id]);
 
   // 支払い: 払い方に選択があるときだけ、タップするマナを選ばせる(自明なら聞かずに自動で払う)
@@ -424,6 +432,16 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         const shape = (pend!.input as { shape: string } | null)?.shape;
         const affirm = k === 'Enter' || k === ' ' || k === KEY.yes;
         if (affirm && Date.now() - askedAt.current < ASK_GUARD_MS) return done();
+        // 候補のカード(pick・割り振りの札・マナの支払い)の上のカーソル: 詳細を読んでから Enter で選ぶ
+        if (shape === 'pick' || shape === 'assign' || shape === 'payment') {
+          const cardSel = shape === 'assign' ? '.input-panel .cards.items .card' : '.input-panel .cards .card';
+          const n = document.querySelectorAll(cardSel).length;
+          if (n > 0 && (k === 'ArrowLeft' || k === 'ArrowRight')) {
+            setPickCursor((cur) => (cur === null ? (k === 'ArrowRight' ? 0 : n - 1) : (cur + (k === 'ArrowRight' ? 1 : n - 1)) % n));
+            return done();
+          }
+          if (k === 'Enter' && pickCursor !== null && pickCursor < n && clickNth(cardSel, pickCursor)) return done();
+        }
         if (/^[a-z]$/.test(k) && clickNth(`.input-panel [data-key="${k}"]`, 0)) return done();
         if (digit >= 0) {
           const sel = shape === 'option' || shape === 'order' ? '.input-panel .choice' : shape === 'assign' ? '.input-panel .cards.items .card' : '.input-panel .cards .card';
@@ -732,7 +750,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         {showHuman && s.winner === null && (
           <div className="input-layer">
             <div className="input-panel">
-              <InputWidget s={s} pending={pend!} me={g.me} onHover={setHover} onAnswer={(value) => g.perform({ type: 'ANSWER', id: pend!.id, value })} />
+              <InputWidget s={s} pending={pend!} me={g.me} onHover={setHover} cursor={pickCursor} onAnswer={(value) => g.perform({ type: 'ANSWER', id: pend!.id, value })} />
             </div>
           </div>
         )}

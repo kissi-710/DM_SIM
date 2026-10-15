@@ -15,6 +15,8 @@ interface Props {
   /** 自分の視点のプレイヤー(null なら観戦) */
   me: number | null;
   onHover?: (uid: number | null) => void;
+  /** ← → で動かすカーソルの位置(候補・札の並びの何番目か)。詳細は右レールに出る */
+  cursor?: number | null;
 }
 
 export function InputWidget(p: Props) {
@@ -39,12 +41,22 @@ export function InputWidget(p: Props) {
 }
 
 // ── pick: 候補を強調して選ぶ ──
-export function PickWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extract<InputSpec, { shape: 'pick' }> }) {
+export function PickWidget({ s, spec, onAnswer, onHover, cursor }: Props & { spec: Extract<InputSpec, { shape: 'pick' }> }) {
   const [sel, setSel] = useState<number[]>([]);
+  // ホバーできない端末(タッチ)では、1回目のタップで詳細を出し、2回目で決める
+  const [armed, setArmed] = useState<number | null>(null);
+  const touch = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(hover: none)').matches;
   // 1枚だけ選ぶ時(0枚も選べる「ブロックしますか?」などを含む)は、クリックした時点で回答する
   const instant = spec.min <= 1 && spec.max === 1;
   const toggle = (u: number) => {
-    if (instant) return onAnswer([u]);
+    if (instant) {
+      if (touch && armed !== u) {
+        setArmed(u);
+        onHover?.(u);
+        return;
+      }
+      return onAnswer([u]);
+    }
     setSel((cur) => (cur.includes(u) ? cur.filter((x) => x !== u) : cur.length < spec.max ? [...cur, u] : cur));
   };
   const ok = sel.length >= spec.min && sel.length <= spec.max;
@@ -61,6 +73,7 @@ export function PickWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extra
             selected={sel.includes(u)}
             hidden={s.cards[u].defId === '?'}
             num={i + 1}
+            cursor={cursor === i}
             onClick={() => toggle(u)}
             onHover={onHover}
           />
@@ -82,7 +95,11 @@ export function PickWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extra
             )}
           </>
         )}
-        {instant && <span className="muted">カードをクリック(または番号キー)で選びます</span>}
+        {instant && (
+          <span className="muted">
+            {touch ? (armed !== null ? 'もう一度タップで決定します' : 'タップで詳細を見て、もう一度タップで決定します') : 'クリックか番号キーで選びます。← → で詳細を見てから Enter でも選べます'}
+          </span>
+        )}
         {spec.min === 0 && (
           <button data-key="n" onClick={() => onAnswer([])}>
             選ばない <Kbd k="n" />
@@ -94,7 +111,7 @@ export function PickWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extra
 }
 
 // ── assign: 札を枠に割り振る(ドラッグ or クリック) ──
-export function AssignWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extract<InputSpec, { shape: 'assign' }> }) {
+export function AssignWidget({ s, spec, onAnswer, onHover, cursor }: Props & { spec: Extract<InputSpec, { shape: 'assign' }> }) {
   const [asg, setAsg] = useState<Record<string, number[]>>(() => Object.fromEntries(spec.slots.map((x) => [x.id, []])));
   const [picked, setPicked] = useState<number | null>(null);
   const placed = new Set(Object.values(asg).flat());
@@ -135,6 +152,7 @@ export function AssignWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
               selected={picked === u}
               draggable
               num={i + 1}
+              cursor={cursor === i}
               // マウス・タッチの選択は useDrag が扱う。キーボードの番号キーからの click(detail が 0)だけをここで扱う
               onClick={(e) => {
                 if (e.detail === 0) setPicked((cur) => (cur === u ? null : u));
@@ -298,7 +316,7 @@ export function OrderWidget({ spec, onAnswer }: { spec: Extract<InputSpec, { sha
 }
 
 // ── payment: マナの割り当て(手動支払い) ──
-export function PaymentWidget({ s, spec, onAnswer, onHover, initial }: Props & { spec: Extract<InputSpec, { shape: 'payment' }>; initial?: number[] }) {
+export function PaymentWidget({ s, spec, onAnswer, onHover, initial, cursor }: Props & { spec: Extract<InputSpec, { shape: 'payment' }>; initial?: number[] }) {
   const [sel, setSel] = useState<number[]>(initial ?? []);
   return (
     <>
@@ -312,6 +330,7 @@ export function PaymentWidget({ s, spec, onAnswer, onHover, initial }: Props & {
             selectable
             selected={sel.includes(u)}
             num={i + 1}
+            cursor={cursor === i}
             onClick={() => setSel((c) => (c.includes(u) ? c.filter((x) => x !== u) : c.length < spec.need ? [...c, u] : c))}
             onHover={onHover}
           />

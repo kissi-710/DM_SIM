@@ -26,6 +26,8 @@ export interface CardProps {
   badge?: ReactNode;
   /** 数字キーで選べる番号(1〜9)。画面に出して、キーボードで選べることを示す */
   num?: number;
+  /** キーボードのカーソルがある(← → で候補を移して、詳細を読む) */
+  cursor?: boolean;
   onClick?: (e: MouseEvent) => void;
   onPointerDown?: (e: PointerEvent) => void;
   onHover?: (uid: number | null) => void;
@@ -55,6 +57,7 @@ export function CardView(p: CardProps) {
   if (p.draggable) cls.push('draggable');
   if (p.dim) cls.push('dim');
   if (p.flash) cls.push('flash');
+  if (p.cursor) cls.push('cursor');
   if (p.sick) cls.push('sick');
   if (card?.ex) cls.push('ex');
   const handlers = {
@@ -63,6 +66,7 @@ export function CardView(p: CardProps) {
     onMouseEnter: () => p.onHover?.(uid),
     onMouseLeave: () => p.onHover?.(null),
     'data-drag': p.dragKey,
+    'data-uid': uid,
     style: p.style,
     // 支援技術向け: 操作できるカードはボタンとして、名前と状態を読み上げる
     role: p.onClick || p.selectable ? ('button' as const) : undefined,
