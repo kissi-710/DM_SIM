@@ -45,7 +45,7 @@
     "text": "【クリーチャー面】出た時、カードを2枚引く。【呪文面】山札の上1枚をマナゾーンに置く。",
     "faces": [
       {
-        "name": "蒼狼の豊穣 ワクムテラス", "type": "creature", "cost": 4, "civs": ["water"], "power": 3000, "races": ["サイバーロード"],
+        "name": "蒼狼の豊穣 ワクムテラス", "type": "creature", "cost": 4, "civs": ["water"], "power": 4000, "races": ["ナイト", "サムライ", "オリジン"],
         "abilities": [
           { "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" }, "steps": [{ "op": "act", "act": { "draw": 2 } }] }
         ]
