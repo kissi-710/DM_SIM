@@ -9,6 +9,7 @@ import { FAIR, type InfoPolicy } from '../engine/view';
 import { determinize } from './determinize';
 import { L1_DEFAULT, withL1, type L1Params } from './l1params';
 import { evaluate, RULE_WEIGHTS } from './eval';
+import { spellNeedsOpponentCreature } from './spellTargets';
 import type { Agent, AgentCtx } from './types';
 
 export interface RuleOpts {
@@ -75,7 +76,7 @@ export function playScore(view: GameState, reg: Registry, a: Extract<Action, { t
   // 呪文は、対象がいなくて空振りしやすいものを避ける(相手の盤面が空)
   if (face.type === 'spell') {
     const opp = (1 - me) as PlayerId;
-    if (view.players[opp].battle.length === 0 && /戻|破壊|選び/.test(def.text ?? '')) v += p.playNoTarget;
+    if (view.players[opp].battle.length === 0 && spellNeedsOpponentCreature(reg, card.defId, fi)) v += p.playNoTarget;
   }
   v += p.cardPlay[card.defId] ?? 0;
   return v;

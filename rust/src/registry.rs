@@ -17,6 +17,48 @@ pub struct Face {
     pub races: Vec<String>,
     pub abilities: Vec<Ability>,
     pub evolve_from: Option<Cond>,
+    /// 呪文が、相手のクリーチャーがいなければ空振りになるか(ルールベースAIが、相手の盤面が空の時に避ける。
+    /// カードのデータから判定する。TS 版の ai/spellTargets.ts と同じ)
+    pub needs_opp_creature: bool,
+}
+
+fn is_opp_battle(sel: &Json) -> bool {
+    let zone_ok = match sel.get("zone") {
+        Some(z) => z.as_str() == Some("battle") || z.as_arr().map_or(false, |a| a.len() == 1 && a[0].as_str() == Some("battle")),
+        None => false,
+    };
+    zone_ok && sel.get("owner").and_then(|o| o.as_str()) == Some("opponent")
+}
+
+/// 手順の先頭から見て、相手のクリーチャーがいなければ何も起こらないか
+fn depends_on_opp_creature(steps: Option<&Json>) -> bool {
+    let arr = match steps.and_then(|s| s.as_arr()) {
+        Some(a) => a,
+        None => return false,
+    };
+    for st in arr {
+        match st.get("op").and_then(|o| o.as_str()) {
+            Some("select") => {
+                let from_opp = st.get("from").map_or(false, is_opp_battle);
+                let min = st.get("min").and_then(|m| m.as_i64()).unwrap_or(1);
+                if from_opp && min >= 1 {
+                    return true;
+                }
+                // 選ぶだけでは何も起こらない。後の効果を見る
+            }
+            Some("act") => {
+                let body = st.get("act").and_then(|a| a.keys().first().map(|k| a.get(k))).flatten();
+                return body.and_then(|b| b.get("sel")).map_or(false, is_opp_battle);
+            }
+            Some("modes") => {
+                // すべての選択肢が対象を要するときだけ(1つでも対象なしで使えるものがあれば、空振りにならない)
+                let opts: &[Json] = st.get("options").and_then(|o| o.as_arr()).map(|a| a.as_slice()).unwrap_or(&[]);
+                return st.get("allIf").is_none() && !opts.is_empty() && opts.iter().all(|o| depends_on_opp_creature(o.get("steps")));
+            }
+            _ => return false,
+        }
+    }
+    false
 }
 
 #[derive(Clone, Debug)]
@@ -26,8 +68,6 @@ pub struct Def {
     pub faces: Vec<Face>,
     /// 全面の文明の和集合
     pub union_civs: Rc<Vec<Civ>>,
-    /// 説明文に「戻」「破壊」「選び」を含むか(ルールベースAIの呪文の空振り判定)
-    pub text_risky: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -132,6 +172,10 @@ impl Registry {
                         Some(c) => Some(parse_cond(c).map_err(|e| format!("{}: {}", id, e))?),
                         None => None,
                     },
+                    needs_opp_creature: f
+                        .get("abilities")
+                        .and_then(|a| a.as_arr())
+                        .map_or(false, |a| a.iter().any(|x| x.get("kind").and_then(|k| k.as_str()) == Some("spell") && depends_on_opp_creature(x.get("steps")))),
                 });
             }
             let mut union: Vec<Civ> = Vec::new();
@@ -142,7 +186,6 @@ impl Registry {
                     }
                 }
             }
-            let text = d.get("text").and_then(|t| t.as_str()).unwrap_or("");
             let idx = defs.len() as u16;
             by_id.insert(id.clone(), idx);
             ids.push(id.clone());
@@ -151,7 +194,6 @@ impl Registry {
                 name: d.get("name").and_then(|x| x.as_str()).unwrap_or("").to_string(),
                 faces,
                 union_civs: Rc::new(union),
-                text_risky: text.contains('戻') || text.contains("破壊") || text.contains("選び"),
             });
         }
         // 索引

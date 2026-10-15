@@ -377,7 +377,7 @@ fn play_score(e: Env, uid: i32, from: Option<Zone>, face: Option<i32>, extra: &O
     // 呪文は、対象がいなくて空振りしやすいものを避ける(相手の盤面が空)
     if f.ty == FaceType::Spell {
         let o = opp(me);
-        if s.players[o as usize].battle.is_empty() && def.text_risky {
+        if s.players[o as usize].battle.is_empty() && f.needs_opp_creature {
             v -= 3.0;
         }
     }
