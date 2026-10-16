@@ -13,6 +13,7 @@ import {
   hasKeyword,
   infoOf,
   isUnblockable,
+  mustBlock,
   payNeed,
   planPayment,
   powerOf,
@@ -389,7 +390,29 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         } else if (p.after === 'deckBottom' || v.after === 'deckBottom') {
           moveCards(c, [uid], { to: 'deck', cause: 'castBottom', pos: 'bottom', noReplace: true });
         } else {
-          moveCards(c, [uid], { to: 'grave', cause: 'cast', noReplace: true });
+          // 呪文自身の効果が、自身の移動を置換する(チャージャーなど)。他の置換効果より優先する(総合ルール 409.2b / 609.8a)。
+          // 質問は、状態を変更する前に行う
+          const info = c.reg.getInfo(card.defId, p.face);
+          let dest: ZoneName | null = null;
+          for (const r of info.replaces) {
+            const a = r.ability;
+            if (a.apply.type !== 'changeDest' || a.match.type !== 'moved' || a.match.cause !== 'cast') continue;
+            if (a.while && !evalCond(mkCC(c, card.owner, { self: uid }), a.while)) continue;
+            if (a.optional) {
+              const yes = ask<boolean>(c, {
+                player: card.owner,
+                why: 'may',
+                input: { shape: 'yesno' },
+                source: { uid, ep: card.ep },
+                prompt: `${c.reg.defs[card.defId].name}: ${a.label ?? '墓地に置くかわりに置き換えますか?'}`,
+              });
+              if (!yes) continue;
+            }
+            dest = a.apply.to;
+            break;
+          }
+          if (dest) moveCards(c, [uid], { to: dest, cause: 'replaced', noReplace: true });
+          else moveCards(c, [uid], { to: 'grave', cause: 'cast', noReplace: true });
         }
       }
       f.stage = 3;
@@ -459,20 +482,35 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       const cands = isUnblockable(c, pm.perm)
         ? []
         : s.players[defender].battle.filter((p) => p.pid !== attacked && canBlock(c, p)).map((p) => p.cards[0]);
-      let blocker: number | null = null;
-      if (cands.length > 0) {
-        const ans = ask<number[]>(c, {
+      // ブロッカーは、複数体を同時に選べる(507.1a / 507.2)。ブロックを強制する効果を受けているものは、必ず選ぶ(507.1b)。
+      // 選んだ全員がタップし、最後に解決した1体だけが、攻撃先を変更してブロッククリーチャーになる(507.2a)
+      const forced = cands.filter((u) => mustBlock(c, permByPid(s, s.cards[u].pid)!.perm));
+      let chosen: number[] = [];
+      if (forced.length > 0) chosen = forced;
+      else if (cands.length > 0) {
+        chosen = ask<number[]>(c, {
           player: defender,
           why: 'block',
-          input: { shape: 'pick', candidates: cands, min: 0, max: 1 },
+          input: { shape: 'pick', candidates: cands, min: 0, max: cands.length },
           source: null,
-          prompt: 'ブロッカーでブロックしますか?',
+          prompt: 'ブロッカーでブロックしますか?(複数体を選べる。最後に解決する1体がブロックする)',
         });
-        if (ans.length) blocker = ans[0];
+      }
+      let blocker: number | null = null;
+      if (chosen.length === 1) blocker = chosen[0];
+      else if (chosen.length > 1) {
+        const last = ask<number[]>(c, {
+          player: defender,
+          why: 'block',
+          input: { shape: 'pick', candidates: chosen, min: 1, max: 1 },
+          source: null,
+          prompt: '最後に解決する(ブロックする)ブロッカーを選んでください',
+        });
+        blocker = last[0];
       }
       if (blocker !== null) {
         const bpm = permByPid(s, s.cards[blocker].pid)!;
-        setTapped(c, blocker, true);
+        for (const u of chosen) setTapped(c, u, true);
         v.target = { kind: 'creature', pid: bpm.perm.pid };
         v.blocked = true;
         emit(c, 'blocked', { attacker: pm.perm.pid, attackerCard: pm.perm.cards[0], blocker: bpm.perm.pid, card: blocker, owner: defender });
@@ -502,8 +540,38 @@ function runAttack(c: Ctx, f: ProcFrame): void {
         pushProc(c, 'break', { pid: pm.perm.pid, owner: pm.owner, n: breakerCount(c, pm.perm) });
         return;
       }
-      const dm = permByPid(s, target.pid);
-      if (!dm) {
+      const dm0 = permByPid(s, target.pid);
+      if (!dm0) {
+        popFrame(c, f);
+        return;
+      }
+      // 「バトルする時」の誘発は、パワーを比べる前に解決する(総合ルール 115.2 / 701.13a)。
+      // 聞き手のいるカードがある時だけ、イベントを発行する(段階を増やさず、既存の対戦の記録を変えない)
+      f.stage = 4;
+      if (c.reg.trigByDef.has('battleStarted')) {
+        const evb = emit(c, 'battleStarted', {
+          attacker: pm.perm.pid,
+          defender: dm0.perm.pid,
+          attackerCard: pm.perm.cards[0],
+          defenderCard: dm0.perm.cards[0],
+          owner: pm.owner,
+        });
+        s.batchNo++;
+        collectBatch(c, [evb]);
+        pushProc(c, 'settle');
+      }
+      return;
+    }
+    case 4: {
+      // バトル。「バトルする時」の効果の解決で、どちらかが場を離れていれば、バトルは行われない(115.3a)
+      if (s.winner !== null || s.skipTurn) {
+        popFrame(c, f);
+        return;
+      }
+      const pm = permByPid(s, v.pid);
+      const target = v.target as { kind: 'player' } | { kind: 'creature'; pid: number };
+      const dm = target.kind === 'creature' ? permByPid(s, target.pid) : null;
+      if (!pm || !dm) {
         popFrame(c, f);
         return;
       }
@@ -543,8 +611,23 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       const ev = c.out[c.out.length - 1];
       s.batchNo++;
       collectBatch(c, [ev]);
-      f.stage = 3;
+      // 「バトルの後」の誘発のために、バトルの当事者を残す(聞き手がいる時だけ)
+      if (c.reg.trigByDef.has('afterBattle')) v.battle = { attacker: aPid, defender: dPid, attackerCard: aTop, defenderCard: dTop, owner: aOwner };
+      f.stage = 5;
       pushProc(c, 'settle');
+      return;
+    }
+    case 5: {
+      // 「バトルの後」の誘発(総合ルール 701.13d)。勝敗の誘発を解決し終えた後に誘発する
+      if (c.reg.trigByDef.has('afterBattle') && v.battle && s.winner === null && !s.skipTurn) {
+        const eva = emit(c, 'afterBattle', { ...v.battle });
+        s.batchNo++;
+        collectBatch(c, [eva]);
+        f.stage = 3;
+        pushProc(c, 'settle');
+        return;
+      }
+      popFrame(c, f);
       return;
     }
     case 3:
@@ -583,6 +666,26 @@ function runBreak(c: Ctx, f: ProcFrame): void {
       const broken: number[] = [];
       while (broken.length < n) broken.push(pool.splice(rngInt(s, pool.length), 1)[0]);
       v.broken = broken;
+      // 「ブレイクする前に」の誘発は、ブレイクするシールドを選んだ後、ブレイクする前に解決する(総合ルール 509.3 / 509.4)。
+      // 聞き手のいるカードがある時だけ、イベントを発行する(既存の対戦の記録を変えない)
+      f.stage = 3;
+      if (c.reg.trigByDef.has('beforeBreak')) {
+        const evb = emit(c, 'beforeBreak', { attacker: v.pid, owner: attackerOwner, defenderOwner: defender, cards: broken.slice() });
+        s.batchNo++;
+        collectBatch(c, [evb]);
+        pushProc(c, 'settle');
+      }
+      return;
+    }
+    case 3: {
+      // 「ブレイクする前に」の効果の解決でクリーチャーが場を離れても、すでに選んだシールドはブレイクされる(509.4c)。
+      // シールドゾーンから離れたカードだけは、ブレイクできない
+      const broken: number[] = (v.broken as number[]).filter((u) => s.cards[u].zone === 'shield' && s.cards[u].owner === defender);
+      v.broken = broken;
+      if (broken.length === 0) {
+        popFrame(c, f);
+        return;
+      }
       s.breaking = broken.slice();
       const brokenEvs: Ev[] = [];
       for (const u of broken) brokenEvs.push(emit(c, 'shieldBroken', { card: u, owner: defender, by: v.pid }));
@@ -706,9 +809,16 @@ function declareHidden(c: Ctx): boolean {
     need.push(e);
   }
   if (need.length === 0) return false;
+  // ターン・プレイヤー側が先に宣言し、その待機中の効果を解決し終えてから、非ターン・プレイヤー側が宣言する(506.3b〜e)
+  const tp = s.active;
+  let group = need.filter((e) => e.controller === tp);
+  if (group.length === 0) {
+    if (s.pool.some((e) => e.controller === tp)) return false; // ターン・プレイヤーの効果を先に解決する
+    group = need;
+  }
   const answers = new Map<number, boolean>();
-  for (const player of [s.active, opponentOf(s.active)]) {
-    for (const e of need) {
+  for (const player of [tp, opponentOf(tp)]) {
+    for (const e of group) {
       if (e.controller !== player) continue;
       const a = c.reg.ability(e.ability!) as { label?: string };
       answers.set(
@@ -724,7 +834,7 @@ function declareHidden(c: Ctx): boolean {
     }
   }
   // プールの要素は、元の状態と共有されている(step は入力を書き換えない)ので、置き換える
-  for (const e of need) {
+  for (const e of group) {
     const i = s.pool.indexOf(e);
     if (answers.get(e.id)) s.pool[i] = { ...e, declared: true };
     else s.pool.splice(i, 1);

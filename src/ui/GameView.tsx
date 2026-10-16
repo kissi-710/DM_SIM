@@ -16,16 +16,8 @@ import { parseRecord, saveRecord } from './record';
 import { makeRecord, type GameSetup, type Session, useGame } from './useGame';
 import { downloadText, loadJson, saveJson } from './util';
 import { FxLayer } from './FxLayer';
-import { cuesOf, loadFxEnabled, saveFxEnabled } from './fx';
-
-const STEP_LABEL: Record<string, string> = {
-  start: 'ターン開始',
-  draw: 'ドロー',
-  mana: 'マナチャージ',
-  main: 'メイン',
-  attack: '攻撃',
-  end: 'ターン終了',
-};
+import { FxTicker } from './FxTicker';
+import { cuesOf, drawCuesOf, loadFxEnabled, saveFxEnabled, STEP_LABEL } from './fx';
 
 export function CardDetail({ s, uid }: { s: GameState; uid: number | null }) {
   if (uid === null || !s.cards[uid] || s.cards[uid].defId === '?') {
@@ -68,6 +60,7 @@ const EFFECT_LABEL: Record<string, string> = {
   cannotAttack: '攻撃できない',
   cannotBeChosen: '相手に選ばれない',
   cannotBeAttacked: '攻撃されない',
+  mustBlock: 'ブロックしなければならない',
 };
 
 /** 現在のコスト・パワー・付与された能力(画像なしなので、全文と一緒に派生値を出す) */
@@ -250,6 +243,12 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const fxActive = fxOn && !g.fast;
   const fxEvents = session.actions.length === 0 ? session.log : session.last;
   const fxCues = useMemo(() => (fxActive ? cuesOf(s, fxEvents, g.me) : []), [fxActive, fxEvents]);
+  const drawCues = useMemo(() => (fxActive ? drawCuesOf(fxEvents, g.me) : []), [fxActive, fxEvents]);
+  const attackers = useMemo(() => {
+    const set = new Set<number>();
+    if (fxActive) for (const e of session.last) if (e.type === 'attackDeclared' && typeof e.card === 'number') set.add(e.card);
+    return set;
+  }, [fxActive, session.last]);
   const shieldHit = useMemo(() => {
     const set = new Set<PlayerId>();
     if (fxActive) for (const e of session.last) if (e.type === 'shieldBroken') set.add(e.owner as PlayerId);
@@ -761,9 +760,16 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           }}
           flash={flash}
           hit={shieldHit}
+          attackers={attackers}
           listReq={listReq}
         />
         <FxLayer cues={fxCues} token={session.last} enabled={fxActive} />
+        <FxTicker
+          draws={drawCues}
+          drawToken={session.last}
+          step={{ key: `${s.turn}:${s.active}:${s.step}`, step: s.step, active: s.active, me: g.me }}
+          enabled={fxActive}
+        />
 
         {/* CPU が考えている間の表示 */}
         {!interactive && !showHuman && s.winner === null && pend && (

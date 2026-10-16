@@ -14,13 +14,15 @@ import { mulberry } from '../src/sim/playGame';
 import { evalRound, roundSeed, type SearchEnv } from '../src/ai/mcts';
 import { BASE_FEATURES, type ValueModel } from '../src/ai/valueModel';
 import { PairedTree, treeSearch } from '../src/ai/tree';
+import { ATTACK_TEST_CARDS } from '../tests/fixtures/attack-cards';
 
 const out = process.argv[2] ?? 'rust/fixtures/games.json';
-const reg = loadRegistry(CARD_DB);
+// 攻撃まわりのイベント(バトルする時・バトルの後・ブレイクする前に)・呪文の置換・使用宣言を試すテスト用のカードも入れる
+const reg = loadRegistry({ ...CARD_DB, ...Object.fromEntries(ATTACK_TEST_CARDS.map((c) => [c.id, c])) });
 const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 
 interface Rec {
-  decks: [string, string];
+  decks: [string | string[], string | string[]];
   seed: number;
   kinds: [string, string];
   states: unknown[];
@@ -28,9 +30,10 @@ interface Rec {
   actions: unknown[];
 }
 
-function play(deckA: string, deckB: string, seed: number, kinds: ['rule' | 'random', 'rule' | 'random']): Rec {
+const deckOf = (d: string | string[]): string[] => (typeof d === 'string' ? deckCards(d) : d);
+function play(deckA: string | string[], deckB: string | string[], seed: number, kinds: ['rule' | 'random', 'rule' | 'random']): Rec {
   const agents: Agent[] = kinds.map((k) => (k === 'rule' ? makeRuleBased({}) : randomAgent));
-  let { state: s } = createGame(reg, { decks: [deckCards(deckA), deckCards(deckB)], seed, first: 'random' });
+  let { state: s } = createGame(reg, { decks: [deckOf(deckA), deckOf(deckB)], seed, first: 'random' });
   const rand = mulberry(seed * 7 + 1);
   const rec: Rec = { decks: [deckA, deckB], seed, kinds, states: [], legal: [], actions: [] };
   for (let i = 0; i < 4000 && s.winner === null; i++) {
@@ -79,6 +82,34 @@ for (const [a, b, seed, k] of [
 ] as const) {
   games.push(play(a, b, seed, [k[0], k[1]]));
 }
+// テスト用のカードで組んだデッキ: バトルする時・バトルの後・ブレイクする前に・呪文の置換(チャージャー)・
+// 非ターン・プレイヤーの使用宣言・複数ブロッカー・強制ブロックの手続きを、Rust 版と突き合わせる
+const rep = (n: number, id: string): string[] => Array.from({ length: n }, () => id);
+const DECK_T1 = [...rep(8, 't-atk'), ...rep(8, 't-after'), ...rep(6, 't-bs-bounce'), ...rep(6, 't-before-break'), ...rep(4, 't-charger'), ...rep(4, 'dm24rp3-020'), ...rep(4, 't-force')];
+// ブロッカーだらけ(複数ブロッカーの同時選択を起こす)
+const DECK_T3 = [...rep(20, 'dm24rp3-020'), ...rep(8, 't-atk'), ...rep(6, 't-after'), ...rep(6, 't-bs-bounce')];
+const DECK_T2 = [...rep(8, 't-ntp-declare'), ...rep(8, 't-atk'), ...rep(6, 't-after'), ...rep(6, 't-bs-bounce'), ...rep(4, 't-before-break'), ...rep(8, 'dm24rp3-020')];
+for (const [seed, k] of [
+  [31, ['random', 'random']],
+  [32, ['random', 'random']],
+  [33, ['rule', 'rule']],
+  [34, ['random', 'rule']],
+  [35, ['random', 'random']],
+] as const) {
+  games.push(play(DECK_T1, DECK_T2, seed, [k[0], k[1]]));
+}
+for (const [seed, k] of [
+  [72, ['random', 'random']], // 複数ブロッカーの同時選択が起きる種
+  [159, ['random', 'random']],
+  [163, ['random', 'random']],
+  [38, ['random', 'rule']],
+] as const) {
+  games.push(play(DECK_T3, DECK_T2, seed, [k[0], k[1]]));
+}
+// ツインパクト・「マナゾーンに置く」効果を多く入れたデッキ: バトルゾーンからマナゾーンへ移るツインパクトのカードが、
+// タップして置かれること(マナゾーンでは両面の文明で多色。spec 3.4.1 M-1)を、Rust 版と突き合わせる
+const DECK_TWIN = [...rep(4, 'dm23rp1-070'), ...rep(4, 'dm24rp3-025'), ...rep(8, 'dm24ex2-096'), ...rep(4, 'dm24bd4-007'), ...rep(8, 'dmrp01-093'), ...rep(4, 'dmbd01-015'), ...rep(4, 'dm24rp3-S10'), ...rep(4, 'dm23bd1-014')];
+for (const seed of [1, 14, 16]) games.push(play(DECK_TWIN, DECK_TWIN, seed, ['random', 'random']));
 // 差分テスト用の価値関数(重みは決め打ち。全特徴量・手番・一部のカードに非零の値を入れる)
 const TEST_MODEL: ValueModel = {
   v: 1,

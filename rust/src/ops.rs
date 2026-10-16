@@ -504,7 +504,6 @@ fn do_move(c: &mut Ctx, uid: i32, to: Zone, cause: Sym, pos: Option<bool>, evs: 
         return enter_battle(c, uid, opts, evs);
     }
     remove_from_zone(c, uid);
-    let tapped_in_mana = to == Zone::Mana && enters_mana_tapped(c, uid, opts);
     {
         let card = &mut c.s.cards[uid as usize];
         card.zone = to;
@@ -513,10 +512,12 @@ fn do_move(c: &mut Ctx, uid: i32, to: Zone, cause: Sym, pos: Option<bool>, evs: 
         card.tapped = false;
         card.ex = false;
         card.ex_pid = -1;
-        if to == Zone::Mana {
-            card.tapped = tapped_in_mana;
-        }
         card.face = 0;
+    }
+    // 移動先のゾーンでの特性で判定する(TS 版と同じ。ツインパクトは、場(バトルゾーン)の面ではなく、マナゾーンでは両面の文明で多色)
+    if to == Zone::Mana {
+        let t = enters_mana_tapped(c, uid, opts);
+        c.s.cards[uid as usize].tapped = t;
     }
     place_in_zone(c, uid, to, pos)?;
     let mut f = vec![
@@ -537,14 +538,17 @@ fn do_move(c: &mut Ctx, uid: i32, to: Zone, cause: Sym, pos: Option<bool>, evs: 
         let usnap = Rc::new(snap_of(c.env(), u));
         let uowner = c.s.cards[u as usize].owner;
         remove_from_zone(c, u);
-        let tapped = if to == Zone::Mana { enters_mana_tapped(c, u, opts) } else { false };
         {
             let uc = &mut c.s.cards[u as usize];
             uc.zone = to;
             uc.ep += 1;
             uc.pid = -1;
-            uc.tapped = tapped;
+            uc.tapped = false;
             uc.face = 0;
+        }
+        if to == Zone::Mana {
+            let t = enters_mana_tapped(c, u, opts);
+            c.s.cards[u as usize].tapped = t;
         }
         place_in_zone(c, u, to, pos)?;
         evs.push(emit(

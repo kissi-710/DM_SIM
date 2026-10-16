@@ -143,8 +143,11 @@ type Action =
 | `summoned` | `card, free` | 召喚を宣言し、コストを払った |
 | `tapped` / `untapped` | `perm or card, cause` | |
 | `attackDeclared` | `attacker, target` | 「攻撃する時」。攻撃クリーチャーをタップした直後 |
-| `blocked` | `attacker, blocker` | |
+| `blocked` | `attacker, blocker` | 最後に解決した1体のブロッカーだけ(507.2a) |
+| `battleStarted` | `attacker, defender, attackerCard, defenderCard, owner` | 「バトルする時」。パワーを比べる前。**聞き手のカードがある時だけ**発行。`role: attacker / defender` |
 | `battleEnded` | `winner?, loser?, draw?` | |
+| `afterBattle` | 同上(`attacker, defender, attackerCard, defenderCard, owner`) | 「バトルの後」。勝敗の誘発を解決した後(701.13d)。聞き手のカードがある時だけ発行 |
+| `beforeBreak` | `attacker, owner, defenderOwner, cards` | 「ブレイクする前に」。ブレイクするシールドを選んだ後(509.3)。聞き手のカードがある時だけ発行 |
 | `shieldBroken` | `attacker, shield, by` | ブレイクされたシールド1枚ごと |
 | `triggerDeclared` | `card, kind` | S・トリガー/G・ストライクの宣言 |
 | `abilityTriggered` | `ability, source, controller` | 置換フィルタを通過して**実際に誘発した**能力(オルゲイトが見る) |
@@ -533,13 +536,16 @@ proc:"attack"
   A0 宣言     : 攻撃クリーチャーをタップ → emit attackDeclared → settle                  // 「攻撃する時」の誘発、侵略
                 (settle の最初に、非公開ゾーンで誘発した「してもよい」の能力[侵略・革命チェンジ]を
                  ターン・プレイヤー側から全て使用宣言する。宣言済みは取りやめられない。506.3b / `declareHidden`)
-  A1 ブロック  : 相手に blocker 候補があれば pending(pick 1 or none)。ブロックなら blocked → settle
-  A2 対象別    : creature / blocker → battle(パワー比較。同値は相打ち。勝敗は SBA で破壊)→ battleEnded → settle
+  A1 ブロック  : 相手に blocker 候補があれば pending(pick 0〜全員。複数なら、最後に解決する1体を pick 1)。
+                強制ブロック(mustBlock)があれば質問せず選ぶ。選んだ全員をタップ → 最後の1体だけ blocked → settle
+  A2 対象別    : creature / blocker → battleStarted(→ settle。どちらかが離れたらバトルなし)→
+                battle(パワー比較。同値は相打ち。勝敗は SBA で破壊)→ battleEnded → settle → afterBattle → settle
                  player → proc:"breakShields"(ブレイカー数)
   A3 終了      : 攻撃終了。settle
 
 proc:"breakShields"
-  B0 ブレイク   : 対象のシールドを選ぶ(攻撃側が選ぶ。裏向き)。moved(shield→"手札に加わる前の領域")
+  B0 ブレイク   : 対象のシールドを選ぶ(攻撃側が選ぶ。裏向き)→ beforeBreak → settle(509.3。選んだものは離れない限りブレイクされる)
+                moved(shield→"手札に加わる前の領域")
   B1 宣言       : 持ち主に triggerDeclare(S・トリガー/G・ストライクの宣言)。宣言したものは pool に shieldTrigger=true で入る
   B2 手札へ     : 宣言が全部終わってから全カードを手札に加える(112.3a)
   B3 settle     : S・トリガー層を先に解決(5.2)。解決中にブレイクされたものは新しいbatchなので先に解決される

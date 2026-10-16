@@ -602,10 +602,12 @@ pub fn rollout_pick(e: Env, legal: &[Action], rand: &mut SeededRand) -> usize {
             }
         }
         Why::Block => {
-            // 半分はブロックする
+            // 半分はブロックする。複数体のブロッカーを選ぶと、余分にタップするだけで損なので、1体の選択を優先する(507.1a)
             let blocks: Vec<usize> = legal.iter().enumerate().filter(|(_, a)| matches!(a, Action::Answer { value: Val::List(l), .. } if !l.is_empty())).map(|(i, _)| i).collect();
-            if !blocks.is_empty() && rand.next() < 0.5 {
-                blocks[pick(blocks.len(), rand)]
+            let single: Vec<usize> = blocks.iter().copied().filter(|&i| answer_len(&legal[i]) == 1).collect();
+            let pool: &Vec<usize> = if single.is_empty() { &blocks } else { &single };
+            if !pool.is_empty() && rand.next() < 0.5 {
+                pool[pick(pool.len(), rand)]
             } else {
                 0
             }
