@@ -90,6 +90,16 @@ describe('formatProb(未判定が多い時の上限)', () => {
   });
 });
 
+describe('formatProb(未判定が多い時の注意)', () => {
+  it('未判定が 2 割を超えたら、上限を上げるよう知らせる。2 割以下なら出さない', () => {
+    const many = formatProb(prob({ trials: 100, search: { achieved: 50, unknown: 30, judged: 70, rate: 0.7, ci95: [0.5, 0.8], avgNodes: 10, maxRate: 0.8 } }));
+    expect(many).toContain('注意: 未判定が 30% あり');
+    expect(many).toContain('maxNodes');
+    const few = formatProb(prob({ trials: 100, search: { achieved: 70, unknown: 20, judged: 80, rate: 0.9, ci95: [0.6, 0.8], avgNodes: 10, maxRate: 0.9 } }));
+    expect(few).not.toContain('注意: 未判定');
+  });
+});
+
 describe('formatProb', () => {
   it('試行回数・達成率・累積の行が出る(0ターン目は出さない)', () => {
     const t = formatProb(prob());

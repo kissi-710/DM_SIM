@@ -1,7 +1,7 @@
 // ソリティア調査画面: 条件ビルダー → 実行(Worker・進捗・キャンセル)→ 結果(確率・グラフ・パターン)→ 再生 → 出力。
 import { useMemo, useRef, useState } from 'react';
 import { CARD_DB } from '../cards';
-import { patternsToCsv, probToCsv, pct } from '../sim/export';
+import { patternsToCsv, probToCsv, pct, UNKNOWN_WARN } from '../sim/export';
 import { describeGoal, GOAL_PRESETS, type Goal } from '../sim/goal';
 import {
   initialProblems,
@@ -33,7 +33,7 @@ export function SimView() {
   const [goal, setGoal] = useState<Goal>(saved.goal ?? GOAL_PRESETS[0].goal);
   const [trials, setTrials] = useState<number>(saved.trials ?? 200);
   const [seed, setSeed] = useState<number>(saved.seed ?? 1);
-  const [maxNodes, setMaxNodes] = useState<number>(saved.maxNodes ?? 8000);
+  const [maxNodes, setMaxNodes] = useState<number>(saved.maxNodes ?? 30000);
   const [agent, setAgent] = useState<'rule' | 'random'>(saved.agent ?? 'rule');
   const [mode, setMode] = useState<Mode>('prob');
   const [gran, setGran] = useState<PatternGranularity>('ordered');
@@ -378,6 +378,11 @@ function ProbResultView({ r, goal }: { r: ProbResult; goal: Goal }) {
             <div className="muted">
               到達できると確認 {r.search.achieved} 回 / 未判定 {r.search.unknown} 回(ノード上限)/ 判定できた中の割合 {pct(r.search.rate)}
             </div>
+            {r.search.unknown > UNKNOWN_WARN * r.trials && (
+              <div className="muted" role="note">
+                未判定が多い({pct(r.search.unknown / Math.max(1, r.trials), 0)})ので、上限の範囲が広くなっています。「探索の上限ノード数」を上げると、狭まります。
+              </div>
+            )}
           </div>
         )}
       </div>

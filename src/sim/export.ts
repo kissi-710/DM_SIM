@@ -35,6 +35,9 @@ export function patternsToCsv(r: PatternResult): string {
 
 export const pct = (x: number, d = 1) => (x * 100).toFixed(d) + '%';
 
+/** 未判定がこの割合を超えたら、上限を上げるよう知らせる */
+export const UNKNOWN_WARN = 0.2;
+
 export function formatProb(r: ProbResult): string {
   const lines: string[] = [];
   lines.push(`試行 ${r.trials} 回 / 調査ターン ${r.maxTurns} / ${r.ms}ms`);
@@ -47,6 +50,9 @@ export function formatProb(r: ProbResult): string {
     lines.push(
       `探索による上限: ${pct(lower)}${r.search.unknown > 0 ? `〜${pct(r.search.maxRate)}` : ''}(確認できた割合の95%信頼区間 ${pct(lo)} 〜 ${pct(hi)}、未判定 ${r.search.unknown} 回、判定できた中の割合 ${pct(r.search.rate)}、平均 ${r.search.avgNodes.toFixed(0)} ノード)`,
     );
+  }
+  if (r.search && r.search.unknown > UNKNOWN_WARN * r.trials) {
+    lines.push(`注意: 未判定が ${pct(r.search.unknown / Math.max(1, r.trials), 0)} あり、探索による上限の範囲が広い。ノード数の上限(maxNodes)を上げると、範囲が狭まります`);
   }
   if (r.exact) lines.push(`厳密値(超幾何分布): ${pct(r.exact.value, 2)} … ${r.exact.note}`);
   lines.push('ターンまでの達成率(累積):');

@@ -33,7 +33,7 @@ if (args.help) {
   --trials <n>       試行回数(既定 300)
   --jobs <n>         並列数(既定: コア数-1、最大8。1なら直列。結果は並列数によらず同じ)
   --seed <n>         シード(既定 1)
-  --maxNodes <n>     探索のノード数上限(0で探索しない。既定 3000)
+  --maxNodes <n>     探索のノード数上限(0で探索しない。既定 30000。未判定が多い時は上げる)
   --agent <kind>     方針プレイのAI rule / random(既定 rule)
   --must <名前,..>   初手に必ず含める   --exclude <名前,..> 初手に含めない   --top <名前,..> 山札の上を固定
   --gran <g>         ordered / set / cards / choices(パターンの粗さ。既定 ordered)
@@ -84,7 +84,7 @@ const params: SolitaireParams = {
   goal,
   trials: num('trials', 300, 1),
   seed: num('seed', 1, -Infinity),
-  maxNodes: num('maxNodes', 3000),
+  maxNodes: num('maxNodes', 30000),
   agent: { kind: oneOf('agent', ['rule', 'random'], 'rule') },
   initial: { mustHand: list(args.must), mustNotHand: list(args.exclude), topFixed: list(args.top) },
 };
