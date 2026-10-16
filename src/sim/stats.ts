@@ -76,10 +76,17 @@ export function addAcc(a: RateAcc, b: RateAcc): RateAcc {
   return { nF: a.nF + b.nF, sF: a.sF + b.sF, nS: a.nS + b.nS, sS: a.sS + b.sS, m: a.m + b.m, pSum: a.pSum + b.pSum, pSq: a.pSq + b.pSq };
 }
 
-/** 有効サンプル数 nEff の Wilson 区間(推定値 p を中心に)。分散 v から nEff = p(1−p)/v */
-function wilsonEff(p: number, v: number): [number, number] {
-  const pc = Math.min(1 - 1e-9, Math.max(1e-9, p));
-  const nEff = Math.max(1, (pc * (1 - pc)) / Math.max(v, 1e-12));
+/**
+ * 有効サンプル数 nEff の Wilson 区間(推定値 p を中心に)。分散 v から nEff = c(1−c)/v。
+ * c は、v を求めた時と同じ平滑化(勝ち・負けに 0.5 を足す)をした割合。p そのもの(0 や 1)で nEff を求めると、
+ * 分子が 0 に潰れて nEff が 1 になり、全勝(400 試合で 400 勝)の区間が 20.7%〜100% になっていた。
+ */
+function wilsonEff(p: number, v: number, c: number, n: number): [number, number] {
+  // 全勝・全敗に近い時は、ペアにしても、試合数(n)より多くの情報は得られない(全ペアが同じ得点だと、分散の推定が潰れて、
+  // 20 ペア全勝でも 97.5% 以上のような過信の区間になる)。試合数で頭打ちにする
+  const cap = c * (1 - c) < 0.05 ? n : Infinity;
+  const nEff = Math.min(cap, Math.max(1, (c * (1 - c)) / Math.max(v, 1e-12)));
+  const pc = Math.min(1, Math.max(0, p));
   return wilson(pc * nEff, nEff);
 }
 
@@ -96,7 +103,7 @@ export function estimateRate(a: RateAcc): { rate: number; ci: [number, number] }
     const p = a.pSum / a.m;
     // 事前に、標準偏差 0.25 のペアが 1 つあるとみなして、分散の下限を与える(全ペアが同じ得点でも区間が潰れない)
     const s2 = (a.pSq - a.m * p * p + 0.0625) / a.m;
-    return { rate: p, ci: wilsonEff(p, s2 / a.m) };
+    return { rate: p, ci: wilsonEff(p, s2 / a.m, (a.pSum + 0.5) / (a.m + 1), n) };
   }
   if (a.nF > 0 && a.nS > 0) {
     const pF = a.sF / a.nF;
@@ -106,7 +113,7 @@ export function estimateRate(a: RateAcc): { rate: number; ci: [number, number] }
     const qF = sm(a.sF, a.nF);
     const qS = sm(a.sS, a.nS);
     const v = 0.25 * ((qF * (1 - qF)) / a.nF + (qS * (1 - qS)) / a.nS);
-    return { rate: p, ci: wilsonEff(p, v) };
+    return { rate: p, ci: wilsonEff(p, v, 0.5 * (qF + qS), n) };
   }
   const s = a.sF + a.sS;
   return { rate: s / n, ci: wilson(s, n) };

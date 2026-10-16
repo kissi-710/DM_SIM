@@ -30,6 +30,17 @@ describe('estimateRate(勝率の推定と区間)', () => {
     expect(w).toBeLessThan((wilson(m, 2 * m)[1] - wilson(m, 2 * m)[0]) * 0.5);
   });
 
+  it('全勝・全敗でも、区間は Wilson と同程度(400 試合で 400 勝が 20.7%〜100% にならない)', () => {
+    const win = estimateRate({ ...emptyAcc(), nF: 200, sF: 200, nS: 200, sS: 200 });
+    expect(win.rate).toBe(1);
+    expect(win.ci[0]).toBeGreaterThan(0.99);
+    const lose = estimateRate({ ...emptyAcc(), nF: 200, sF: 0, nS: 200, sS: 0 });
+    expect(lose.ci[1]).toBeLessThan(0.01);
+    // 複製対局(ペア)で全ペア勝ちでも、試合数以上の情報にはしない: 20 ペア(40 試合)全勝で、区間の下限は Wilson(40, 40) 程度
+    const pairs = estimateRate({ ...emptyAcc(), nF: 20, sF: 20, nS: 20, sS: 20, m: 20, pSum: 20, pSq: 20 });
+    expect(pairs.ci[0]).toBeCloseTo(wilson(40, 40)[0], 3);
+  });
+
   it('addAcc は足し算(範囲を分けて実行した統計の統合に使う)', () => {
     const x = { nF: 1, sF: 1, nS: 2, sS: 0.5, m: 1, pSum: 0.5, pSq: 0.25 };
     expect(addAcc(x, x)).toEqual({ nF: 2, sF: 2, nS: 4, sS: 1, m: 2, pSum: 1, pSq: 0.5 });
