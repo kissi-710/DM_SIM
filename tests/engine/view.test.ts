@@ -213,7 +213,7 @@ describe('toPlayerView: 入れ子のイベント・待機プールから、隠�
     const opp = s.players[1].hand[0]; // 相手の手札(自分には見えない)
     const defId = s.cards[opp].defId;
     const ref = { defId, face: 0, idx: 0 };
-    const snap = { uid: opp, defId, owner: 1, face: 0, zone: 'hand', civs: ['water'], cost: 3, power: 0, multicolor: false, pid: -1 };
+    const snap = { uid: opp, defId, owner: 1 as const, face: 0, zone: 'hand' as const, civs: ['water' as const], cost: 3, power: 0, multicolor: false, pid: -1 };
     const moved = { id: 1, causedBy: null, type: 'moved', turn: 1, card: opp, lki: snap };
     s.turnLog.push({ id: 2, causedBy: 1, type: 'abilityTriggered', turn: 1, ability: ref, source: opp, controller: 1, cause: moved, entry: 9 });
     const entry = { id: 9, batch: 1, ability: ref, kind: 'ability' as const, source: { uid: opp, ep: 0 }, lki: snap, controller: 1 as const, event: moved, stLayer: false };
