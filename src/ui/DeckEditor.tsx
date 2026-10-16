@@ -126,9 +126,9 @@ export function DeckEditor() {
                 onClick={() => {
                   try {
                     const o = JSON.parse(json);
-                    const cs: string[] = o.cards ?? o;
-                    if (!Array.isArray(cs) || cs.some((c) => !CARD_DB[c])) throw new Error('未知のカードIDがあります');
-                    load(cs, o.name ?? 'インポートしたデッキ');
+                    const cs: unknown = o?.cards ?? o;
+                    if (!Array.isArray(cs) || cs.some((c) => typeof c !== 'string' || !Object.hasOwn(CARD_DB, c))) throw new Error('未知のカードIDがあります');
+                    load(cs as string[], typeof o?.name === 'string' && o.name ? o.name : 'インポートしたデッキ');
                     setMsg('読み込みました');
                   } catch (e) {
                     setMsg('読み込めません: ' + errorMessage(e));

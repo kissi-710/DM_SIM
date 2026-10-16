@@ -11,8 +11,18 @@ export interface DeckEntry {
 
 const KEY = 'dmsim.decks';
 
+/** ブラウザに保存したデッキ。壊れた保存(配列でない・形式の違う項目)は、読み飛ばす(画面が開けなくならないように) */
 export function loadSavedDecks(): DeckEntry[] {
-  return loadJson<{ id: string; name: string; cards: string[] }[]>(KEY, []).map((d) => ({ ...d, preset: false }));
+  const raw = loadJson<unknown>(KEY, []);
+  if (!Array.isArray(raw)) return [];
+  const out: DeckEntry[] = [];
+  for (const d of raw) {
+    if (!d || typeof d !== 'object') continue;
+    const { id, name, cards } = d as Record<string, unknown>;
+    if (typeof id !== 'string' || typeof name !== 'string' || !Array.isArray(cards) || !cards.every((c) => typeof c === 'string')) continue;
+    out.push({ id, name, cards: cards as string[], preset: false });
+  }
+  return out;
 }
 
 export function saveDeck(d: { id: string; name: string; cards: string[] }): void {

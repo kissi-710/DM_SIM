@@ -51,7 +51,7 @@ export function validateRecord(x: unknown): RecordCheck {
     if (!Array.isArray(d) || d.length === 0 || !d.every((c) => typeof c === 'string')) {
       return { ok: false, error: `棋譜のデッキ ${p + 1} が、カードIDの配列ではありません` };
     }
-    const bad = (d as string[]).find((c) => !CARD_DB[c]);
+    const bad = (d as string[]).find((c) => !Object.hasOwn(CARD_DB, c));
     if (bad !== undefined) return { ok: false, error: `棋譜のデッキ ${p + 1} に、未知のカードIDがあります: ${bad}` };
   }
   if (x.first !== 0 && x.first !== 1) return { ok: false, error: '棋譜の先攻(first)が 0 か 1 ではありません' };

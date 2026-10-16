@@ -67,6 +67,16 @@ describe('デッキの保存', () => {
     deleteDeck('u1');
     expect(loadSavedDecks().map((x) => x.id)).toEqual(['u2']);
   });
+  it('壊れた保存(配列でない・形式の違う項目)があっても、画面が開けなくならない(読み飛ばす)', () => {
+    g.localStorage.setItem('dmsim.decks', '{"oops":1}');
+    expect(loadSavedDecks()).toEqual([]);
+    expect(allDecks().length).toBe(DECK_PRESETS.length);
+    g.localStorage.setItem(
+      'dmsim.decks',
+      JSON.stringify([null, 3, { id: 'a', name: 'ok', cards: ['dummy'] }, { id: 'b', name: 'x', cards: 'notarray' }, { id: 1, name: 'x', cards: [] }, { id: 'c', name: 'y', cards: [1] }]),
+    );
+    expect(loadSavedDecks()).toEqual([{ id: 'a', name: 'ok', cards: ['dummy'], preset: false }]);
+  });
   it('findDeck: 未知の id は例外', () => {
     expect(() => findDeck('nope')).toThrow();
   });
