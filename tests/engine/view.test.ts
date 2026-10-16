@@ -206,3 +206,40 @@ describe('隠れたカードの正体を、uid と deckIds から割り出せな
     expect(s.deckIds[1]).toEqual([...deckB].sort());
   });
 });
+
+describe('toPlayerView: 入れ子のイベント・待機プールから、隠れたカードが漏れない', () => {
+  const setup = () => {
+    const s = state();
+    const opp = s.players[1].hand[0]; // 相手の手札(自分には見えない)
+    const defId = s.cards[opp].defId;
+    const ref = { defId, face: 0, idx: 0 };
+    const snap = { uid: opp, defId, owner: 1, face: 0, zone: 'hand', civs: ['water'], cost: 3, power: 0, multicolor: false, pid: -1 };
+    const moved = { id: 1, causedBy: null, type: 'moved', turn: 1, card: opp, lki: snap };
+    s.turnLog.push({ id: 2, causedBy: 1, type: 'abilityTriggered', turn: 1, ability: ref, source: opp, controller: 1, cause: moved, entry: 9 });
+    const entry = { id: 9, batch: 1, ability: ref, kind: 'ability' as const, source: { uid: opp, ep: 0 }, lki: snap, controller: 1 as const, event: moved, stLayer: false };
+    s.pool.push(entry);
+    return { s, opp, defId, entry };
+  };
+  it('turnLog: 誘発した能力の持ち主(見えないカード)の定義IDと、入れ子の lki が消える', () => {
+    const { s, defId } = setup();
+    const v = toPlayerView(s, 0, FAIR, reg);
+    const e = v.turnLog.find((x) => x.type === 'abilityTriggered')!;
+    expect(e.ability.defId).toBe('?');
+    expect(e.cause.lki).toBeUndefined();
+    expect(JSON.stringify(v.turnLog)).not.toContain(defId);
+    // 元の状態は書き換えない(イベントは共有される)
+    expect(s.turnLog.find((x) => x.type === 'abilityTriggered')!.ability.defId).toBe(defId);
+  });
+  it('待機プール: 見えない持ち主の、宣言していない「してもよい」の能力は、相手には出さない。宣言済み・S・トリガーは残す', () => {
+    const { s, entry } = setup();
+    expect(toPlayerView(s, 0, FAIR, reg).pool).toHaveLength(0);
+    s.pool[0] = { ...entry, declared: true };
+    expect(toPlayerView(s, 0, FAIR, reg).pool).toHaveLength(1);
+    s.pool[0] = { ...entry, kind: 'shieldTrigger' };
+    expect(toPlayerView(s, 0, FAIR, reg).pool).toHaveLength(1);
+    // 自分の見える持ち主(自分の手札)の分は、そのまま
+    const mine = s.players[0].hand[0];
+    s.pool[0] = { ...entry, source: { uid: mine, ep: 0 } };
+    expect(toPlayerView(s, 0, FAIR, reg).pool).toHaveLength(1);
+  });
+});
