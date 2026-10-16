@@ -193,9 +193,20 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
 }
 
 /** 効果の選択: 実際に1手進めてみて、評価が最も高いものを選ぶ */
-function chooseAnswer(view: GameState, legal: Action[], ctx: AgentCtx, o: RuleOpts): Action {
+function chooseAnswer(view: GameState, legalAll: Action[], ctx: AgentCtx, o: RuleOpts): Action {
+  let legal = legalAll;
   if (legal.length === 1) return legal[0];
   const me = view.pending!.player;
+  // 任意効果の「使うか + 対象」の1問(0枚 = 使わない)。評価関数は1手先の盤面の差しか見ず、使う/使わないの得失を
+  // 見分けられない(従来の「使いますか?」も、はいの評価が同点で乱数まかせだった)ので、従来どおり半々で使い、
+  // 使う時の対象だけを評価で選ぶ(評価で使う/使わないを決めると、EXライフのシールドを手放す効果などを使いすぎて勝率が下がる)
+  if (view.pending!.why === 'may' && view.pending!.input?.shape === 'pick') {
+    const none = legal.find((a) => a.type === 'ANSWER' && Array.isArray(a.value) && a.value.length === 0);
+    if (none && ctx.rand() < 0.5) return none;
+    const use = legal.filter((a) => a.type === 'ANSWER' && Array.isArray(a.value) && a.value.length > 0);
+    if (use.length > 0) legal = use;
+    if (legal.length === 1) return legal[0];
+  }
   const pr = withL1(o.params);
   const w = pr.ansMana === RULE_WEIGHTS.mana ? RULE_WEIGHTS : { ...RULE_WEIGHTS, mana: pr.ansMana };
   const det = determinize(view, me, { rand: ctx.rand, reg: ctx.reg, policy: o.policy ?? FAIR, candidateDecks: o.candidateDecks });
