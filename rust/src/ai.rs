@@ -584,9 +584,21 @@ pub fn rollout_pick(e: Env, legal: &[Action], rand: &mut SeededRand) -> usize {
         }
         Why::May => {
             let yes = legal.iter().position(|a| matches!(a, Action::Answer { value: Val::Bool(true), .. }));
-            match yes {
-                Some(i) if rand.next() < 0.75 => i,
-                _ => pick(legal.len(), rand),
+            if yes.is_some() {
+                return match yes {
+                    Some(i) if rand.next() < 0.75 => i,
+                    _ => pick(legal.len(), rand),
+                };
+            }
+            // 「使うか + 対象」を1問にした形(pick。空 = 使わない): 従来の はい/いいえ と同じ、約 7/8 で使う
+            let uses: Vec<usize> = legal.iter().enumerate().filter(|(_, a)| answer_len(a) > 0).map(|(i, _)| i).collect();
+            if uses.is_empty() {
+                return pick(legal.len(), rand);
+            }
+            if rand.next() < 0.875 {
+                uses[pick(uses.len(), rand)]
+            } else {
+                legal.iter().position(|a| matches!(a, Action::Answer { value: Val::List(l), .. } if l.is_empty())).unwrap_or(uses[0])
             }
         }
         Why::Block => {

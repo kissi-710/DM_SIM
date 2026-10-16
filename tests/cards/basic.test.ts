@@ -170,7 +170,7 @@ describe('A16 ジゴクバンカー', () => {
     const sim = new Sim({ p0: { hand: ['九番龍 ジゴクバンカー'], mana: mana(8), deck: [W, 'ダミー'] } });
     sim.play('九番龍 ジゴクバンカー');
     expect(sim.count(0, 'mana')).toBe(9);
-    sim.yes();
+    // 使うかと対象を1問で聞く(選べば使う)
     sim.pick(W);
     expect(sim.has(0, 'hand', W)).toBe(true);
     expect(sim.count(0, 'mana')).toBe(8);

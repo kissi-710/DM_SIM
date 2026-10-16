@@ -210,10 +210,8 @@ describe('A9 絶望と反魂と滅殺の決断', () => {
     expect(sim.canPlay('絶望と反魂と滅殺の決断', 'grave')).toBe(true);
     sim.play('絶望と反魂と滅殺の決断', { from: 'grave' });
     sim.option(0, 0); // 相手は手札を2枚捨てる
-    // 相手が選んで捨てる(2回)
-    expect(sim.pending.player).toBe(1);
-    sim.pick(N);
-    sim.pick(N);
+    // 相手が選んで捨てる(2回)。手札は同名3枚で、どれを捨てても同じなので、聞かれずに捨てる
+    expect(sim.s.pending?.why).toBe('turnAction');
     expect(sim.count(1, 'hand')).toBe(1);
     const deck = sim.s.players[0].deck;
     expect(sim.s.cards[deck[deck.length - 1]].defId).toBe('dm23bd3-003');

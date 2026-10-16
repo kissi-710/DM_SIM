@@ -88,7 +88,11 @@ export function rolloutPick(s: GameState, legal: Action[], reg: Registry, rand: 
     }
     case 'may': {
       const yes = legal.find((a) => a.type === 'ANSWER' && a.value === true);
-      return yes && rand() < 0.75 ? yes : pick(legal);
+      if (yes) return rand() < 0.75 ? yes : pick(legal);
+      // 「使うか + 対象」を1問にした形(pick。空 = 使わない): 従来の はい/いいえ と同じ、約 7/8 で使う
+      const use = legal.filter((a) => a.type === 'ANSWER' && Array.isArray(a.value) && a.value.length > 0);
+      if (use.length === 0) return pick(legal);
+      return rand() < 0.875 ? pick(use) : legal.find((a) => a.type === 'ANSWER' && Array.isArray(a.value) && a.value.length === 0) ?? pick(use);
     }
     case 'block': {
       // 半分はブロックする
