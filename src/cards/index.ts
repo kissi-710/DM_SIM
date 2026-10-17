@@ -118,9 +118,3 @@ export function deckCards(id: string): string[] {
   for (const [cid, n] of p.list) for (let i = 0; i < n; i++) out.push(cid);
   return out;
 }
-
-export function deckPreset(id: string): DeckPreset {
-  const p = DECK_PRESETS.find((d) => d.id === id);
-  if (!p) throw new Error(`未知のデッキ: ${id}`);
-  return p;
-}
