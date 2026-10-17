@@ -53,7 +53,7 @@ export function saveFxMode(mode: FxMode): void {
 
 // ───────────────────────── 演出の種類と長さ ─────────────────────────
 
-export type FxKind = 'turn' | 'cast' | 'summon' | 'invade' | 'attack' | 'block' | 'shield' | 'trigger';
+export type FxKind = 'turn' | 'cast' | 'summon' | 'invade' | 'attack' | 'block' | 'shield' | 'trigger' | 'direct';
 
 export interface FxCue {
   /** 元のイベントの id(複数のイベントをまとめた時は先頭) */
@@ -79,6 +79,7 @@ export const FX_MS: Record<FxKind, number> = {
   block: 600,
   shield: 800,
   trigger: 1000,
+  direct: 1400,
 };
 
 /** 1手で出す演出の最大数と合計の長さ(長い連鎖でも、CPU の手が際限なく遅くならない) */
@@ -154,6 +155,12 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
         out.push({ id: e.id, kind: 'shield', title: 'シールドブレイク!', sub: `${who(e.owner, me)}のシールド`, side: sideOf(e.owner, me), ms: FX_MS.shield, count: 1 });
         break;
       }
+      case 'gameOver':
+        // ダイレクトアタックで決まった時だけ(山札切れ・ターン上限などは出さない)
+        if (e.reason === 'ダイレクトアタック' && typeof e.winner === 'number') {
+          out.push({ id: e.id, kind: 'direct', title: 'ダイレクトアタック!', sub: `${who(e.winner, me)}の勝ち`, side: sideOf(e.winner, me), ms: FX_MS.direct });
+        }
+        break;
       case 'triggerDeclared':
         out.push({
           id: e.id,
@@ -340,12 +347,121 @@ export function removalCuesOf(s: GameState, events: Ev[], me: number | null, sca
   });
 }
 
+// ───────────────────────── 攻撃(攻撃線・ブロック線・ブレイク・バトルの火花) ─────────────────────────
+// アタックはデュエマの華。攻撃の対象(シールドかクリーチャーか)を赤い線で明示し、割れる・ぶつかる瞬間を派手に見せる。
+// 位置は盤面の要素から取る(fxRects.ts のキー)。判定は Ev だけで決まる純粋関数。
+
+export type AttackTone = 'attack' | 'block';
+export type BurstTone = 'shield' | 'clash' | 'direct';
+
+export type AttackFx =
+  | {
+      kind: 'line';
+      id: number;
+      /** 位置のキー(uid:/pid:/zone:)。fxRects.ts */
+      from: string;
+      to: string;
+      tone: AttackTone;
+      /** 狙いの表示(「シールド」「クリーチャー」「ブロック」) */
+      label: string;
+      /** 対象がシールド(プレイヤーへの攻撃)か */
+      shield: boolean;
+      /** 開始までの遅れ(ms。倍率の前) */
+      delay: number;
+    }
+  | {
+      kind: 'burst';
+      id: number;
+      at: string;
+      tone: BurstTone;
+      /** 割れたシールドの枚数 */
+      n: number;
+      /** バトルが相打ちか */
+      draw: boolean;
+      delay: number;
+    };
+
+export const ATK_MS = {
+  line: 800,
+  burst: 750,
+  /** 攻撃線が引かれてから、着弾(ブレイク・バトル)までの間 */
+  impact: 450,
+  /** ブロック線が引かれてから、着弾までの間 */
+  blockImpact: 400,
+};
+
 /**
- * CPU が次の手を打つ前に待つ、演出の長さ(ms)。バナーの合計と、ゴーストの長さの大きいほう。
+ * 1手のイベントから、攻撃の演出を作る。
+ * 攻撃線 → (ブロックされたらブロック線)→ 着弾(シールドが割れる・バトルの火花・ダイレクトアタック)の順に、遅れを付ける。
+ * 攻撃宣言とそのあとの処理が別の手に分かれる(ブロッカーの選択が入る)ことがあるので、手の中にあるものだけで組む。
+ */
+export function attackFxOf(events: Ev[]): AttackFx[] {
+  const out: AttackFx[] = [];
+  let t = 0;
+  // 同じ手で続けて割れたシールドは、持ち主ごとに1つの着弾にまとめる
+  const shieldBurst = new Map<number, Extract<AttackFx, { kind: 'burst' }>>();
+  for (const e of events) {
+    switch (e.type) {
+      case 'attackDeclared': {
+        const isPlayer = e.target?.kind === 'player';
+        const defender = (e.owner as number) === 0 ? 1 : 0;
+        out.push({
+          id: e.id,
+          kind: 'line',
+          from: `uid:${e.card}`,
+          to: isPlayer ? `zone:shield:${defender}` : `pid:${e.target?.pid}`,
+          tone: 'attack',
+          label: isPlayer ? 'シールド' : 'クリーチャー',
+          shield: isPlayer,
+          delay: t,
+        });
+        t += ATK_MS.impact;
+        break;
+      }
+      case 'blocked':
+        out.push({ id: e.id, kind: 'line', from: `pid:${e.blocker}`, to: `uid:${e.attackerCard}`, tone: 'block', label: 'ブロック', shield: false, delay: t });
+        t += ATK_MS.blockImpact;
+        break;
+      case 'shieldBroken': {
+        const o = e.owner as number;
+        const cur = shieldBurst.get(o);
+        if (cur) {
+          cur.n++;
+          break;
+        }
+        const b: Extract<AttackFx, { kind: 'burst' }> = { kind: 'burst', id: e.id, at: `zone:shield:${o}`, tone: 'shield', n: 1, draw: false, delay: t };
+        shieldBurst.set(o, b);
+        out.push(b);
+        break;
+      }
+      case 'battleEnded':
+        out.push({ kind: 'burst', id: e.id, at: `pid:${e.defender}`, tone: 'clash', n: 1, draw: !!e.draw, delay: t });
+        break;
+      case 'gameOver':
+        if (e.reason === 'ダイレクトアタック' && typeof e.winner === 'number') {
+          out.push({ kind: 'burst', id: e.id, at: `zone:shield:${e.winner === 0 ? 1 : 0}`, tone: 'direct', n: 1, draw: false, delay: t });
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  return out;
+}
+
+/** 攻撃の演出が終わるまでの長さ(ms。倍率込み) */
+export function attackFxMs(fx: AttackFx[], scale: number): number {
+  let end = 0;
+  for (const f of fx) end = Math.max(end, f.delay + (f.kind === 'line' ? ATK_MS.line : ATK_MS.burst));
+  return fx.length === 0 ? 0 : scaleMs(end, scale);
+}
+
+/**
+ * CPU が次の手を打つ前に待つ、演出の長さ(ms)。バナーの合計・ゴースト・攻撃の演出の、長いもの。
  * (チップ・ステップ表示は待たせない)
  */
 export function fxHoldMs(s: GameState, events: Ev[], me: number | null, scale: number): number {
   const banners = fxTotalMs(cuesOf(s, events, me, scale));
   const ghost = removalsOf(events).length > 0 ? scaleMs(GHOST_MS, scale) : 0;
-  return Math.max(banners, ghost);
+  return Math.max(banners, ghost, attackFxMs(attackFxOf(events), scale));
 }

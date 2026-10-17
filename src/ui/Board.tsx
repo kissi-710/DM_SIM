@@ -293,6 +293,7 @@ export function Board(b: BoardProps) {
     const canPeek = mine && b.peek;
     return (
       <div
+        data-zone={`shield:${p}`}
         className={(isOppShield ? zcls(key, 'chip shield') : 'chip shield') + (canPeek ? ' clickable' : '') + (b.hit?.has(p) ? ' hit' : '')}
         {...(isOppShield ? zoneProps(key) : {})}
         onDoubleClick={canPeek ? () => openList(p, 'shield') : undefined}
