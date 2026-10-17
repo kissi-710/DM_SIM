@@ -6,7 +6,7 @@
 //     演出が CPU に与える影響は「次の手を打つまでの待ち時間」だけ(`cpuWaitMs`)。
 //  3. 「演出」設定は 通常 / 高速 / オフ の3段階。高速は長さを半分(約2倍の速さ)にし、オフはオーバーレイ・CSS アニメーション・待ち時間の上乗せのすべてを無効にする。
 import type { Ev, GameState, ZoneName } from '../engine/types';
-import { cardName } from './format';
+import { cardName, reg } from './format';
 import { loadJson, saveJson } from './util';
 
 // ───────────────────────── 設定 ─────────────────────────
@@ -55,10 +55,37 @@ export function saveFxMode(mode: FxMode): void {
 
 export type FxKind = 'turn' | 'cast' | 'summon' | 'invade' | 'revolution' | 'evolve' | 'attack' | 'block' | 'shield' | 'trigger' | 'direct';
 
+/**
+ * 演出の重み。**試合結果への影響が大きい行動ほど、豪華にする**(docs/ui-effects.md 0.2)。
+ * - decisive(決定的): 逆転の一手・切り札。S・トリガー / G・ストライク、革命チェンジ・侵略、ラスト・シールドのブレイク、ダイレクトアタック。
+ *   画面を暗くして光線・画面の揺れを足し、長く見せる。数の上限を超えても必ず出す。
+ * - major(重要): ターン遷移、呪文、進化、攻撃、ブロック、シールドブレイク。
+ * - minor(軽い): 召喚。
+ */
+export type FxTier = 'minor' | 'major' | 'decisive';
+
+/** 公開されたカードの見せ札(S・トリガーなど。何が起きるか読めるように、名前・コスト・テキストを出す) */
+export interface FxReveal {
+  name: string;
+  civs: string[];
+  cost: string;
+  power?: number;
+  type: string;
+  text: string;
+}
+
 export interface FxCue {
   /** 元のイベントの id(複数のイベントをまとめた時は先頭) */
   id: number;
   kind: FxKind;
+  /** 重み。省略時は種類の既定(tierOf) */
+  tier?: FxTier;
+  /** 種類の中の変種(ラスト・シールド / S・トリガー / G・ストライク) */
+  variant?: 'last' | 'strigger' | 'gstrike';
+  /** 一言(「逆転の一手」など) */
+  tag?: string;
+  /** 公開されたカードの見せ札 */
+  reveal?: FxReveal;
   title: string;
   sub?: string;
   /** 誰の出来事か(色分け)。観戦では席の番号で 'p0' / 'p1' */
@@ -74,15 +101,51 @@ export const FX_MS: Record<FxKind, number> = {
   turn: 1200,
   cast: 800,
   summon: 600,
-  invade: 1100,
-  revolution: 1300,
+  invade: 1500,
+  revolution: 1700,
   evolve: 700,
   attack: 700,
   block: 600,
   shield: 800,
-  trigger: 1000,
-  direct: 1400,
+  trigger: 2600,
+  direct: 1800,
 };
+
+/** 種類ごとの重みの既定 */
+export const FX_TIER: Record<FxKind, FxTier> = {
+  turn: 'major',
+  cast: 'major',
+  summon: 'minor',
+  invade: 'decisive',
+  revolution: 'decisive',
+  evolve: 'major',
+  attack: 'major',
+  block: 'major',
+  shield: 'major',
+  trigger: 'decisive',
+  direct: 'decisive',
+};
+
+export function tierOf(c: { kind: FxKind; tier?: FxTier }): FxTier {
+  return c.tier ?? FX_TIER[c.kind];
+}
+
+/** 見せ札を作る(S・トリガーとして使える面を優先。ツインパクトは呪文面) */
+export function revealOf(defId: string | undefined): FxReveal | undefined {
+  const def = defId ? reg.defs[defId] : undefined;
+  if (!defId || !def) return undefined;
+  let fi = 0;
+  for (let i = 0; i < def.faces.length; i++) {
+    const info = reg.getInfo(defId, i);
+    if (info.shieldTriggers.length > 0 || info.gStrike) {
+      fi = i;
+      break;
+    }
+  }
+  const f = def.faces[fi];
+  const type = f.type === 'spell' ? '呪文' : f.type === 'evolution' ? '進化' : f.type === 'smaxEvolution' ? 'S-MAX進化' : 'クリーチャー';
+  return { name: f.name ?? def.name, civs: f.civs, cost: String(f.cost), power: f.power, type, text: def.text ?? '' };
+}
 
 /** 1手で出す演出の最大数と合計の長さ(長い連鎖でも、CPU の手が際限なく遅くならない) */
 export const FX_MAX_CUES = 4;
@@ -105,6 +168,7 @@ function who(owner: number, me: number | null): string {
  */
 export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1): FxCue[] {
   const out: FxCue[] = [];
+  const triggered = new Set<number>();
   const own = (owner: number) => me !== null && owner === me;
   for (let i = 0; i < events.length; i++) {
     const e = events[i];
@@ -123,7 +187,7 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
         break;
       }
       case 'cast':
-        if (own(e.owner)) break;
+        if (own(e.owner) || triggered.has(e.card)) break;
         out.push({ id: e.id, kind: 'cast', title: cardName(s, e.card), sub: `${who(e.owner, me)}が呪文を唱えた`, side: sideOf(e.owner, me), ms: FX_MS.cast });
         break;
       case 'entered':
@@ -140,7 +204,7 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
           });
           break;
         }
-        if (own(e.owner)) break;
+        if (own(e.owner) || triggered.has(e.card)) break;
         if (e.via === 'summon') out.push({ id: e.id, kind: 'summon', title: cardName(s, e.card), sub: `${who(e.owner, me)}が召喚`, side: sideOf(e.owner, me), ms: FX_MS.summon });
         break;
       case 'evolved':
@@ -182,7 +246,18 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
           prev.title = `シールドブレイク! ×${n}`;
           break;
         }
-        out.push({ id: e.id, kind: 'shield', title: 'シールドブレイク!', sub: `${who(e.owner, me)}のシールド`, side: sideOf(e.owner, me), ms: FX_MS.shield, count: 1 });
+        // 最後のシールドが割れた(あと1撃で決まる)ときは、決定的な見せ場にする
+        const last = s.players[e.owner as 0 | 1].shield.length === 0;
+        out.push({
+          id: e.id,
+          kind: 'shield',
+          title: 'シールドブレイク!',
+          sub: last ? `${who(e.owner, me)}のラスト・シールド!` : `${who(e.owner, me)}のシールド`,
+          side: sideOf(e.owner, me),
+          ms: last ? 1800 : FX_MS.shield,
+          count: 1,
+          ...(last ? { tier: 'decisive' as const, variant: 'last' as const, tag: '王手' } : {}),
+        });
         break;
       }
       case 'gameOver':
@@ -195,11 +270,16 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
         out.push({
           id: e.id,
           kind: 'trigger',
+          variant: e.kind === 'gStrike' ? 'gstrike' : 'strigger',
+          tag: '逆転の一手',
           title: e.kind === 'gStrike' ? 'G・ストライク!' : 'S・トリガー!',
           sub: cardName(s, e.card),
+          reveal: revealOf(s.cards[e.card]?.defId),
           side: sideOf(e.owner, me),
           ms: FX_MS.trigger,
         });
+        // トリガーで唱えた・出したカードは、見せ札で出したので、同じ手の「呪文」「召喚」の帯は出さない
+        triggered.add(e.card);
         break;
       default:
         break;
@@ -208,13 +288,15 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
   return limitCues(out).map((c) => ({ ...c, ms: scaleMs(c.ms, scale) }));
 }
 
-/** 数と合計の長さを制限する(先頭を優先。ターン遷移は必ず残す) */
+/** 数と合計の長さを制限する(先頭を優先。ターン遷移と決定的な見せ場は必ず残す) */
 export function limitCues(cues: FxCue[]): FxCue[] {
   const keep: FxCue[] = [];
   let total = 0;
   for (const c of cues) {
-    if (keep.length >= FX_MAX_CUES) break;
-    if (total + c.ms > FX_MAX_TOTAL_MS && c.kind !== 'turn') continue;
+    // ターン遷移と決定的な見せ場は、数・合計の上限を超えても必ず残す
+    const must = c.kind === 'turn' || tierOf(c) === 'decisive';
+    if (keep.length >= FX_MAX_CUES && !must) continue;
+    if (total + c.ms > FX_MAX_TOTAL_MS && !must) continue;
     keep.push(c);
     total += c.ms;
   }
