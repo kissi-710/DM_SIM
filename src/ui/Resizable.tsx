@@ -148,17 +148,21 @@ export function ResizablePanel({ boxKey, className, title, onClose, label, minW 
 }
 
 /**
- * 盤面と右レールの間の仕切り。つまんで左右に動かすと、レールの幅が変わる(仕切りが指に付いてくる)。
- * 盤面(field)は幅の上限があり、残りの幅を左右の余白にして中央に寄せているので、つまんだ位置から幅を逆算する。
+ * 盤面と右レールの間の仕切り。つまんで左右に動かすと、レールの幅が変わる(仕切りがポインタに付いてくる)。
+ * 盤面(field)は広い画面でも FIELD_MAX までは広がり(styles.css の .stage と同じ値)、それを超えた分だけ左右の余白にして中央に寄せている。
  */
+export const FIELD_MAX = 1600;
 export const RAIL_MIN = 220;
 export const RAIL_MAX = 560;
 export const RAIL_DEFAULT = 300;
 
-/** 仕切りの中心が stage の左端から x にある時の、レールの幅。field は自分の幅 f(上限)のまま。f が収まらない時は、左端に寄せて field を縮める */
-export function railWidthFor(stageW: number, f: number, x: number, gap = 10): number {
-  const centered = stageW + f - 2 * x; // 中央寄せの時(左の余白 = (stageW - f - gap - r) / 2)の、仕切りの位置 x = (stageW + f - r) / 2 から逆算
-  const r = f + gap + centered <= stageW ? centered : stageW - x - gap / 2;
+/**
+ * 仕切りの中心が stage の左端から x にある時の、レールの幅。
+ * 盤面が上限に達していない間は、仕切りの左がすべて盤面なので、レール = stage - x - gap/2。
+ * 上限を超える間は、盤面を FIELD_MAX に保ち、余白を左右に分けるので、x = (stage + FIELD_MAX - レール) / 2 から逆算する。
+ */
+export function railWidthFor(stageW: number, x: number, gap = 10): number {
+  const r = x - gap / 2 <= FIELD_MAX ? stageW - x - gap / 2 : stageW + FIELD_MAX - 2 * x;
   return Math.min(RAIL_MAX, Math.max(RAIL_MIN, Math.round(r)));
 }
 
@@ -173,23 +177,20 @@ export function useRailWidth(): [number, (w: number) => void] {
   return [w, setW];
 }
 
-export function Splitter({ width, onChange, stageRef, fieldRef }: { width: number; onChange: (w: number) => void; stageRef: React.RefObject<HTMLElement | null>; fieldRef: React.RefObject<HTMLElement | null> }) {
-  const dragging = useRef<{ f: number } | null>(null);
+export function Splitter({ width, onChange, stageRef }: { width: number; onChange: (w: number) => void; stageRef: React.RefObject<HTMLElement | null> }) {
+  const dragging = useRef(false);
   const down = (e: PointerEvent<HTMLDivElement>) => {
-    const f = fieldRef.current?.getBoundingClientRect().width;
-    if (!f) return;
-    dragging.current = { f };
+    dragging.current = true;
     e.currentTarget.setPointerCapture?.(e.pointerId);
     e.preventDefault();
   };
   const move = (e: PointerEvent<HTMLDivElement>) => {
-    const d = dragging.current;
     const st = stageRef.current?.getBoundingClientRect();
-    if (!d || !st) return;
-    onChange(railWidthFor(st.width, d.f, e.clientX - st.left));
+    if (!dragging.current || !st) return;
+    onChange(railWidthFor(st.width, e.clientX - st.left));
   };
   const up = () => {
-    dragging.current = null;
+    dragging.current = false;
   };
   const key = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;

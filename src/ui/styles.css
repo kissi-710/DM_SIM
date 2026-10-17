@@ -224,7 +224,7 @@ th {
   min-width: 0;
   display: grid;
   /* 盤面 | 仕切り(つまんで動かせる) | 右の欄(幅は --rail-w。仕切りで変える) */
-  grid-template-columns: minmax(0, 820px) 10px var(--rail-w, 300px);
+  grid-template-columns: minmax(0, 1600px) 10px var(--rail-w, 300px); /* 1600 は Resizable.tsx の FIELD_MAX と同じ */
   grid-template-rows: minmax(0, 1fr);
   justify-content: center;
 }
@@ -389,7 +389,7 @@ th {
   border: 1px solid var(--accent);
   border-radius: 14px;
   padding: 16px 18px;
-  max-width: min(820px, 100%);
+  max-width: min(1100px, 100%);
   max-height: 100%;
   overflow: auto;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
