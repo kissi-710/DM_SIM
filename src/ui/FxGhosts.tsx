@@ -2,6 +2,7 @@
 // 離れたカードの元の位置に、カードの影を出し、行き先(墓地・手札・マナ)へ縮みながら飛ばす。一瞬で消える。
 // 元の位置は、直前の描画で測っておいた各カード(data-uid)の矩形を使う。見た目だけで、操作を妨げない。無効なら何も描かない。
 import { useLayoutEffect, useRef, useState } from 'react';
+import { useFxOnToken, type Rects } from './fxRects';
 import type { GameState } from '../engine/types';
 import { civGradient } from './CardView';
 import { GHOST_MS, scaleMs, type Removal } from './fx';
@@ -31,55 +32,38 @@ function targetRect(r: Removal): DOMRect | null {
   return el ? el.getBoundingClientRect() : null;
 }
 
-function measure(): Map<number, DOMRect> {
-  const m = new Map<number, DOMRect>();
-  for (const el of document.querySelectorAll<HTMLElement>('.board [data-uid]')) {
-    const u = Number(el.dataset.uid);
-    if (!m.has(u)) m.set(u, el.getBoundingClientRect());
-  }
-  return m;
-}
-
 export function FxGhosts({ s, removals, token, enabled, scale }: { s: GameState; removals: Removal[]; token: unknown; enabled: boolean; scale: number }) {
   const [ghosts, setGhosts] = useState<Ghost[]>([]);
-  const rects = useRef<Map<number, DOMRect>>(new Map());
-  const lastToken = useRef<unknown>(undefined);
   const seq = useRef(0);
 
-  // 描画のたびに、各カードの位置を覚える。新しい手が来た描画では、上書きする前(=直前の描画)の位置を使う
-  useLayoutEffect(() => {
-    const prev = rects.current;
-    if (lastToken.current !== token) {
-      lastToken.current = token;
-      if (enabled && removals.length > 0) {
-        const add: Ghost[] = [];
-        for (const r of removals.slice(0, MAX_GHOSTS)) {
-          const from = prev.get(r.uid);
-          if (!from || from.width === 0) continue;
-          const to = targetRect(r);
-          const dx = to ? to.left + to.width / 2 - (from.left + from.width / 2) : 0;
-          const dy = to ? to.top + to.height / 2 - (from.top + from.height / 2) : 0;
-          add.push({
-            key: ++seq.current,
-            name: cardName(s, r.uid),
-            civs: civsOf(s, r.uid),
-            label: r.label,
-            left: from.left,
-            top: from.top,
-            w: from.width,
-            h: from.height,
-            dx,
-            dy,
-            ms: scaleMs(GHOST_MS, scale),
-          });
-        }
-        if (add.length > 0) {
-          setGhosts((cur) => cur.concat(add));
-          for (const g of add) setTimeout(() => setGhosts((cur) => cur.filter((x) => x.key !== g.key)), g.ms + 50);
-        }
-      }
+  // 新しい手が来た描画で、直前の描画の位置(離れたカードの元の位置)から、行き先へ飛ばす
+  useFxOnToken(token, enabled, (prev: Rects) => {
+    if (removals.length === 0) return;
+    const add: Ghost[] = [];
+    for (const r of removals.slice(0, MAX_GHOSTS)) {
+      const from = prev.get(`uid:${r.uid}`);
+      if (!from || from.width === 0) continue;
+      const to = targetRect(r);
+      const dx = to ? to.left + to.width / 2 - (from.left + from.width / 2) : 0;
+      const dy = to ? to.top + to.height / 2 - (from.top + from.height / 2) : 0;
+      add.push({
+        key: ++seq.current,
+        name: cardName(s, r.uid),
+        civs: civsOf(s, r.uid),
+        label: r.label,
+        left: from.left,
+        top: from.top,
+        w: from.width,
+        h: from.height,
+        dx,
+        dy,
+        ms: scaleMs(GHOST_MS, scale),
+      });
     }
-    rects.current = measure();
+    if (add.length > 0) {
+      setGhosts((cur) => cur.concat(add));
+      for (const gh of add) setTimeout(() => setGhosts((cur) => cur.filter((x) => x.key !== gh.key)), gh.ms + 50);
+    }
   });
 
   useLayoutEffect(() => {

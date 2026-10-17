@@ -16,9 +16,10 @@ import { parseRecord, saveRecord } from './record';
 import { makeRecord, type GameSetup, type Session, useGame } from './useGame';
 import { downloadText, loadJson, saveJson } from './util';
 import { FxLayer } from './FxLayer';
+import { FxAttack } from './FxAttack';
 import { FxGhosts } from './FxGhosts';
 import { FxTicker } from './FxTicker';
-import { cuesOf, drawCuesOf, FX_MODE_LABEL, FX_MODES, fxScale, loadFxMode, removalCuesOf, removalsOf, saveFxMode, STEP_LABEL, type FxMode } from './fx';
+import { cuesOf, drawCuesOf, FX_MODE_LABEL, FX_MODES, fxHoldMs, fxScale, loadFxMode, removalCuesOf, removalsOf, saveFxMode, STEP_LABEL, type FxMode } from './fx';
 
 export function CardDetail({ s, uid }: { s: GameState; uid: number | null }) {
   if (uid === null || !s.cards[uid] || s.cards[uid].defId === '?') {
@@ -249,6 +250,14 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   // 軽いチップ(ドロー・離れたカード)。ステップの切り替わりは FxTicker が状態の差分から作る
   const lightCues = useMemo(() => (fxActive ? [...drawCuesOf(fxEvents, g.me, scale), ...removalCuesOf(s, fxEvents, g.me, scale)] : []), [fxActive, fxEvents, scale]);
   const removals = useMemo(() => (fxActive ? removalsOf(fxEvents) : []), [fxActive, fxEvents]);
+  // 勝敗のパネルは、最後の一撃の演出(ダイレクトアタックなど)が終わってから出す。演出が無効なら、すぐ出す
+  const [resultShown, setResultShown] = useState(() => s.winner !== null);
+  useEffect(() => {
+    if (s.winner === null) return setResultShown(false);
+    if (!fxActive) return setResultShown(true);
+    const t = setTimeout(() => setResultShown(true), fxHoldMs(s, session.last, g.me, scale));
+    return () => clearTimeout(t);
+  }, [s.winner, fxActive]);
   const blockers = useMemo(() => {
     const set = new Set<number>();
     if (fxActive) for (const e of session.last) if (e.type === 'blocked' && typeof e.card === 'number') set.add(e.card);
@@ -782,6 +791,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         />
         <FxLayer cues={fxCues} token={session.last} enabled={fxActive} />
         <FxGhosts s={s} removals={removals} token={session.last} enabled={fxActive} scale={scale} />
+        <FxAttack events={fxEvents} token={session.last} enabled={fxActive} scale={scale} />
         <FxTicker
           scale={scale}
           draws={lightCues}
@@ -809,7 +819,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         )}
 
         {/* 勝敗 */}
-        {s.winner !== null && (
+        {s.winner !== null && resultShown && (
           <div className="input-layer">
             <div className="input-panel result">
               <h2>
