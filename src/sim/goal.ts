@@ -37,6 +37,26 @@ export type Goal =
   | { op: 'not'; arg: Goal }
   | { op: 'pred'; timing: Timing; pred: Predicate };
 
+/**
+ * 目標(Goal)の形が正しいか。保存した設定・JSON の読み込みなど、信用できない入力を、使う前に確かめる。
+ * 述語の中身(カードの条件の細部)までは見ないが、実行時に例外になる形(葉が無い・種類が不明・ターンが数でない)は断る。
+ */
+export function isGoal(x: unknown, depth = 0): x is Goal {
+  if (!x || typeof x !== 'object' || depth > 20) return false;
+  const g = x as Record<string, unknown>;
+  if (g.op === 'and' || g.op === 'or') return Array.isArray(g.args) && g.args.length > 0 && g.args.every((a) => isGoal(a, depth + 1));
+  if (g.op === 'not') return isGoal(g.arg, depth + 1);
+  if (g.op !== 'pred') return false;
+  const t = g.timing as Record<string, unknown> | undefined;
+  if (!t || typeof t !== 'object' || typeof t.turn !== 'number' || !Number.isFinite(t.turn) || !['anyMain', 'turnEnd', 'byTurn', 'opening'].includes(t.at as string)) return false;
+  const p = g.pred as Record<string, unknown> | undefined;
+  if (!p || typeof p !== 'object') return false;
+  if (p.kind === 'manaCount') return typeof p.min === 'number';
+  if (p.kind === 'castable' || p.kind === 'cast') return !!p.card && typeof p.card === 'object';
+  if (p.kind === 'zoneHas') return ['hand', 'mana', 'grave', 'battle', 'shield'].includes(p.zone as string) && !!p.card && typeof p.card === 'object';
+  return false;
+}
+
 // ───────────────────────── 表示用 ─────────────────────────
 
 export function describeMatcher(m: CardMatcher): string {

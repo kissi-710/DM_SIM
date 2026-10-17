@@ -8,7 +8,8 @@ import { INFO_PRESET_LABEL, type InfoPreset } from '../engine/view';
 import { allDecks, findDeck } from './decks';
 import type { GameSetup, Seat } from './useGame';
 import { FX_MODE_LABEL, FX_MODES, loadFxMode, saveFxMode, type FxMode } from './fx';
-import { loadJson, saveJson } from './util';
+import { loadSavedSetup } from './saved';
+import { saveJson } from './util';
 import { errorMessage } from '../engine/types';
 import { aiEngine, onAiEngine, warmAi, type AiEngine } from './aiClient';
 
@@ -23,9 +24,9 @@ interface SeatForm {
 
 export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch'; onStart: (s: GameSetup) => void; onBack: () => void }) {
   const decks = allDecks();
-  const saved = loadJson<{ seats: SeatForm[]; first: string; seed: string; autoOrder: boolean; undo: boolean; delay: number; think?: number } | null>('dmsim.setup.' + mode, null);
+  const saved = loadSavedSetup(mode);
   const [seats, setSeats] = useState<SeatForm[]>(
-    saved?.seats ??
+    saved.seats ??
       (mode === 'play'
         ? [
             { kind: 'human', agent: 'rule', info: 'fair', deck: 'maruru' },
@@ -36,15 +37,15 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
             { kind: 'cpu', agent: 'rule', info: 'fair', deck: 'zardy' },
           ]),
   );
-  const [first, setFirst] = useState(saved?.first ?? 'random');
-  const [seed, setSeed] = useState(saved?.seed ?? '');
-  const [autoOrder, setAutoOrder] = useState(saved?.autoOrder ?? false);
-  const [undo, setUndo] = useState(saved?.undo ?? true);
+  const [first, setFirst] = useState(saved.first ?? 'random');
+  const [seed, setSeed] = useState(saved.seed ?? '');
+  const [autoOrder, setAutoOrder] = useState(saved.autoOrder ?? false);
+  const [undo, setUndo] = useState(saved.undo ?? true);
   // 演出(対戦画面の「演出を表示する」と同じ設定)
   const [fx, setFx] = useState<FxMode>(loadFxMode);
-  const [delay, setDelay] = useState(saved?.delay ?? (mode === 'watch' ? 600 : 500));
+  const [delay, setDelay] = useState(saved.delay ?? (mode === 'watch' ? 600 : 500));
   // モンテカルロ探索の最大の思考時間。手の優劣がはっきりすれば、これより早く打ち切る
-  const [think, setThink] = useState(saved?.think ?? 1200);
+  const [think, setThink] = useState(saved.think ?? 1200);
   const [strict, setStrict] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 

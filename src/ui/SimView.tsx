@@ -17,7 +17,8 @@ import { ReplayViewer } from './ReplayViewer';
 import { allDecks, findDeck } from './decks';
 import { reg } from './format';
 import { runSimJob, type RunningJob } from './simClient';
-import { downloadText, loadJson, saveJson } from './util';
+import { loadSavedSim } from './saved';
+import { downloadText, saveJson } from './util';
 import type { Ev, GameState } from '../engine/types';
 import { errorMessage } from '../engine/types';
 
@@ -25,9 +26,8 @@ type Mode = 'prob' | 'patterns';
 
 export function SimView() {
   const decks = allDecks();
-  /** 前回の入力(localStorage)。項目は増減しうるので、すべて任意として読む */
-  type Saved = Partial<{ deckId: string; first: 0 | 1; goal: Goal; trials: number; seed: number; maxNodes: number; agent: 'rule' | 'random'; must: string; exclude: string; topFixed: string }>;
-  const saved = loadJson<Saved>('dmsim.sim', {});
+  /** 前回の入力(localStorage)。項目は増減しうるので、すべて任意として読み、形の違うもの・消したデッキは捨てる */
+  const saved = loadSavedSim();
   const [deckId, setDeckId] = useState<string>(saved.deckId ?? 'maruru');
   const [first, setFirst] = useState<0 | 1>(saved.first ?? 0);
   const [goal, setGoal] = useState<Goal>(saved.goal ?? GOAL_PRESETS[0].goal);

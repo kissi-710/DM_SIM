@@ -12,6 +12,12 @@ interface Box {
 
 const DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
 
+function isBox(b: unknown): b is Box {
+  if (!b || typeof b !== 'object') return false;
+  const o = b as Record<string, unknown>;
+  return (['x', 'y', 'w', 'h'] as const).every((k) => typeof o[k] === 'number' && Number.isFinite(o[k]));
+}
+
 /** パネルを、親の中に収める(幅・高さは最小〜親の大きさ、位置は親の内側) */
 export function clampBox(b: Box, pw: number, ph: number, minW: number, minH: number): Box {
   const w = Math.min(Math.max(b.w, minW), Math.max(pw, 1));
@@ -64,7 +70,10 @@ interface PanelProps {
 
 export function ResizablePanel({ boxKey, className, title, onClose, label, minW = 260, minH = 110, children }: PanelProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState<Box | null>(() => loadJson<Box | null>(boxKey, null));
+  const [box, setBox] = useState<Box | null>(() => {
+    const b = loadJson<unknown>(boxKey, null);
+    return isBox(b) ? b : null; // 形の違う保存は捨てる(位置・大きさが NaN になって、パネルが消えないように)
+  });
   const drag = useRef<{ dir: string; start: Box; sx: number; sy: number; pw: number; ph: number; last: Box } | null>(null);
 
   /** パネルの座標系(位置を決める親)の大きさ。位置は親の左上からの距離で持つ */
@@ -169,7 +178,7 @@ export function railWidthFor(stageW: number, x: number, gap = 10): number {
 export function useRailWidth(): [number, (w: number) => void] {
   const [w, setW] = useState<number>(() => {
     const v = loadJson<number>('dmsim.railW', RAIL_DEFAULT);
-    return typeof v === 'number' ? Math.min(RAIL_MAX, Math.max(RAIL_MIN, v)) : RAIL_DEFAULT;
+    return typeof v === 'number' && Number.isFinite(v) ? Math.min(RAIL_MAX, Math.max(RAIL_MIN, v)) : RAIL_DEFAULT;
   });
   useEffect(() => {
     saveJson('dmsim.railW', w);
