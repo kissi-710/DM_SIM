@@ -3,7 +3,7 @@
 シミュレータとしての正確さに加え、カードゲームとして「いま何が起きたか」が見て分かるよう、見せ場に演出を足す。
 **演出は見た目だけの層**で、ゲームの進行と CPU の手の選択には関与しない。設計の約束(§1)を最初に置く。
 
-実装: [src/ui/fx.ts](../src/ui/fx.ts)(判定・長さ・設定。純粋関数)/ [src/ui/FxLayer.tsx](../src/ui/FxLayer.tsx)(バナー)/ [src/ui/FxTicker.tsx](../src/ui/FxTicker.tsx)(軽いチップ)/ [src/ui/FxGhosts.tsx](../src/ui/FxGhosts.tsx)(離れたカードのゴースト)/ [src/ui/FxAttack.tsx](../src/ui/FxAttack.tsx)(攻撃線・着弾)/ [src/ui/fxRects.ts](../src/ui/fxRects.ts)(位置の記憶)/ [src/ui/styles.css](../src/ui/styles.css) 末尾の「演出」/ テスト [tests/ui/fx.test.tsx](../tests/ui/fx.test.tsx)・[tests/ui/fx-removal.test.tsx](../tests/ui/fx-removal.test.tsx)・[tests/ui/fx-attack.test.tsx](../tests/ui/fx-attack.test.tsx)。
+実装: [src/ui/fx.ts](../src/ui/fx.ts)(判定・長さ・設定。純粋関数)/ [src/ui/FxLayer.tsx](../src/ui/FxLayer.tsx)(バナー)/ [src/ui/FxTicker.tsx](../src/ui/FxTicker.tsx)(軽いチップ)/ [src/ui/FxGhosts.tsx](../src/ui/FxGhosts.tsx)(離れたカードのゴースト)/ [src/ui/FxAttack.tsx](../src/ui/FxAttack.tsx)(攻撃線・着弾)/ [src/ui/fxRects.ts](../src/ui/fxRects.ts)(位置の記憶)/ [src/ui/styles.css](../src/ui/styles.css) 末尾の「演出」/ テスト [tests/ui/fx-trump.test.tsx](../tests/ui/fx-trump.test.tsx)・[tests/ui/fx.test.tsx](../tests/ui/fx.test.tsx)・[tests/ui/fx-removal.test.tsx](../tests/ui/fx-removal.test.tsx)・[tests/ui/fx-attack.test.tsx](../tests/ui/fx-attack.test.tsx)。
 
 ## 1. 設計の約束
 
@@ -27,6 +27,9 @@
 | `attack` | `attackDeclared` | 「攻撃!」+ 攻撃元 → 相手 | 700ms |
 | `block` | `blocked` | 「ブロック!」 | 600ms |
 | `shield` | `shieldBroken`(続けて割れた分は ×N にまとめる) | 「シールドブレイク!」+ 盤面のシールドが揺れる | 800ms |
+| `revolution` | `entered`(via=革命チェンジ) | **金色の帯**に「革命チェンジ!」+「手札に戻った札 → 出た札」。**自分の分も出す**(切り札なので) | 1300ms |
+| `invade` | `evolved`(via=侵略) | **紫の帯**に「侵略!」+「攻撃中の札 の上に 出た札」。自分の分も出す。進化元が場から来る侵略でも出る(`entered` が出ないため `evolved` で拾う) | 1100ms |
+| `evolve` | `evolved`(侵略以外) | 「進化!」+ カード名(相手の分だけ) | 700ms |
 | `trigger` | `triggerDeclared` | 「S・トリガー!」「G・ストライク!」 | 1000ms |
 | `direct` | `gameOver`(ダイレクトアタック) | 「ダイレクトアタック!」+ 勝者 | 1400ms |
 
@@ -51,6 +54,13 @@
 - **位置**: 攻撃元は `uid:`、クリーチャーは `pid:`(盤面の `data-drop`)、シールド・墓地などは `zone:`(盤面の `data-zone`)のキーで、**直前の描画で測っておいた位置**(`fxRects.ts`)から取る。破壊されて消えたクリーチャーも、線の行き先・火花の位置が分かる。位置が分からないものは出さない。
 - 攻撃・ブロック・シールドブレイクのバナーは、線を隠さないよう、盤面の上寄りに小さく出す。
 - CPU の待ち(§4)には、攻撃の演出が終わるまでの長さを入れる(バナー・ゴーストとの大きいもの)。
+
+#### 切り札(革命チェンジ・侵略)の入れ替わり
+
+宣言のあと、次の3つが重なる。
+1. バナー(上の表)。
+2. 入れ替わりで手札に戻る札は、§2.1 のゴーストで手札へ飛ぶ(革命チェンジ)。
+3. 出てきた札は、**上から落ちてきて**(`.trump-in`)、その位置に**金色の着弾**(`tone: 'trump'`。破片と輪)が出る。位置は攻撃後の描画(`fxRects` の `cur`)から取る。
 
 ### 2.1 カードが離れた時(破壊・バウンス・捨てる・マナへ)
 
@@ -77,6 +87,15 @@ CPU の待ち(§4)には、ゴースト(`GHOST_MS`)の長さを入れる(バナ�
 ステップのうち、engine がイベントにするのはターンの開始と終了だけなので、ステップの切り替わりは状態の差分から検知する。
 
 その他の盤面の動き(`.game.fx` の時だけ): 攻撃を宣言したクリーチャーが相手のほうへ一歩前に出る。**手番のプレイヤーの盤面の縁取り**は、情報表示なので演出が無効でも残す。
+
+### 2.3 触れない状態(ジャストダイバーなど)の表示
+
+ジャストダイバーで出たクリーチャーは、次のターンの開始まで「相手の効果で選ばれず、攻撃もされない」。これを演出ではなく**常時の情報表示**として出す(演出が無効でも残る。光のきらめきの動きだけが演出)。
+
+- 判定は `wardOf(state, pid)`(`format.ts`)。`cannotBeChosen` / `cannotBeAttacked` の継続効果から作り、ジャストダイバーに限らず、同じ状態になる効果すべてに効く。ラベルは「触れない」(両方)・「選ばれない」・「攻撃されない」。
+- 札: **水色の光る縁**(`.card.ward`)・「🛡 触れない」の札(`.ward-tag`)・ゆっくり流れるきらめき(演出が有効な時だけ)・本文に「JD」。選択中・攻撃対象の強調は、ward より優先する。
+- ツールチップ・読み上げ: 「触れない(持ち主の次のターンの開始まで)…」。
+- カードの詳細: 「🛡 相手に選ばれない(持ち主の次のターンの開始まで)」「🛡 攻撃されない(…)」。
 
 ## 3. 設定(演出: 通常・高速・オフ)
 
@@ -107,5 +126,6 @@ fast                       → 0
 
 - `tests/ui/fx.test.tsx`: 設定(三段階・旧い保存の読み替え・倍率)の保存・既定、イベントごとの演出、隠れた情報を含まないこと、数・長さの上限、`cpuWaitMs` の表、演出あり・なしで CPU 同士の対戦の先頭 16 手が一致すること、`FxLayer`・`FxTicker` の無効化。
 - `tests/ui/fx-removal.test.tsx`: 離れたカードの拾い方(見えない移動を拾わない)、チップのまとめ方、CPU の待ち(ゴースト)、ゴーストの位置・行き先・高速・無効、高速・通常・オフで CPU の手が一致すること。
+- `tests/ui/fx-trump.test.tsx`: 実際のエンジンのイベント(Sim)で、革命チェンジ・侵略・進化のバナーと名前、ゴースト・着弾の対象、侵略で「進化!」を重ねないこと、ジャストダイバーの `wardOf`・札の表示・詳細。
 - `tests/ui/fx-attack.test.tsx`: 攻撃の演出の判定(シールド/クリーチャー/ブロック/ダイレクト・遅れ・まとめ・倍率)、`FxAttack` の線の位置・札・着弾・高速・無効・同じ手で一度だけ、ダイレクトアタックのバナー、CPU の待ち。
 - `tests/ui/gameview.test.tsx`: 演出が有効なら最初のターンを見せる/オフ(旧い保存の無効を含む)ならオーバーレイも `.fx` も出ない/メニューで「オフ」「高速」に切ると即座に反映されて保存される。
