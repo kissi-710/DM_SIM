@@ -118,7 +118,7 @@ describe('cuesOf(イベントから演出を作る)', () => {
     const steps = playUntilTurn(30, (a) => a.type === 'ATTACK' || a.type === 'PLAY_CARD' || a.type === 'CHARGE_MANA');
     const mine = steps.flatMap((x) => cuesOf(x.state, x.events, 0));
     const watch = steps.flatMap((x) => cuesOf(x.state, x.events, null));
-    const act = ['summon', 'cast', 'attack', 'invade'];
+    const act = ['summon', 'cast', 'attack'];
     expect(mine.filter((c) => act.includes(c.kind) && c.side === 'me')).toHaveLength(0);
     expect(mine.filter((c) => act.includes(c.kind) && c.side === 'opp').length).toBeGreaterThan(0);
     expect(watch.filter((c) => act.includes(c.kind)).length).toBeGreaterThan(mine.filter((c) => act.includes(c.kind)).length);

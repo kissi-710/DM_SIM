@@ -33,18 +33,19 @@ export function center(r: DOMRect): { x: number; y: number } {
 }
 
 /**
- * 描画のたびに位置を測り、`token` が変わった描画では、直前の描画の位置を `onNew` に渡す(演出が有効な時だけ)。
+ * 描画のたびに位置を測り、`token` が変わった描画では、直前の描画の位置(prev)と今の位置(cur)を `onNew` に渡す(演出が有効な時だけ)。
  * 同じ token では一度しか呼ばない(StrictMode の二重実行でも)。
  */
-export function useFxOnToken(token: unknown, enabled: boolean, onNew: (prev: Rects) => void): void {
+export function useFxOnToken(token: unknown, enabled: boolean, onNew: (prev: Rects, cur: Rects) => void): void {
   const rects = useRef<Rects>(new Map());
   const last = useRef<unknown>(undefined);
   useLayoutEffect(() => {
     const prev = rects.current;
+    const cur = measureAll();
     if (last.current !== token) {
       last.current = token;
-      if (enabled) onNew(prev);
+      if (enabled) onNew(prev, cur);
     }
-    rects.current = measureAll();
+    rects.current = cur;
   });
 }

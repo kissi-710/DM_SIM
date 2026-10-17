@@ -1875,3 +1875,113 @@ body.dragging .action-pop {
   font-size: 54px;
   color: #ffd0d0;
 }
+
+/* ───────── 切り札(革命チェンジ・侵略・進化)と、触れない状態(ジャストダイバーなど)───────── */
+.fx-cue.fx-revolution,
+.fx-cue.fx-invade {
+  padding: 24px 24px;
+}
+.fx-cue.fx-revolution {
+  border-color: #ffd24d;
+  background: linear-gradient(90deg, transparent, rgba(70, 46, 0, 0.93) 14%, rgba(70, 46, 0, 0.93) 86%, transparent);
+}
+.fx-cue.fx-revolution .fx-title {
+  font-size: 46px;
+  letter-spacing: 0.12em;
+  color: #ffe9a0;
+  text-shadow: 0 0 18px #ffb300, 0 2px 8px #000;
+}
+.fx-cue.fx-invade {
+  border-color: #b57bff;
+  background: linear-gradient(90deg, transparent, rgba(40, 10, 74, 0.93) 14%, rgba(40, 10, 74, 0.93) 86%, transparent);
+}
+.fx-cue.fx-invade .fx-title {
+  font-size: 46px;
+  letter-spacing: 0.12em;
+  color: #e5ccff;
+  text-shadow: 0 0 18px #8a4dff, 0 2px 8px #000;
+}
+.fx-cue.fx-revolution .fx-sub,
+.fx-cue.fx-invade .fx-sub {
+  font-size: 17px;
+  color: #fff;
+}
+.fx-cue.fx-evolve .fx-title {
+  font-size: 26px;
+}
+/* 出てきたクリーチャーの位置の金色の着弾 */
+.fx-burst-trump .fx-burst-flash {
+  width: 320px;
+  height: 320px;
+  margin: -160px 0 0 -160px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 1), rgba(255, 200, 60, 0.55) 45%, rgba(255, 160, 0, 0) 72%);
+}
+.fx-burst-trump .fx-burst-ring {
+  border-color: #ffd24d;
+  border-width: 5px;
+}
+.fx-burst-trump .fx-shard {
+  width: 26px;
+  height: 8px;
+  background: linear-gradient(90deg, #fff7d6, #ffb300);
+  box-shadow: 0 0 12px #ffc83c;
+}
+/* 出てきたクリーチャーは上から落ちてくる */
+.game.fx .pile.trump-in > .card {
+  animation: fx-trump-in calc(0.65s * var(--fx-scale, 1)) ease-out both;
+}
+@keyframes fx-trump-in {
+  0% {
+    transform: translateY(-80px) scale(1.8);
+    opacity: 0;
+    box-shadow: 0 0 0 6px #ffd24d, 0 0 30px #ffb300;
+  }
+  55% {
+    transform: translateY(4px) scale(0.95);
+    opacity: 1;
+    box-shadow: 0 0 0 4px #ffd24d, 0 0 22px #ffb300;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+/* 触れない状態(ジャストダイバーなど): 選ばれない・攻撃されない間は、水色の光る縁と札で示す。演出が無効でも静止して残す */
+.card.ward:not(.selected):not(.target):not(.flash) {
+  border-color: #9fe8ff;
+  box-shadow: 0 0 0 2px rgba(159, 232, 255, 0.75), 0 0 14px rgba(120, 220, 255, 0.85);
+}
+.card.ward::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(190, 240, 255, 0.28) 50%, transparent 65%);
+  background-size: 250% 100%;
+  background-position: 120% 0;
+}
+.game.fx .card.ward::before {
+  animation: fx-ward-sheen calc(2.4s * var(--fx-scale, 1)) linear infinite;
+}
+@keyframes fx-ward-sheen {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+.card .ward-tag {
+  position: absolute;
+  left: 2px;
+  bottom: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(24, 110, 140, 0.92);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  white-space: nowrap;
+}

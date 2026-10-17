@@ -3,7 +3,7 @@ import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode 
 import { charsOf, hasKeyword, powerOf } from '../engine/derive';
 import { mkCtx, permByPid } from '../engine/state';
 import type { GameState } from '../engine/types';
-import { CIV_COLOR, reg } from './format';
+import { CIV_COLOR, reg, wardOf, type Ward } from './format';
 
 export interface CardProps {
   s: GameState;
@@ -119,13 +119,21 @@ export function CardView(p: CardProps) {
   const twin = def.faces.length > 1 && !inPlay;
   const civs = twin ? ch.civs : face.civs;
   const keywords: string[] = [];
+  let ward: Ward | null = null;
   if (card.zone === 'battle') {
     const pm = permByPid(s, card.pid);
     if (pm && pm.perm.cards[0] === uid) {
+      ward = wardOf(s, pm.perm.pid);
       if (hasKeyword(c, pm.perm, 'blocker')) keywords.push('ブロッカー');
       if (hasKeyword(c, pm.perm, 'speedAttacker')) keywords.push('SA');
       if (hasKeyword(c, pm.perm, 'machFighter')) keywords.push('マッハ');
+      if (hasKeyword(c, pm.perm, 'justDiver')) keywords.push('JD');
     }
+  }
+  const wardTitle = ward ? `${ward.label}(${ward.until}): ${ward.chosen ? '相手の効果で選ばれず' : ''}${ward.chosen && ward.attacked ? '、' : ''}${ward.attacked ? '攻撃もされない' : ''}` : '';
+  if (ward) {
+    cls.push('ward');
+    handlers['aria-label'] = (handlers['aria-label'] ?? def.name) + `(${ward.label})`;
   }
   if (p.mini) {
     return (
@@ -139,7 +147,7 @@ export function CardView(p: CardProps) {
     : undefined;
   const typeLabel = face.type === 'spell' ? '呪文' : face.type === 'evolution' ? '進化' : face.type === 'smaxEvolution' ? 'S-MAX進化' : 'クリーチャー';
   return (
-    <div className={cls.join(' ')} title={def.name} {...handlers} style={{ ...imgStyle, ...p.style }}>
+    <div className={cls.join(' ')} title={ward ? `${def.name} — ${wardTitle}` : def.name} {...handlers} style={{ ...imgStyle, ...p.style }}>
       <div className="civbar" style={{ background: civGradient(civs) }} />
       <div className="head">
         <span className="cost">{twin ? `${def.faces[0].cost}/${def.faces[1].cost}` : face.cost}</span>
@@ -150,6 +158,11 @@ export function CardView(p: CardProps) {
         <span>{power !== null ? power : typeLabel}</span>
         <span>{def.faces.length > 1 && !inPlay ? 'ツイン' : ''}</span>
       </div>
+      {ward ? (
+        <span className="ward-tag" aria-hidden="true">
+          🛡 {ward.label}
+        </span>
+      ) : null}
       {p.badge ? <span className="badge">{p.badge}</span> : null}
       {num}
     </div>

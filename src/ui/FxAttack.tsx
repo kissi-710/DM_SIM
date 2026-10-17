@@ -30,14 +30,14 @@ interface Burst {
   ms: number;
 }
 
-const SHARDS: Record<BurstTone, number> = { shield: 12, clash: 10, direct: 18 };
+const SHARDS: Record<BurstTone, number> = { shield: 12, clash: 10, direct: 18, trump: 16 };
 
 export function FxAttack({ events, token, enabled, scale }: { events: Ev[]; token: unknown; enabled: boolean; scale: number }) {
   const [lines, setLines] = useState<Line[]>([]);
   const [bursts, setBursts] = useState<Burst[]>([]);
   const seq = useRef(0);
 
-  useFxOnToken(token, enabled, (prev: Rects) => {
+  useFxOnToken(token, enabled, (prev: Rects, cur: Rects) => {
     const fx: AttackFx[] = attackFxOf(events);
     if (fx.length === 0) return;
     const addL: Line[] = [];
@@ -52,7 +52,7 @@ export function FxAttack({ events, token, enabled, scale }: { events: Ev[]; toke
         const q = center(b);
         addL.push({ key: ++k, tone: f.tone, shield: f.shield, label: f.label, x1: p.x, y1: p.y, x2: q.x, y2: q.y, delay: scaleMs(f.delay, scale), ms: scaleMs(ATK_MS.line, scale) });
       } else {
-        const r = prev.get(f.at);
+        const r = (f.cur ? cur : prev).get(f.at);
         if (!usable(r)) continue;
         const c = center(r);
         addB.push({ key: ++k, tone: f.tone, n: f.n, draw: f.draw, x: c.x, y: c.y, delay: scaleMs(f.delay, scale), ms: scaleMs(ATK_MS.burst, scale) });
@@ -110,7 +110,7 @@ export function FxAttack({ events, token, enabled, scale }: { events: Ev[]; toke
           <div className="fx-burst-ring" style={{ animationDelay: `${b.delay}ms`, animationDuration: `${b.ms}ms` }} />
           {Array.from({ length: SHARDS[b.tone] }, (_, i) => {
             const a = (360 / SHARDS[b.tone]) * i + (i % 2 ? 9 : 0);
-            const d = (b.tone === 'direct' ? 110 : 70) + (i % 3) * 18;
+            const d = (b.tone === 'direct' ? 110 : b.tone === 'trump' ? 90 : 70) + (i % 3) * 18;
             return (
               <span
                 key={i}
