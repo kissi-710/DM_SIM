@@ -918,13 +918,13 @@ button.icon {
   font-weight: 700;
 }
 .card.tapped {
-  --rot: 90deg;
+  --rot: -90deg;
   transform: rotate(var(--rot));
   margin: 0 14px;
 }
-/* 向かいの相手の盤面は、卓の向こうから見た向き(自分と逆回り)でタップする */
+/* 自分は左(反時計回り)、相手は右(時計回り)に倒れる */
 .side-board.opp .card.tapped {
-  --rot: -90deg;
+  --rot: 90deg;
 }
 .card.small.tapped {
   margin: 0 10px;

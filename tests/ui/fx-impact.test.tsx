@@ -107,9 +107,9 @@ describe('FxLayer(重みごとの描画)', () => {
 
 describe('タップの向きを、演出が壊さない(styles.css)', () => {
   const css = readFileSync('src/ui/styles.css', 'utf8');
-  it('自分は時計回り、向かいの相手は逆回りにタップする(変数 --rot)', () => {
-    expect(css).toMatch(/\.card\.tapped\s*\{[^}]*--rot:\s*90deg;[^}]*transform:\s*rotate\(var\(--rot\)\)/);
-    expect(css).toMatch(/\.side-board\.opp \.card\.tapped\s*\{[^}]*--rot:\s*-90deg/);
+  it('自分は左(反時計回り)、相手は右(時計回り)にタップする(変数 --rot)', () => {
+    expect(css).toMatch(/\.card\.tapped\s*\{[^}]*--rot:\s*-90deg;[^}]*transform:\s*rotate\(var\(--rot\)\)/);
+    expect(css).toMatch(/\.side-board\.opp \.card\.tapped\s*\{[^}]*--rot:\s*90deg/);
   });
   it('札の transform を動かす演出のキーフレームは、回転(--rot)を保つ', () => {
     for (const name of ['fx-pop', 'fx-block', 'fx-trump-in']) {
