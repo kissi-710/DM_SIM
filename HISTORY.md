@@ -447,3 +447,10 @@ ISSUES.md を書き直した後(新番号。以後、番号は固定)に解決�
 | ISSUE-26 | 配布用ビルドに Rust 版(WASM)が入らず、探索が約 6 倍遅い | 解決: CI の web ジョブで `build:wasm` してからビルド。対戦の設定画面に、使っているエンジン(Rust 版 / TS 版)を出す。README に作り方を記す | `535190a` `0a70caa` |
 | ISSUE-27 | Worker の起動と、強さ測定のチャンクの偏り | 解決(一部は見送り): 設定画面でモンテカルロの CPU を選んだ時点で Worker を先に起動する。強さ測定を、変種ごとの試合の範囲でも分けた。コンパイル済み WASM の共有は、581KB で起動が軽いと見て見送り(実ブラウザの所要時間は未計測) | `535190a` `9f052ef` |
 | ISSUE-34 | 保存した設定(localStorage)が壊れていると画面が落ちる。確率調査で選んだカスタムデッキを削除すると、確率シミュレータが毎回クラッシュする | 解決: `src/ui/saved.ts` で `dmsim.setup.play・dmsim.setup.watch`・`dmsim.sim` を型・範囲・デッキの存在で検証し、不正な項目は既定値に戻す。目標の形は `isGoal`(`sim/goal.ts`)で検査。仕切り・確認ダイアログの保存値も検証。9 種の壊れた値のテスト | `24b1044` |
+| ISSUE-35 | 配布物の本体が 515KB で、画面ごとの分割がない | 解決: 対戦以外の画面(確率調査・バッチ・棋譜・一人回し・デッキ編集)を `React.lazy` で後から読む。本体 515KB → 339KB(gzip 159KB → 110KB)で、500KB 超の警告が消えた。WASM は、探索の Worker が使う時に読む(従来どおり) | `cb325b1` |
+| ISSUE-37 | スマホ幅(375px)で、操作の dock が手札の下端に重なる | 解決: 960px 以下で盤面の下に dock の高さ分(112px)の余白を足した。実機(375x812)で手札の下端が dock の上端より上であることを確認 | `d0460c4` |
+| ISSUE-38 | `scripts/` が lint・型検査の対象外 | 解決: tsconfig の `include` と `npm run lint` に `scripts` を追加し、`dump-fixtures.ts` の `any` 4 か所を型に置き換えた | `04271ee` |
+| ISSUE-39 | ROADMAP の項目 ID が重複(M7-13・UX-29) | 解決: 後の項目を M7-26・UX-34 に振り直した(`M1-6` と `M1-6a` は別 ID で、重複ではなかった) | `fc651cc` |
+| ISSUE-40 | 呼び出し元のない export | 解決: `ruleBasedAgent`・`deckPreset`・`isCreatureType`・`isOver`・`currentPlayer`・`randomPick`・`getCard`・`zoneList` を削除 | `ac2cac3` |
+| ISSUE-41 | 観戦の速度が、演出の長さで頭打ちになる | 解決(明記): 速度の欄のツールチップとヒントに、演出が下限になること・最速にする方法を書いた(待ち時間の仕様は設計どおりで変えない) | `f18fec1` |
+| ISSUE-42 | Rust の `FastAlloc` が 4MB 超の確保で null を返す | 解決: 最大のクラスを超える確保は、bump から 16 の倍数で切り出す。9MB のカード定義の読み込みが、旧版は確保の失敗で落ち、新版は通る(`tests/wasm`)。差分テスト・diff-fuzz は一致 | `ded0276` |
