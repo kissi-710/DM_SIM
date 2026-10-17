@@ -239,12 +239,4 @@ export function drive(c: Ctx): void {
 
 // ───────────────────────── ヘルパー ─────────────────────────
 
-export function isOver(s: GameState): boolean {
-  return s.winner !== null;
-}
-
-export function currentPlayer(s: GameState): PlayerId | null {
-  return s.pending ? s.pending.player : null;
-}
-
 export { emit, collectBatch };

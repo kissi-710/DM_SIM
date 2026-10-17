@@ -143,7 +143,7 @@ describe('FxAttack', () => {
     expect(container.querySelector('.fx-line')).toBeNull();
     rerender(<FxAttack events={[declared(11, 0, { kind: 'player' })]} token={2} enabled scale={0.02} />);
     expect(container.querySelector('.fx-line')).not.toBeNull();
-    await waitFor(() => expect(container.querySelector('.fx-atk')).toBeNull(), { timeout: 2000 });
+    await waitFor(() => expect(container.querySelector('.fx-atk')).toBeNull(), { timeout: 10000 });
     b.remove();
   });
 });

@@ -64,10 +64,6 @@ export function infoOf(c: Ctx, uid: number): FaceInfo {
   return c.reg.getInfo(card.defId, ch.faceIdx);
 }
 
-export function isCreatureType(t: FaceType): boolean {
-  return t !== 'spell';
-}
-
 // ───────────────────────── 継続効果 ─────────────────────────
 
 export function effectsOnPerm(c: Ctx, pid: number): ContEffect[] {

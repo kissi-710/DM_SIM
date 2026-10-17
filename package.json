@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src tests",
+    "lint": "eslint src tests scripts",
     "batch": "tsx src/cli/batch.ts",
     "prob": "tsx src/cli/prob.ts",
     "aibench": "tsx src/cli/aibench.ts",
