@@ -1,6 +1,6 @@
 # ISSUES(DM_SIM の未解決の問題点)
 
-- 更新日: 2026-10-16(全範囲の再調査。HEAD `b90bf1c` 以降)
+- 更新日: 2026-10-17(プロジェクト全体の再調査。HEAD `24b1044`)
 - 解決済みの項目と、そのときの調査記録は [HISTORY.md](./HISTORY.md) に移した(基本的に読む必要はない)。
 - **番号は固定**(振り直さない)。解決した項目の番号は欠番になる。旧番号(2026-10-15 の振り直し前)との対応は HISTORY.md §1。
 - 修正はこの文書の対象外。項目ごとに別コミットで直す(CLAUDE.md)。直したら、この文書から消して HISTORY.md に移す。
@@ -8,26 +8,78 @@
 
 **確度**: 【再現】実際に動かして確認した / 【読解】コードを読んで判断した(未再現) / 【照合】docs 同士・docs とコードの食い違い。
 
-## 現在の状態(2026-10-16)
+## 現在の状態(2026-10-17)
 
 | 確認 | 結果 |
 |---|---|
 | `npm run typecheck` / `npm run lint` | エラー・警告なし(`noUnusedLocals` / `noUnusedParameters` を有効化済み) |
-| `npm test` | 1046 件成功(69 ファイル) |
+| `npm test` | 1136 件成功(76 ファイル。約 16 秒) |
 | `npm run test:rust`(Rust 版と TS 版の差分テスト) | 成功(取り直したフィクスチャで) |
 | `npm run test:coverage` | 文 72.9%・分岐 70.3%・関数 62.3% |
 | `npm audit --omit=dev` | 脆弱性 0 |
-| 未解決の項目 | 1件(低 1。ISSUE-19 は持ち主の判断) |
+| 未解決の項目 | 10件(中 3・低 7。ISSUE-19 は持ち主の判断) |
 
 ## 一覧
 
 | ID | 優先度 | 確度 | 概要 |
 |---|---|---|---|
+| ISSUE-35 | 中 | 再現 | 配布物の本体が 515KB(500KB 超の警告)で、画面ごとの分割がない。WASM も 948KB に増えた |
+| ISSUE-36 | 中 | 再現 | リポジトリの衛生: main が origin より 30 コミット先(未 push)、worktree 16 個(うち 4 個が prunable)、作業用ブランチ多数 |
+| ISSUE-37 | 中 | 再現 | スマホ幅(375px)で、操作の dock が手札に重なる(UX の担当領域。観測のみ) |
+| ISSUE-38 | 低 | 読解 | `scripts/` が lint・型検査の対象外(CI でも見ない)。`dump-fixtures.ts` に `any` が残る |
+| ISSUE-39 | 低 | 読解 | ROADMAP の項目 ID が重複(M1-6・M7-13・UX-29)。参照が曖昧になる |
+| ISSUE-40 | 低 | 読解 | 呼び出し元のない export が残っている(`ruleBasedAgent`・`deckPreset` など) |
+| ISSUE-41 | 低 | 読解 | 観戦の速度を最速にしても、演出の長さより速くならない(演出あり) |
+| ISSUE-42 | 低 | 読解 | Rust の `FastAlloc` は、4MB を超える確保で null を返す(確保の失敗) |
+| ISSUE-43 | 低 | 再現 | UI のテストが一度だけ 5 件失敗した(fx-attack・fx-trump)。再現せず、原因は不明 |
 | ISSUE-19 | 低 | 照合 | `package.json` の `repository` と、公開時のライセンスが未定(持ち主の判断) |
 
 ---
 
 ## 品質・保守性
+
+### ISSUE-35 配布物が大きく、画面ごとの分割がない【再現】
+- 内容: `vite build` で本体 `index-*.js` が 514.9KB(gzip 158.6KB)になり、Vite が「500KB 超」の警告を出す。起動時に全画面(対戦・確率調査・バッチ・棋譜・デッキ編集・一人回し)のコードを読む。`ai.worker` 137KB・`sim.worker` 159KB・WASM 948KB(gzip 296KB。2026-10-15 は 581KB で、Rust 版の機能追加で増えた)。
+- 影響: 初回の読み込みが遅くなる(特に回線の細い環境・スマホ)。ブラウザでの所要時間は未計測。
+- 修正案: 画面ごとに `React.lazy` で分割する(対戦以外の画面は後から読む)。WASM は使う時(CPU がモンテカルロの時)だけ取りに行く。サイズの閾値を CI で見張る。
+
+### ISSUE-36 リポジトリの衛生【再現】
+- 内容:
+  - `main` が `origin/main` より 30 コミット先(未 push)。
+  - `git worktree list` に 16 個(`.claude/worktrees/*` 15 個+`../DM_SIM_rust`)。うち 4 個(`interstellar-marulu-deck-342987`・`jaouga-effect-processing-b76efd`・`monte-carlo-rules-batch-improve-57571d`・`DM_SIM_rust`)は実体がなく prunable。対応するブランチ(`claude/*`・`feat/rust-engine`・`backup/jaouga-before-rebase`・`wip/main-uncommitted-20261015`)が残り、どれが `main` に取り込み済みかが一覧できない。
+  - 同じ作業ツリーで複数のエージェントが並行して動くため、未コミットの変更が混ざる(部分的なステージングが必要になる)。
+- 影響: 履歴の把握が難しくなる。未 push のまま PC の故障で失う危険。
+- 修正案: 持ち主が push のタイミングを決める。取り込み済みの worktree とブランチを `git worktree prune`・`git branch --merged main` で確認して片付ける(**他のエージェントの作業中のものは触らない**)。
+
+### ISSUE-37 スマホ幅で dock が手札に重なる【再現】
+- 内容: 375px 幅の対戦画面で、下部の操作 dock(`.dock`)が手札(`.zone.hand`)の下端に重なって見える。
+- 備考: UX(盤面のレイアウト)の担当領域なので、この調査では直していない。ROADMAP の UX 項目として扱う。
+
+### ISSUE-38 `scripts/` が lint・型検査の対象外【読解】
+- 内容: `tsconfig.json` の `include` は `src tests vite.config.ts`、`npm run lint` は `eslint src tests`。`scripts/*.ts`(`diff-fuzz.ts`・`dump-fixtures.ts`・`bench-*.ts` など)は検査されない。`scripts/dump-fixtures.ts` は `test:rust` のフィクスチャを作る道具で、型が壊れても CI が気付かない(実行して初めて失敗する)。`any` も使っている。
+- 修正案: `scripts` を tsconfig の `include` と lint の対象に入れ、`any` を直す。使い捨ての `bench-*.ts` / `*-probe.ts` は `scratch/` へ移すか削除する。
+
+### ISSUE-39 ROADMAP の項目 ID が重複している【読解】
+- 内容: `M1-6`・`M7-13`(ルールベースAIの強化/探索の高速化の 2 項目)・`UX-29`(盤面の幅/切り札の演出の 2 項目)が 2 回ずつ使われている。HISTORY.md などが `UX-29` と参照しているため、どちらを指すか決まらない。
+- 修正案: 後から付けた方を新しい番号に振り直し(`M7-14`・`M7-15`・`UX-30` は使用済みなので、末尾の次の番号)、HISTORY.md の参照を更新する。
+
+### ISSUE-40 使われていない export【読解】
+- 内容: 呼び出し元がどこにもない export: `ruleBasedAgent`・`deckPreset`・`isCreatureType`・`currentPlayer`・`isOver`・`randomPick`・`getCard`・`zoneList`(テスト以外の参照がない)。
+- 修正案: 削除する(テストが使っていれば、そのテストの対象から外す)。`ts-prune` / `knip` を使えば機械的に見張れる。
+
+### ISSUE-41 観戦の速度が演出の長さで頭打ちになる【読解】
+- 内容: `cpuWaitMs`(`src/ui/fx.ts`)は、演出が有効だと `max(速度の設定, 直前の手の演出の長さ)` だけ待つ。観戦で速度を最速にしても、演出のある手(攻撃・召喚・トリガー)では演出の分だけ待つ。設計どおり(演出が終わる前に盤面が書き換わらないため)だが、設定画面からは分からない。
+- 回避: 演出を「なし」にするか、「一気に進める」にする。
+- 修正案: 速度スライダーの近くに「演出ありでは演出の長さが下限になる」と書く。または観戦だけ、演出の長さを速度に比例して縮める。
+
+### ISSUE-42 Rust の `FastAlloc` が大きな確保で null を返す【読解】
+- 内容: `rust/src/fastalloc.rs` は、2K〜4M の 2 のべき乗(`N_LARGE = 12`)までしか空きリストを持たず、それを超える確保は null を返す(Rust の確保失敗=Worker の中断)。通常の探索(状態の複製・プレイアウト)では 4MB を超える確保は起きない。
+- 影響: 現在のデッキ(40 枚・33 種)では起きない。デッキや探索の規模を大きく広げた時だけ問題になる。
+- 修正案: 上限を超える確保は、`grow` で直接ページを足して返す(再利用はしない)。または上限を超えたら TS 版にフォールバックする。
+
+### ISSUE-43 UI のテストが一度だけ失敗した【再現(1 回のみ)】
+- 内容: 全体のテストを回した 1 回だけ、`fx-attack`・`fx-trump` 系の 5 件が失敗した。単独の 12 回以上の実行と、全体の同時 3 回の実行では再現しなかった。同じ作業ツリーで他のエージェントが画面を編集していたため、途中の状態を読んだ可能性が高い。
+- 対応: 再発したら、そのときの出力を残す。時間に依存する検査(演出の長さ)は、`743881c` で負荷に強くしてある。
 
 ### ISSUE-19 `package.json` の `repository` と、公開時のライセンスが未定【照合】
 - 旧番号: ISSUE-25(CI・カバレッジ・`engines`・`license: UNLICENSED` は対応済み)
@@ -70,6 +122,21 @@
 | 依存・ビルド | `npm audit --omit=dev`・`npm outdated`・`cargo build` の警告 | 脆弱性 0・古いのはパッチ版のみ・警告 0 |
 
 計測用の使い捨てスクリプトは `scratch/survey/`(git の管理外)。
+
+---
+
+## 2026-10-17 のプロジェクト全体調査の記録
+
+| 調べたこと | 方法 | 結果 |
+|---|---|---|
+| 保存した設定(localStorage)の読み込み | 壊れた値(型違い・範囲外・存在しないデッキ・壊れた目標)を、設定画面 2 種と確率調査に入れて描画 | **画面が落ちる不具合を発見**: 確率調査で選んだカスタムデッキを削除すると、確率シミュレータが毎回クラッシュ。`dmsim.setup.*`・`dmsim.sim` の不正な値も同様 → `24b1044` で読み込み時に検証して修正(ISSUE-34。HISTORY.md §6) |
+| 型検査・lint・テスト | `npm run typecheck` / `lint` / `test` | エラーなし。1136 件(76 ファイル、約 16 秒) |
+| 配布物 | `vite build` | 本体 515KB で警告(ISSUE-35) |
+| リポジトリ | `git worktree list`・`git branch`・`git rev-list` | 未 push 30 コミット・prunable な worktree 4 個(ISSUE-36) |
+| ROADMAP・docs | 項目 ID の重複・docs 内の相対リンクの有無 | ID の重複 3 件(ISSUE-39)。リンク切れは 0(`path:行` の参照を除く) |
+| コードの衛生 | 未使用の export・検査の対象外のファイル | ISSUE-38・ISSUE-40 |
+| 観戦・演出 | `cpuWaitMs` を読む | 速度が演出の長さで頭打ち(ISSUE-41) |
+| Rust 版 | `fastalloc.rs` を読む | 大きな確保の上限(ISSUE-42) |
 
 ---
 
