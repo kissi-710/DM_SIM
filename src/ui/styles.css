@@ -368,6 +368,10 @@ th {
   .rail-tip {
     display: none;
   }
+  /* 右下に重ねて出す操作(dock)の高さ(ボタン2つ)だけ、盤面の下をあける。手札の下端がボタンに隠れない(はみ出す分は盤面の中でスクロールする) */
+  .field > .board {
+    padding-bottom: 112px;
+  }
 }
 .input-layer {
   position: absolute;
