@@ -918,8 +918,13 @@ button.icon {
   font-weight: 700;
 }
 .card.tapped {
-  transform: rotate(90deg);
+  --rot: 90deg;
+  transform: rotate(var(--rot));
   margin: 0 14px;
+}
+/* 向かいの相手の盤面は、卓の向こうから見た向き(自分と逆回り)でタップする */
+.side-board.opp .card.tapped {
+  --rot: -90deg;
 }
 .card.small.tapped {
   margin: 0 10px;
@@ -1246,15 +1251,15 @@ body.dragging .action-pop {
 }
 @keyframes fx-pop {
   0% {
-    transform: scale(0.6);
+    transform: rotate(var(--rot, 0deg)) scale(0.6);
     opacity: 0.4;
   }
   60% {
-    transform: scale(1.12);
+    transform: rotate(var(--rot, 0deg)) scale(1.12);
     opacity: 1;
   }
   100% {
-    transform: scale(1);
+    transform: rotate(var(--rot, 0deg)) scale(1);
   }
 }
 .game.fx .chip.hit {
@@ -1556,7 +1561,7 @@ body.dragging .action-pop {
   }
   30% {
     box-shadow: 0 0 0 6px var(--good), 0 0 22px var(--good);
-    transform: scale(1.1);
+    transform: rotate(var(--rot, 0deg)) scale(1.1);
   }
   100% {
     box-shadow: 0 0 0 0 transparent;
@@ -1932,17 +1937,17 @@ body.dragging .action-pop {
 }
 @keyframes fx-trump-in {
   0% {
-    transform: translateY(-80px) scale(1.8);
+    transform: translateY(-80px) rotate(var(--rot, 0deg)) scale(1.8);
     opacity: 0;
     box-shadow: 0 0 0 6px #ffd24d, 0 0 30px #ffb300;
   }
   55% {
-    transform: translateY(4px) scale(0.95);
+    transform: translateY(4px) rotate(var(--rot, 0deg)) scale(0.95);
     opacity: 1;
     box-shadow: 0 0 0 4px #ffd24d, 0 0 22px #ffb300;
   }
   100% {
-    transform: none;
+    transform: rotate(var(--rot, 0deg));
     opacity: 1;
     box-shadow: 0 0 0 0 transparent;
   }
@@ -1984,4 +1989,220 @@ body.dragging .action-pop {
   font-weight: 700;
   line-height: 14px;
   white-space: nowrap;
+}
+
+/* ───────── 決定的な見せ場(S・トリガー / G・ストライク / ラスト・シールド / 切り札 / ダイレクトアタック)─────────
+   試合結果への影響が大きい行動ほど豪華に(docs/ui-effects.md 0.2)。画面を暗くし、光線・揺れ・見せ札で見せる。 */
+.fx-layer[data-fx-tier='decisive'] {
+  align-items: center;
+  padding-top: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.72));
+  animation: fx-dim 1s ease-in-out both;
+}
+.fx-layer[data-fx-tier='decisive']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  animation: fx-flash-in 0.5s ease-out both;
+  animation-duration: calc(0.5s * var(--fx-scale, 1));
+}
+.fx-rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220%;
+  aspect-ratio: 1;
+  margin: -110% 0 0 -110%;
+  background: repeating-conic-gradient(rgba(255, 224, 140, 0.34) 0 4deg, transparent 4deg 14deg);
+  -webkit-mask-image: radial-gradient(circle, #000 4%, transparent 38%);
+  mask-image: radial-gradient(circle, #000 4%, transparent 38%);
+  animation-name: fx-rays;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+.fx-layer[data-fx-variant='gstrike'] .fx-rays {
+  background: repeating-conic-gradient(rgba(150, 230, 255, 0.4) 0 4deg, transparent 4deg 14deg);
+}
+.fx-layer[data-fx-variant='last'] .fx-rays {
+  background: repeating-conic-gradient(rgba(255, 90, 90, 0.42) 0 4deg, transparent 4deg 14deg);
+}
+@keyframes fx-dim {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fx-flash-in {
+  0% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fx-rays {
+  0% {
+    transform: rotate(0deg) scale(0.6);
+  }
+  100% {
+    transform: rotate(50deg) scale(1.1);
+  }
+}
+.fx-layer[data-fx-tier='decisive'] .fx-cue {
+  position: relative;
+  z-index: 1;
+}
+.fx-layer[data-fx-tier='decisive'] .fx-title {
+  font-size: 56px;
+  letter-spacing: 0.1em;
+}
+.fx-tag {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 1px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+}
+/* S・トリガー(稲妻の黄)/ G・ストライク(白青)/ ラスト・シールド(赤)*/
+.fx-cue.fx-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 22px 24px;
+  border-color: #ffd24d;
+  background: linear-gradient(90deg, transparent, rgba(40, 28, 0, 0.94) 12%, rgba(40, 28, 0, 0.94) 88%, transparent);
+}
+.fx-layer[data-fx-variant='strigger'] .fx-title {
+  color: #fff0a0;
+  text-shadow: 0 0 22px #ffb300, 0 0 6px #fff, 0 2px 8px #000;
+}
+.fx-layer[data-fx-variant='gstrike'] .fx-cue.fx-trigger {
+  border-color: #8fe3ff;
+  background: linear-gradient(90deg, transparent, rgba(0, 28, 44, 0.94) 12%, rgba(0, 28, 44, 0.94) 88%, transparent);
+}
+.fx-layer[data-fx-variant='gstrike'] .fx-title {
+  color: #d9f6ff;
+  text-shadow: 0 0 22px #3cc8ff, 0 0 6px #fff, 0 2px 8px #000;
+}
+.fx-layer[data-fx-variant='last'] .fx-cue.fx-shield {
+  padding: 26px 24px;
+  border-color: #ff4d4d;
+  background: linear-gradient(90deg, transparent, rgba(70, 0, 0, 0.94) 14%, rgba(70, 0, 0, 0.94) 86%, transparent);
+}
+.fx-layer[data-fx-variant='last'] .fx-title {
+  color: #ffd0d0;
+  text-shadow: 0 0 22px #ff2d2d, 0 2px 8px #000;
+}
+.fx-cue-main {
+  text-align: center;
+}
+/* 公開されたカードの見せ札(名前・コスト・テキスト。何が起きるか読める) */
+.fx-reveal {
+  flex: none;
+  width: 190px;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 0 8px;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 3px solid #ffd24d;
+  background: #1f2636;
+  color: var(--text);
+  text-align: left;
+  text-shadow: none;
+  box-shadow: 0 0 28px rgba(255, 200, 60, 0.7);
+  animation: fx-reveal-flip 0.7s ease-out both;
+}
+.fx-layer[data-fx-variant='gstrike'] .fx-reveal {
+  border-color: #8fe3ff;
+  box-shadow: 0 0 28px rgba(80, 200, 255, 0.7);
+}
+.fx-reveal-bar {
+  height: 8px;
+}
+.fx-reveal-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-weight: 800;
+  font-size: 15px;
+}
+.fx-reveal-cost {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  line-height: 26px;
+  text-align: center;
+  border-radius: 50%;
+  background: #12151c;
+  border: 2px solid #ffd24d;
+}
+.fx-reveal-type {
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.fx-reveal-text {
+  padding: 4px 8px 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  max-height: 9em;
+  overflow: hidden;
+}
+@keyframes fx-reveal-flip {
+  0% {
+    transform: perspective(600px) rotateY(90deg) scale(0.5);
+    opacity: 0;
+  }
+  70% {
+    transform: perspective(600px) rotateY(-8deg) scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(600px) rotateY(0) scale(1);
+    opacity: 1;
+  }
+}
+/* 決定的な見せ場の間は、盤面が揺れる */
+.game.fx .field:has(.fx-layer[data-fx-tier='decisive']) .board {
+  animation: fx-shake calc(0.5s * var(--fx-scale, 1)) ease-out;
+}
+@keyframes fx-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  15% {
+    transform: translate(-7px, 3px);
+  }
+  30% {
+    transform: translate(6px, -3px);
+  }
+  45% {
+    transform: translate(-4px, 2px);
+  }
+  60% {
+    transform: translate(3px, -2px);
+  }
+  80% {
+    transform: translate(-1px, 1px);
+  }
 }
