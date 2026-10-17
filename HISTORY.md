@@ -454,3 +454,4 @@ ISSUES.md を書き直した後(新番号。以後、番号は固定)に解決�
 | ISSUE-40 | 呼び出し元のない export | 解決: `ruleBasedAgent`・`deckPreset`・`isCreatureType`・`isOver`・`currentPlayer`・`randomPick`・`getCard`・`zoneList` を削除 | `ac2cac3` |
 | ISSUE-41 | 観戦の速度が、演出の長さで頭打ちになる | 解決(明記): 速度の欄のツールチップとヒントに、演出が下限になること・最速にする方法を書いた(待ち時間の仕様は設計どおりで変えない) | `f18fec1` |
 | ISSUE-42 | Rust の `FastAlloc` が 4MB 超の確保で null を返す | 解決: 最大のクラスを超える確保は、bump から 16 の倍数で切り出す。9MB のカード定義の読み込みが、旧版は確保の失敗で落ち、新版は通る(`tests/wasm`)。差分テスト・diff-fuzz は一致 | `ded0276` |
+| ISSUE-43 | UI のテストが一度だけ 5 件失敗した(fx-attack・fx-trump) | 解決(予防): 再現せず(全体を同時に 3 本 × 2 回)。fx-trump は同期の検査で、時間に頼るのは fx-attack の 1 か所だけだったため、その待ちを 2 秒 → 10 秒に広げた。原因は、共有の作業ツリーで他の編集が途中だった可能性が高いが、確認はできていない | `43beb36` |
