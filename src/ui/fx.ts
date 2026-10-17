@@ -57,7 +57,7 @@ export type FxKind = 'turn' | 'cast' | 'summon' | 'invade' | 'revolution' | 'evo
 
 /**
  * 演出の重み。**試合結果への影響が大きい行動ほど、豪華にする**(docs/ui-effects.md 0.2)。
- * - decisive(決定的): 逆転の一手・切り札。S・トリガー / G・ストライク、革命チェンジ・侵略、ラスト・シールドのブレイク、ダイレクトアタック。
+ * - decisive(決定的): 逆転の一手・切り札。S・トリガー / G・ストライク、革命チェンジ・侵略、ダイレクトアタック。
  *   画面を暗くして揺れを足し、長く見せる。数の上限を超えても必ず出す。
  * - major(重要): ターン遷移、呪文、進化、攻撃、ブロック、シールドブレイク。
  * - minor(軽い): 召喚。
@@ -80,8 +80,8 @@ export interface FxCue {
   kind: FxKind;
   /** 重み。省略時は種類の既定(tierOf) */
   tier?: FxTier;
-  /** 種類の中の変種(ラスト・シールド / S・トリガー / G・ストライク) */
-  variant?: 'last' | 'strigger' | 'gstrike';
+  /** 種類の中の変種(S・トリガー / G・ストライク) */
+  variant?: 'strigger' | 'gstrike';
   /** 公開されたカードの見せ札 */
   reveal?: FxReveal;
   title: string;
@@ -244,18 +244,7 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
           prev.title = `シールドブレイク! ×${n}`;
           break;
         }
-        // 最後のシールドが割れた(あと1撃で決まる)ときは、決定的な見せ場にする
-        const last = s.players[e.owner as 0 | 1].shield.length === 0;
-        out.push({
-          id: e.id,
-          kind: 'shield',
-          title: 'シールドブレイク!',
-          sub: last ? `${who(e.owner, me)}のラスト・シールド` : `${who(e.owner, me)}のシールド`,
-          side: sideOf(e.owner, me),
-          ms: last ? 1800 : FX_MS.shield,
-          count: 1,
-          ...(last ? { tier: 'decisive' as const, variant: 'last' as const } : {}),
-        });
+        out.push({ id: e.id, kind: 'shield', title: 'シールドブレイク!', sub: `${who(e.owner, me)}のシールド`, side: sideOf(e.owner, me), ms: FX_MS.shield, count: 1 });
         break;
       }
       case 'gameOver':

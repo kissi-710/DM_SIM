@@ -2008,7 +2008,7 @@ body.dragging .action-pop {
   white-space: nowrap;
 }
 
-/* ───────── 決定的な見せ場(S・トリガー / G・ストライク / ラスト・シールド / 切り札 / ダイレクトアタック)─────────
+/* ───────── 決定的な見せ場(S・トリガー / G・ストライク / 切り札 / ダイレクトアタック)─────────
    試合結果への影響が大きい行動ほど豪華に(docs/ui-effects.md 0.2)。画面を暗くし、揺れ・見せ札で見せる。 */
 .fx-layer[data-fx-tier='decisive'] {
   align-items: center;
@@ -2055,7 +2055,7 @@ body.dragging .action-pop {
   font-size: 56px;
   letter-spacing: 0.1em;
 }
-/* S・トリガー(稲妻の黄)/ G・ストライク(白青)/ ラスト・シールド(赤)*/
+/* S・トリガー(稲妻の黄)/ G・ストライク(白青)*/
 .fx-cue.fx-trigger {
   display: flex;
   align-items: center;
@@ -2076,15 +2076,6 @@ body.dragging .action-pop {
 .fx-layer[data-fx-variant='gstrike'] .fx-title {
   color: #d9f6ff;
   text-shadow: 0 0 22px #3cc8ff, 0 0 6px #fff, 0 2px 8px #000;
-}
-.fx-layer[data-fx-variant='last'] .fx-cue.fx-shield {
-  padding: 26px 24px;
-  border-color: #ff4d4d;
-  background: linear-gradient(90deg, transparent, rgba(70, 0, 0, 0.94) 14%, rgba(70, 0, 0, 0.94) 86%, transparent);
-}
-.fx-layer[data-fx-variant='last'] .fx-title {
-  color: #ffd0d0;
-  text-shadow: 0 0 22px #ff2d2d, 0 2px 8px #000;
 }
 .fx-cue-main {
   text-align: center;

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 演出の重み(試合結果への影響が大きい行動ほど豪華に): S・トリガー / G・ストライク / ラスト・シールド、
+// 演出の重み(試合結果への影響が大きい行動ほど豪華に): S・トリガー / G・ストライク、
 // 決定的な見せ場の上限の扱い、FxLayer の描画、タップの向きを演出が壊さないこと
 import { readFileSync } from 'node:fs';
 import { cleanup, render } from '@testing-library/react';
@@ -67,20 +67,15 @@ describe('S・トリガー / G・ストライクの演出(実際のエンジン�
   });
 });
 
-describe('ラスト・シールド', () => {
-  it('最後のシールドが割れた時は決定的な見せ場(王手)。まだ残っている時は通常のシールドブレイク', () => {
+describe('最後のシールド', () => {
+  it('最後のシールドが割れても、特別な演出にはしない(通常のシールドブレイクと同じ)', () => {
     const last = new Sim({ p0: { battle: ['ヨビニオン・マルル'] }, p1: { shield: 1 } });
     last.attack('ヨビニオン・マルル', 'player');
     const lc = cuesOf(last.s, last.events, 0).find((c) => c.kind === 'shield')!;
-    expect(lc.variant).toBe('last');
-    expect(tierOf(lc)).toBe('decisive');
-    expect(lc.sub).toContain('ラスト・シールド');
-
-    const many = new Sim({ p0: { battle: ['ヨビニオン・マルル'] }, p1: { shield: 5 } });
-    many.attack('ヨビニオン・マルル', 'player');
-    const mc = cuesOf(many.s, many.events, 0).find((c) => c.kind === 'shield')!;
-    expect(mc.variant).toBeUndefined();
-    expect(tierOf(mc)).toBe('major');
+    expect(lc.variant).toBeUndefined();
+    expect(tierOf(lc)).toBe('major');
+    expect(lc.ms).toBe(FX_MS.shield);
+    expect(lc.sub).not.toContain('ラスト');
   });
 });
 
