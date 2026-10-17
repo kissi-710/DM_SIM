@@ -23,6 +23,11 @@ export interface InfoPolicy {
     opponentHandCount?: number;
     /** 手札の「種類」だけ開示(例: 'shieldTrigger' 'blocker' 'creature' 'spell') */
     opponentHandKinds?: string[];
+    /** 情報の価値を測る実験用: 相手のシールド/山札、自分のシールド/山札を開示する */
+    opponentShield?: boolean;
+    opponentDeck?: boolean;
+    ownShield?: boolean;
+    ownDeck?: boolean;
   };
   /** hypothesis: 決め打ち */
   hypotheses?: Hypothesis[];
@@ -68,8 +73,9 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
     v.cards[uid].defId = '?';
   };
   // 自分の隠れた領域(山札・シールドは本人にも見えない)
-  for (const u of v.players[player].deck) hide(u);
-  for (const u of v.players[player].shield) hide(u);
+  const rv = policy.preset === 'partial' ? policy.reveal : undefined;
+  if (!rv?.ownDeck) for (const u of v.players[player].deck) hide(u);
+  if (!rv?.ownShield) for (const u of v.players[player].shield) hide(u);
   // 相手の隠れた領域
   const oppHand = v.players[opp].hand.slice();
   let reveal = 0;
@@ -87,8 +93,8 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
   oppHand.forEach((u, i) => {
     if (i >= reveal) hide(u);
   });
-  for (const u of v.players[opp].shield) hide(u);
-  for (const u of v.players[opp].deck) hide(u);
+  if (!rv?.opponentShield) for (const u of v.players[opp].shield) hide(u);
+  if (!rv?.opponentDeck) for (const u of v.players[opp].deck) hide(u);
   // 自分への質問で提示されたカードは見える(デドダムの上3枚など)
   const p = state.pending;
   if (p && p.player === player && p.input) {

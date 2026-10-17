@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import type { AgentKind, AgentSpec, AiTuning } from './index';
 import type { RewardWeights } from './eval';
-import { FAIR } from '../engine/view';
+import { FAIR, FULL } from '../engine/view';
 import { L1_DEFAULT, type L1Params } from './l1params';
 
 const KINDS: AgentKind[] = ['random', 'rule', 'mcts', 'pass'];
@@ -48,7 +48,29 @@ export function parseSpec(text: string): AgentSpec {
     }
     if (k === 'infer') {
       // 公開されて山札の下に戻った札(ヨビニオン)の推論。infer=0 で切る(新旧の比較用)
-      spec.policy = { ...FAIR, inferRevealed: n !== 0 };
+      spec.policy = { ...(spec.policy ?? FAIR), inferRevealed: n !== 0 };
+      continue;
+    }
+    if (k === 'info') {
+      // 情報の価値を測る実験: info=full / info=oh+os+od+ms+md(相手の手札・シールド・山札、自分のシールド・山札を開示)
+      if (v === 'full') spec.policy = { ...FULL, ...(spec.policy?.inferRevealed === false ? { inferRevealed: false } : {}) };
+      else {
+        const f = v.split('+');
+        const bad = f.filter((x) => !['oh', 'os', 'od', 'ms', 'md'].includes(x));
+        if (bad.length) throw new Error('info= は full か oh/os/od/ms/md の組み合わせです: ' + bad.join(','));
+        spec.policy = {
+          ...FAIR,
+          ...(spec.policy ?? {}),
+          preset: 'partial',
+          reveal: {
+            ...(f.includes('oh') ? { opponentHandCount: 99 } : {}),
+            opponentShield: f.includes('os'),
+            opponentDeck: f.includes('od'),
+            ownShield: f.includes('ms'),
+            ownDeck: f.includes('md'),
+          },
+        };
+      }
       continue;
     }
     if (k === 'lookahead') {
@@ -109,6 +131,12 @@ export function specLabel(spec: AgentSpec): string {
     else parts.push(`w.${k}=${v}`);
   }
   if (spec.policy?.inferRevealed === false) parts.push('infer=0');
+  if (spec.policy?.preset === 'full') parts.push('info=full');
+  else if (spec.policy?.preset === 'partial' && spec.policy.reveal) {
+    const r = spec.policy.reveal;
+    const f = [r.opponentHandCount ? 'oh' : '', r.opponentShield ? 'os' : '', r.opponentDeck ? 'od' : '', r.ownShield ? 'ms' : '', r.ownDeck ? 'md' : ''].filter(Boolean);
+    if (f.length) parts.push('info=' + f.join('+'));
+  }
   if (t?.modelPath) parts.push(`value=${t.modelPath}`);
   for (const [k, v] of Object.entries(spec.l1 ?? {})) parts.push('l1.' + k + '=' + v);
   return parts.length ? `${spec.kind}:${parts.join(',')}` : spec.kind;
