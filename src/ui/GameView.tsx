@@ -235,8 +235,8 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [askPay, setAskPay] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  // ログ・待機中の能力は、盤面の上に重ねて出す(別の欄を増やさない)。既定は閉じておく
-  const [sideOpen, setSideOpen] = useState(false);
+  // ログ・待機中の能力は、盤面の右の欄(rail)の中に出す(別の欄も、浮かぶパネルも作らない)。観戦(CPU 同士)では、ログが主な情報なので既定で開く
+  const [sideOpen, setSideOpen] = useState(() => setup.seats.every((x) => x.kind === 'cpu'));
   const [railW, setRailW] = useRailWidth();
   const stageRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -925,15 +925,20 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             </div>
           )}
           {interactive && <div className="rail-tip">💡 {tip}</div>}
+          {/* ログと待機中の能力: 右の欄の中に出す。幅は仕切りで変えられる */}
+          {sideOpen && (
+            <section className="rail-log" aria-label="対戦ログ">
+              <div className="rail-log-head">
+                <strong>対戦ログ・待機中の能力</strong>
+                <button className="small" onClick={() => setSideOpen(false)} aria-label="ログを閉じる" title="閉じる(L)">
+                  ✕
+                </button>
+              </div>
+              <PoolPanel s={s} />
+              <LogPanel s={s} log={session.log} me={g.me} />
+            </section>
+          )}
         </div>
-
-        {/* ログと待機中の能力: 盤面の上に重ねる(移動・サイズ変更・閉じるができる)。別の欄は作らない */}
-        {sideOpen && (
-          <ResizablePanel boxKey="dmsim.logBox" className="log-box" title="対戦ログ・待機中の能力" label="対戦ログ" onClose={() => setSideOpen(false)} minW={240} minH={140}>
-            <PoolPanel s={s} />
-            <LogPanel s={s} log={session.log} me={g.me} />
-          </ResizablePanel>
-        )}
 
         {g.saveStatus !== 'ok' && (
           <div className="toast" role="status" style={{ bottom: session.error ? 96 : undefined }}>
