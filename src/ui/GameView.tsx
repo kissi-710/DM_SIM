@@ -314,7 +314,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     const t = setTimeout(() => setNotice(null), 6000);
     return () => clearTimeout(t);
   }, [notice]);
-  const [confirmOn, setConfirmOn] = useState(() => loadJson<boolean>('dmsim.confirmEnd', true));
+  const [confirmOn, setConfirmOn] = useState(() => loadJson<unknown>('dmsim.confirmEnd', true) !== false);
   const toggleConfirm = () =>
     setConfirmOn((v) => {
       saveJson('dmsim.confirmEnd', !v);
