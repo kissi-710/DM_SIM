@@ -99,6 +99,7 @@ export function cloneState(s: GameState): GameState {
     breaking: s.breaking.slice(),
     deckIds: s.deckIds,
     cfg: s.cfg,
+    ...(s.knownDeck ? { knownDeck: [s.knownDeck[0].map((g) => g.slice()), s.knownDeck[1].map((g) => g.slice())] as GameState['knownDeck'] } : {}),
   };
 }
 

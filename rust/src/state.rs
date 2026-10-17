@@ -469,6 +469,22 @@ pub fn state_from_json(reg: &Registry, j: &Json) -> R<State> {
         mana_charged: gb(j, "manaCharged")?,
         breaking: ints(get(j, "breaking")?)?,
         deck_ids: Rc::new(deck_ids),
+        known_deck: match j.get("knownDeck") {
+            Some(Json::Arr(per)) if per.len() == 2 => {
+                let mut out: [Vec<Vec<(i32, i32)>>; 2] = [Vec::new(), Vec::new()];
+                for (p, groups) in per.iter().enumerate() {
+                    for g in groups.as_arr().ok_or("knownDeck")? {
+                        let mut grp = Vec::new();
+                        for e in g.as_arr().ok_or("knownDeck")? {
+                            grp.push((gi(e, "uid")? as i32, gi(e, "ep")? as i32));
+                        }
+                        out[p].push(grp);
+                    }
+                }
+                Some(out)
+            }
+            _ => None,
+        },
         cards_by_def: Rc::new(by_def),
         cfg: Rc::new(cfg),
         dirty_sba: gb(j, "dirtySba")?,
@@ -623,7 +639,7 @@ pub fn state_to_json(reg: &Registry, s: &State) -> Json {
         ("skipRunsEndTriggers", Json::Bool(c.skip_runs_end_triggers)),
         ("maxFrameSteps", Json::int(c.max_frame_steps as i64)),
     ]);
-    Json::obj(vec![
+    let mut out = Json::obj(vec![
         ("v", Json::int(s.v as i64)),
         ("cards", cards),
         ("players", players),
@@ -661,7 +677,22 @@ pub fn state_to_json(reg: &Registry, s: &State) -> Json {
         ),
         ("cfg", cfg),
         ("dirtySba", Json::Bool(s.dirty_sba)),
-    ])
+    ]);
+    if let (Json::Obj(o), Some(kd)) = (&mut out, &s.known_deck) {
+        let per: Vec<Json> = kd
+            .iter()
+            .map(|groups| {
+                Json::Arr(
+                    groups
+                        .iter()
+                        .map(|g| Json::Arr(g.iter().map(|&(uid, ep)| Json::obj(vec![("uid", Json::int(uid as i64)), ("ep", Json::int(ep as i64))])).collect()))
+                        .collect(),
+                )
+            })
+            .collect();
+        o.push(("knownDeck".to_string(), Json::Arr(per)));
+    }
+    out
 }
 
 // ───────────────────────── 行動 ─────────────────────────

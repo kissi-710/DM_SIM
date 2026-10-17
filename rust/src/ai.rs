@@ -739,6 +739,8 @@ pub struct SearchEnv {
     pub me: PlayerId,
     pub policy: Policy,
     pub opp_hand_kinds: Option<Vec<(String, i32)>>,
+    /// 山札の中で中身が公開された札のまとまり(ヨビニオンで山札の下に戻した札)。プレイヤーごとに (山札の位置の uid, 中身)
+    pub deck_known: [Vec<(Vec<i32>, Vec<u16>)>; 2],
     pub candidate_decks: Vec<Vec<u16>>,
     pub horizon: i32,
     pub weights: EvalWeights,
@@ -775,6 +777,21 @@ impl SearchEnv {
             Some(Json::Obj(o)) => Some(o.iter().map(|(k, v)| (k.clone(), v.as_i64().unwrap_or(0) as i32)).collect()),
             _ => None,
         };
+        let mut deck_known: [Vec<(Vec<i32>, Vec<u16>)>; 2] = [Vec::new(), Vec::new()];
+        if let Some(Json::Arr(per_player)) = view_j.get("hints").and_then(|h| h.get("deckKnown")) {
+            for (p, groups) in per_player.iter().take(2).enumerate() {
+                for g in groups.as_arr().ok_or("deckKnown")? {
+                    let uids = g.get("uids").and_then(|u| u.as_arr()).ok_or("deckKnown.uids")?;
+                    let defs = g.get("defIds").and_then(|u| u.as_arr()).ok_or("deckKnown.defIds")?;
+                    let uids: Vec<i32> = uids.iter().map(|u| u.as_i64().unwrap_or(-1) as i32).collect();
+                    let mut ds = Vec::new();
+                    for d in defs {
+                        ds.push(reg.def_index(d.as_str().unwrap_or("")).ok_or("未知のカード")?);
+                    }
+                    deck_known[p].push((uids, ds));
+                }
+            }
+        }
         let mut candidate_decks = Vec::new();
         if let Some(Json::Arr(ds)) = j.get("candidateDecks") {
             for d in ds {
@@ -791,6 +808,7 @@ impl SearchEnv {
             me: j.get("me").and_then(|x| x.as_i64()).ok_or("me がありません")? as u8,
             policy,
             opp_hand_kinds,
+            deck_known,
             candidate_decks,
             horizon: j.get("horizon").and_then(|x| x.as_i64()).unwrap_or(3) as i32,
             weights: EvalWeights::from_json(reg, j.get("weights")),
@@ -939,6 +957,22 @@ pub fn determinize(reg: &Registry, env: &SearchEnv, rand: &mut SeededRand, q_def
             }
         }
     };
+
+    // 公開されて山札の下に戻った札(ヨビニオンなど)は、先に山札のその枠へ割り当てる(TS 版 determinize.ts と同じ順・同じ乱数の使い方)。
+    // 残りの未知の札は、デッキリストからこの札を引いた残りから選ばれる
+    for p in 0..2usize {
+        for (uids, defs) in &env.deck_known[p] {
+            let ok = uids.len() == defs.len()
+                && uids.iter().all(|&u| u >= 0 && (u as usize) < s.cards.len() && s.cards[u as usize].def == q_def && s.cards[u as usize].zone == Zone::Deck);
+            if !ok {
+                continue;
+            }
+            let ds = shuffled(defs, rand);
+            for (i, &u) in uids.iter().enumerate() {
+                s.cards[u as usize].def = ds[i];
+            }
+        }
+    }
 
     // 自分のデッキ・シールド
     let my_list: Vec<u16> = if !s.deck_ids[me as usize].is_empty() { s.deck_ids[me as usize].clone() } else { known_of(&s, me) };

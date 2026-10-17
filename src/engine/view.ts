@@ -2,7 +2,7 @@
 // 隠れたカードの defId は '?' に置き換える。開示の処理はこの関数だけに閉じ込める。
 import type { Registry } from './registry';
 import { cloneState } from './state';
-import type { Ev, GameState, PlayerId } from './types';
+import type { DeckGroupHint, Ev, GameState, PlayerId } from './types';
 
 export type InfoPreset = 'fair' | 'partial' | 'hypothesis' | 'full';
 
@@ -28,6 +28,8 @@ export interface InfoPolicy {
   hypotheses?: Hypothesis[];
   /** 仮説のカードを手札に置く確率(0〜1) */
   hypothesisWeight?: number;
+  /** 公開されて山札の下に戻った札(ヨビニオンなど)の位置を推論に使うか。既定は true。false なら昔と同じ(測定の比較用) */
+  inferRevealed?: boolean;
 }
 
 export const FAIR: InfoPolicy = { preset: 'fair', knowOpponentDecklist: true };
@@ -129,6 +131,37 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
   if (!policy.knowOpponentDecklist) {
     v.deckIds = player === 0 ? [v.deckIds[0], []] : [[], v.deckIds[1]];
   }
+  if (policy.inferRevealed !== false) {
+    const dk = deckKnownHints(state, player);
+    if (dk) hints.deckKnown = dk;
+  }
+  // 視点側に knownDeck そのものは渡さない(中身は hints.deckKnown に、並びを伏せて入れる)
+  delete v.knownDeck;
   v.hints = hints;
   return v;
+}
+
+/**
+ * 山札の中で中身が公開されたまとまりを、視点に渡す形にする。
+ * - 並び順は渡さない(uid は昇順、中身は defId 順)。シャッフル済みなので、実際にも誰も知らない
+ * - まとまりの一部が山札を離れた場合、持ち主には残りが分かる(離れた札も本人は見ている)。
+ *   相手には「どれが離れたか」が分からないので、崩れたまとまりは渡さない
+ */
+function deckKnownHints(state: GameState, viewer: PlayerId): [DeckGroupHint[], DeckGroupHint[]] | undefined {
+  const kd = state.knownDeck;
+  if (!kd) return undefined;
+  const out: [DeckGroupHint[], DeckGroupHint[]] = [[], []];
+  for (const p of [0, 1] as PlayerId[]) {
+    for (const g of kd[p]) {
+      const live = g.filter((e) => {
+        const c = state.cards[e.uid];
+        return c.zone === 'deck' && c.owner === p && c.ep === e.ep;
+      });
+      if (live.length === 0 || (viewer !== p && live.length !== g.length)) continue;
+      const uids = live.map((e) => e.uid).sort((a, b) => a - b);
+      const defIds = live.map((e) => state.cards[e.uid].defId).sort();
+      out[p].push({ uids, defIds });
+    }
+  }
+  return out[0].length || out[1].length ? out : undefined;
 }

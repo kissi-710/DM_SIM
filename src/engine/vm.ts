@@ -504,6 +504,8 @@ function execAct(c: Ctx, f: EffectFrame, cc: CC, act: ActDef): void {
         deck.push(u);
         s.cards[u].ep++;
       }
+      // 公開した札(ヨビニオン)を山札の下に戻した: 並びは分からないが、どの札が下にあるかは両者が知っている
+      (s.knownDeck ??= [[], []])[owner].push(uids.map((u) => ({ uid: u, ep: s.cards[u].ep })));
       return;
     }
     case 'shuffle': {

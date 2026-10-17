@@ -819,6 +819,9 @@ pub struct State {
     pub mana_charged: bool,
     pub breaking: Vec<i32>,
     pub deck_ids: Rc<Vec<Vec<u16>>>,
+    /// 山札の中で中身が公開された札のまとまり(TS 版 GameState.knownDeck と同じ)。プレイヤーごとに、まとまりの (uid, ep) の並び。
+    /// 探索では使わない(決定化に使う視点側のヒントは SearchEnv.deck_known)。往復の一致のために持つ
+    pub known_deck: Option<[Vec<Vec<(i32, i32)>>; 2]>,
     /// 定義 → その定義のカードの uid(昇順)。誘発の収集で、全カードを走査しないための索引
     pub cards_by_def: Rc<Vec<Vec<i32>>>,
     pub cfg: Rc<Cfg>,

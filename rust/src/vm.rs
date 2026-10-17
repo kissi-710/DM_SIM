@@ -702,10 +702,14 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             }
             let mut uids = uids;
             shuffle_in_place(&mut c.s, &mut uids);
+            let mut group = Vec::with_capacity(uids.len());
             for u in uids {
                 c.s.players[owner].deck.push(u);
                 c.s.cards[u as usize].ep += 1;
+                group.push((u, c.s.cards[u as usize].ep));
             }
+            // 公開した札(ヨビニオン)を山札の下に戻した: 並びは分からないが、どの札が下にあるかは両者が知っている
+            c.s.known_deck.get_or_insert_with(|| [Vec::new(), Vec::new()])[owner].push(group);
             Ok(())
         }
         Act::Shuffle { who } => {

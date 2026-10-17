@@ -245,11 +245,28 @@ export interface GameState {
   deckIds: [string[], string[]]; // 初期デッキ(カードID列)。決定化・開示に使う
   cfg: GameConfig;
   dirtySba: boolean;
+  /**
+   * 山札の中で「中身が公開された札のまとまり」(ヨビニオンで公開して山札の下に戻した札など)。プレイヤーごと。
+   * 並び順は伏せられる(シャッフル済み)が、どの札が下にあるかは両者が知っている。推論(ai/determinize)に使う。
+   * 札が山札を離れる/山札全体をシャッフルすると、そのまとまりは崩れる(ep で検査)。
+   */
+  knownDeck?: [KnownGroup[], KnownGroup[]];
   /** PlayerView だけが持つ追加情報(部分開示)。engine は使わない */
   hints?: ViewHints;
 }
 
+/** 公開されたまとまり。同じ ep の札だけが「まだ山札のそこにある」 */
+export type KnownGroup = { uid: number; ep: number }[];
+
+/** 視点に渡す「山札の中の既知のまとまり」。uids は山札のどこかにある位置、defIds はその中身(順不同) */
+export interface DeckGroupHint {
+  uids: number[];
+  defIds: string[];
+}
+
 export interface ViewHints {
+  /** 山札の中で中身が公開されているまとまり(プレイヤーごと)。決定化で、その枠に正体を割り当てる */
+  deckKnown?: [DeckGroupHint[], DeckGroupHint[]];
   /** 相手の手札のうち、種類ごとの枚数(部分開示) */
   oppHandKinds?: Record<string, number>;
   /** 相手のデッキリストが既知か */

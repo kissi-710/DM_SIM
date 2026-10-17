@@ -573,6 +573,8 @@ export function drawCards(c: Ctx, player: PlayerId, n: number): number {
 
 export function shuffleDeck(c: Ctx, player: PlayerId): void {
   shuffleInPlace(c.s, c.s.players[player].deck);
+  // 山札全体を混ぜたら、公開された札の位置の手がかりは失われる
+  if (c.s.knownDeck) c.s.knownDeck[player] = [];
 }
 
 export function setTapped(c: Ctx, uid: number, tapped: boolean): void {

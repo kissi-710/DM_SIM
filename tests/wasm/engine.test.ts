@@ -6,6 +6,7 @@ import { makeRuleBased } from '../../src/ai/rulebased';
 import { PairedTree, setNativePairedRound, setNativeTree, treeSearch } from '../../src/ai/tree';
 import { deckCards } from '../../src/cards';
 import { createGame, legalActions, step } from '../../src/engine/engine';
+import { FAIR, toPlayerView } from '../../src/engine/view';
 import { mulberry } from '../../src/sim/playGame';
 import { DmEngine } from '../../src/wasm/dmEngine';
 import { reg } from '../scenario';
@@ -48,6 +49,42 @@ describe.skipIf(!has)('Rust 版エンジン(WASM)', () => {
       }
     }
     expect(compared).toBeGreaterThan(20);
+  }, 120000);
+
+  it('ヨビニオンで公開された山札の下の札の推論(決定化)が TS 版と一致する', () => {
+    const eng = DmEngine.createSync(readFileSync(wasmPath), JSON.stringify(reg.defs));
+    const native = eng.asNativeRounds();
+    const l1 = makeRuleBased({});
+    let s = createGame(reg, { decks: [deckCards('maruru'), deckCards('zardy')], seed: 5, first: 0 }).state;
+    const rand = mulberry(5);
+    let compared = 0;
+    for (let i = 0; i < 40 && s.winner === null; i++) {
+      const legal = legalActions(s, reg);
+      if (legal.length === 0) break;
+      // 両者の山札の下の3枚を、公開済みの札のまとまりにする(ヨビニオンを使った後と同じ形)
+      s.knownDeck = [0, 1].map((p) => {
+        const deck = s.players[p].deck;
+        return deck.length >= 4 ? [deck.slice(-3).map((uid) => ({ uid, ep: s.cards[uid].ep }))] : [];
+      }) as typeof s.knownDeck;
+      if (i % 4 === 0 && legal.length >= 2 && s.pending) {
+        const plan = planSearch(toPlayerView(s, s.pending.player, FAIR, reg), legal, { rand: mulberry(i), reg, budget: { iterations: 20 } }, {}, l1);
+        expect(plan.env.view.hints?.deckKnown).toBeDefined();
+        const alive = legal.map((_, k) => k);
+        for (const r of [0, 1]) {
+          const sd = roundSeed(plan.base, r);
+          setNativeRounds(null);
+          const ts = evalRound(plan.env, reg, sd, alive);
+          const got = native(plan.env, sd, alive);
+          ts.forEach((v, k) => {
+            if (Number.isNaN(v)) expect(Number.isNaN(got[k])).toBe(true);
+            else expect(Math.abs(got[k] - v)).toBeLessThan(1e-9);
+            compared++;
+          });
+        }
+      }
+      s = step(s, legal[Math.floor(rand() * legal.length)], reg).state;
+    }
+    expect(compared).toBeGreaterThan(10);
   }, 120000);
 
   it('木の探索(ターン内の行動列)が TS 版と一致する(続きからの反復も同じ)', () => {

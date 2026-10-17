@@ -4,11 +4,13 @@
 // キー: algo=flat|tree|ptree c(木の探索定数) depth(木の深さ) iter(反復回数) ms(最大思考時間) horizon(先読みターン数。99でゲーム終了まで) prior(L1の手への上乗せ) w.<重み名>
 //       lookahead=1(プレイアウトの効果の選択を1手先読みで決める) rl1.<調整値名>=<値>(プレイアウトの L1 の調整値)
 //       l1.<調整値名>=<値>(rule: ai/l1params.ts の調整値)
+//       infer=0(公開されて山札の下に戻った札の推論を切る。既定は入。新旧の比較用)
 //       z=<外す判定の厳しさ。既定 2.5> sh=1(Sequential Halving)
 //       value=<パス>(学習した価値関数の JSON。trainValue の出力。Node の CLI 専用)
 import { readFileSync } from 'node:fs';
 import type { AgentKind, AgentSpec, AiTuning } from './index';
 import type { RewardWeights } from './eval';
+import { FAIR } from '../engine/view';
 import { L1_DEFAULT, type L1Params } from './l1params';
 
 const KINDS: AgentKind[] = ['random', 'rule', 'mcts', 'pass'];
@@ -42,6 +44,11 @@ export function parseSpec(text: string): AgentSpec {
       if (!Number.isFinite(n)) throw new Error(k + ' は数で指定してください(指定値: ' + v + ')');
       (spec.l1 as Record<string, number>) ??= {};
       (spec.l1 as Record<string, number>)[name] = n;
+      continue;
+    }
+    if (k === 'infer') {
+      // 公開されて山札の下に戻った札(ヨビニオン)の推論。infer=0 で切る(新旧の比較用)
+      spec.policy = { ...FAIR, inferRevealed: n !== 0 };
       continue;
     }
     if (k === 'lookahead') {
@@ -101,6 +108,7 @@ export function specLabel(spec: AgentSpec): string {
     else if (k === 'l1') for (const [kk, vv] of Object.entries(v as object)) parts.push('rl1.' + kk + '=' + vv);
     else parts.push(`w.${k}=${v}`);
   }
+  if (spec.policy?.inferRevealed === false) parts.push('infer=0');
   if (t?.modelPath) parts.push(`value=${t.modelPath}`);
   for (const [k, v] of Object.entries(spec.l1 ?? {})) parts.push('l1.' + k + '=' + v);
   return parts.length ? `${spec.kind}:${parts.join(',')}` : spec.kind;

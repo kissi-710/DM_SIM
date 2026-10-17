@@ -89,6 +89,22 @@ export function determinize(view: GameState, me: PlayerId, o: DetermOpts): GameS
     open.forEach((u, i) => (s.cards[u].defId = best[i]));
   };
 
+  // 公開されて山札の下に戻った札(ヨビニオンなど)は、先に山札のその枠へ割り当てる。
+  // 残りの未知の札(手札・シールド・山札の上側)は、デッキリストからこの札を引いた残りから選ばれる。
+  // つまり「下にある札は引きにくい」「3枚が下にあるなら、残りの1枚は手札かシールドか山札の上にある」といった推論が、
+  // 一様にシャッフルされたデッキの事後分布として自然に出る。
+  const dk = view.hints?.deckKnown;
+  if (dk) {
+    for (const p of [0, 1] as PlayerId[]) {
+      for (const g of dk[p]) {
+        // 枠が隠れたままの札だけを対象にする(見えている札を書き換えない)。個数が合わなければ無視する
+        if (g.uids.length !== g.defIds.length || g.uids.some((u) => s.cards[u]?.defId !== '?' || s.cards[u].zone !== 'deck')) continue;
+        const ds = shuffled(g.defIds, o.rand);
+        g.uids.forEach((u, i) => (s.cards[u].defId = ds[i]));
+      }
+    }
+  }
+
   // 自分のデッキ・シールド
   const myList = s.deckIds[me].length ? s.deckIds[me] : knownOf(me);
   assign(me, myList);

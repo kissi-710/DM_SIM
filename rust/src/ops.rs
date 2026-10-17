@@ -889,6 +889,10 @@ pub fn shuffle_deck(c: &mut Ctx, player: PlayerId) {
     let mut deck = std::mem::take(&mut c.s.players[player as usize].deck);
     shuffle_in_place(&mut c.s, &mut deck);
     c.s.players[player as usize].deck = deck;
+    // 山札全体を混ぜたら、公開された札の位置の手がかりは失われる
+    if let Some(kd) = c.s.known_deck.as_mut() {
+        kd[player as usize].clear();
+    }
 }
 
 pub fn set_tapped(c: &mut Ctx, uid: i32, tapped: bool) {

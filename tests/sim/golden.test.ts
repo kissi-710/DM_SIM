@@ -55,11 +55,12 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
       // 侵略が自分自身の攻撃では誘発しなくなったので、1試合が変わった
       // ブロッカーを複数体同時に選べるようにした(507.1a。AI は1体を選ぶ)ので、1試合が変わった
       // 任意効果の質問を整理した(勝敗が1試合変わり、その1試合が山札切れに)
-      winsA: 49,
-      winsB: 11,
+      // ヨビニオンで山札の下に戻した札を、決定化(推論)に使うようにした(山札切れの1試合が、ダイレクトアタックになった)
+      winsA: 50,
+      winsB: 10,
       draws: 0,
-      avgTurns: 11.666666666666666,
-      reasons: { ダイレクトアタック: 59, 山札切れ: 1 },
+      avgTurns: 11.466666666666667,
+      reasons: { ダイレクトアタック: 60 },
     });
   });
   // 探索の既定を、根はペア比較・2手目以降は木(ptree。docs/ai-quality-plan.md §6.4)にした時と、
@@ -69,7 +70,7 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
       winsA: 5,
       winsB: 1,
       draws: 0,
-      avgTurns: 13.666666666666666, // 任意効果の質問を整理した(20反復の6試合なので、1試合が変わっただけ)
+      avgTurns: 12.666666666666666, // 任意効果の質問を整理した・山札の下の公開札の推論を入れた(20反復の6試合なので、1試合ずつ変わっただけ。勝敗は同じ)
       reasons: { ダイレクトアタック: 6 },
     });
   });
@@ -78,13 +79,15 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
       const r = playGameSync(reg, [makeAgent({ kind }), makeAgent({ kind })], { decks: [A, B], seed });
       return [r.actions.length, hash(JSON.stringify(r.actions)), r.winner, r.turns, r.state.seq, r.state.rng, hash(JSON.stringify(r.state.cards))];
     };
-    expect(play('rule', 5)).toEqual([50, 3096645315, 0, 11, 274, 1440342336, 1477984376]);
+    // 山札の下の公開札の推論(ヨビニオン)で、ルールベースの選択が変わった
+    expect(play('rule', 5)).toEqual([42, 2496869643, 0, 11, 250, -1527012423, 2283302843]);
     expect(play('random', 9)).toEqual([96, 1448277335, 0, 25, 467, 1504283537, 3871052353]);
   });
   it('確率調査: 方針プレイと探索(40試行)', () => {
     const r = runProbability(reg, { deck: A, first: 0, goal, trials: 40, seed: 1, maxNodes: 3000 });
-    expect(r.policy.achieved).toBe(13);
-    expect(r.policy.byTurn).toEqual([0, 0, 0, 0.075, 0.25, 0.3, 0.325]);
+    // 方針プレイの AI が山札の下の公開札(ヨビニオン)を推論に使うようになり、1試行が変わった(13 → 12)。探索(全探索)は変わらない
+    expect(r.policy.achieved).toBe(12);
+    expect(r.policy.byTurn).toEqual([0, 0, 0, 0.075, 0.25, 0.275, 0.3]);
     // 限定食い違い探索 + 目標までの距離の順序づけ(旧: 到達 16 / 不明 24 / 平均 2000 ノード)。
     // 予算の 2/3 を LDS に、残りを 1 回の全探索に使う(到達不可の確定を速くする。到達 32 / 不明 8 → 31 / 9)
     expect(r.search?.achieved).toBe(31);
