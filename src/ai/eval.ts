@@ -47,6 +47,8 @@ export interface RewardWeights extends EvalWeights {
   anti?: number;
   /** プレイアウトの L1: 相打ちでも、相手のコスト − 自分のコスト がこの値以上なら攻撃する(l1.atkTrade と同じ。99 で無効) */
   atkTrade?: number;
+  /** 学習した召喚の方針の重み(ai/l1learn.ts。あれば、プレイアウトの召喚・詠唱の選択がこれになる。Rust 版も同じ) */
+  playModel?: number[];
 }
 
 /**

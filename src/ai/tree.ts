@@ -77,7 +77,9 @@ function descend(env: SearchEnv, reg: Registry, o: TreeOpts, start: GameState, s
     if (expand) {
       chosen = untried[0];
       if (p.why === 'turnAction') {
-        const l1 = chooseTurnAction(state, legal, { reg, rand: () => 0 }, env.weights?.atkTrade === undefined ? undefined : withL1({ atkTrade: env.weights.atkTrade }));
+        const l1 = chooseTurnAction(state, legal, { reg, rand: () => 0 }, env.weights?.atkTrade === undefined && !env.weights?.playModel
+            ? undefined
+            : withL1({ ...(env.weights?.atkTrade === undefined ? {} : { atkTrade: env.weights.atkTrade }), ...(env.weights?.playModel ? { playModel: env.weights.playModel } : {}) }));
         const j = legal.findIndex((a) => keyOf(a) === keyOf(l1));
         if (j >= 0 && untried.includes(j)) chosen = j;
       }

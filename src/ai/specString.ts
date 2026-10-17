@@ -7,6 +7,7 @@
 //       infer=0(公開されて山札の下に戻った札の推論を切る。既定は入。新旧の比較用)
 //       z=<外す判定の厳しさ。既定 2.5> sh=1(Sequential Halving)
 //       value=<パス>(学習した価値関数の JSON。trainValue の出力。Node の CLI 専用)
+//       pm=<パス>(学習した召喚の方針。scripts/l1q-fit.ts の出力。プレイアウト(TS・Rust)と L1 に入れる。Node の CLI 専用)
 import { readFileSync } from 'node:fs';
 import type { AgentKind, AgentSpec, AiTuning } from './index';
 import type { RewardWeights } from './eval';
@@ -73,6 +74,14 @@ export function parseSpec(text: string): AgentSpec {
       }
       continue;
     }
+    if (k === 'pm') {
+      // 学習した召喚の方針(l1q-fit の出力 JSON。docs/ai-quality-plan.md §12)。L1(事前の候補)とプレイアウトの両方に入れる
+      if (!v) throw new Error('pm= にはモデルの JSON のパスを指定してください');
+      const w = (JSON.parse(readFileSync(v, 'utf8')) as { w: number[] }).w;
+      (spec.l1 ??= {}).playModel = w;
+      (tuning.weights ??= {}).playModel = w;
+      continue;
+    }
     if (k === 'lookahead') {
       (tuning.weights ??= {}).lookahead = n !== 0;
       continue;
@@ -126,6 +135,10 @@ export function specLabel(spec: AgentSpec): string {
   if (t?.halving !== undefined) parts.push(`sh=${t.halving ? 1 : 0}`);
   for (const [k, v] of Object.entries(t?.weights ?? {})) {
     if (k === 'model') continue;
+    if (k === 'playModel') {
+      parts.push('pm=on');
+      continue;
+    }
     if (k === 'lookahead') parts.push('lookahead=' + (v ? 1 : 0));
     else if (k === 'l1') for (const [kk, vv] of Object.entries(v as object)) parts.push('rl1.' + kk + '=' + vv);
     else parts.push(`w.${k}=${v}`);
@@ -138,6 +151,6 @@ export function specLabel(spec: AgentSpec): string {
     if (f.length) parts.push('info=' + f.join('+'));
   }
   if (t?.modelPath) parts.push(`value=${t.modelPath}`);
-  for (const [k, v] of Object.entries(spec.l1 ?? {})) parts.push('l1.' + k + '=' + v);
+  for (const [k, v] of Object.entries(spec.l1 ?? {})) if (k !== 'playModel') parts.push('l1.' + k + '=' + v);
   return parts.length ? `${spec.kind}:${parts.join(',')}` : spec.kind;
 }

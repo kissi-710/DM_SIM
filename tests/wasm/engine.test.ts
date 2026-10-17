@@ -87,6 +87,42 @@ describe.skipIf(!has)('Rust 版エンジン(WASM)', () => {
     expect(compared).toBeGreaterThan(10);
   }, 120000);
 
+  it('学習した召喚の方針(playModel)が TS 版と一致する', () => {
+    const eng = DmEngine.createSync(readFileSync(wasmPath), JSON.stringify(reg.defs));
+    const native = eng.asNativeRounds();
+    const l1 = makeRuleBased({});
+    const playModel = JSON.parse(readFileSync(new URL('../../src/ai/models/play-v1.json', import.meta.url), 'utf8')).w as number[];
+    let compared = 0;
+    for (const [deckA, deckB, seed] of [
+      ['maruru', 'zardy', 31],
+      ['lost-maruru', 'maruru', 32],
+    ] as const) {
+      let s = createGame(reg, { decks: [deckCards(deckA), deckCards(deckB)], seed, first: 0 }).state;
+      const rand = mulberry(seed);
+      for (let i = 0; i < 80 && s.winner === null; i++) {
+        const legal = legalActions(s, reg);
+        if (legal.length === 0) break;
+        if (i % 3 === 0 && legal.length >= 2 && s.pending) {
+          const plan = planSearch(toPlayerView(s, s.pending.player, FAIR, reg), legal, { rand: mulberry(i), reg, budget: { iterations: 20 } }, { weights: { playModel } }, l1);
+          const alive = legal.map((_, k) => k);
+          for (const r of [0, 1]) {
+            const sd = roundSeed(plan.base, r);
+            setNativeRounds(null);
+            const ts = evalRound(plan.env, reg, sd, alive);
+            const got = native(plan.env, sd, alive);
+            ts.forEach((v, k) => {
+              if (Number.isNaN(v)) expect(Number.isNaN(got[k])).toBe(true);
+              else expect(Math.abs(got[k] - v)).toBeLessThan(1e-9);
+              compared++;
+            });
+          }
+        }
+        s = step(s, legal[Math.floor(rand() * legal.length)], reg).state;
+      }
+    }
+    expect(compared).toBeGreaterThan(20);
+  }, 120000);
+
   it('木の探索(ターン内の行動列)が TS 版と一致する(続きからの反復も同じ)', () => {
     const eng = DmEngine.createSync(readFileSync(wasmPath), JSON.stringify(reg.defs));
     const native = eng.asNativeTree();

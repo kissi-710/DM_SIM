@@ -7,6 +7,7 @@ import type { Registry } from '../engine/registry';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { FAIR, type InfoPolicy } from '../engine/view';
 import { determinize } from './determinize';
+import { choosePlayLearned } from './l1learn';
 import { L1_DEFAULT, withL1, type L1Params } from './l1params';
 import { evaluate, RULE_WEIGHTS } from './eval';
 import { spellNeedsOpponentCreature } from './spellTargets';
@@ -118,6 +119,10 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
   // 攻撃の評価(メインでも攻撃は可能。召喚を先に行う)
   const plays = byType('PLAY_CARD') as Extract<Action, { type: 'PLAY_CARD' }>[];
   if (plays.length > 0) {
+    if (p.playModel) {
+      const i = choosePlayLearned(view, legal, reg, p.playModel);
+      if (i >= 0) return legal[i];
+    }
     let best = plays[0];
     let bs = -Infinity;
     for (const a of plays) {

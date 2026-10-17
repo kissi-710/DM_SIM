@@ -1,7 +1,9 @@
 // 実験: 学習した線形の方針(ai/l1learn.ts)の部品
 import { describe, expect, it } from 'vitest';
 import { CARD_DB, deckCards } from '../../src/cards';
-import { chooseConservative, chooseLearned, features, n_features, situationOf } from '../../src/ai/l1learn';
+import { chooseConservative, chooseLearned, choosePlayLearned, features, n_features, situationOf } from '../../src/ai/l1learn';
+import { makeRuleBased } from '../../src/ai/rulebased';
+import playModel from '../../src/ai/models/play-v1.json';
 import { chooseTurnAction } from '../../src/ai/rulebased';
 import { createGame, legalActions, step } from '../../src/engine/engine';
 import { mulberry } from '../../src/sim/playGame';
@@ -50,5 +52,23 @@ describe('学習した方針の部品', () => {
       s = step(s, a, reg).state;
     }
     expect(s.turn).toBeGreaterThan(2);
+    });
+  it('召喚だけを選ぶ方針: 召喚の手が無ければ -1、重みの長さが合わなければ使わない', () => {
+    const s = start();
+    const legal = legalActions(s, reg); // 最初はマナチャージ(召喚の手は無い)
+    expect(choosePlayLearned(s, legal, reg, playModel.w)).toBe(-1);
+    expect(choosePlayLearned(s, legal, reg, [1, 2, 3])).toBe(-1);
+  });
+  it('学習した召喚の方針を入れたルールベースで、最後まで進められ、選ぶ手は合法', () => {
+    const agent = makeRuleBased({ params: { playModel: playModel.w } });
+    let s = start();
+    const rand = mulberry(7);
+    for (let i = 0; i < 600 && s.winner === null; i++) {
+      const legal = legalActions(s, reg);
+      const a = agent.chooseAction(s, legal, { reg, rand }) as (typeof legal)[number];
+      expect(legal.some((x) => JSON.stringify(x) === JSON.stringify(a))).toBe(true);
+      s = step(s, a, reg).state;
+    }
+    expect(s.turn).toBeGreaterThan(4);
   });
 });

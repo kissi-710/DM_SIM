@@ -1,6 +1,7 @@
 // L1 の方針改善の実験: 手の価値(Q)に線形モデルを当てはめ、保留の局面で損失(regret)を測る。
 //   npx tsx scripts/l1q-fit.ts <データ名...> [--out <モデルJSON>] [--lambda <数>]
 import { readFileSync, writeFileSync } from 'node:fs';
+import { PLAY_BLOCK } from '../src/ai/l1learn';
 
 const args = process.argv.slice(2);
 const outIdx = args.indexOf('--out');
@@ -30,7 +31,7 @@ for (const name of names) {
 }
 // 全体の X に連結し、off を補正
 const totalRows = Xs.reduce((s, x) => s + x.length / D, 0);
-const X = new Float32Array(totalRows * D);
+let X = new Float32Array(totalRows * D);
 {
   let o = 0;
   let pi = 0;
@@ -41,6 +42,26 @@ const X = new Float32Array(totalRows * D);
     pi += meta.pos.length;
     o += Xs[k].length / D;
   }
+}
+const onlyPlay = args.includes('--only-play');
+if (onlyPlay) {
+  // 召喚・詠唱の手だけを候補にする(定数項が立つ行)。選ぶ方針が召喚の手だけを比べるので、学習もそれに合わせる
+  const rows: number[][] = [];
+  const keep: P[] = [];
+  for (const p of pos) {
+    if (p.cat !== 'play') continue;
+    const idx: number[] = [];
+    for (let k = 0; k < p.n; k++) if (X[(p.off + k) * D + PLAY_BLOCK] === 1) idx.push(k);
+    if (idx.length < 2) continue;
+    const l1k = idx.indexOf(p.l1);
+    keep.push({ ...p, q: idx.map((k) => p.q[k]), n: idx.length, l1: Math.max(0, l1k), off: rows.length });
+    for (const k of idx) rows.push([p.off + k]);
+  }
+  const X2 = new Float32Array(rows.length * D);
+  rows.forEach((r, i) => X2.set(X.subarray(r[0] * D, r[0] * D + D), i * D));
+  X = X2;
+  pos.length = 0;
+  pos.push(...keep);
 }
 if (catArg) {
   const keep = pos.filter((p) => p.cat === catArg);

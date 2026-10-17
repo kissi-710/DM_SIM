@@ -26,6 +26,8 @@ const N_CHARGE = 1 + N_ATTR + 8; // 定数 + 属性 + 文脈
 const B_SKIP = B_CHARGE + N_CHARGE;
 const N_SKIP = 5;
 const B_PLAY = B_SKIP + N_SKIP;
+/** 召喚の特徴量ブロックの先頭(定数項 = 1 が立つ)。召喚の手だけを選ぶ方針(choosePlayLearned)と学習が使う */
+export const PLAY_BLOCK = B_PLAY;
 const N_PLAY = 1 + N_ATTR + 10;
 const B_ATK_P = B_PLAY + N_PLAY;
 const N_ATK_P = 12;
@@ -279,4 +281,24 @@ export function chooseConservative(view: GameState, legal: Action[], reg: Regist
     }
   }
   return bs - l1s > delta ? best : l1pick;
+}
+
+/** 召喚・詠唱の手だけを、学習した評価で選ぶ(手が無ければ -1)。同点は先頭。Rust 版(rust/src/ai.rs の learned_play)と同じ式 */
+export function choosePlayLearned(view: GameState, legal: Action[], reg: Registry, w: number[]): number {
+  // カードの一覧が学習時と変わった(重みの長さが合わない)時は使わない(Rust 版も同じ)
+  if (w.length !== n_features(reg)) return -1;
+  const sit = situationOf(view, reg);
+  const x: number[] = [];
+  let best = -1;
+  let bs = -Infinity;
+  for (let i = 0; i < legal.length; i++) {
+    if (legal[i].type !== 'PLAY_CARD') continue;
+    features(view, reg, sit, legal[i], x);
+    const s = dot(w, x);
+    if (best < 0 || s > bs) {
+      bs = s;
+      best = i;
+    }
+  }
+  return best;
 }

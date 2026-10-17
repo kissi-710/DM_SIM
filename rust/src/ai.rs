@@ -40,12 +40,14 @@ pub struct EvalWeights {
     pub atk_trade: i32,
     /// 学習した価値関数(src/ai/valueModel.ts)。あれば、打ち切りの報酬はこれが返す勝つ確率になる
     pub model: Option<std::rc::Rc<ValueModel>>,
+    /// 学習した召喚の方針(src/ai/l1learn.ts の choosePlayLearned)。あれば、召喚・詠唱の手は点数ではなくこの評価で選ぶ
+    pub play_model: Option<std::rc::Rc<PlayModel>>,
 }
 
 impl Default for EvalWeights {
     fn default() -> Self {
         // src/ai/eval.ts の DEFAULT_WEIGHTS と同じ
-        EvalWeights { creature: 3.0, power_div: 2500.0, blocker: 1.5, speed_attacker: 0.5, stack: 0.5, shield: 4.0, hand: 1.6, mana: 3.5, hand_cost: 0.05, deck_out: 3.0, scale: 30.0, eps: 0.0, traj: 1.0, traj_decay: 1.0, traj_start: false, anti: false, atk_trade: 0, model: None }
+        EvalWeights { creature: 3.0, power_div: 2500.0, blocker: 1.5, speed_attacker: 0.5, stack: 0.5, shield: 4.0, hand: 1.6, mana: 3.5, hand_cost: 0.05, deck_out: 3.0, scale: 30.0, eps: 0.0, traj: 1.0, traj_decay: 1.0, traj_start: false, anti: false, atk_trade: 0, model: None, play_model: None }
     }
 }
 
@@ -81,6 +83,9 @@ impl EvalWeights {
             }
             if let Some(m) = o.iter().find(|(k, _)| k == "model").map(|(_, v)| v) {
                 w.model = Some(std::rc::Rc::new(ValueModel::from_json(reg, m)));
+            }
+            if let Some(m) = o.iter().find(|(k, _)| k == "playModel").map(|(_, v)| v) {
+                w.play_model = PlayModel::from_json(reg, m).map(std::rc::Rc::new);
             }
         }
         w
@@ -310,10 +315,118 @@ pub fn model_prob(e: Env, me: PlayerId, m: &ValueModel) -> f64 {
 // プレイアウトの方針の調整値(EvalWeights から、ラウンドの評価の入口で設定する。WASM は単一スレッド)
 thread_local! {
     static ATK_TRADE: std::cell::Cell<i32> = std::cell::Cell::new(0);
+    static PLAY_MODEL: std::cell::RefCell<Option<std::rc::Rc<PlayModel>>> = std::cell::RefCell::new(None);
 }
 
 fn apply_policy(w: &EvalWeights) {
     ATK_TRADE.with(|c| c.set(w.atk_trade));
+    PLAY_MODEL.with(|c| *c.borrow_mut() = w.play_model.clone());
+}
+
+// ───────────────────────── 学習した召喚の方針(src/ai/l1learn.ts の choosePlayLearned と同じ式) ─────────────────────────
+// 特徴量のブロックの位置は l1learn.ts の B_PLAY / N_ATTR / B_ID と同じ。重みの長さは B_ID + 3 × (カード別の添字の数)。
+
+const PL_N_ATTR: usize = 13;
+const PL_B_PLAY: usize = 27;
+const PL_B_ID: usize = 81;
+
+#[derive(Clone, Debug)]
+pub struct PlayModel {
+    w: Vec<f64>,
+    /// 定義の添字 → カード別のブロックの添字(無ければ -1)。l1learn.ts の defIndex と同じ並び(id の昇順。?・dummy・blank は除く)
+    id_of_def: Vec<i32>,
+    n_ids: usize,
+}
+
+impl PlayModel {
+    pub fn from_json(reg: &Registry, j: &Json) -> Option<PlayModel> {
+        let w: Vec<f64> = j.as_arr()?.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect();
+        let mut ids: Vec<(usize, &String)> = reg.ids.iter().enumerate().filter(|(_, id)| id.as_str() != "?" && id.as_str() != "dummy" && !id.starts_with("blank")).collect();
+        ids.sort_by(|a, b| a.1.cmp(b.1));
+        if w.len() != PL_B_ID + 3 * ids.len() {
+            return None;
+        }
+        let mut id_of_def = vec![-1i32; reg.ids.len()];
+        for (k, (d, _)) in ids.iter().enumerate() {
+            id_of_def[*d] = k as i32;
+        }
+        Some(PlayModel { w, id_of_def, n_ids: ids.len() })
+    }
+}
+
+/// 召喚・詠唱の手 1 つの学習した評価(l1learn.ts の features の PLAY_CARD と dot を、添字の昇順で足す)
+fn learned_play_score(e: Env, pm: &PlayModel, uid: i32, from: Option<Zone>, face: Option<i32>, extra: &Option<PlayExtra>, me: PlayerId) -> f64 {
+    let s = e.s;
+    let card = &s.cards[uid as usize];
+    let def = &e.reg.defs[card.def as usize];
+    let fi = face.unwrap_or(0);
+    let f = &def.faces[fi as usize];
+    let taps_v: Vec<i32> = extra.as_ref().and_then(|x| x.tap.clone()).unwrap_or_default();
+    let cost = cost_of(e, uid, fi, &taps_v, false);
+    let ch = chars_lite(e, uid, -1);
+    let info = e.reg.info(card.def, ch.face_idx);
+    let w = &pm.w;
+    let mut z = 0.0f64;
+    z += w[PL_B_PLAY];
+    let a = PL_B_PLAY + 1;
+    z += w[a] * (ch.cost.min(12) as f64 / 10.0);
+    if ch.face.ty == FaceType::Spell {
+        z += w[a + 1];
+    }
+    if !info.shield_triggers.is_empty() {
+        z += w[a + 2];
+    }
+    if info.blocker {
+        z += w[a + 3];
+    }
+    if info.speed_attacker {
+        z += w[a + 4];
+    }
+    z += w[a + 5] * (ch.face.power.unwrap_or(0) as f64 / 10000.0);
+    let mut civ_mask = 0u32;
+    for cv in ch.civs {
+        civ_mask |= 1 << (*cv as u32);
+    }
+    if civ_mask.count_ones() > 1 {
+        z += w[a + 6];
+    }
+    if ch.face.ty != FaceType::Spell {
+        z += w[a + 7];
+    }
+    for i in 0..5usize {
+        if civ_mask & (1 << i) != 0 {
+            z += w[a + 8 + i];
+        }
+    }
+    let at = a + PL_N_ATTR;
+    let o = opp(me);
+    let untapped = s.players[me as usize].mana.iter().filter(|&&m| !s.cards[m as usize].tapped).count() as i32;
+    let opp_creatures = s.players[o as usize].battle.len() as f64;
+    z += w[at] * (pay_need(cost, f.civs.len() as i32) as f64 / 5.0);
+    z += w[at + 1] * ((f.cost - cost) as f64 / 5.0);
+    z += w[at + 2] * (taps_v.len() as f64 / 3.0);
+    if from.unwrap_or(Zone::Hand) != Zone::Hand {
+        z += w[at + 3];
+    }
+    if f.ty == FaceType::Spell && s.players[o as usize].battle.is_empty() && f.needs_opp_creature {
+        z += w[at + 4];
+    }
+    z += w[at + 5] * ((untapped - cost) as f64 / 10.0);
+    z += w[at + 6] * (s.players[me as usize].battle.len() as f64 / 5.0);
+    z += w[at + 7] * (opp_creatures / 5.0);
+    z += w[at + 8] * (s.players[o as usize].shield.len() as f64 / 5.0);
+    if f.ty == FaceType::Spell {
+        z += w[at + 9] * (opp_creatures / 5.0);
+    }
+    let di = pm.id_of_def[card.def as usize];
+    if di >= 0 {
+        z += w[PL_B_ID + pm.n_ids + di as usize];
+    }
+    z
+}
+
+fn play_model() -> Option<std::rc::Rc<PlayModel>> {
+    PLAY_MODEL.with(|c| c.borrow().clone())
 }
 
 fn keep_score(e: Env, uid: i32, me: PlayerId) -> f64 {
@@ -439,9 +552,13 @@ pub fn choose_turn_action(e: Env, legal: &[Action], me: PlayerId) -> usize {
     // 召喚を先に行う
     let mut best_play: Option<usize> = None;
     let mut bs = f64::NEG_INFINITY;
+    let pm = play_model();
     for (i, a) in legal.iter().enumerate() {
         if let Action::PlayCard { uid, from, face, extra } = a {
-            let sc = play_score(e, *uid, *from, *face, extra, me);
+            let sc = match &pm {
+                Some(m) => learned_play_score(e, m, *uid, *from, *face, extra, me),
+                None => play_score(e, *uid, *from, *face, extra, me),
+            };
             if best_play.is_none() || sc > bs {
                 bs = sc;
                 best_play = Some(i);
@@ -642,9 +759,13 @@ fn fast_turn_action(e: Env, me: PlayerId) -> Action {
         if !plays.is_empty() {
             let mut best = 0usize;
             let mut bs = f64::NEG_INFINITY;
+            let pm = play_model();
             for (i, a) in plays.iter().enumerate() {
                 if let Action::PlayCard { uid, from, face, extra } = a {
-                    let sc = play_score(e, *uid, *from, *face, extra, me);
+                    let sc = match &pm {
+                        Some(m) => learned_play_score(e, m, *uid, *from, *face, extra, me),
+                        None => play_score(e, *uid, *from, *face, extra, me),
+                    };
                     if i == 0 || sc > bs {
                         bs = sc;
                         best = i;

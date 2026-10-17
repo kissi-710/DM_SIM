@@ -155,7 +155,7 @@ export function seedOfRound(base: number, r: number, anti: boolean): number {
 
 /** プレイアウトの L1 の調整値(rl1 の指定に、atkTrade の指定を重ねる) */
 export function rolloutL1(w: RewardWeights): L1Params {
-  return withL1(w.atkTrade === undefined ? w.l1 : { ...w.l1, atkTrade: w.atkTrade });
+  return withL1({ ...w.l1, ...(w.atkTrade === undefined ? {} : { atkTrade: w.atkTrade }), ...(w.playModel ? { playModel: w.playModel } : {}) });
 }
 
 export function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number, w: RewardWeights): number {

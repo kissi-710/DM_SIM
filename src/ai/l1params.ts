@@ -64,6 +64,9 @@ export interface L1Params {
   cardKeep: Record<string, number>;
   /** 召喚・詠唱の点への加算(正なら、先に出したい) */
   cardPlay: Record<string, number>;
+
+  // ── 学習した召喚の方針(ai/l1learn.ts。あれば、召喚・詠唱の手を点数ではなくこの評価で選ぶ。Rust 版にも同じ式がある) ──
+  playModel?: number[];
 }
 
 export const L1_DEFAULT: L1Params = {
