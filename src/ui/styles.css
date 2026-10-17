@@ -1457,33 +1457,26 @@ body.dragging .action-pop {
   }
 }
 /* 手番の色(情報表示。演出が無効でも残す): 自分(観戦は1P)は青、相手(2P)は赤。
-   手番のプレイヤーの色で、盤面の外・ヘッダーを染め、手番の盤面を縁取る。手番でない側は少し暗くする */
+   プレイに関わる盤面(.field)だけを、手番のプレイヤーの色でうっすら染め、手番の盤面を縁取る。
+   ヘッダー・ログ・カード詳細などの欄は染めない。手番でない側の盤面は少しだけ暗くする */
 .game[data-turn='mine'] {
   --turn-color: var(--accent);
 }
 .game[data-turn='theirs'] {
   --turn-color: var(--bad);
 }
-.game[data-turn] {
-  background-color: color-mix(in srgb, var(--turn-color) 17%, var(--bg));
-}
-.game[data-turn] .game-head {
-  background-color: color-mix(in srgb, var(--turn-color) 26%, var(--bg2));
-  border-bottom-color: var(--turn-color);
-}
-.game[data-turn] .status-chip {
-  border-color: var(--turn-color);
-  color: var(--turn-color);
+.game[data-turn] .field {
+  background-color: color-mix(in srgb, var(--turn-color) 7%, transparent);
+  border-radius: 12px;
 }
 .game[data-turn] .side-board.turn-active {
   border-color: var(--turn-color);
-  box-shadow: inset 0 0 0 1px var(--turn-color), inset 0 0 30px color-mix(in srgb, var(--turn-color) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--turn-color) 60%, transparent);
 }
 .game[data-turn] .side-board:not(.turn-active) {
-  filter: brightness(0.82);
+  filter: brightness(0.9);
 }
-.game.fx,
-.game.fx .game-head,
+.game.fx .field,
 .game.fx .side-board {
   transition: background-color calc(0.5s * var(--fx-scale, 1)) ease, border-color calc(0.5s * var(--fx-scale, 1)) ease, box-shadow calc(0.5s * var(--fx-scale, 1)) ease, filter calc(0.5s * var(--fx-scale, 1)) ease;
 }

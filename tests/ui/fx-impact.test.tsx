@@ -106,11 +106,13 @@ describe('FxLayer(重みごとの描画)', () => {
 
 describe('手番の色(styles.css)', () => {
   const css = readFileSync('src/ui/styles.css', 'utf8');
-  it('自分は青(accent)、相手は赤(bad)。背景・ヘッダー・手番の盤面に使い、手番でない側は暗くする', () => {
+  it('自分は青(accent)、相手は赤(bad)。盤面(.field)と手番の盤面だけに使い、ヘッダー・ログ・詳細欄は染めない', () => {
     expect(css).toMatch(/\.game\[data-turn='mine'\]\s*\{[^}]*--turn-color:\s*var\(--accent\)/);
     expect(css).toMatch(/\.game\[data-turn='theirs'\]\s*\{[^}]*--turn-color:\s*var\(--bad\)/);
-    expect(css).toMatch(/\.game\[data-turn\]\s*\{[^}]*background-color:[^;]*var\(--turn-color\)/);
-    expect(css).toMatch(/\.game\[data-turn\] \.game-head\s*\{[^}]*var\(--turn-color\)/);
+    expect(css).toMatch(/\.game\[data-turn\] \.field\s*\{[^}]*background-color:[^;]*var\(--turn-color\)/);
+    // 染めない場所(画面全体の背景・ヘッダー・状態表示・右の欄)
+    expect(css).not.toMatch(/\.game\[data-turn\]\s*\{[^}]*background/);
+    expect(css).not.toMatch(/\.game\[data-turn\] \.(game-head|status-chip|rail)/);
     expect(css).toMatch(/\.game\[data-turn\] \.side-board\.turn-active\s*\{[^}]*border-color:\s*var\(--turn-color\)/);
     expect(css).toMatch(/\.game\[data-turn\] \.side-board:not\(\.turn-active\)\s*\{[^}]*filter:\s*brightness/);
   });
