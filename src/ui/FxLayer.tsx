@@ -55,7 +55,6 @@ export function FxLayer({ cues, token, enabled }: { cues: FxCue[]; token: unknow
       data-fx-variant={c.variant}
       style={{ animationDuration: `${c.ms}ms` }}
     >
-      {tier === 'decisive' && <div className="fx-rays" style={{ animationDuration: `${c.ms}ms` }} />}
       <div className={`fx-cue fx-${c.kind} fx-side-${c.side}${c.reveal ? ' has-reveal' : ''}`} style={{ animationDuration: `${c.ms}ms` }}>
         {r && (
           <div className="fx-reveal" style={{ animationDuration: `${Math.round(c.ms * 0.35)}ms` }}>

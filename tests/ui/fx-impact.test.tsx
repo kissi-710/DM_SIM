@@ -86,21 +86,20 @@ describe('ラスト・シールド', () => {
 
 describe('FxLayer(重みごとの描画)', () => {
   const base: FxCue = { id: 1, kind: 'trigger', title: 'S・トリガー!', sub: 'フェアリー・ライフ', side: 'opp', ms: 5000, variant: 'strigger' };
-  it('決定的な見せ場は、光線・見せ札・一言を出し、重みを属性に持つ', () => {
+  it('決定的な見せ場は、見せ札を出し、光が回る装飾は付けず、重みを属性に持つ', () => {
     const reveal = { name: 'フェアリー・ライフ', civs: ['nature'], cost: '2', type: '呪文', text: 'マナをふやす' };
     const { container } = render(<FxLayer cues={[{ ...base, reveal }]} token={1} enabled />);
     const layer = container.querySelector('.fx-layer')!;
     expect(layer.getAttribute('data-fx-tier')).toBe('decisive');
     expect(layer.getAttribute('data-fx-variant')).toBe('strigger');
-    expect(container.querySelector('.fx-rays')).not.toBeNull();
+    expect(container.querySelector('.fx-rays')).toBeNull(); // 光が回る装飾は、くどいので付けない
     expect(container.querySelector('.fx-reveal-name')!.textContent).toBe('フェアリー・ライフ');
     expect(container.querySelector('.fx-reveal-text')!.textContent).toBe('マナをふやす');
     expect(container.textContent).not.toContain('逆転の一手');
   });
-  it('重要・軽い演出は、光線も見せ札も出さない', () => {
+  it('重要・軽い演出は、見せ札を出さない', () => {
     const { container } = render(<FxLayer cues={[{ id: 2, kind: 'cast', title: '呪文', side: 'opp', ms: 5000 }]} token={1} enabled />);
     expect(container.querySelector('.fx-layer')!.getAttribute('data-fx-tier')).toBe('major');
-    expect(container.querySelector('.fx-rays')).toBeNull();
     expect(container.querySelector('.fx-reveal')).toBeNull();
   });
 });
