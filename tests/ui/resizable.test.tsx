@@ -124,21 +124,31 @@ const setup = (): GameSetup => ({
   strict: true,
 });
 
-describe('GameView: ログは盤面の上に重ねて出す', () => {
-  it('L で、別の欄(列)を増やさず、盤面(.stage)の中にログが重なる。✕ と L で閉じる', async () => {
+describe('GameView: ログは右の欄(rail)の中に出す', () => {
+  it('L で、別の欄(列)も浮かぶパネルも作らず、右の欄の中にログが出る。✕ と L で閉じる', async () => {
     render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
-    expect(document.querySelector('.log-box')).toBeNull();
+    expect(screen.queryByRole('region', { name: '対戦ログ' })).toBeNull();
     await userEvent.keyboard('l');
-    const box = await screen.findByRole('group', { name: '対戦ログ' });
-    expect(document.querySelector('.stage')!.contains(box)).toBe(true);
-    expect(document.querySelector('.side')).toBeNull();
+    const log = await screen.findByRole('region', { name: '対戦ログ' });
+    expect(document.querySelector('.rail')!.contains(log)).toBe(true);
+    expect(document.querySelector('.side, .log-box')).toBeNull();
     expect(document.querySelector('.game')!.className).not.toMatch(/side-closed/);
-    await userEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    await waitFor(() => expect(document.querySelector('.log-box')).toBeNull());
+    await userEvent.click(screen.getByRole('button', { name: 'ログを閉じる' }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: '対戦ログ' })).toBeNull());
     await userEvent.keyboard('l');
-    await screen.findByRole('group', { name: '対戦ログ' });
+    await screen.findByRole('region', { name: '対戦ログ' });
     await userEvent.keyboard('l');
-    await waitFor(() => expect(document.querySelector('.log-box')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('region', { name: '対戦ログ' })).toBeNull());
+  });
+  it('観戦(CPU 同士)では、ログが主な情報なので、最初から右の欄に出ている', () => {
+    const s = setup();
+    s.seats = [
+      { kind: 'cpu', agent: { kind: 'random' } },
+      { kind: 'cpu', agent: { kind: 'random' } },
+    ];
+    render(<GameView setup={s} onExit={() => {}} onRematch={() => {}} />);
+    const log = screen.getByRole('region', { name: '対戦ログ' });
+    expect(document.querySelector('.rail')!.contains(log)).toBe(true);
   });
   it('右の欄との境界(仕切り)があり、右の欄の幅は CSS 変数で持つ', () => {
     render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
