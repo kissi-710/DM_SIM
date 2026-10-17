@@ -2,6 +2,7 @@
 import type { ActDef, Cond, Expr, Selector, StepDef } from './ast';
 import { type CC, evalCond, evalExpr, selectCards, varUids } from './cond';
 import { charsOf, infoOf } from './derive';
+import type { Instr } from './registry';
 import {
   addShieldFromDeck,
   ask,
@@ -56,12 +57,36 @@ export function runEffect(c: Ctx, f: EffectFrame): boolean {
       f.pc++;
       return false;
     case 'may': {
+      const plan = planMay(c, f, prog, f.pc);
+      const q = ins.prompt ?? '効果を使いますか?';
+      if (plan.kind === 'skip') {
+        // 使っても何も起きない: 聞かずに使わない側へ進む(本体が空にするはずだった変数は、空にしておく)
+        for (const v of plan.empties) f.vars[v] = [];
+        f.pc = ins.no;
+        return false;
+      }
+      if (plan.kind === 'pick') {
+        // 「使うか」と「どれを対象にするか」を1問に: 選べば使う、選ばなければ使わない
+        const ans = ask<number[]>(c, {
+          player: f.controller,
+          why: 'may',
+          input: { shape: 'pick', candidates: plan.candidates, min: 0, max: plan.max },
+          source: f.source,
+          prompt: `${sourceName(c, f)}: ${q}(使うなら対象を選ぶ。選ばなければ使わない)`,
+        });
+        if (ans.length === 0) f.pc = ins.no;
+        else {
+          bindPicked(c, f, plan.step, ans, f.controller);
+          f.pc += 2; // may と、それに続く select を済ませた
+        }
+        return false;
+      }
       const ans = ask<boolean>(c, {
         player: f.controller,
         why: 'may',
         input: { shape: 'yesno' },
         source: f.source,
-        prompt: `${sourceName(c, f)}: ${ins.prompt ?? '効果を使いますか?'}`,
+        prompt: `${sourceName(c, f)}: ${q}`,
       });
       f.pc = ans ? f.pc + 1 : ins.no;
       return false;
@@ -153,18 +178,107 @@ export function runEffect(c: Ctx, f: EffectFrame): boolean {
 
 // ───────────────────────── select ─────────────────────────
 
-function execSelect(c: Ctx, f: EffectFrame, cc: CC, st: Extract<StepDef, { op: 'select' }>): void {
-  let cand: number[];
+type SelectStep = Extract<StepDef, { op: 'select' }>;
+
+/** select の候補・選ぶ枚数(上限・下限は候補の数に丸めた後)・選ぶ人 */
+function selectInfo(cc: CC, f: EffectFrame, st: SelectStep): { cand: number[]; min: number; max: number; chooser: PlayerId } {
   const from = st.from;
-  if (from && 'var' in from && !('zone' in from)) cand = varUids(cc, from.var);
-  else cand = selectCards(cc, from as Selector);
+  const cand = from && 'var' in from && !('zone' in from) ? varUids(cc, from.var) : selectCards(cc, from as Selector);
   const chooser: PlayerId =
     st.who === 'opponent' ? opponentOf(f.controller) : st.who === 'iter' ? (f.vars.$iter ?? f.controller) : f.controller;
   const min0 = st.min === undefined ? 1 : evalExpr(cc, st.min);
   const max0 = st.max === undefined ? 1 : evalExpr(cc, st.max);
-  const n = cand.length;
-  const max = Math.min(max0, n);
+  const max = Math.min(max0, cand.length);
   const min = Math.min(min0, max);
+  return { cand, min, max, chooser };
+}
+
+/** 選んだカードを変数に束ね、ログ用の chosen を出す(select と、may に統合した選択で共通) */
+function bindPicked(c: Ctx, f: EffectFrame, st: SelectStep, picked: number[], chooser: PlayerId): void {
+  const picks = picked.map((u) => ref(c, u));
+  f.vars[st.as] = st.append ? [...((f.vars[st.as] as ObjRef[] | undefined) ?? []), ...picks] : picks;
+  if (picked.length) {
+    // 選んだものの公開(相手が選んだものなど)は、ログのためにイベントにする
+    emit(c, 'chosen', { cards: picked, by: chooser, source: f.source.uid });
+  }
+}
+
+/** 参照として数える項目名。ここに入る数値だけが、カードの uid・山の pid として扱われる */
+const REF_KEYS = new Set(['uid', 'pid', 'card', 'cards', 'base', 'source', 'attacker', 'attackerCard', 'blocker']);
+
+function collectRefs(v: unknown, flag: boolean, out: Set<number>): void {
+  if (typeof v === 'number') {
+    if (flag) out.add(v);
+  } else if (Array.isArray(v)) {
+    for (const x of v) collectRefs(x, flag, out);
+  } else if (v && typeof v === 'object') {
+    for (const [k, x] of Object.entries(v)) collectRefs(x, REF_KEYS.has(k), out);
+  }
+}
+
+/** 変数の値(配列は uid の列として、オブジェクトは中の参照として数える) */
+function collectVarRefs(vars: Record<string, unknown>, out: Set<number>): void {
+  for (const x of Object.values(vars)) collectRefs(x, Array.isArray(x), out);
+}
+
+/**
+ * 進行中の処理(スタック・待機中の誘発・今ターンの出来事・継続効果など)が、名指しで覚えているカードと山。
+ * 同名のカードのうちこれに載っているものは、他の同名と同じ扱いにできない。
+ */
+function referencedIds(c: Ctx, f: EffectFrame): Set<number> {
+  const s = c.s;
+  const out = new Set<number>();
+  const frameRefs = (src: ObjRef, lki: unknown, vars: Record<string, unknown>, trigger: unknown) => {
+    out.add(src.uid);
+    collectRefs(lki, false, out);
+    collectVarRefs(vars, out);
+    collectRefs(trigger, false, out);
+  };
+  frameRefs(f.source, f.lki, f.vars, f.trigger);
+  for (const fr of s.cont) {
+    if (fr.kind === 'effect') frameRefs(fr.source, fr.lki, fr.vars, fr.trigger);
+    else collectVarRefs(fr.vars, out);
+  }
+  for (const e of s.pool) frameRefs(e.source, e.lki, {}, e.event);
+  for (const ev of s.turnLog) collectRefs(ev, false, out);
+  for (const e of s.effects) if (e.until.kind === 'source') out.add(e.until.uid);
+  for (const u of s.breaking) out.add(u);
+  return out;
+}
+
+/**
+ * 候補のどれを選んでも、その後の結果が同じか(同じ持ち主・同じゾーン・同名・同じ状態)。
+ * 同じなら、どれを選ぶかは聞かない(docs/effects.md 11.6)。不確かな時は false(聞く側に倒す)。
+ * 山札(順序が結果を変える)・見えないカード('?')・処理の中で名指しされているカードは同じと見なさない。
+ */
+export function interchangeable(c: Ctx, f: EffectFrame, cand: number[]): boolean {
+  if (cand.length < 2) return false;
+  const s = c.s;
+  const a = s.cards[cand[0]];
+  if (a.defId === '?' || a.zone === 'deck' || a.zone === 'limbo') return false;
+  for (const u of cand) {
+    const x = s.cards[u];
+    if (x.defId !== a.defId || x.zone !== a.zone || x.owner !== a.owner || x.face !== a.face) return false;
+    if (x.tapped !== a.tapped || x.ex !== a.ex || (x.ex && x.exPid !== a.exPid)) return false;
+  }
+  const refs = referencedIds(c, f);
+  if (cand.some((u) => refs.has(u))) return false;
+  if (a.zone === 'battle') {
+    const first = permByPid(s, a.pid)?.perm;
+    if (!first) return false;
+    for (const u of cand) {
+      const pm = permByPid(s, s.cards[u].pid)?.perm;
+      if (!pm || pm.cards.length !== 1 || pm.cards[0] !== u) return false;
+      if (pm.tapped !== first.tapped || pm.sick !== first.sick || pm.enteredTurn !== first.enteredTurn) return false;
+      if (refs.has(pm.pid) || s.effects.some((e) => e.pid === pm.pid)) return false;
+    }
+  }
+  return true;
+}
+
+function execSelect(c: Ctx, f: EffectFrame, cc: CC, st: SelectStep): void {
+  const { cand, min, max, chooser } = selectInfo(cc, f, st);
+  const n = cand.length;
   let picked: number[];
   if (max === 0) picked = [];
   else if (st.random) {
@@ -173,6 +287,9 @@ function execSelect(c: Ctx, f: EffectFrame, cc: CC, st: Extract<StepDef, { op: '
     while (picked.length < max && pool.length) picked.push(pool.splice(rngInt(c.s, pool.length), 1)[0]);
   } else if (min === n) {
     picked = cand.slice();
+  } else if (min === max && interchangeable(c, f, cand)) {
+    // 何枚選ぶかが決まっていて、どれを選んでも同じ: 聞かずに先頭から
+    picked = cand.slice(0, min);
   } else {
     const ans = ask<number[]>(c, {
       player: chooser,
@@ -183,12 +300,92 @@ function execSelect(c: Ctx, f: EffectFrame, cc: CC, st: Extract<StepDef, { op: '
     });
     picked = ans;
   }
-  const picks = picked.map((u) => ref(c, u));
-  f.vars[st.as] = st.append ? [...((f.vars[st.as] as ObjRef[] | undefined) ?? []), ...picks] : picks;
-  if (picked.length) {
-    // 選んだものの公開(相手が選んだものなど)は、ログのためにイベントにする
-    emit(c, 'chosen', { cards: picked, by: chooser, source: f.source.uid });
+  bindPicked(c, f, st, picked, chooser);
+}
+
+// ───────────────────────── 任意効果(may)の聞き方 ─────────────────────────
+
+/**
+ * 任意効果の聞き方(payChoice と同じ流儀: 状態だけで決まる関数にして、テストで固定する)。
+ * - skip: 使っても何も起きない。聞かずに「使わない」へ進む。empties は、本体が空にするはずだった変数。
+ * - pick: 本体の最初が「自分が1〜n 枚選ぶ」で、候補がある。「使うか」と「どれか」を1問(0枚 = 使わない)にまとめる。
+ * - ask: 従来どおり「使いますか?」を聞く。
+ */
+export type MayPlan =
+  | { kind: 'skip'; empties: string[] }
+  | { kind: 'pick'; step: SelectStep; candidates: number[]; max: number }
+  | { kind: 'ask' };
+
+/** 対象が空だと何も起きない原始操作(sel を取るもの) */
+const INERT_ON_EMPTY = new Set(['move', 'tap', 'untap', 'addEffect', 'put', 'summon', 'castFree']);
+
+/**
+ * may の本体(prog[from] 〜 prog[end))を実行しても、状態が何も変わらないか。
+ * 変わらないと言えるのは、対象を選ぶ(候補が空)・空の対象に操作する・空かで分岐する、だけの時。
+ * 分からない命令が出たら null(= 聞く)。変わらない時は、本体が空にする変数の名前を返す。
+ */
+function inertBody(cc: CC, f: EffectFrame, prog: Instr[], from: number, end: number): string[] | null {
+  const empties = new Set<string>();
+  const isEmpty = (name: string) => empties.has(name) || varUids(cc, name).length === 0;
+  let pc = from;
+  while (pc < end) {
+    const ins = prog[pc];
+    switch (ins.o) {
+      case 'select': {
+        const st = ins.step;
+        if (selectInfo(cc, f, st).cand.length > 0) return null;
+        if (!st.append || isEmpty(st.as)) empties.add(st.as);
+        pc++;
+        break;
+      }
+      case 'act': {
+        const key = Object.keys(ins.act)[0];
+        if (!INERT_ON_EMPTY.has(key)) return null;
+        const a: any = (ins.act as any)[key];
+        const sel: string | Selector = a.sel;
+        const none = typeof sel === 'string' ? isEmpty(sel) : selectCards(cc, sel).length === 0;
+        if (!none) return null;
+        if (a.as && (key === 'move' || key === 'put' || key === 'summon')) empties.add(a.as);
+        pc++;
+        break;
+      }
+      case 'jf': {
+        const cond: any = ins.cond;
+        const v: unknown = cond && typeof cond === 'object' && Object.keys(cond).length === 1 ? cond.nonEmpty : undefined;
+        if (typeof v !== 'string') return null;
+        // 空なら条件は成り立たない(evalCond の nonEmpty と同じく、世代は見ない)
+        if (!(empties.has(v) || varUids(cc, v, { ignoreEp: true }).length === 0)) return null;
+        pc = ins.to;
+        break;
+      }
+      case 'jmp':
+        if (ins.to <= pc) return null;
+        pc = ins.to;
+        break;
+      default:
+        return null;
+    }
   }
+  return [...empties];
+}
+
+export function planMay(c: Ctx, f: EffectFrame, prog: Instr[], pc: number): MayPlan {
+  const ins = prog[pc];
+  if (!ins || ins.o !== 'may') return { kind: 'ask' };
+  const cc = ccOfFrame(c, f);
+  const empties = inertBody(cc, f, prog, pc + 1, ins.no);
+  if (empties) return { kind: 'skip', empties };
+  const nx = prog[pc + 1];
+  if (nx && nx.o === 'select' && pc + 1 < ins.no && !nx.step.random) {
+    const info = selectInfo(cc, f, nx.step);
+    // 「ちょうど1枚(1〜n 枚)選ぶ」で、選ぶのは自分。0枚を選べる select や、他人が選ぶものは統合しない
+    if (info.chooser === f.controller && info.cand.length > 0 && info.min === 1) {
+      // 1枚だけ選ぶ時、同じものしか無ければ代表の1枚だけを示す(「このカードを使いますか?」)
+      const candidates = info.max === 1 && interchangeable(c, f, info.cand) ? [info.cand[0]] : info.cand;
+      return { kind: 'pick', step: nx.step, candidates, max: info.max };
+    }
+  }
+  return { kind: 'ask' };
 }
 
 // ───────────────────────── 原始操作 ─────────────────────────

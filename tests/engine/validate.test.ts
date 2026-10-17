@@ -298,6 +298,14 @@ describe('checkDeck', () => {
     expect(checkDeck(CARD_DB, [...ok.slice(1), 'dm23bd1-014', 'dm23bd1-014'].slice(0, 40).map((x, i) => (i < 6 ? 'dm23bd1-014' : x)), true).errors.join()).toContain('4枚まで');
     expect(checkDeck(CARD_DB, [...ok.slice(1), 'nope'], true).errors.join()).toContain('未知のカードID');
   });
+  it("'constructor' や 'toString' などのプロトタイプのキー・内部用の '?' は、カードIDとして通さない(通すと、対戦が途中で例外になる)", () => {
+    const ok = deckCards('maruru');
+    for (const bad of ['constructor', 'toString', '__proto__', 'hasOwnProperty', '?']) {
+      const r = checkDeck(CARD_DB, [...ok.slice(1), bad], true);
+      expect(r.ok, bad).toBe(false);
+      expect(r.errors.join(), bad).toContain('未知のカードID');
+    }
+  });
   it('ダミーは同名4枚の制限に含まない(調査用)', () => {
     expect(checkDeck(CARD_DB, Array(40).fill('dummy'), true).ok).toBe(true);
   });

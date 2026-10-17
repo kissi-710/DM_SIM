@@ -2,7 +2,7 @@
 // 隠れたカードの defId は '?' に置き換える。開示の処理はこの関数だけに閉じ込める。
 import type { Registry } from './registry';
 import { cloneState } from './state';
-import type { GameState, PlayerId } from './types';
+import type { Ev, GameState, PlayerId } from './types';
 
 export type InfoPreset = 'fair' | 'partial' | 'hypothesis' | 'full';
 
@@ -109,12 +109,22 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
       v.cards[u].defId = state.cards[u].defId;
     }
   }
-  // イベントに残る最後の情報(lki)から、隠れたカードが漏れないようにする
-  v.turnLog = v.turnLog.map((e) => {
-    if (!('lki' in e)) return e;
+  // イベントに残る最後の情報(lki)・誘発した能力の持ち主(ability.defId)から、隠れたカードが漏れないようにする。
+  // 入れ子のイベント(abilityTriggered の cause)にも lki があるので、再帰的に洗う。イベントは共有されるので、書き換えずに作り直す
+  const hidden = (uid: unknown) => typeof uid === 'number' && v.cards[uid]?.defId === '?';
+  const scrub = (e: Ev): Ev => {
     const { lki: _lki, ...rest } = e;
-    return rest as typeof e;
-  });
+    const out: Ev = rest;
+    if (out.cause && typeof out.cause === 'object') out.cause = scrub(out.cause as Ev);
+    if (out.ability && typeof out.ability === 'object' && hidden(out.source)) out.ability = { ...(out.ability as object), defId: '?' };
+    return out;
+  };
+  v.turnLog = v.turnLog.map(scrub);
+  // 待機プール: 見えない持ち主(手札など)の、使用を宣言していない「してもよい」の能力は、相手には伏せる(手札に何があるかが漏れる)。
+  // 宣言済みのもの・S・トリガー・G・ストライクは、公開されている情報なので残す
+  v.pool = v.pool
+    .filter((e) => !(e.kind === 'ability' && !e.declared && hidden(e.source.uid)))
+    .map((e) => (e.event ? { ...e, event: scrub(e.event) } : e));
   v.rng = 1;
   if (!policy.knowOpponentDecklist) {
     v.deckIds = player === 0 ? [v.deckIds[0], []] : [[], v.deckIds[1]];

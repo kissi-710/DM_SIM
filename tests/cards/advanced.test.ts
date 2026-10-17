@@ -236,7 +236,7 @@ describe('A12 魔誕の斬将オルゲイト', () => {
     expect(sim.tappedMana(0)).toBe(3);
     // 出た時: 任意 → 相手のクリーチャーを手札に戻す(ジャストダイバーと同時に誘発するので順序を選ぶ)
     sim.order('手札に戻す');
-    sim.yes();
+    sim.use('ティンパニ=シンバリー');
     expect(sim.has(1, 'hand', 'ティンパニ=シンバリー')).toBe(true);
     const pm = sim.s.players[0].battle.filter((p) => p.tapped).length;
     expect(pm).toBe(2);
@@ -255,7 +255,7 @@ describe('A12 魔誕の斬将オルゲイト', () => {
     });
     sim.play('魔誕の斬将オルゲイト');
     sim.order('手札に戻す');
-    sim.no();
+    sim.decline();
     expect(sim.s.effects.some((e) => e.mod.kind === 'cannotBeChosen')).toBe(true);
     sim.endTurn();
     // 相手のターン: タップされたオルゲイトでも攻撃対象にできない
@@ -336,9 +336,9 @@ describe('A14 逆転の剣スカイソード', () => {
       p1: { battle: ['ティンパニ=シンバリー'] },
     });
     sim.play('逆転の剣スカイソード');
-    sim.yes(); // 相手をマナゾーンへ
+    sim.use('ティンパニ=シンバリー'); // 相手をマナゾーンへ(使うかと対象を1問で)
     expect(sim.has(1, 'mana', 'ティンパニ=シンバリー')).toBe(true);
-    sim.yes(); // マナから出す
+    sim.use('ヨビニオン・マルル'); // マナから出す
     expect(sim.has(0, 'battle', 'ヨビニオン・マルル')).toBe(true);
   });
   it('マナゾーンの枚数より小さいコストのクリーチャーだけが対象', () => {
@@ -346,8 +346,8 @@ describe('A14 逆転の剣スカイソード', () => {
       p0: { hand: ['逆転の剣スカイソード'], mana: [...mana(10), '終末の監視者 ジ・ウォッチ'] },
     });
     sim.play('逆転の剣スカイソード');
-    sim.no();
-    sim.yes();
+    // 相手のクリーチャーがいなければ、「マナゾーンに置きますか?」は聞かれない
+    sim.use('終末の監視者 ジ・ウォッチ');
     // マナ11枚: コスト10(ジ・ウォッチ)は 10 < 11 で対象
     expect(sim.has(0, 'battle', '終末の監視者 ジ・ウォッチ')).toBe(true);
   });
@@ -602,7 +602,7 @@ describe('B10 龍風混成 ザーディクリカ', () => {
     });
     sim.play('龍風混成 ザーディクリカ');
     expect(sim.pending.why).toBe('may');
-    sim.yes();
+    sim.use(N);
     expect(sim.has(0, 'mana', W)).toBe(true); // ブースト
     const deck = sim.s.players[0].deck;
     expect(sim.s.cards[deck[deck.length - 1]].defId).toBe('dmrp01-093'); // 山札の下
@@ -613,7 +613,7 @@ describe('B10 龍風混成 ザーディクリカ', () => {
       p0: { hand: ['龍風混成 ザーディクリカ'], mana: [L, W, F, N, N, N, N], grave: [N], deck: [W, 'ダミー'] },
     });
     sim.play('龍風混成 ザーディクリカ');
-    sim.yes();
+    sim.use(N);
     expect(sim.has(0, 'mana', W)).toBe(true);
   });
   it('ターン終了時、そのターンに呪文を唱えていれば、パワー5500以下を破壊し、カードを引いてもよい', () => {

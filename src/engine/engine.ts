@@ -38,8 +38,11 @@ export function checkDeck(db: CardDB | Registry, deck: string[], strict = true):
   const reg = registryOf(db);
   const errors: string[] = [];
   const count = new Map<string, number>();
+  // defs は普通のオブジェクトなので、'constructor' や 'toString' などのプロトタイプのキーを、カードIDとして通さない。
+  // '?'(見えないカード)は内部用で、デッキには入れられない
+  const known = (id: string) => id !== '?' && Object.hasOwn(reg.defs, id);
   for (const id of deck) {
-    if (!reg.defs[id]) errors.push(`未知のカードID: ${id}`);
+    if (!known(id)) errors.push(`未知のカードID: ${id}`);
     count.set(id, (count.get(id) ?? 0) + 1);
   }
   if (strict) {

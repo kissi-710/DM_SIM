@@ -200,6 +200,19 @@ export class Sim {
     expect(this.pending.input?.shape).toBe('yesno');
     return this.answer(false);
   }
+  /**
+   * 任意効果を使う。「使いますか?」(はい/いいえ)でも、対象の選択を1問にまとめた質問(0枚 = 使わない)でも使える。
+   * 後者は、名前を与えればそのカード、なければ先頭の候補を選ぶ。
+   */
+  use(...names: string[]): this {
+    const inp = this.pending.input;
+    if (inp?.shape === 'pick') return names.length ? this.pick(...names) : this.answer(inp.candidates.slice(0, 1));
+    return this.yes();
+  }
+  /** 任意効果を使わない(はい/いいえの「いいえ」でも、対象を選ばない 0枚 でも) */
+  decline(): this {
+    return this.pending.input?.shape === 'pick' ? this.answer([]) : this.no();
+  }
   /** pick に、名前で答える(同名が複数あるときは同じ名前を繰り返す。候補のうち先頭から割り当てる) */
   pick(...names: string[]): this {
     const inp = this.pending.input;

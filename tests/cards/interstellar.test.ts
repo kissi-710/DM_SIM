@@ -22,6 +22,7 @@ function settle(sim: Sim, o: { first?: string[]; yes?: boolean; option?: number 
       const want = (o.first ?? []).map((k) => labels.findIndex((l) => l.includes(k))).find((i) => i >= 0);
       sim.answer(inp.candidates[want ?? 0]);
     } else if (inp.shape === 'yesno') sim.answer(o.yes ?? true);
+    else if (inp.shape === 'pick' && sim.pending.why === 'may') sim.answer(o.yes ?? true ? inp.candidates.slice(0, 1) : []);
     else if (inp.shape === 'option') sim.answer([o.option ?? 0]);
     else sim.drain(1);
   }
@@ -72,7 +73,7 @@ describe('偽りの月 インターステラ(超次元ゾーン)', () => {
     });
     sim.attack('偽りの月 インターステラ', 'player');
     expect(sim.pending.why).toBe('may');
-    sim.yes();
+    sim.use();
     settle(sim, { yes: false });
     expect(sim.count(1, 'grave')).toBe(2); // 相手の手札2枚が捨てられた(その後、割られたシールドが手札に入る)
     expect(sim.count(0, 'hyper')).toBe(0);
@@ -116,7 +117,7 @@ describe('覚醒連結 XXDDZ', () => {
     });
     sim.attack('覚醒連結 XXDDZ', 'player');
     expect(sim.pending.why).toBe('may');
-    sim.yes();
+    sim.use();
     expect(sim.count(0, 'shield')).toBe(3); // EXライフのシールドが墓地へ(通常シールド3枚は残る)
     expect(sim.s.players[0].shield.every((u) => !sim.s.cards[u].ex)).toBe(true);
     expect(sim.count(0, 'grave')).toBe(1);
@@ -128,7 +129,7 @@ describe('覚醒連結 XXDDZ', () => {
   it('攻撃する時: 断れば、EXライフのシールドも残り、呪文も封じない', () => {
     const sim = new Sim({ p0: { battle: [{ c: '覚醒連結 XXDDZ', sick: false, ex: true }] }, p1: { hand: [N], shield: 5 } });
     sim.attack('覚醒連結 XXDDZ', 'player');
-    sim.no();
+    sim.decline();
     expect(sim.s.players[0].shield.some((u) => sim.s.cards[u].ex)).toBe(true);
     expect(canCast(mkCtx(sim.s, reg), 1, sim.s.players[1].hand[0], 0)).toBe(true);
   });
@@ -301,7 +302,7 @@ describe('同じ攻撃時に誘発した革命チェンジとインターステ�
     sim.attack('偽りの月 インターステラ', 'player');
     sim.yes(); // 革命チェンジの使用宣言
     sim.order('超次元ゾーンの呪文');
-    sim.yes();
+    sim.use();
     expect(sim.count(0, 'hyper')).toBe(0);
     expect(sim.s.pending?.why).not.toBe('may'); // 革命チェンジの確認を重ねない
     expect(sim.has(0, 'battle', '轟く革命 レッドギラゾーン')).toBe(true);

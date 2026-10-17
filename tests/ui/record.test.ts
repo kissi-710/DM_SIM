@@ -46,6 +46,13 @@ describe('validateRecord', () => {
   it('オブジェクトでないものは断る', () => {
     for (const v of [null, 3, 'x', [], undefined]) expect(validateRecord(v).ok).toBe(false);
   });
+  it("プロトタイプのキー('constructor' など)も、未知のカードIDとして断る", () => {
+    const r = base();
+    r.decks[0] = [...r.decks[0].slice(1), 'constructor'];
+    const c = validateRecord(r);
+    expect(c.ok).toBe(false);
+    if (!c.ok) expect(c.error).toContain('constructor');
+  });
   it('未知のカードIDがあれば、どのデッキかを示して断る', () => {
     const r = base();
     r.decks[1] = [...r.decks[1].slice(1), 'nope-000'];

@@ -106,6 +106,10 @@ for (const [seed, k] of [
 ] as const) {
   games.push(play(DECK_T3, DECK_T2, seed, [k[0], k[1]]));
 }
+// ツインパクト・「マナゾーンに置く」効果を多く入れたデッキ: バトルゾーンからマナゾーンへ移るツインパクトのカードが、
+// タップして置かれること(マナゾーンでは両面の文明で多色。spec 3.4.1 M-1)を、Rust 版と突き合わせる
+const DECK_TWIN = [...rep(4, 'dm23rp1-070'), ...rep(4, 'dm24rp3-025'), ...rep(8, 'dm24ex2-096'), ...rep(4, 'dm24bd4-007'), ...rep(8, 'dmrp01-093'), ...rep(4, 'dmbd01-015'), ...rep(4, 'dm24rp3-S10'), ...rep(4, 'dm23bd1-014')];
+for (const seed of [1, 14, 16]) games.push(play(DECK_TWIN, DECK_TWIN, seed, ['random', 'random']));
 // 差分テスト用の価値関数(重みは決め打ち。全特徴量・手番・一部のカードに非零の値を入れる)
 const TEST_MODEL: ValueModel = {
   v: 1,

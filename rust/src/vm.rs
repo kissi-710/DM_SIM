@@ -5,6 +5,7 @@ use crate::cond::*;
 use crate::ops::*;
 use crate::registry::Instr;
 use crate::types::*;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 fn cc_of<'a>(e: Env<'a>, f: &'a EffectFrame) -> CC<'a> {
@@ -91,8 +92,40 @@ fn run_effect_inner(c: &mut Ctx, f: &mut EffectFrame) -> Res<bool> {
             Ok(false)
         }
         Instr::May { no } => {
-            let ans = ask(c, NeedInput { player: f.controller, why: Why::May, input: Some(InputSpec::YesNo), source: Some(f.source) })?;
-            f.pc = if ans.as_bool() == Some(true) { f.pc + 1 } else { *no };
+            match plan_may(c, f, &prog, f.pc) {
+                MayPlan::Skip(empties) => {
+                    // 使っても何も起きない: 聞かずに使わない側へ(本体が空にするはずだった変数は、空にしておく)
+                    for v in empties {
+                        var_set(&mut f.vars, v, Val::refs(&[]));
+                    }
+                    f.pc = *no;
+                }
+                MayPlan::Pick { candidates, max } => {
+                    // 「使うか」と「どれを対象にするか」を1問に: 選べば使う、選ばなければ使わない
+                    let ans = ask(
+                        c,
+                        NeedInput {
+                            player: f.controller,
+                            why: Why::May,
+                            input: Some(InputSpec::Pick { candidates, min: 0, max: max as i32 }),
+                            source: Some(f.source),
+                        },
+                    )?;
+                    let picked = ans.to_i32s();
+                    if picked.is_empty() {
+                        f.pc = *no;
+                    } else if let Some(Instr::Select(st)) = prog.get(f.pc + 1) {
+                        bind_picked(c, f, st, &picked, f.controller);
+                        f.pc += 2; // may と、それに続く select を済ませた
+                    } else {
+                        return fail("may の後ろに select がありません");
+                    }
+                }
+                MayPlan::Ask => {
+                    let ans = ask(c, NeedInput { player: f.controller, why: Why::May, input: Some(InputSpec::YesNo), source: Some(f.source) })?;
+                    f.pc = if ans.as_bool() == Some(true) { f.pc + 1 } else { *no };
+                }
+            }
             Ok(false)
         }
         Instr::Jmp(to) => {
@@ -220,7 +253,15 @@ fn run_effect_inner(c: &mut Ctx, f: &mut EffectFrame) -> Res<bool> {
 
 // ───────────────────────── select ─────────────────────────
 
-fn exec_select(c: &mut Ctx, f: &mut EffectFrame, st: &SelectStep) -> Res<()> {
+/// select の候補・選ぶ枚数(上限・下限は候補の数に丸めた後)・選ぶ人(src/engine/vm.ts の selectInfo)
+struct SelInfo {
+    cand: Vec<i32>,
+    min: i64,
+    max: i64,
+    chooser: PlayerId,
+}
+
+fn select_info(c: &Ctx, f: &EffectFrame, st: &SelectStep) -> SelInfo {
     let (cand, min0, max0) = {
         let cc = cc_of(c.env(), f);
         let cand = match &st.from {
@@ -236,35 +277,14 @@ fn exec_select(c: &mut Ctx, f: &mut EffectFrame, st: &SelectStep) -> Res<()> {
         Who::Iter => var_get(&f.vars, s::ITER).and_then(|v| v.as_int()).map_or(f.controller, |n| n as u8),
         Who::Controller => f.controller,
     };
-    let n = cand.len() as i64;
-    let max = max0.min(n);
+    let max = max0.min(cand.len() as i64);
     let min = min0.min(max);
-    let picked: Vec<i32>;
-    if max == 0 {
-        picked = vec![];
-    } else if st.random {
-        let mut pool = cand.clone();
-        let mut p = Vec::new();
-        while (p.len() as i64) < max && !pool.is_empty() {
-            let i = c.s.rng_int(pool.len());
-            p.push(pool.remove(i));
-        }
-        picked = p;
-    } else if min == n {
-        picked = cand.clone();
-    } else {
-        let ans = ask(
-            c,
-            NeedInput {
-                player: chooser,
-                why: Why::Select,
-                input: Some(InputSpec::Pick { candidates: cand.clone(), min: min as i32, max: max as i32 }),
-                source: Some(f.source),
-            },
-        )?;
-        picked = ans.to_i32s();
-    }
-    let refs = refs_of(c, &picked);
+    SelInfo { cand, min, max, chooser }
+}
+
+/// 選んだカードを変数に束ね、ログ用の chosen を出す(select と、may に統合した選択で共通)
+fn bind_picked(c: &mut Ctx, f: &mut EffectFrame, st: &SelectStep, picked: &[i32], chooser: PlayerId) {
+    let refs = refs_of(c, picked);
     let val = if st.append {
         let mut items: Vec<Val> = match var_get(&f.vars, st.as_) {
             Some(Val::List(l)) => l.as_ref().clone(),
@@ -281,10 +301,273 @@ fn exec_select(c: &mut Ctx, f: &mut EffectFrame, st: &SelectStep) -> Res<()> {
         emit(
             c,
             s::CHOSEN,
-            vec![(s::CARDS, Val::ints(&picked)), (s::BY, Val::Int(chooser as i64)), (s::SOURCE, Val::Int(f.source.uid as i64))],
+            vec![(s::CARDS, Val::ints(picked)), (s::BY, Val::Int(chooser as i64)), (s::SOURCE, Val::Int(f.source.uid as i64))],
         );
     }
+}
+
+/// 参照として数える項目名。ここに入る数値だけが、カードの uid・山の pid として扱われる
+fn is_ref_key(k: Sym) -> bool {
+    k == s::UID || k == s::PID || k == s::CARD || k == s::CARDS || k == s::BASE || k == s::SOURCE || k == s::ATTACKER || k == s::ATTACKER_CARD || k == s::BLOCKER
+}
+
+fn collect_ev(e: &Ev, out: &mut HashSet<i64>) {
+    for (k, x) in &e.f {
+        collect_refs(x, is_ref_key(*k), out);
+    }
+}
+
+fn collect_refs(v: &Val, flag: bool, out: &mut HashSet<i64>) {
+    match v {
+        Val::Int(n) => {
+            if flag {
+                out.insert(*n);
+            }
+        }
+        Val::List(l) => {
+            for x in l.iter() {
+                collect_refs(x, flag, out);
+            }
+        }
+        Val::Obj(o) => {
+            for (k, x) in o.iter() {
+                collect_refs(x, is_ref_key(*k), out);
+            }
+        }
+        Val::Ev(e) => collect_ev(e, out),
+        Val::Snap(sn) => {
+            out.insert(sn.uid as i64);
+            out.insert(sn.pid as i64);
+        }
+        _ => {}
+    }
+}
+
+/// 変数の値(配列は uid の列として、オブジェクトは中の参照として数える)
+fn collect_var_refs(vars: &Vars, out: &mut HashSet<i64>) {
+    for (_, x) in vars {
+        collect_refs(x, matches!(x, Val::List(_)), out);
+    }
+}
+
+fn frame_refs(src: ObjRef, lki: &Snap, vars: &Vars, trigger: Option<&Ev>, out: &mut HashSet<i64>) {
+    out.insert(src.uid as i64);
+    out.insert(lki.uid as i64);
+    out.insert(lki.pid as i64);
+    collect_var_refs(vars, out);
+    if let Some(e) = trigger {
+        collect_ev(e, out);
+    }
+}
+
+/// 進行中の処理(スタック・待機中の誘発・今ターンの出来事・継続効果など)が、名指しで覚えているカードと山。
+/// 同名のカードのうちこれに載っているものは、他の同名と同じ扱いにできない(src/engine/vm.ts の referencedIds)。
+fn referenced_ids(c: &Ctx, f: &EffectFrame) -> HashSet<i64> {
+    let s = &c.s;
+    let mut out = HashSet::new();
+    frame_refs(f.source, &f.lki, &f.vars, f.trigger.as_deref(), &mut out);
+    for fr in &s.cont {
+        match fr {
+            Frame::Effect(ef) => frame_refs(ef.source, &ef.lki, &ef.vars, ef.trigger.as_deref(), &mut out),
+            Frame::Proc(pf) => collect_var_refs(&pf.vars, &mut out),
+        }
+    }
+    for e in &s.pool {
+        frame_refs(e.source, &e.lki, &Vec::new(), e.event.as_deref(), &mut out);
+    }
+    for ev in &s.turn_log {
+        collect_ev(ev, &mut out);
+    }
+    for e in &s.effects {
+        if let Duration::Source { uid, .. } = e.until {
+            out.insert(uid as i64);
+        }
+    }
+    for &u in &s.breaking {
+        out.insert(u as i64);
+    }
+    out
+}
+
+/// 候補のどれを選んでも、その後の結果が同じか(同じ持ち主・同じゾーン・同名・同じ状態)。
+/// 同じなら、どれを選ぶかは聞かない(docs/effects.md 11.6)。不確かな時は false(聞く側に倒す)。
+/// 山札(順序が結果を変える)・見えないカード('?')・処理の中で名指しされているカードは同じと見なさない。
+pub fn interchangeable(c: &Ctx, f: &EffectFrame, cand: &[i32]) -> bool {
+    if cand.len() < 2 {
+        return false;
+    }
+    let s = &c.s;
+    let a = &s.cards[cand[0] as usize];
+    if Some(a.def) == c.reg.def_index("?") || a.zone == Zone::Deck || a.zone == Zone::Limbo {
+        return false;
+    }
+    for &u in cand {
+        let x = &s.cards[u as usize];
+        if x.def != a.def || x.zone != a.zone || x.owner != a.owner || x.face != a.face {
+            return false;
+        }
+        if x.tapped != a.tapped || x.ex != a.ex || (x.ex && x.ex_pid != a.ex_pid) {
+            return false;
+        }
+    }
+    let refs = referenced_ids(c, f);
+    if cand.iter().any(|&u| refs.contains(&(u as i64))) {
+        return false;
+    }
+    if a.zone == Zone::Battle {
+        let first = match s.perm(a.pid) {
+            Some(p) => p,
+            None => return false,
+        };
+        for &u in cand {
+            let pm = match s.perm(s.cards[u as usize].pid) {
+                Some(p) => p,
+                None => return false,
+            };
+            if pm.cards.len() != 1 || pm.cards[0] != u {
+                return false;
+            }
+            if pm.tapped != first.tapped || pm.sick != first.sick || pm.entered_turn != first.entered_turn {
+                return false;
+            }
+            if refs.contains(&(pm.pid as i64)) || s.effects.iter().any(|e| e.pid == pm.pid) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn exec_select(c: &mut Ctx, f: &mut EffectFrame, st: &SelectStep) -> Res<()> {
+    let SelInfo { cand, min, max, chooser } = select_info(c, f, st);
+    let n = cand.len() as i64;
+    let picked: Vec<i32>;
+    if max == 0 {
+        picked = vec![];
+    } else if st.random {
+        let mut pool = cand.clone();
+        let mut p = Vec::new();
+        while (p.len() as i64) < max && !pool.is_empty() {
+            let i = c.s.rng_int(pool.len());
+            p.push(pool.remove(i));
+        }
+        picked = p;
+    } else if min == n {
+        picked = cand.clone();
+    } else if min == max && interchangeable(c, f, &cand) {
+        // 何枚選ぶかが決まっていて、どれを選んでも同じ: 聞かずに先頭から
+        picked = cand[..min as usize].to_vec();
+    } else {
+        let ans = ask(
+            c,
+            NeedInput {
+                player: chooser,
+                why: Why::Select,
+                input: Some(InputSpec::Pick { candidates: cand.clone(), min: min as i32, max: max as i32 }),
+                source: Some(f.source),
+            },
+        )?;
+        picked = ans.to_i32s();
+    }
+    bind_picked(c, f, st, &picked, chooser);
     Ok(())
+}
+
+// ───────────────────────── 任意効果(may)の聞き方 ─────────────────────────
+
+/// 任意効果の聞き方(src/engine/vm.ts の MayPlan)
+enum MayPlan {
+    /// 使っても何も起きない。聞かずに「使わない」へ。本体が空にするはずだった変数
+    Skip(Vec<Sym>),
+    /// 本体の最初の select と1問にまとめる(0枚 = 使わない)
+    Pick { candidates: Vec<i32>, max: i64 },
+    /// 従来どおり「使いますか?」
+    Ask,
+}
+
+/// 対象が空だと何も起きない原始操作の、対象と(あれば)結果の変数
+fn inert_target(act: &Act) -> Option<(&SelOrVar, Option<Sym>)> {
+    match act {
+        Act::Move { sel, as_, .. } => Some((sel, *as_)),
+        Act::Put { sel, as_ } | Act::Summon { sel, as_ } => Some((sel, *as_)),
+        Act::Tap { sel } | Act::Untap { sel } => Some((sel, None)),
+        Act::AddEffect { sel, .. } | Act::CastFree { sel, .. } => Some((sel, None)),
+        _ => None,
+    }
+}
+
+/// may の本体(prog[from] 〜 prog[end))を実行しても、状態が何も変わらないか(src/engine/vm.ts の inertBody)。
+/// 分からない命令が出たら None(= 聞く)。変わらない時は、本体が空にする変数を返す。
+fn inert_body(c: &Ctx, f: &EffectFrame, prog: &[Instr], from: usize, end: usize) -> Option<Vec<Sym>> {
+    let cc = cc_of(c.env(), f);
+    let mut empties: Vec<Sym> = Vec::new();
+    let mut pc = from;
+    while pc < end {
+        match &prog[pc] {
+            Instr::Select(st) => {
+                if !select_info(c, f, st).cand.is_empty() {
+                    return None;
+                }
+                if (!st.append || empties.contains(&st.as_) || var_uids(&cc, &st.as_.name(), false).is_empty()) && !empties.contains(&st.as_) {
+                    empties.push(st.as_);
+                }
+                pc += 1;
+            }
+            Instr::Act(act) => {
+                let (sel, as_) = inert_target(act)?;
+                let none = match sel {
+                    SelOrVar::Var(name) => empties.contains(&sym(name)) || var_uids(&cc, name, false).is_empty(),
+                    SelOrVar::Sel(sl) => select_cards(&cc, sl).is_empty(),
+                };
+                if !none {
+                    return None;
+                }
+                if let Some(v) = as_ {
+                    if !empties.contains(&v) {
+                        empties.push(v);
+                    }
+                }
+                pc += 1;
+            }
+            Instr::Jf { cond: Cond::NonEmpty(v), to } => {
+                // 空なら条件は成り立たない(eval_cond の NonEmpty と同じく、世代は見ない)
+                if !(empties.contains(&sym(v)) || var_uids(&cc, v, true).is_empty()) {
+                    return None;
+                }
+                pc = *to;
+            }
+            Instr::Jmp(to) => {
+                if *to <= pc {
+                    return None;
+                }
+                pc = *to;
+            }
+            _ => return None,
+        }
+    }
+    Some(empties)
+}
+
+fn plan_may(c: &Ctx, f: &EffectFrame, prog: &[Instr], pc: usize) -> MayPlan {
+    let no = match prog.get(pc) {
+        Some(Instr::May { no }) => *no,
+        _ => return MayPlan::Ask,
+    };
+    if let Some(empties) = inert_body(c, f, prog, pc + 1, no) {
+        return MayPlan::Skip(empties);
+    }
+    if let Some(Instr::Select(st)) = prog.get(pc + 1) {
+        if pc + 1 < no && !st.random {
+            let info = select_info(c, f, st);
+            // 「ちょうど1枚(1〜n 枚)選ぶ」で、選ぶのは自分。0枚を選べる select や、他人が選ぶものは統合しない
+            if info.chooser == f.controller && !info.cand.is_empty() && info.min == 1 {
+                // 1枚だけ選ぶ時、同じものしか無ければ代表の1枚だけを示す
+                let candidates = if info.max == 1 && interchangeable(c, f, &info.cand) { vec![info.cand[0]] } else { info.cand };
+                return MayPlan::Pick { candidates, max: info.max };
+            }
+        }
+    }
+    MayPlan::Ask
 }
 
 // ───────────────────────── 原始操作 ─────────────────────────

@@ -36,12 +36,13 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
       // ジャオウガの身代わりをバトルゾーンのカードだけにした(公式 Q&A 41461)ので、山札切れが 15 → 13 に
       // 手札で誘発する侵略・革命チェンジを、解決の前にまとめて使用宣言するようにした(総合ルール 506.3b)ので、1試合が変わった
       // 侵略が自分自身の攻撃では誘発しなくなった(空振りの質問が消え、ランダムの選択が変わった)
-      winsA: 32,
-      winsB: 28,
+      // 任意効果(使っても何も起きない・「使うか + 対象」の1問・同名は聞かない)で質問が減り、ランダムの選択が変わった
+      winsA: 40,
+      winsB: 20,
       draws: 0,
       // ブロッカーを複数体同時に選べるようにした(507.1a)ので、ランダムの選択が変わった(1試合)
-      avgTurns: 23.45,
-      reasons: { ダイレクトアタック: 45, 山札切れ: 15 },
+      avgTurns: 23.233333333333334,
+      reasons: { ダイレクトアタック: 43, 山札切れ: 17 },
     });
   });
   it('バッチ対戦: ルールベース同士 60試合', () => {
@@ -53,21 +54,22 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
       // 侵略・革命チェンジの使用宣言を解決の前にした(506.3b)・勝ち確定の判定を直した(最後の1体を残す・ブロックされない攻撃)ので、1試合が変わった
       // 侵略が自分自身の攻撃では誘発しなくなったので、1試合が変わった
       // ブロッカーを複数体同時に選べるようにした(507.1a。AI は1体を選ぶ)ので、1試合が変わった
-      winsA: 48,
-      winsB: 12,
+      // 任意効果の質問を整理した(勝敗が1試合変わり、その1試合が山札切れに)
+      winsA: 49,
+      winsB: 11,
       draws: 0,
-      avgTurns: 11.733333333333333,
-      reasons: { ダイレクトアタック: 60 },
+      avgTurns: 11.666666666666666,
+      reasons: { ダイレクトアタック: 59, 山札切れ: 1 },
     });
   });
   // 探索の既定を、根はペア比較・2手目以降は木(ptree。docs/ai-quality-plan.md §6.4)にした時と、
   // 報酬を軌跡平均(traj=1。§8)にした時に更新した固定値
   it('バッチ対戦: MCTS(20反復) 対 ルールベース 6試合', () => {
     expect(match({ kind: 'mcts', iterations: 20, ms: 100000 }, { kind: 'rule' }, 6, 1)).toEqual({
-      winsA: 6,
-      winsB: 0,
+      winsA: 5,
+      winsB: 1,
       draws: 0,
-      avgTurns: 12.833333333333334,
+      avgTurns: 13.666666666666666, // 任意効果の質問を整理した(20反復の6試合なので、1試合が変わっただけ)
       reasons: { ダイレクトアタック: 6 },
     });
   });
@@ -87,12 +89,12 @@ describe('ゴールデン(シード固定の結果が変わらない)', () => {
     // 予算の 2/3 を LDS に、残りを 1 回の全探索に使う(到達不可の確定を速くする。到達 32 / 不明 8 → 31 / 9)
     expect(r.search?.achieved).toBe(31);
     expect(r.search?.unknown).toBe(9);
-    expect(r.search?.avgNodes).toBe(855.15);
+    expect(r.search?.avgNodes).toBe(844.175); // 任意効果の質問を整理した(旧 855.15。到達・不明は同じ)
   });
   it('パターン調査(12試行)', () => {
     const r = runPatterns(reg, { deck: A, first: 0, goal, trials: 12, seed: 1, maxNodes: 3000 }, { granularity: 'set', maxHistoriesPerTrial: 2 });
     // 旧: パターン 6 / 達成 5 / 不明 7
-    expect([r.patterns.length, r.achievedTrials, r.unknownTrials]).toEqual([17, 11, 1]);
-    expect(hash(JSON.stringify(r.patterns.map((x) => [x.key, x.count, x.sampleSeed])))).toBe(2396495186);
+    expect([r.patterns.length, r.achievedTrials, r.unknownTrials]).toEqual([16, 11, 1]); // 任意効果の質問を整理した(旧 17。達成・不明は同じ)
+    expect(hash(JSON.stringify(r.patterns.map((x) => [x.key, x.count, x.sampleSeed])))).toBe(1739197345);
   });
 });
