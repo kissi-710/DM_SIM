@@ -103,12 +103,13 @@ export function parseSpec(text: string): AgentSpec {
       tuning.algo = v;
       continue;
     }
-    if (k === 'iter' || k === 'ms' || k === 'horizon' || k === 'prior' || k === 'c' || k === 'depth' || k.startsWith('w.')) {
+    if (k === 'iter' || k === 'ms' || k === 'horizon' || k === 'chh' || k === 'prior' || k === 'c' || k === 'depth' || k.startsWith('w.')) {
       if (!Number.isFinite(n)) throw new Error(`${k} は数で指定してください(指定値: ${v})`);
     }
     if (k === 'iter') spec.iterations = n;
     else if (k === 'ms') spec.ms = n;
     else if (k === 'horizon') tuning.horizonTurns = n;
+    else if (k === 'chh') tuning.chargeHorizon = n;
     else if (k === 'prior') tuning.priorBonus = n;
     else if (k === 'c') tuning.treeC = n;
     else if (k === 'depth') tuning.treeDepth = n;
@@ -127,6 +128,7 @@ export function specLabel(spec: AgentSpec): string {
   if (spec.ms !== undefined) parts.push(`ms=${spec.ms}`);
   const t = spec.tuning;
   if (t?.horizonTurns !== undefined) parts.push(`horizon=${t.horizonTurns}`);
+  if (t?.chargeHorizon !== undefined) parts.push(`chh=${t.chargeHorizon}`);
   if (t?.priorBonus !== undefined) parts.push(`prior=${t.priorBonus}`);
   if (t?.algo !== undefined) parts.push(`algo=${t.algo}`);
   if (t?.treeC !== undefined) parts.push(`c=${t.treeC}`);

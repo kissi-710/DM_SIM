@@ -45,3 +45,18 @@ describe('spec 文字列の info=', () => {
     expect(() => parseSpec('mcts:info=xx')).toThrow();
   });
 });
+
+describe('spec 文字列の chh= と pm=', () => {
+  it('chh= はマナチャージの先読みターン数になり、ラベルに戻る', () => {
+    const spec = parseSpec('mcts:iter=300,chh=6');
+    expect(spec.tuning?.chargeHorizon).toBe(6);
+    expect(specLabel(spec)).toContain('chh=6');
+  });
+  it('pm= は L1 とプレイアウトの両方に召喚の方針を入れる', () => {
+    const spec = parseSpec('mcts:iter=120,pm=src/ai/models/play-v1.json');
+    expect(spec.l1?.playModel?.length).toBeGreaterThan(100);
+    expect(spec.tuning?.weights?.playModel?.length).toBe(spec.l1?.playModel?.length);
+    expect(specLabel(spec)).toContain('pm=on');
+    expect(() => parseSpec('mcts:pm=')).toThrow();
+  });
+});

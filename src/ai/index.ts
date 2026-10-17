@@ -26,6 +26,8 @@ export interface AgentSpec {
 export interface AiTuning {
   /** プレイアウトを何ターン先で打ち切るか */
   horizonTurns?: number;
+  /** マナチャージの判断だけ、先読みのターン数を変える(どのカードをマナに置くかは、数ターン先で効く)。未指定なら horizonTurns */
+  chargeHorizon?: number;
   /** L1 の手に与える事前の上乗せ */
   priorBonus?: number;
   /** 評価関数の重み(差し替える分だけ) */

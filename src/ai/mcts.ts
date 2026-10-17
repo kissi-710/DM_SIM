@@ -32,6 +32,8 @@ export interface MctsOpts {
   ms?: number;
   /** プレイアウトを何ターン先で打ち切るか */
   horizonTurns?: number;
+  /** マナチャージの判断だけの先読みのターン数(未指定なら horizonTurns) */
+  chargeHorizon?: number;
   /** L1 の手に与える事前の上乗せ(報酬の単位) */
   priorBonus?: number;
   /** 評価関数の重み(差し替える分だけ指定) */
@@ -426,7 +428,7 @@ export function planSearch(
   let baseIdx = legal.findIndex((a) => JSON.stringify(a) === JSON.stringify(baseAct));
   if (baseIdx < 0) baseIdx = 0;
   return {
-    env: { view, legal, me: view.pending!.player, policy, candidateDecks: o.candidateDecks, horizon: o.horizonTurns ?? 3, weights: o.weights, tree: o.tree },
+    env: { view, legal, me: view.pending!.player, policy, candidateDecks: o.candidateDecks, horizon: legal.some((a) => a.type === 'CHARGE_MANA') ? (o.chargeHorizon ?? o.horizonTurns ?? 3) : (o.horizonTurns ?? 3), weights: o.weights, tree: o.tree },
     baseIdx,
     prior: o.priorBonus ?? 0.005,
     maxIt: timeDriven ? HARD_MAX_ITERATIONS : Math.max(iterations!, n),
