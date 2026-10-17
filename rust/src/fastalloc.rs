@@ -42,7 +42,13 @@ fn class_of(size: usize) -> (bool, usize, usize) {
         while (1usize << shift) < size {
             shift += 1;
         }
-        (false, shift - LARGE_MIN_SHIFT, 1usize << shift)
+        let ci = shift - LARGE_MIN_SHIFT;
+        if ci >= N_LARGE {
+            // 最大のクラス(4M)を超える確保。クラスには入れず、16 の倍数に切り上げた大きさで bump から切り出す
+            (false, ci, (size + 15) & !15)
+        } else {
+            (false, ci, 1usize << shift)
+        }
     }
 }
 
@@ -71,13 +77,16 @@ unsafe impl GlobalAlloc for FastAlloc {
         // 16 バイトを超える配置は、サイズを揃えて確保する(クラスの先頭が 16 の倍数なので、align ≤ 16 は満たす)
         let size = if align > SMALL_STEP { core::cmp::max(l.size(), align) } else { l.size() };
         let (small, ci, bytes) = class_of(size);
-        let head = if small { &mut st.small[ci] } else { match st.large.get_mut(ci) { Some(h) => h, None => return core::ptr::null_mut() } };
+        // 最大のクラスを超える確保は、空きリストを持たない(bump から切り出し、解放しても再利用しない)
+        let huge = !small && ci >= N_LARGE;
+        let mut dummy = 0usize;
+        let head = if small { &mut st.small[ci] } else { match st.large.get_mut(ci) { Some(h) => h, None => &mut dummy } };
         if *head != 0 {
             let p = *head;
             *head = *(p as *const usize);
             return p as *mut u8;
         }
-        if align > SMALL_STEP {
+        if align > SMALL_STEP || huge {
             // まれな配置: bump から切り出す(再利用しない)
             let mut p = (st.bump + align - 1) & !(align - 1);
             if p + bytes > st.end {
