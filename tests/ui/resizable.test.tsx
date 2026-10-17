@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { deckCards } from '../../src/cards';
-import { clampBox, dragBox, railWidthFor, RAIL_MAX, RAIL_MIN, ResizablePanel, Splitter } from '../../src/ui/Resizable';
+import { clampBox, dragBox, FIELD_MAX, railWidthFor, RAIL_MAX, RAIL_MIN, ResizablePanel, Splitter } from '../../src/ui/Resizable';
 import { GameView } from '../../src/ui/GameView';
 import type { GameSetup } from '../../src/ui/useGame';
 import { createRef } from 'react';
@@ -44,21 +44,26 @@ describe('dragBox / clampBox', () => {
 });
 
 describe('railWidthFor', () => {
-  it('中央寄せの間は、仕切りが指に付いてくる幅になる(仕切りの中心 = (stage + field - rail) / 2)', () => {
-    const stageW = 1600;
-    const f = 820;
+  it('盤面が上限に達していない間は、仕切りの右がすべて右の欄(仕切りがポインタに付いてくる)', () => {
+    // stage 1000: 仕切りの中心が 700 なら、右の欄は 1000 - 700 - 5
+    expect(railWidthFor(1000, 700)).toBe(295);
+    expect(railWidthFor(1920, 1500)).toBe(415);
+  });
+  it('盤面が上限(FIELD_MAX)を超える広い画面では、余白を左右に分けるので、仕切りの中心 = (stage + FIELD_MAX - 右の欄) / 2', () => {
+    const stageW = 3600;
     for (const r of [260, 300, 420]) {
-      const x = (stageW + f - r) / 2;
-      expect(railWidthFor(stageW, f, x)).toBe(r);
+      const x = (stageW + FIELD_MAX - r) / 2;
+      expect(railWidthFor(stageW, x)).toBe(r);
     }
   });
-  it('狭くて field が収まらない時は、左端に寄せて field を縮める向きに逆算する', () => {
-    // stage 1000、field 820 のまま 右の欄 260 だと 1090 で収まらない → 左端から field = x - 5、rail = stage - x - 5
-    expect(railWidthFor(1000, 820, 700)).toBe(295);
+  it('2つの場合の境目でも連続する', () => {
+    const stageW = 3000;
+    const x = FIELD_MAX + 5;
+    expect(railWidthFor(stageW, x)).toBe(railWidthFor(stageW, x + 0.0001));
   });
   it('下限・上限に収める', () => {
-    expect(railWidthFor(1600, 820, 1500)).toBe(RAIL_MIN);
-    expect(railWidthFor(1600, 820, 100)).toBe(RAIL_MAX);
+    expect(railWidthFor(1600, 1500)).toBe(RAIL_MIN);
+    expect(railWidthFor(1600, 100)).toBe(RAIL_MAX);
   });
 });
 
@@ -67,12 +72,11 @@ describe('Splitter', () => {
     let w = 300;
     const onChange = (n: number) => (w = n);
     const stageRef = createRef<HTMLElement>();
-    const fieldRef = createRef<HTMLElement>();
-    const { rerender } = render(<Splitter width={w} onChange={onChange} stageRef={stageRef} fieldRef={fieldRef} />);
+        const { rerender } = render(<Splitter width={w} onChange={onChange} stageRef={stageRef} />);
     const sep = screen.getByRole('separator');
     fireEvent.keyDown(sep, { key: 'ArrowLeft' });
     expect(w).toBe(320);
-    rerender(<Splitter width={w} onChange={onChange} stageRef={stageRef} fieldRef={fieldRef} />);
+    rerender(<Splitter width={w} onChange={onChange} stageRef={stageRef} />);
     fireEvent.keyDown(sep, { key: 'ArrowRight' });
     expect(w).toBe(300);
     fireEvent.doubleClick(sep);

@@ -239,7 +239,6 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [sideOpen, setSideOpen] = useState(() => setup.seats.every((x) => x.kind === 'cpu'));
   const [railW, setRailW] = useRailWidth();
   const stageRef = useRef<HTMLDivElement>(null);
-  const fieldRef = useRef<HTMLDivElement>(null);
   // 直近の1手で動いたカードを強調する(イベントの再生。design 9)
   const flash = useMemo(() => {
     const set = new Set<number>();
@@ -775,7 +774,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
       </div>
 
       <div className="stage" ref={stageRef} style={{ '--rail-w': railW + 'px' } as React.CSSProperties}>
-        <div className="field" ref={fieldRef}>
+        <div className="field">
         <Board
           s={s}
           me={g.me}
@@ -871,7 +870,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         </div>
 
         {/* 盤面と右の欄の境界(つまんで動かせる) */}
-        <Splitter width={railW} onChange={setRailW} stageRef={stageRef} fieldRef={fieldRef} />
+        <Splitter width={railW} onChange={setRailW} stageRef={stageRef} />
 
         {/* 盤面の右(中央右): カードの詳細・選んだカードの操作・ターン操作を、カードの近くにまとめる */}
         <div className="rail">
