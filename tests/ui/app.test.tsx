@@ -76,6 +76,19 @@ describe('App: メニュー', () => {
     expect(await screen.findByRole('heading', { name: '対戦の設定' })).toBeInTheDocument();
     expect(location.hash).toBe('#/play-setup');
   });
+  // 対戦以外の画面は React.lazy で後から読み込む。読み込み後に、各画面が出ることを確かめる
+  it.each([
+    ['確率シミュレータ', /ソリティア調査/, '#/sim'],
+    ['バッチ対戦', 'AI同士のバッチ対戦', '#/batch'],
+    ['棋譜の再生', '棋譜の再生', '#/replay'],
+    ['一人回し(手動)', '一人回し(手動)', '#/manual'],
+    ['デッキ編集', 'デッキ編集', '#/decks'],
+  ])('「%s」の画面を、遅延読み込みで開ける', async (tile, heading, hash) => {
+    render(<App />);
+    await userEvent.click(screen.getByText(tile));
+    expect(await screen.findByRole('heading', { level: 2, name: heading })).toBeInTheDocument();
+    expect(location.hash).toBe(hash);
+  });
 });
 
 describe('App: 対戦の開始と再開', () => {

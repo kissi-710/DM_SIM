@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { ErrorBoundary } from './ErrorBoundary';
-import { BatchView } from './BatchView';
-import { DeckEditor } from './DeckEditor';
 import { GameView } from './GameView';
-import { ManualView } from './ManualView';
-import { ReplayScreen } from './ReplayScreen';
 import { SetupScreen } from './SetupScreen';
-import { SimView } from './SimView';
 import { clearAutosave, isRecentOtherTab, loadAutosave } from './autosave';
 import type { GameSetup } from './useGame';
+
+// 対戦以外の画面は、開いた時に読み込む(起動時のコードを小さくする)
+const BatchView = lazy(() => import('./BatchView').then((m) => ({ default: m.BatchView })));
+const DeckEditor = lazy(() => import('./DeckEditor').then((m) => ({ default: m.DeckEditor })));
+const ManualView = lazy(() => import('./ManualView').then((m) => ({ default: m.ManualView })));
+const ReplayScreen = lazy(() => import('./ReplayScreen').then((m) => ({ default: m.ReplayScreen })));
+const SimView = lazy(() => import('./SimView').then((m) => ({ default: m.SimView })));
 
 export type Screen = 'menu' | 'play-setup' | 'watch-setup' | 'game' | 'sim' | 'batch' | 'replay' | 'decks' | 'manual';
 
@@ -54,6 +56,7 @@ export function App() {
         {screen !== 'menu' && screen !== 'game' && <button onClick={home}>メニュー</button>}
       </div>
       <ErrorBoundary key={screen + gameKey} onReset={home}>
+      <Suspense fallback={<div className="page"><p className="muted" role="status">読み込み中…</p></div>}>
       {screen === 'menu' && <Menu go={setScreen} leftGame={leftGame} onResume={(a) => start({ ...a.setup, resume: a.actions })} />}
       {screen === 'play-setup' && (
         <div className="page">
@@ -86,6 +89,7 @@ export function App() {
       {screen === 'replay' && <ReplayScreen />}
       {screen === 'decks' && <DeckEditor />}
       {screen === 'manual' && <ManualView />}
+      </Suspense>
       </ErrorBoundary>
     </div>
   );
