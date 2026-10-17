@@ -6,7 +6,7 @@ import { mkCtx, permByPid } from '../engine/state';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { Board, buildDropMap, selectedActions } from './Board';
 import { CardView, civGradient } from './CardView';
-import { buildLogTree, cardName, CIV_NAME, recentFeed, reg, type LogNode } from './format';
+import { buildLogTree, cardName, CIV_NAME, recentFeed, reg, untilLabel, type LogNode } from './format';
 import { endTurnWarning } from './endTurn';
 import { whyUnplayable } from './unplayable';
 import { Kbd } from './Kbd';
@@ -79,6 +79,7 @@ function Derived({ s, uid }: { s: GameState; uid: number }) {
       for (const e of effectsOnPerm(c, pm.perm.pid)) {
         if (e.mod.kind === 'powerAdd') lines.push(`パワー ${e.mod.n > 0 ? '+' : ''}${e.mod.n}(${e.until.kind === 'endOfTurn' ? 'このターン中' : '次の自分のターンのはじめまで'})`);
         else if (e.mod.kind === 'grant') lines.push(`${KW_LABEL[e.mod.keyword] ?? e.mod.keyword} を得ている`);
+        else if (e.mod.kind === 'cannotBeChosen' || e.mod.kind === 'cannotBeAttacked') lines.push(`🛡 ${EFFECT_LABEL[e.mod.kind]}(${untilLabel(e.until)})`);
         else lines.push(EFFECT_LABEL[e.mod.kind] ?? e.mod.kind);
       }
       lines.push(`${pm.perm.tapped ? 'タップ' : 'アンタップ'}状態${pm.perm.sick ? '(召喚酔い)' : ''}${pm.perm.cards.length > 1 ? ' / 進化元 ' + (pm.perm.cards.length - 1) + '枚' : ''}`);
@@ -258,6 +259,11 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     const t = setTimeout(() => setResultShown(true), fxHoldMs(s, session.last, g.me, scale));
     return () => clearTimeout(t);
   }, [s.winner, fxActive]);
+  const trumps = useMemo(() => {
+    const set = new Set<number>();
+    if (fxActive) for (const e of session.last) if (((e.type === 'entered' && e.via === 'revolutionChange') || (e.type === 'evolved' && e.via === 'invade')) && typeof e.card === 'number') set.add(e.card);
+    return set;
+  }, [fxActive, session.last]);
   const blockers = useMemo(() => {
     const set = new Set<number>();
     if (fxActive) for (const e of session.last) if (e.type === 'blocked' && typeof e.card === 'number') set.add(e.card);
@@ -787,6 +793,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           hit={shieldHit}
           attackers={attackers}
           blockers={blockers}
+          trumps={trumps}
           listReq={listReq}
         />
         <FxLayer cues={fxCues} token={session.last} enabled={fxActive} />

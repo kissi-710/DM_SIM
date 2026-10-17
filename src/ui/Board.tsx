@@ -108,6 +108,8 @@ interface BoardProps {
   attackers?: Set<number>;
   /** 直近のイベントでブロックしたカード(演出で光らせる) */
   blockers?: Set<number>;
+  /** 直近のイベントで革命チェンジ・侵略により出たカード(演出で上から落とす) */
+  trumps?: Set<number>;
   /** キーボードからの一覧の表示要求(n が変わるたびに開く) */
   listReq?: { p: PlayerId; zone: 'mana' | 'grave' | 'shield'; n: number } | null;
   /** 今は使えない手札のカードがクリックされた(理由を出す) */
@@ -254,7 +256,7 @@ export function Board(b: BoardProps) {
             return (
               <div
                 key={perm.pid}
-                className={'pile' + (isTarget ? ' drop-ok' : '') + (b.attackers?.has(top) ? (mine ? ' lunge-up' : ' lunge-down') : '') + (b.blockers?.has(top) ? ' block-flash' : '')}
+                className={'pile' + (isTarget ? ' drop-ok' : '') + (b.attackers?.has(top) ? (mine ? ' lunge-up' : ' lunge-down') : '') + (b.blockers?.has(top) ? ' block-flash' : '') + (b.trumps?.has(top) ? ' trump-in' : '')}
                 data-drop={pileDropKey}
                 onClick={() => {
                   if (activeKey && liveDrops.has(pileDropKey)) exec(activeKey, pileDropKey);

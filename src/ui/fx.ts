@@ -53,7 +53,7 @@ export function saveFxMode(mode: FxMode): void {
 
 // ───────────────────────── 演出の種類と長さ ─────────────────────────
 
-export type FxKind = 'turn' | 'cast' | 'summon' | 'invade' | 'attack' | 'block' | 'shield' | 'trigger' | 'direct';
+export type FxKind = 'turn' | 'cast' | 'summon' | 'invade' | 'revolution' | 'evolve' | 'attack' | 'block' | 'shield' | 'trigger' | 'direct';
 
 export interface FxCue {
   /** 元のイベントの id(複数のイベントをまとめた時は先頭) */
@@ -74,7 +74,9 @@ export const FX_MS: Record<FxKind, number> = {
   turn: 1200,
   cast: 800,
   summon: 600,
-  invade: 800,
+  invade: 1100,
+  revolution: 1300,
+  evolve: 700,
   attack: 700,
   block: 600,
   shield: 800,
@@ -125,9 +127,37 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
         out.push({ id: e.id, kind: 'cast', title: cardName(s, e.card), sub: `${who(e.owner, me)}が呪文を唱えた`, side: sideOf(e.owner, me), ms: FX_MS.cast });
         break;
       case 'entered':
+        // 革命チェンジは切り札なので、自分の分も出す。入れ替わりで手札に戻ったクリーチャーの名前を添える
+        if (e.via === 'revolutionChange') {
+          const out0 = events.find((x) => x.type === 'moved' && x.cause === 'revolutionChange');
+          out.push({
+            id: e.id,
+            kind: 'revolution',
+            title: '革命チェンジ!',
+            sub: out0 ? `${cardName(s, out0.card)} → ${cardName(s, e.card)}` : cardName(s, e.card),
+            side: sideOf(e.owner, me),
+            ms: FX_MS.revolution,
+          });
+          break;
+        }
         if (own(e.owner)) break;
         if (e.via === 'summon') out.push({ id: e.id, kind: 'summon', title: cardName(s, e.card), sub: `${who(e.owner, me)}が召喚`, side: sideOf(e.owner, me), ms: FX_MS.summon });
-        else if (e.via === 'invade') out.push({ id: e.id, kind: 'invade', title: cardName(s, e.card), sub: `${who(e.owner, me)}の侵略`, side: sideOf(e.owner, me), ms: FX_MS.invade });
+        break;
+      case 'evolved':
+        if (e.via === 'invade') {
+          // 侵略も切り札なので、自分の分も出す(進化元は攻撃中のクリーチャー)
+          const base = Array.isArray(e.base) ? e.base[0] : undefined;
+          out.push({
+            id: e.id,
+            kind: 'invade',
+            title: '侵略!',
+            sub: typeof base === 'number' ? `${cardName(s, base)} の上に ${cardName(s, e.card)}` : cardName(s, e.card),
+            side: sideOf(e.owner, me),
+            ms: FX_MS.invade,
+          });
+        } else if (!own(e.owner)) {
+          out.push({ id: e.id, kind: 'evolve', title: '進化!', sub: cardName(s, e.card), side: sideOf(e.owner, me), ms: FX_MS.evolve });
+        }
         break;
       case 'attackDeclared':
         if (own(e.owner)) break;
@@ -352,7 +382,7 @@ export function removalCuesOf(s: GameState, events: Ev[], me: number | null, sca
 // 位置は盤面の要素から取る(fxRects.ts のキー)。判定は Ev だけで決まる純粋関数。
 
 export type AttackTone = 'attack' | 'block';
-export type BurstTone = 'shield' | 'clash' | 'direct';
+export type BurstTone = 'shield' | 'clash' | 'direct' | 'trump';
 
 export type AttackFx =
   | {
@@ -379,6 +409,8 @@ export type AttackFx =
       /** バトルが相打ちか */
       draw: boolean;
       delay: number;
+      /** 今の位置(攻撃後の描画)で出す。消えるカードではなく、出てきたカードの位置 */
+      cur?: boolean;
     };
 
 export const ATK_MS = {
@@ -440,6 +472,13 @@ export function attackFxOf(events: Ev[]): AttackFx[] {
       case 'gameOver':
         if (e.reason === 'ダイレクトアタック' && typeof e.winner === 'number') {
           out.push({ kind: 'burst', id: e.id, at: `zone:shield:${e.winner === 0 ? 1 : 0}`, tone: 'direct', n: 1, draw: false, delay: t });
+        }
+        break;
+      case 'entered':
+      case 'evolved':
+        // 革命チェンジ・侵略で出てきたクリーチャーの位置に、金色の着弾
+        if ((e.type === 'entered' && e.via === 'revolutionChange') || (e.type === 'evolved' && e.via === 'invade')) {
+          out.push({ kind: 'burst', id: e.id, at: `uid:${e.card}`, tone: 'trump', n: 1, draw: false, delay: 0, cur: true });
         }
         break;
       default:

@@ -3,7 +3,7 @@ import { CARD_DB } from '../cards';
 import { charsOf } from '../engine/derive';
 import { loadRegistry } from '../engine/registry';
 import { mkCtx } from '../engine/state';
-import type { Civ, Ev, GameState, ZoneName } from '../engine/types';
+import type { Civ, Duration, Ev, GameState, ZoneName } from '../engine/types';
 
 export const reg = loadRegistry(CARD_DB);
 
@@ -184,4 +184,46 @@ export function recentFeed(s: GameState, evs: Ev[], me: number | null, max = 3):
     out.push({ id: e.id, text, turn: e.turn });
   }
   return out.reverse();
+}
+
+// ───────────────────────── 触れない状態(ジャストダイバーなど) ─────────────────────────
+
+export interface Ward {
+  /** 相手の効果で選ばれない */
+  chosen: boolean;
+  /** 攻撃されない */
+  attacked: boolean;
+  /** 短い名前(「触れない」「選ばれない」「攻撃されない」) */
+  label: string;
+  /** いつまでか(「持ち主の次のターンの開始まで」など) */
+  until: string;
+}
+
+/** 期限の言い方 */
+export function untilLabel(d: Duration): string {
+  return d.kind === 'endOfTurn' ? 'このターンの終わりまで' : d.kind === 'untilTurnStart' ? '持ち主の次のターンの開始まで' : '発生源が場にいる間';
+}
+
+/**
+ * クリーチャー(山)が、いま「選ばれない」「攻撃されない」状態か。ジャストダイバーは、出たあと次のターンの開始まで両方になる。
+ * どちらかでもあれば返す(どちらも無ければ null)。
+ */
+export function wardOf(s: GameState, pid: number): Ward | null {
+  let chosen = false;
+  let attacked = false;
+  let until: Duration | null = null;
+  for (const e of s.effects) {
+    if (e.pid !== pid) continue;
+    if (e.mod.kind === 'cannotBeChosen') chosen = true;
+    else if (e.mod.kind === 'cannotBeAttacked') attacked = true;
+    else continue;
+    until = until ?? e.until;
+  }
+  if (!chosen && !attacked) return null;
+  return {
+    chosen,
+    attacked,
+    label: chosen && attacked ? '触れない' : chosen ? '選ばれない' : '攻撃されない',
+    until: until ? untilLabel(until) : '',
+  };
 }
