@@ -10,6 +10,7 @@ import type { Agent } from '../src/ai/types';
 import { createGame, legalActions, step } from '../src/engine/engine';
 import { loadRegistry } from '../src/engine/registry';
 import { FAIR, toPlayerView } from '../src/engine/view';
+import type { Action, GameState } from '../src/engine/types';
 import { mulberry } from '../src/sim/playGame';
 import { evalRound, roundSeed, type SearchEnv } from '../src/ai/mcts';
 import { BASE_FEATURES, type ValueModel } from '../src/ai/valueModel';
@@ -44,7 +45,7 @@ function play(deckA: string | string[], deckB: string | string[], seed: number, 
     const who = s.pending!.player;
     const ag = agents[who];
     const view = ag.needsView === false ? s : toPlayerView(s, who, ag.policy ?? FAIR, reg);
-    const a = legal.length === 1 ? legal[0] : ag.chooseAction(view, legal, { rand, reg }) as any;
+    const a = legal.length === 1 ? legal[0] : ag.chooseAction(view, legal, { rand, reg }) as Action;
     rec.actions.push(plain(a));
     s = step(s, a, reg).state;
   }
@@ -124,8 +125,8 @@ for (const g of games) {
   let nThis = 0;
   for (let i = 0; i < g.states.length - 1; i += 3) {
     if (nThis >= 15) break; // 1試合から取る数(デッキの組が偏らないように)
-    const st: any = g.states[i];
-    const legal: any[] = g.legal[i] as any[];
+    const st = g.states[i] as GameState;
+    const legal = g.legal[i] as Action[];
     if (!st.pending || legal.length < 2) continue;
     const me = st.pending.player;
     const view = toPlayerView(st, me, FAIR, reg);
