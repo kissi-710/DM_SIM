@@ -138,3 +138,4 @@ scratch/
 
 # Rust 版エンジンのビルド成果物(npm run build:wasm)
 src/wasm/dmsim.wasm
+scripts/legacy/

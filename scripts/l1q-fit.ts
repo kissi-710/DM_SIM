@@ -151,7 +151,6 @@ function evaluate(w: Float64Array | null, rows: P[]) {
   let reg = 0;
   let agree = 0;
   let n = 0;
-  const byWhy: Record<string, { n: number; reg: number }> = {};
   const perTurn: Record<string, { n: number; reg: number }> = {};
   for (const p of rows) {
     if (p.n < 2) continue;
