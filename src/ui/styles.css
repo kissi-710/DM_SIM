@@ -212,28 +212,10 @@ th {
 /* ── 対戦画面 ── */
 .game {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
-}
-.game.side-closed {
-  grid-template-columns: minmax(0, 1fr);
-}
-@media (max-width: 1000px) {
-  .game {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .side {
-    position: fixed;
-    top: 44px;
-    right: 0;
-    bottom: 0;
-    width: min(340px, 92vw);
-    z-index: 60;
-    background: var(--bg);
-    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.5);
-  }
 }
 /* 盤面+右のレール(カード詳細・選んだカードの操作・ターン操作)。中央に寄せて、目線の移動を短くする */
 .stage {
@@ -241,10 +223,30 @@ th {
   min-height: 0;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 820px) 300px;
+  /* 盤面 | 仕切り(つまんで動かせる) | 右の欄(幅は --rail-w。仕切りで変える) */
+  grid-template-columns: minmax(0, 820px) 10px var(--rail-w, 300px);
   grid-template-rows: minmax(0, 1fr);
   justify-content: center;
-  column-gap: 6px;
+}
+.splitter {
+  align-self: stretch;
+  cursor: col-resize;
+  touch-action: none;
+  position: relative;
+}
+.splitter::after {
+  content: '';
+  position: absolute;
+  top: 12%;
+  bottom: 12%;
+  left: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.splitter:hover::after,
+.splitter:focus-visible::after {
+  background: var(--accent);
 }
 .field {
   position: relative;
@@ -344,6 +346,9 @@ th {
   .stage {
     grid-template-columns: minmax(0, 1fr);
   }
+  .splitter {
+    display: none;
+  }
   .rail {
     position: absolute;
     right: 8px;
@@ -372,7 +377,12 @@ th {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(8, 10, 16, 0.5);
+  background: rgba(8, 10, 16, 0.35);
+  /* 入力パネルを動かしたり、下の盤面のカードにホバーして詳細を読んだりできるよう、背景はポインタを通す */
+  pointer-events: none;
+}
+.input-layer > * {
+  pointer-events: auto;
 }
 .input-panel {
   background: var(--bg2);
@@ -507,23 +517,135 @@ button.on {
 .side-board .cards {
   justify-content: safe center;
 }
-.side {
-  border-left: 1px solid var(--line);
-  overflow: auto;
-  padding: 8px;
+/* 盤面の上に重ねるログ(移動・サイズ変更ができる)。既定は盤面の左上 */
+.log-box {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: min(340px, calc(100% - 16px));
+  height: min(70%, 560px);
+  z-index: 40;
+  background: rgba(15, 18, 26, 0.97);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  padding: 4px 6px 6px;
+}
+.log-box .rzp-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  min-height: 0;
+  gap: 8px;
+  padding: 2px;
 }
-.side .box {
+.log-box .box {
   background: var(--bg2);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 10px;
 }
-.side .box h3 {
+.log-box .box h3 {
   margin-bottom: 4px;
+}
+
+/* ── 触って動かせるパネル(Resizable.tsx) ── */
+.rzp {
+  display: flex;
+  flex-direction: column;
+}
+.rzp-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.rzp-grip {
+  flex: 1;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  padding: 2px 0 3px;
+  border-radius: 6px;
+}
+.rzp-grip:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+.rzp-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.rz {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+.rz:hover {
+  background: rgba(90, 162, 255, 0.45);
+}
+.rz-n,
+.rz-s {
+  left: 12px;
+  right: 12px;
+  height: 8px;
+  cursor: ns-resize;
+}
+.rz-n {
+  top: -4px;
+}
+.rz-s {
+  bottom: -4px;
+}
+.rz-e,
+.rz-w {
+  top: 12px;
+  bottom: 12px;
+  width: 8px;
+  cursor: ew-resize;
+}
+.rz-e {
+  right: -4px;
+}
+.rz-w {
+  left: -4px;
+}
+.rz-ne,
+.rz-nw,
+.rz-se,
+.rz-sw {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+.rz-ne {
+  top: -5px;
+  right: -5px;
+  cursor: nesw-resize;
+}
+.rz-sw {
+  bottom: -5px;
+  left: -5px;
+  cursor: nesw-resize;
+}
+.rz-nw {
+  top: -5px;
+  left: -5px;
+  cursor: nwse-resize;
+}
+.rz-se {
+  bottom: -5px;
+  right: -5px;
+  cursor: nwse-resize;
+}
+.input-panel.input-box {
+  padding: 4px 8px 8px;
+  overflow: visible;
+}
+.input-panel.input-box .rzp-body {
+  padding: 4px 10px 6px;
 }
 
 .side-board {

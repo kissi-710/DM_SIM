@@ -15,6 +15,7 @@ import { InputWidget, PaymentWidget } from './Widgets';
 import { parseRecord, saveRecord } from './record';
 import { makeRecord, type GameSetup, type Session, useGame } from './useGame';
 import { downloadText, loadJson, saveJson } from './util';
+import { Splitter, ResizablePanel, useRailWidth } from './Resizable';
 import { FxLayer } from './FxLayer';
 import { FxAttack } from './FxAttack';
 import { FxGhosts } from './FxGhosts';
@@ -234,7 +235,11 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [askPay, setAskPay] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [sideOpen, setSideOpen] = useState(() => window.innerWidth >= 1500);
+  // ログ・待機中の能力は、盤面の上に重ねて出す(別の欄を増やさない)。既定は閉じておく
+  const [sideOpen, setSideOpen] = useState(false);
+  const [railW, setRailW] = useRailWidth();
+  const stageRef = useRef<HTMLDivElement>(null);
+  const fieldRef = useRef<HTMLDivElement>(null);
   // 直近の1手で動いたカードを強調する(イベントの再生。design 9)
   const flash = useMemo(() => {
     const set = new Set<number>();
@@ -665,7 +670,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const tip = tips[Math.floor(s.turn / 2) % tips.length];
 
   return (
-    <div className={'game' + (sideOpen ? '' : ' side-closed') + (fxActive ? ' fx' : '') + (fxActive && fxMode === 'fast' ? ' fx-fast' : '')} style={fxActive ? ({ '--fx-scale': scale } as React.CSSProperties) : undefined}>
+    <div className={'game' + (fxActive ? ' fx' : '') + (fxActive && fxMode === 'fast' ? ' fx-fast' : '')} style={fxActive ? ({ '--fx-scale': scale } as React.CSSProperties) : undefined}>
       <div className="game-head">
         <button className={confirmQuit ? 'on' : ''} onClick={onExit} title="メニューへ戻ります(対戦は自動保存され、メニューから再開できます)。キーは Q を2回">
           {confirmQuit ? 'もう一度 Q でメニューへ' : '← メニュー'} <Kbd k={KEY.quit} />
@@ -769,8 +774,8 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         </button>
       </div>
 
-      <div className="stage">
-        <div className="field">
+      <div className="stage" ref={stageRef} style={{ '--rail-w': railW + 'px' } as React.CSSProperties}>
+        <div className="field" ref={fieldRef}>
         <Board
           s={s}
           me={g.me}
@@ -819,9 +824,9 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         {/* 入力(選ぶ・答える)は盤面の中央にパネルで出す */}
         {showHuman && s.winner === null && (
           <div className="input-layer">
-            <div className="input-panel">
+            <ResizablePanel boxKey="dmsim.inputBox" className="input-panel input-box" title="入力" label="入力パネル" minW={280} minH={120}>
               <InputWidget s={s} pending={pend!} me={g.me} onHover={setHover} cursor={pickCursor} onAnswer={(value) => g.perform({ type: 'ANSWER', id: pend!.id, value })} />
-            </div>
+            </ResizablePanel>
           </div>
         )}
 
@@ -864,6 +869,9 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           </div>
         )}
         </div>
+
+        {/* 盤面と右の欄の境界(つまんで動かせる) */}
+        <Splitter width={railW} onChange={setRailW} stageRef={stageRef} fieldRef={fieldRef} />
 
         {/* 盤面の右(中央右): カードの詳細・選んだカードの操作・ターン操作を、カードの近くにまとめる */}
         <div className="rail">
@@ -918,6 +926,14 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           )}
           {interactive && <div className="rail-tip">💡 {tip}</div>}
         </div>
+
+        {/* ログと待機中の能力: 盤面の上に重ねる(移動・サイズ変更・閉じるができる)。別の欄は作らない */}
+        {sideOpen && (
+          <ResizablePanel boxKey="dmsim.logBox" className="log-box" title="対戦ログ・待機中の能力" label="対戦ログ" onClose={() => setSideOpen(false)} minW={240} minH={140}>
+            <PoolPanel s={s} />
+            <LogPanel s={s} log={session.log} me={g.me} />
+          </ResizablePanel>
+        )}
 
         {g.saveStatus !== 'ok' && (
           <div className="toast" role="status" style={{ bottom: session.error ? 96 : undefined }}>
@@ -1004,13 +1020,6 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             </div>
           );
         })()}
-
-      {sideOpen && (
-        <div className="side">
-          <PoolPanel s={s} />
-          <LogPanel s={s} log={session.log} me={g.me} />
-        </div>
-      )}
 
       {recText !== null && (
         <div className="modal-back" onClick={() => setRecText(null)}>
