@@ -1,0 +1,532 @@
+<title>CPUの手のレビュー</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+  /* レイアウト: 上に進捗と絞り込みを固定し、判断ごとのカード(盤面 → 候補 → 評価)を縦に並べる */
+  :root {
+    --bg: #f3f5f2;
+    --surface: #ffffff;
+    --surface-2: #e9ede8;
+    --ink: #1b2420;
+    --ink-2: #4a5852;
+    --line: #d5dbd4;
+    --accent: #0e6e66;
+    --accent-soft: #d8efec;
+    --ok: #2b7a4b;
+    --ok-soft: #dcf0e3;
+    --ng: #bf4630;
+    --ng-soft: #f8e1db;
+    --unsure: #8a6200;
+    --unsure-soft: #f6ecd0;
+    --civ-light: #cfae22;
+    --civ-water: #3a8bd4;
+    --civ-darkness: #7a5c99;
+    --civ-fire: #d9503a;
+    --civ-nature: #3d9a50;
+    --font: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111715;
+      --surface: #1a2220;
+      --surface-2: #232d2a;
+      --ink: #e5ebe7;
+      --ink-2: #a2b0a9;
+      --line: #333f3b;
+      --accent: #4fc3b7;
+      --accent-soft: #1d3a37;
+      --ok: #62c48b;
+      --ok-soft: #1e3a2b;
+      --ng: #f08068;
+      --ng-soft: #432620;
+      --unsure: #e2b24c;
+      --unsure-soft: #3d3418;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111715;
+    --surface: #1a2220;
+    --surface-2: #232d2a;
+    --ink: #e5ebe7;
+    --ink-2: #a2b0a9;
+    --line: #333f3b;
+    --accent: #4fc3b7;
+    --accent-soft: #1d3a37;
+    --ok: #62c48b;
+    --ok-soft: #1e3a2b;
+    --ng: #f08068;
+    --ng-soft: #432620;
+    --unsure: #e2b24c;
+    --unsure-soft: #3d3418;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.65;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0 48px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* 上部 */
+  .top {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 5;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    padding: 12px 0 10px;
+    margin-bottom: 18px;
+  }
+  .top h1 { font-size: 1.25rem; margin: 0 0 6px; letter-spacing: 0.02em; }
+  .progress { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .bar { flex: 1 1 160px; min-width: 120px; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; display: flex; }
+  .bar i { display: block; height: 100%; }
+  .bar .b-ok { background: var(--ok); }
+  .bar .b-unsure { background: var(--unsure); }
+  .bar .b-ng { background: var(--ng); }
+  .count { font-variant-numeric: tabular-nums; font-size: 0.9rem; color: var(--ink-2); white-space: nowrap; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+  .chip-btn {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 3px 12px;
+    font-size: 0.85rem;
+    min-height: 32px;
+  }
+  .chip-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .sp { flex: 1 1 8px; }
+  .save-status { font-size: 0.78rem; color: var(--ink-2); }
+
+  .howto {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 0.92rem;
+  }
+  .howto summary { cursor: pointer; font-weight: 700; }
+  .howto p { margin: 8px 0 0; max-width: 62ch; }
+  .howto dl { margin: 10px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; }
+  .howto dt { font-weight: 700; }
+  .howto dd { margin: 0; }
+
+  /* カード */
+  .cards { display: flex; flex-direction: column; gap: 22px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+    scroll-margin-top: 130px;
+  }
+  .card[data-verdict="ok"] { border-left: 5px solid var(--ok); }
+  .card[data-verdict="ng"] { border-left: 5px solid var(--ng); }
+  .card[data-verdict="unsure"] { border-left: 5px solid var(--unsure); }
+  .card header { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+  .num { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink-2); }
+  .kind { font-size: 0.78rem; font-weight: 700; background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 1px 8px; }
+  .meta { font-size: 0.82rem; color: var(--ink-2); }
+  .q { font-size: 1.05rem; margin: 8px 0 12px; text-wrap: balance; }
+
+  .board { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .side { background: var(--surface-2); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+  .side h3 { margin: 0 0 6px; font-size: 0.82rem; letter-spacing: 0.04em; color: var(--ink-2); }
+  .stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.86rem; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+  .stats b { font-weight: 700; }
+  .zone-label { font-size: 0.74rem; color: var(--ink-2); margin: 8px 0 3px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .none { font-size: 0.82rem; color: var(--ink-2); }
+  .cardchip {
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--civ, var(--ink-2));
+    background: var(--surface);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    text-align: left;
+    max-width: 100%;
+  }
+  .cardchip .cost { font-variant-numeric: tabular-nums; font-weight: 700; margin-right: 4px; }
+  .cardchip .sub { color: var(--ink-2); font-size: 0.74rem; margin-left: 4px; }
+  .cardchip.tapped { opacity: 0.62; border-style: dashed; }
+  .cardchip.civ-light { --civ: var(--civ-light); }
+  .cardchip.civ-water { --civ: var(--civ-water); }
+  .cardchip.civ-darkness { --civ: var(--civ-darkness); }
+  .cardchip.civ-fire { --civ: var(--civ-fire); }
+  .cardchip.civ-nature { --civ: var(--civ-nature); }
+  .cardchip.civ-multi { --civ: var(--ink-2); }
+  .cardtext { margin-top: 8px; padding: 8px 10px; border-radius: 4px; background: var(--accent-soft); font-size: 0.84rem; max-width: 70ch; }
+  .cardtext b { font-weight: 700; }
+
+  .log { margin-top: 10px; font-size: 0.82rem; color: var(--ink-2); }
+  .log summary { cursor: pointer; }
+  .log ol { margin: 6px 0 0; padding-left: 1.4em; }
+
+  /* 候補 */
+  .opts-h { font-size: 0.82rem; font-weight: 700; margin: 16px 0 6px; color: var(--ink-2); }
+  .opts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+  .opt {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 10px;
+    background: var(--surface);
+    font-size: 0.92rem;
+    width: 100%;
+    text-align: left;
+  }
+  .opt .txt { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+  .opt.cpu { border-color: var(--accent); background: var(--accent-soft); }
+  .tag { font-size: 0.72rem; font-weight: 700; border-radius: 3px; padding: 0 6px; white-space: nowrap; }
+  .tag.cpu { background: var(--accent); color: var(--bg); }
+  .tag.pick { background: var(--ng); color: var(--bg); }
+  .q-val { font-variant-numeric: tabular-nums; font-size: 0.8rem; color: var(--ink-2); display: none; }
+  body.show-q .q-val { display: inline; }
+  .opt.pickable { cursor: pointer; }
+  .opt.pickable:hover { border-color: var(--ng); }
+  .opt.picked { border-color: var(--ng); background: var(--ng-soft); }
+
+  /* 評価 */
+  .verdict { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+  .vbtn {
+    border: 2px solid var(--line);
+    background: var(--surface);
+    border-radius: 6px;
+    min-height: 46px;
+    font-weight: 700;
+    font-size: 0.98rem;
+  }
+  .vbtn[data-v="ok"][aria-pressed="true"] { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  .vbtn[data-v="ng"][aria-pressed="true"] { background: var(--ng-soft); border-color: var(--ng); color: var(--ng); }
+  .vbtn[data-v="unsure"][aria-pressed="true"] { background: var(--unsure-soft); border-color: var(--unsure); color: var(--unsure); }
+  .follow { margin-top: 12px; }
+  .follow label { display: block; font-size: 0.82rem; font-weight: 700; color: var(--ink-2); margin-bottom: 4px; }
+  .follow textarea {
+    width: 100%; min-height: 70px; resize: vertical;
+    border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
+    background: var(--bg); color: var(--ink); font: inherit; font-size: 0.92rem;
+  }
+  .follow .hint { font-size: 0.78rem; color: var(--ink-2); margin: 0 0 6px; }
+
+  .general { margin-top: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+  .general h2 { font-size: 1rem; margin: 0 0 8px; }
+  .general textarea { width: 100%; min-height: 110px; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--bg); color: var(--ink); font: inherit; resize: vertical; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+  .btn { border: 1px solid var(--accent); background: var(--accent); color: var(--bg); border-radius: 6px; padding: 6px 16px; font-weight: 700; min-height: 40px; }
+  .btn.ghost { background: transparent; color: var(--accent); }
+  .empty { padding: 28px 8px; text-align: center; color: var(--ink-2); }
+  [hidden] { display: none !important; }
+
+  @media (max-width: 680px) {
+    .top h1 { font-size: 1.1rem; margin-bottom: 4px; }
+    .filters { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+    .filters .chip-btn { flex: 0 0 auto; white-space: nowrap; }
+    .filters .sp { display: none; }
+    .card { scroll-margin-top: 120px; }
+    .board { grid-template-columns: 1fr; }
+    .verdict { grid-template-columns: 1fr; }
+    .card { padding: 12px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .bar i { transition: width 0.25s ease; }
+  }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <h1>CPUの手のレビュー</h1>
+    <div class="progress">
+      <div class="bar" aria-hidden="true"><i class="b-ok" id="bar-ok"></i><i class="b-unsure" id="bar-unsure"></i><i class="b-ng" id="bar-ng"></i></div>
+      <div class="count" id="count">評価済み 0 / 0</div>
+    </div>
+    <div class="filters" id="filters" role="group" aria-label="絞り込み"></div>
+  </div>
+
+  <details class="howto" open>
+    <summary>このページの使い方</summary>
+    <p>CPU同士の対局から、CPUが実際に指した判断を抜き出しています。1枚のカードが1つの判断です。盤面を見て、CPUの手が人間のプレイヤーとして自然かを付けてください。付けた内容は自動で保存されます。</p>
+    <dl>
+      <dt>自然</dt><dd>人でも同じ手を選ぶ、または納得できる。</dd>
+      <dt>不自然</dt><dd>人ならしない、違和感がある。人ならどの候補を選ぶかと、理由があれば書いてください。</dd>
+      <dt>どちらとも</dt><dd>局面が難しくて判断できない、など。</dd>
+    </dl>
+    <p>CPUからは相手の手札が見えません(相手の手札は枚数だけ表示しています)。「CPU側」の手札は、CPUが見ている情報です。カード名を押すと効果が出ます。</p>
+  </details>
+
+  <div class="cards" id="cards"></div>
+  <div class="empty" id="empty" hidden>条件に合う判断がありません。</div>
+
+  <section class="general">
+    <h2>全体の感想</h2>
+    <p class="hint" style="margin:0 0 6px;font-size:0.82rem;color:var(--ink-2)">個別の判断に収まらない傾向があれば、ここに書いてください(例: 「序盤はいつも◯◯を優先してほしい」)。</p>
+    <textarea id="general" placeholder="気になった傾向、直してほしい癖など"></textarea>
+    <div class="actions">
+      <button class="btn" id="copy">結果をコピー</button>
+      <span class="save-status" id="copy-status"></span>
+    </div>
+  </section>
+</div>
+
+<script>
+const DATA = /*__DATA__*/[]/*__END__*/;
+const KINDS = ['すべて', 'マナチャージ', '召喚・詠唱', '攻撃・終了', '効果の選択'];
+const VERDICT_LABEL = { ok: '自然', ng: '不自然', unsure: 'どちらとも' };
+const state = { reviews: {}, general: '', kind: 'すべて', onlyOpen: false, showQ: false, db: null, saveMode: 'local' };
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const $ = (id) => document.getElementById(id);
+const CIV_CLASS = { '光': 'civ-light', '水': 'civ-water', '闇': 'civ-darkness', '火': 'civ-fire', '自然': 'civ-nature' };
+
+// ─── 保存: ブラウザ内(予備)と共有データベース ───
+const LS_KEY = 'cpu-review-v1';
+function lsLoad() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch { return null; }
+}
+function lsSave() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ reviews: state.reviews, general: state.general })); } catch { /* 保存できない環境では何もしない */ }
+}
+const queues = new Map();
+function dbWrite(path, body) {
+  if (!state.db) return;
+  const prev = queues.get(path) || Promise.resolve();
+  const next = prev.then(() => state.db.doc(path).set(body)).catch(() => { setStatus('共有データベースに保存できませんでした。このブラウザには保存されています。'); });
+  queues.set(path, next);
+}
+function setStatus(t) { $('save-status') && ($('save-status').textContent = t); }
+const timers = new Map();
+function later(key, fn, ms) { clearTimeout(timers.get(key)); timers.set(key, setTimeout(fn, ms)); }
+
+function setReview(id, patch, delay = 0) {
+  const cur = state.reviews[id] || { verdict: null, pick: null, note: '' };
+  const next = { ...cur, ...patch, t: Date.now() };
+  state.reviews[id] = next;
+  lsSave();
+  updateCard(id);
+  updateProgress();
+  const body = { verdict: next.verdict, pick: next.pick, note: next.note || '', t: next.t };
+  if (delay) later('r' + id, () => dbWrite('reviews/' + id, body), delay);
+  else dbWrite('reviews/' + id, body);
+}
+
+// ─── 描画 ───
+function chipHtml(c, extra = '') {
+  const civ = c.civs.length === 1 ? CIV_CLASS[c.civs[0]] || '' : c.civs.length > 1 ? 'civ-multi' : '';
+  const sub = [];
+  if (c.power != null) sub.push(c.power);
+  if (c.tapped) sub.push('タップ');
+  if (c.sick) sub.push('召喚酔い');
+  if (c.stacked) sub.push('進化+' + c.stacked);
+  return `<button type="button" class="cardchip ${civ} ${c.tapped ? 'tapped' : ''}" data-text="${esc(c.name + '(' + c.civs.join('・') + '・' + c.kind + '・コスト' + c.cost + (c.power != null ? '・パワー' + c.power : '') + ')')}" data-body="${esc(c.text)}">` +
+    `<span class="cost">${c.cost}</span>${esc(c.name.split(' / ')[0])}<span class="sub">${esc(sub.join(' · '))}</span></button>`;
+}
+function chips(list) {
+  return list.length ? `<div class="chips">${list.map((c) => chipHtml(c)).join('')}</div>` : '<div class="none">なし</div>';
+}
+function sideHtml(label, s, mine) {
+  const mana = `${s.mana.total}枚(未使用 ${s.mana.untapped})`;
+  const hand = mine ? chips(s.hand) : `<div class="none">${s.hand}枚(非公開)</div>`;
+  const grave = s.graveCount ? esc(s.grave.join('、') + (s.graveCount > s.grave.length ? ` ほか${s.graveCount - s.grave.length}枚` : '')) : 'なし';
+  return `<section class="side"><h3>${label}</h3>
+    <div class="stats"><span>盾 <b>${s.shield}</b></span><span>マナ <b>${mana}</b></span><span>山札 <b>${s.deck}</b></span></div>
+    <div class="none">マナの文明: ${esc(s.mana.civs.join('・') || 'なし')}</div>
+    <div class="zone-label">手札</div>${hand}
+    <div class="zone-label">場</div>${chips(s.battle)}
+    <div class="zone-label">墓地</div><div class="none">${grave}</div></section>`;
+}
+function cardHtml(d, i) {
+  const opts = d.options.map((o, k) => {
+    const qv = o.q == null ? '' : `<span class="q-val">参考 ${o.q}%</span>`;
+    return `<li><button type="button" class="opt ${k === d.cpu ? 'cpu' : ''}" data-opt="${k}"><span class="txt">${esc(o.text)}</span>${k === d.cpu ? '<span class="tag cpu">CPUの選択</span>' : ''}<span class="tag pick" hidden>人ならこれ</span>${qv}</button></li>`;
+  }).join('');
+  const log = d.recent.length ? `<details class="log"><summary>直前の出来事(このターン)</summary><ol>${d.recent.map((e) => `<li>${esc(e)}</li>`).join('')}</ol></details>` : '';
+  return `<article class="card" id="${d.id}" data-kind="${esc(d.kind)}">
+    <header><span class="num">${d.id.slice(1)}</span><span class="kind">${esc(d.kind)}</span><span class="meta">${esc(d.who)} · ${d.turn}ターン目 · ${esc(d.game)}</span></header>
+    <h2 class="q">${esc(d.title)}</h2>
+    <div class="board">${sideHtml('CPU側(手札が見えている)', d.me, true)}${sideHtml('相手', d.opp, false)}</div>
+    <div class="cardtext" hidden></div>
+    ${log}
+    <div class="opts-h">候補(上から並べただけで、順位ではありません)</div>
+    <ul class="opts">${opts}</ul>
+    <div class="verdict" role="group" aria-label="評価">
+      <button type="button" class="vbtn" data-v="ok" aria-pressed="false">自然</button>
+      <button type="button" class="vbtn" data-v="ng" aria-pressed="false">不自然</button>
+      <button type="button" class="vbtn" data-v="unsure" aria-pressed="false">どちらとも</button>
+    </div>
+    <div class="follow" hidden>
+      <p class="hint" data-hint></p>
+      <label for="note-${d.id}">理由・メモ(任意)</label>
+      <textarea id="note-${d.id}" placeholder="なぜ不自然か、人ならどうするか"></textarea>
+    </div>
+  </article>`;
+}
+function updateCard(id) {
+  const el = $(id);
+  if (!el) return;
+  const r = state.reviews[id] || { verdict: null, pick: null, note: '' };
+  const d = DATA.find((x) => x.id === id);
+  el.dataset.verdict = r.verdict || '';
+  el.querySelectorAll('.vbtn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === r.verdict)));
+  const follow = el.querySelector('.follow');
+  follow.hidden = !r.verdict || r.verdict === 'ok';
+  el.querySelector('[data-hint]').textContent = r.verdict === 'ng' ? '人ならどれを選ぶか、上の候補を押して選べます(任意)。' : '迷った点があれば書いてください(任意)。';
+  const ta = el.querySelector('textarea');
+  if (document.activeElement !== ta && ta.value !== (r.note || '')) ta.value = r.note || '';
+  el.querySelectorAll('.opt').forEach((b) => {
+    const k = Number(b.dataset.opt);
+    b.classList.toggle('pickable', r.verdict === 'ng' && k !== d.cpu);
+    b.classList.toggle('picked', r.verdict === 'ng' && r.pick === k);
+    b.querySelector('.tag.pick').hidden = !(r.verdict === 'ng' && r.pick === k);
+  });
+  applyFilter(el);
+}
+function updateProgress() {
+  const n = DATA.length;
+  const cnt = { ok: 0, ng: 0, unsure: 0 };
+  for (const d of DATA) { const v = state.reviews[d.id]?.verdict; if (v) cnt[v]++; }
+  const done = cnt.ok + cnt.ng + cnt.unsure;
+  $('count').textContent = `評価済み ${done} / ${n}(自然 ${cnt.ok} · 不自然 ${cnt.ng} · どちらとも ${cnt.unsure})`;
+  $('bar-ok').style.width = (cnt.ok / n) * 100 + '%';
+  $('bar-unsure').style.width = (cnt.unsure / n) * 100 + '%';
+  $('bar-ng').style.width = (cnt.ng / n) * 100 + '%';
+  refreshEmpty();
+}
+function applyFilter(el) {
+  const id = el.id;
+  const kindOk = state.kind === 'すべて' || el.dataset.kind === state.kind;
+  const open = !state.reviews[id]?.verdict;
+  el.hidden = !(kindOk && (!state.onlyOpen || open));
+}
+function refreshEmpty() {
+  $('empty').hidden = [...document.querySelectorAll('.card')].some((c) => !c.hidden);
+}
+function renderFilters() {
+  const f = $('filters');
+  f.innerHTML = KINDS.map((k) => `<button type="button" class="chip-btn" data-kind="${esc(k)}" aria-pressed="${k === state.kind}">${esc(k)}</button>`).join('') +
+    `<span class="sp"></span><button type="button" class="chip-btn" id="only-open" aria-pressed="false">未評価のみ</button><button type="button" class="chip-btn" id="show-q" aria-pressed="false" title="シミュレーションで測った各候補の勝率。先入観になるので、初期は隠しています">参考勝率を表示</button><span class="save-status" id="save-status"></span>`;
+}
+
+function init() {
+  renderFilters();
+  $('cards').innerHTML = DATA.map(cardHtml).join('');
+  const saved = lsLoad();
+  if (saved) { state.reviews = saved.reviews || {}; state.general = saved.general || ''; }
+  $('general').value = state.general;
+  DATA.forEach((d) => updateCard(d.id));
+  updateProgress();
+  setStatus('このブラウザに保存中');
+
+  $('filters').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.kind) {
+      state.kind = b.dataset.kind;
+      $('filters').querySelectorAll('[data-kind]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.kind === state.kind)));
+    } else if (b.id === 'only-open') {
+      state.onlyOpen = !state.onlyOpen;
+      b.setAttribute('aria-pressed', String(state.onlyOpen));
+    } else if (b.id === 'show-q') {
+      state.showQ = !state.showQ;
+      b.setAttribute('aria-pressed', String(state.showQ));
+      document.body.classList.toggle('show-q', state.showQ);
+    }
+    document.querySelectorAll('.card').forEach(applyFilter);
+    refreshEmpty();
+  });
+
+  $('cards').addEventListener('click', (e) => {
+    const card = e.target.closest('.card');
+    if (!card) return;
+    const id = card.id;
+    const v = e.target.closest('.vbtn');
+    if (v) {
+      const cur = state.reviews[id]?.verdict;
+      setReview(id, v.dataset.v === cur ? { verdict: null, pick: null } : { verdict: v.dataset.v, pick: v.dataset.v === 'ng' ? state.reviews[id]?.pick ?? null : null });
+      return;
+    }
+    const chip = e.target.closest('.cardchip');
+    if (chip) {
+      const box = card.querySelector('.cardtext');
+      const same = !box.hidden && box.dataset.src === chip.dataset.text;
+      box.hidden = same;
+      box.dataset.src = same ? '' : chip.dataset.text;
+      box.innerHTML = `<b>${esc(chip.dataset.text)}</b><br>${esc(chip.dataset.body || '(効果の説明なし)')}`;
+      return;
+    }
+    const opt = e.target.closest('.opt');
+    if (opt && opt.classList.contains('pickable')) {
+      const k = Number(opt.dataset.opt);
+      setReview(id, { pick: state.reviews[id]?.pick === k ? null : k });
+    }
+  });
+  $('cards').addEventListener('input', (e) => {
+    const ta = e.target.closest('textarea');
+    if (!ta) return;
+    const id = ta.closest('.card').id;
+    setReview(id, { note: ta.value }, 700);
+  });
+  $('general').addEventListener('input', () => {
+    state.general = $('general').value;
+    lsSave();
+    later('general', () => dbWrite('notes/general', { text: state.general, t: Date.now() }), 700);
+  });
+  $('copy').addEventListener('click', async () => {
+    const out = DATA.map((d) => {
+      const r = state.reviews[d.id];
+      return r && r.verdict ? { id: d.id, kind: d.kind, cpu: d.options[d.cpu].text, verdict: VERDICT_LABEL[r.verdict], humanPick: r.pick != null ? d.options[r.pick].text : null, note: r.note || '' } : null;
+    }).filter(Boolean);
+    const text = JSON.stringify({ reviews: out, general: state.general }, null, 2);
+    try { await navigator.clipboard.writeText(text); $('copy-status').textContent = 'コピーしました'; }
+    catch { $('copy-status').textContent = 'コピーできませんでした。保存は自動で行われています'; }
+  });
+  connectDb();
+}
+
+// ─── 共有データベース(使えない環境では、ブラウザ内の保存だけで動く) ───
+async function connectDb() {
+  try {
+    if (!window.claude || !window.claude.use) return;
+    const db = await window.claude.use('db');
+    if (!db) return;
+    state.db = db;
+    state.saveMode = 'db';
+    setStatus('共有データベースに保存中(Claudeが読めます)');
+    let first = true;
+    db.collection('reviews').onSnapshot((snap) => {
+      const remote = {};
+      snap.docs.forEach((s) => { const x = s.data(); if (x) remote[s.id] = x; });
+      if (first) {
+        first = false;
+        // 初回: 共有側が空で、このブラウザに保存済みの評価があれば、共有側へ移す
+        if (Object.keys(remote).length === 0 && Object.keys(state.reviews).length) {
+          for (const [id, r] of Object.entries(state.reviews)) dbWrite('reviews/' + id, { verdict: r.verdict ?? null, pick: r.pick ?? null, note: r.note || '', t: r.t || Date.now() });
+          return;
+        }
+      }
+      let changed = false;
+      for (const [id, r] of Object.entries(remote)) {
+        const cur = state.reviews[id];
+        if (!cur || cur.t !== r.t) { state.reviews[id] = { verdict: r.verdict ?? null, pick: r.pick ?? null, note: r.note || '', t: r.t }; changed = true; updateCard(id); }
+      }
+      if (changed) { lsSave(); updateProgress(); }
+    }, () => setStatus('共有データベースに接続できません。このブラウザに保存中'));
+    db.doc('notes/general').onSnapshot((s) => {
+      const x = s.data();
+      if (x && typeof x.text === 'string' && document.activeElement !== $('general') && x.text !== state.general) { state.general = x.text; $('general').value = x.text; lsSave(); }
+    }, () => {});
+  } catch { /* 共有データベースが無い環境では、ブラウザ内の保存だけで続ける */ }
+}
+
+init();
+</script>
