@@ -171,7 +171,7 @@ const TIPS = [
 /** 観戦中に出す Tips(操作のヒントは出さない) */
 const WATCH_TIPS = [
   'Space で一時停止。停止中は → で1手ずつ進む。',
-  '「速度」で CPU の手の間隔を変えられる。',
+  '「速度」で CPU の手の間隔を変えられる(演出が有効だと、演出の長さが下限。最速にするには、設定の「演出」をなしにする)。',
   '「⚙ 表示」で相手の手札を見られる。',
   'ログの「自動」「手動」で、効果の解決と操作を区別できる。',
 ];
@@ -691,7 +691,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             <button disabled={!g.paused} onClick={g.stepOnce}>
               ⏭ 1手進める <Kbd k="ArrowRight" />
             </button>
-            <label className="speed">
+            <label className="speed" title="演出が有効な間は、演出の長さより速くならない(さらに速くするには、設定の「演出」をなしにする)">
               速度
               <input type="range" min={0} max={1500} step={50} value={1500 - g.speed} onChange={(e) => g.setSpeed(1500 - Number(e.target.value))} />
             </label>
