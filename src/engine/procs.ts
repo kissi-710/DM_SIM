@@ -39,6 +39,7 @@ import type {
   Civ,
   EffectFrame,
   Ev,
+  GameState,
   PlayExtra,
   PlayerId,
   PoolEntry,
@@ -641,10 +642,21 @@ function runBreak(c: Ctx, f: ProcFrame): void {
         return;
       }
       const n = Math.min(v.n, shields.length);
-      // どのシールドを割るかは攻撃側が選ぶが、裏向きなので無作為に扱う(spec 3.7)
-      const pool = shields.slice();
-      const broken: number[] = [];
-      while (broken.length < n) broken.push(pool.splice(rngInt(s, pool.length), 1)[0]);
+      let broken: number[] = [];
+      if (n < shields.length && shieldClasses(s, shields).length >= 2) {
+        // 見分けのつくシールド(EXライフなど)があり、全部は割れない: どれを割るかは攻撃側が選ぶ(509.3)
+        broken = ask<number[]>(c, {
+          player: attackerOwner,
+          why: 'pickShield',
+          input: { shape: 'pick', candidates: shields.slice(), min: n, max: n },
+          source: null,
+          prompt: `ブレイクするシールドを${n}枚選んでください(EXライフのシールドは目印があります。ほかは裏向きで見分けがつきません)`,
+        });
+      } else {
+        // 見分けがつかない(全部が裏向きで同じ扱い)ので、無作為に扱う(spec 3.7)
+        const pool = shields.slice();
+        while (broken.length < n) broken.push(pool.splice(rngInt(s, pool.length), 1)[0]);
+      }
       v.broken = broken;
       // 「ブレイクする前に」の誘発は、ブレイクするシールドを選んだ後、ブレイクする前に解決する(総合ルール 509.3 / 509.4)。
       // 聞き手のいるカードがある時だけ、イベントを発行する(既存の対戦の記録を変えない)
@@ -721,6 +733,41 @@ function runBreak(c: Ctx, f: ProcFrame): void {
       popFrame(c, f);
       return;
   }
+}
+
+/**
+ * シールドを「攻撃側から見て見分けがつくか」で分けた組(シールドゾーンの並びの順)。
+ * 裏向きのシールドは中身が見えず、どれも同じ扱い(組 -1)。見分けがつくのは、EXライフのシールド(どのクリーチャーに紐づくかで組が分かれる)。
+ * 表向きのシールドを足す時は、その札ごとに組を分けるキーをここに加える(ブレイクの選択の判定と合法手の列挙は、この関数だけを見る)。
+ */
+export function shieldClasses(s: GameState, shields: number[]): number[][] {
+  const groups = new Map<number, number[]>();
+  for (const u of shields) {
+    const card = s.cards[u];
+    const key = card.ex ? card.exPid : -1;
+    const g = groups.get(key);
+    if (g) g.push(u);
+    else groups.set(key, [u]);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * ブレイクするシールドの選び方を、見分けがつく違いごとに1つずつ(各組から何枚か。組の中は並びの先頭から)。
+ * どれを選んでも同じものは数えない。AI の探索の分岐を減らす(legalActions)。
+ */
+export function shieldPickChoices(s: GameState, shields: number[], n: number): number[][] {
+  const classes = shieldClasses(s, shields);
+  const out: number[][] = [];
+  const go = (i: number, left: number, cur: number[]) => {
+    if (i === classes.length) {
+      if (left === 0) out.push(cur.slice());
+      return;
+    }
+    for (let k = 0; k <= Math.min(classes[i].length, left); k++) go(i + 1, left - k, cur.concat(classes[i].slice(0, k)));
+  };
+  go(0, n, []);
+  return out;
 }
 
 /** シールドゾーンから手札に加わる時に宣言できる能力(S・トリガー / G・ストライク)。 */

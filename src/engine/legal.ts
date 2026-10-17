@@ -1,7 +1,7 @@
 // 合法手の列挙と検証(design 5 / effects 12)。
 import { canAttack, charsOf, costBase, costOf, defaultPlayFace, isSick } from './derive';
 import { evalCond, mkCC } from './cond';
-import { planPlay } from './procs';
+import { planPlay, shieldPickChoices } from './procs';
 import type { Registry } from './registry';
 import type { Ctx } from './state';
 import { mkCtx, opponentOf } from './state';
@@ -20,6 +20,11 @@ export function legalActions(s: GameState, reg: Registry): Action[] {
   const c = mkCtx(s, reg);
   const p = s.pending;
   if (p.why === 'turnAction') return turnActions(c, p.player);
+  // ブレイクするシールド: 見分けのつく違いごとに1つ(どれを選んでも同じ裏向きのシールドは、探索の分岐に数えない)。
+  // 人間は UI で好きなシールドを選べる(validateAnswer は候補の中の n 枚なら通す)
+  if (p.why === 'pickShield' && p.input?.shape === 'pick') {
+    return shieldPickChoices(s, p.input.candidates, p.input.min).map((value) => ({ type: 'ANSWER', id: p.id, value }));
+  }
   return enumerateAnswers(p).map((value) => ({ type: 'ANSWER', id: p.id, value }));
 }
 
