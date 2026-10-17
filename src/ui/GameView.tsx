@@ -16,8 +16,9 @@ import { parseRecord, saveRecord } from './record';
 import { makeRecord, type GameSetup, type Session, useGame } from './useGame';
 import { downloadText, loadJson, saveJson } from './util';
 import { FxLayer } from './FxLayer';
+import { FxGhosts } from './FxGhosts';
 import { FxTicker } from './FxTicker';
-import { cuesOf, drawCuesOf, loadFxEnabled, saveFxEnabled, STEP_LABEL } from './fx';
+import { cuesOf, drawCuesOf, FX_MODE_LABEL, FX_MODES, fxScale, loadFxMode, removalCuesOf, removalsOf, saveFxMode, STEP_LABEL, type FxMode } from './fx';
 
 export function CardDetail({ s, uid }: { s: GameState; uid: number | null }) {
   if (uid === null || !s.cards[uid] || s.cards[uid].defId === '?') {
@@ -216,9 +217,11 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
 }
 
 export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExit: () => void; onRematch: () => void }) {
-  // 演出(オフにすると、オーバーレイ・アニメーション・演出のための CPU の待ち時間のすべてが無効になる)
-  const [fxOn, setFxOn] = useState(loadFxEnabled);
-  const g = useGame(setup, fxOn);
+  // 演出(通常・高速・オフ。オフにすると、オーバーレイ・アニメーション・演出のための CPU の待ち時間のすべてが無効になる)
+  const [fxMode, setFxMode] = useState<FxMode>(loadFxMode);
+  const fxOn = fxMode !== 'off';
+  const scale = fxScale(fxMode);
+  const g = useGame(setup, fxMode);
   const { session } = g;
   const s = session.state;
   const [hover, setHover] = useState<number | null>(null);
@@ -242,8 +245,15 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   // 演出: 直近の1手のイベントから作る(開始直後は、最初のターンの開始を見せる)。「一気に進める」中は出さない
   const fxActive = fxOn && !g.fast;
   const fxEvents = session.actions.length === 0 ? session.log : session.last;
-  const fxCues = useMemo(() => (fxActive ? cuesOf(s, fxEvents, g.me) : []), [fxActive, fxEvents]);
-  const drawCues = useMemo(() => (fxActive ? drawCuesOf(fxEvents, g.me) : []), [fxActive, fxEvents]);
+  const fxCues = useMemo(() => (fxActive ? cuesOf(s, fxEvents, g.me, scale) : []), [fxActive, fxEvents, scale]);
+  // 軽いチップ(ドロー・離れたカード)。ステップの切り替わりは FxTicker が状態の差分から作る
+  const lightCues = useMemo(() => (fxActive ? [...drawCuesOf(fxEvents, g.me, scale), ...removalCuesOf(s, fxEvents, g.me, scale)] : []), [fxActive, fxEvents, scale]);
+  const removals = useMemo(() => (fxActive ? removalsOf(fxEvents) : []), [fxActive, fxEvents]);
+  const blockers = useMemo(() => {
+    const set = new Set<number>();
+    if (fxActive) for (const e of session.last) if (e.type === 'blocked' && typeof e.card === 'number') set.add(e.card);
+    return set;
+  }, [fxActive, session.last]);
   const attackers = useMemo(() => {
     const set = new Set<number>();
     if (fxActive) for (const e of session.last) if (e.type === 'attackDeclared' && typeof e.card === 'number') set.add(e.card);
@@ -640,7 +650,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const tip = tips[Math.floor(s.turn / 2) % tips.length];
 
   return (
-    <div className={'game' + (sideOpen ? '' : ' side-closed') + (fxActive ? ' fx' : '')}>
+    <div className={'game' + (sideOpen ? '' : ' side-closed') + (fxActive ? ' fx' : '') + (fxActive && fxMode === 'fast' ? ' fx-fast' : '')} style={fxActive ? ({ '--fx-scale': scale } as React.CSSProperties) : undefined}>
       <div className="game-head">
         <button className={confirmQuit ? 'on' : ''} onClick={onExit} title="メニューへ戻ります(対戦は自動保存され、メニューから再開できます)。キーは Q を2回">
           {confirmQuit ? 'もう一度 Q でメニューへ' : '← メニュー'} <Kbd k={KEY.quit} />
@@ -698,16 +708,22 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                   <input type="checkbox" checked={askPay} onChange={(e) => setAskPay(e.target.checked)} /> 選べるときはタップするマナを選ぶ <Kbd k={KEY.askPay} />
                 </label>
               )}
-              <label className="check" title="ターンの切り替わり・攻撃・シールドブレイクなどの演出と、そのための CPU の待ち時間をまとめて切ります">
-                <input
-                  type="checkbox"
-                  checked={fxOn}
+              <label className="check" title="ターンの切り替わり・攻撃・破壊などの演出。高速は約2倍の速さ。オフにすると、演出のための CPU の待ち時間もなくなります">
+                演出{' '}
+                <select
+                  value={fxMode}
                   onChange={(e) => {
-                    setFxOn(e.target.checked);
-                    saveFxEnabled(e.target.checked);
+                    const m = e.target.value as FxMode;
+                    setFxMode(m);
+                    saveFxMode(m);
                   }}
-                />{' '}
-                演出を表示する
+                >
+                  {FX_MODES.map((m) => (
+                    <option key={m} value={m}>
+                      {FX_MODE_LABEL[m]}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="check" title="出せるカードがあるのに何もせずにターンを終えようとした時などに、もう一度押すよう確認します">
                 <input type="checkbox" checked={confirmOn} onChange={toggleConfirm} /> ターン終了の確認を出す <Kbd k={KEY.confirmEnd} />
@@ -761,11 +777,14 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           flash={flash}
           hit={shieldHit}
           attackers={attackers}
+          blockers={blockers}
           listReq={listReq}
         />
         <FxLayer cues={fxCues} token={session.last} enabled={fxActive} />
+        <FxGhosts s={s} removals={removals} token={session.last} enabled={fxActive} scale={scale} />
         <FxTicker
-          draws={drawCues}
+          scale={scale}
+          draws={lightCues}
           drawToken={session.last}
           step={{ key: `${s.turn}:${s.active}:${s.step}`, step: s.step, active: s.active, me: g.me }}
           enabled={fxActive}

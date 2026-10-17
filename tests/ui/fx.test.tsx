@@ -22,8 +22,10 @@ import {
   FX_MS,
   fxTotalMs,
   limitCues,
-  loadFxEnabled,
-  saveFxEnabled,
+  fxScale,
+  loadFxMode,
+  saveFxMode,
+  scaleMs,
   type FxCue,
 } from '../../src/ui/fx';
 import { useGame, type GameSetup } from '../../src/ui/useGame';
@@ -49,28 +51,50 @@ function playUntilTurn(turn: number, prefer: (a: { type: string }) => boolean = 
   return steps;
 }
 
-describe('設定(演出スキップ)', () => {
-  it('保存がなければ有効。保存した値が次回に反映される', () => {
-    expect(loadFxEnabled()).toBe(true);
-    saveFxEnabled(false);
-    expect(loadFxEnabled()).toBe(false);
-    saveFxEnabled(true);
-    expect(loadFxEnabled()).toBe(true);
+describe('設定(演出: 通常・高速・オフ)', () => {
+  it('保存がなければ通常。保存した値が次回に反映される', () => {
+    expect(loadFxMode()).toBe('normal');
+    for (const m of ['fast', 'off', 'normal'] as const) {
+      saveFxMode(m);
+      expect(loadFxMode()).toBe(m);
+    }
   });
-  it('保存がなく、OS が視覚効果の軽減を求めている時は、無効が既定', () => {
+  it('旧い保存({enabled: boolean})は、true=通常・false=オフとして読む', () => {
+    localStorage.setItem(FX_KEY, JSON.stringify({ enabled: false }));
+    expect(loadFxMode()).toBe('off');
+    localStorage.setItem(FX_KEY, JSON.stringify({ enabled: true }));
+    expect(loadFxMode()).toBe('normal');
+  });
+  it('保存がなく、OS が視覚効果の軽減を求めている時は、オフが既定。明示した設定を優先する', () => {
     const orig = window.matchMedia;
     window.matchMedia = ((q: string) => ({ matches: q.includes('reduce'), media: q }) as MediaQueryList) as typeof window.matchMedia;
     try {
-      expect(loadFxEnabled()).toBe(false);
-      localStorage.setItem(FX_KEY, JSON.stringify({ enabled: true }));
-      expect(loadFxEnabled()).toBe(true); // 明示した設定を優先
+      expect(loadFxMode()).toBe('off');
+      saveFxMode('fast');
+      expect(loadFxMode()).toBe('fast');
     } finally {
       window.matchMedia = orig;
     }
   });
-  it('壊れた保存値でも例外にせず、既定にする', () => {
+  it('壊れた・未知の保存値でも例外にせず、既定にする', () => {
     localStorage.setItem(FX_KEY, '{oops');
-    expect(loadFxEnabled()).toBe(true);
+    expect(loadFxMode()).toBe('normal');
+    localStorage.setItem(FX_KEY, JSON.stringify({ mode: 'turbo' }));
+    expect(loadFxMode()).toBe('normal');
+  });
+  it('倍率: 通常 1、高速 0.5(約2倍の速さ)、オフ 0', () => {
+    expect(fxScale('normal')).toBe(1);
+    expect(fxScale('fast')).toBe(0.5);
+    expect(fxScale('off')).toBe(0);
+    expect(scaleMs(1200, 0.5)).toBe(600);
+  });
+  it('高速は、演出の長さがちょうど半分になる(バナー・軽いチップ・ゴースト・CPU の待ち)', () => {
+    const steps = playUntilTurn(3);
+    const sum = (sc: number) => steps.flatMap((x) => cuesOf(x.state, x.events, 0, sc)).reduce((n, c) => n + c.ms, 0);
+    expect(sum(0.5)).toBeGreaterThan(0);
+    expect(Math.abs(sum(0.5) * 2 - sum(1))).toBeLessThanOrEqual(steps.length * 2);
+    expect(drawCuesOf([{ id: 1, causedBy: null, type: 'moved', turn: 2, cause: 'draw', owner: 0, card: 1 } as Ev], 0, 0.5)[0].ms).toBe(550);
+    expect(stepCueOf('main', 0, 0, 0.5).ms).toBe(600);
   });
 });
 
@@ -165,7 +189,7 @@ describe('演出が CPU の手を変えない(同じシードなら、演出の�
     strict: true,
   });
   const N = 16;
-  const run = async (fx: boolean) => {
+  const run = async (fx: 'normal' | 'fast' | 'off') => {
     const { result, unmount } = renderHook(() => useGame(cpuSetup(), fx));
     await waitFor(() => expect(result.current.session.actions.length).toBeGreaterThanOrEqual(N), { timeout: 50000 });
     const actions = result.current.session.actions.slice(0, N);
@@ -173,8 +197,8 @@ describe('演出が CPU の手を変えない(同じシードなら、演出の�
     return actions;
   };
   it('演出あり・なしで、先頭 N 手が同じ', async () => {
-    const off = await run(false);
-    const on = await run(true);
+    const off = await run('off');
+    const on = await run('normal');
     expect(on).toEqual(off);
   }, 120000);
 });

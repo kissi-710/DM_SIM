@@ -10,7 +10,7 @@ import { AiCancelled, cancelAi, chooseWithWorker } from './aiClient';
 import { RECORD_VERSION, type GameRecord } from './record';
 import { clearAutosave, writeAutosave, type SaveStatus } from './autosave';
 import { errorMessage } from '../engine/types';
-import { cpuSeed, cpuWaitMs, cuesOf, fxTotalMs, MIN_CPU_GAP_MS } from './fx';
+import { cpuSeed, cpuWaitMs, fxHoldMs, fxScale, MIN_CPU_GAP_MS, type FxMode } from './fx';
 
 export type { GameRecord } from './record';
 
@@ -79,9 +79,9 @@ export function makeRecord(setup: GameSetup, session: Session): GameRecord {
 }
 
 /**
- * @param fxEnabled 演出が有効か(演出スキップ設定の逆)。CPU の手の「待ち時間」にだけ影響し、手の選択には影響しない(fx.ts)。
+ * @param fxMode 演出の設定(通常・高速・オフ)。CPU の手の「待ち時間」にだけ影響し、手の選択には影響しない(fx.ts)。
  */
-export function useGame(setup: GameSetup, fxEnabled = false) {
+export function useGame(setup: GameSetup, fxMode: FxMode = 'off') {
   const [session, setSession] = useState<Session>(() => {
     const g = createGame(reg, {
       decks: setup.decks,
@@ -142,8 +142,8 @@ export function useGame(setup: GameSetup, fxEnabled = false) {
   const sessionRef = useRef(session);
   sessionRef.current = session;
   // 演出の切り替えで CPU の手番の effect を作り直さない(待ち時間の計算の時点の値を読む)
-  const fxRef = useRef(fxEnabled);
-  fxRef.current = fxEnabled;
+  const fxRef = useRef(fxMode);
+  fxRef.current = fxMode;
   const stamp = useRef(0);
 
   const humanSeats = ([0, 1] as PlayerId[]).filter((p) => setup.seats[p].kind === 'human');
@@ -199,8 +199,8 @@ export function useGame(setup: GameSetup, fxEnabled = false) {
         speedMs: speed,
         fast,
         vsHuman: me !== null,
-        fxEnabled: fxRef.current,
-        fxHoldMs: fxRef.current ? fxTotalMs(cuesOf(cur.state, cur.last, me)) : 0,
+        fxEnabled: fxRef.current !== 'off',
+        fxHoldMs: fxRef.current !== 'off' ? fxHoldMs(cur.state, cur.last, me, fxScale(fxRef.current)) : 0,
       });
       await new Promise((r) => setTimeout(r, wait));
       if (cancelled) return;

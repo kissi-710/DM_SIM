@@ -7,7 +7,7 @@ import { CARD_DB } from '../cards';
 import { INFO_PRESET_LABEL, type InfoPreset } from '../engine/view';
 import { allDecks, findDeck } from './decks';
 import type { GameSetup, Seat } from './useGame';
-import { loadFxEnabled, saveFxEnabled } from './fx';
+import { FX_MODE_LABEL, FX_MODES, loadFxMode, saveFxMode, type FxMode } from './fx';
 import { loadJson, saveJson } from './util';
 import { errorMessage } from '../engine/types';
 import { aiEngine, onAiEngine, warmAi, type AiEngine } from './aiClient';
@@ -41,7 +41,7 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
   const [autoOrder, setAutoOrder] = useState(saved?.autoOrder ?? false);
   const [undo, setUndo] = useState(saved?.undo ?? true);
   // 演出(対戦画面の「演出を表示する」と同じ設定)
-  const [fx, setFx] = useState(loadFxEnabled);
+  const [fx, setFx] = useState<FxMode>(loadFxMode);
   const [delay, setDelay] = useState(saved?.delay ?? (mode === 'watch' ? 600 : 500));
   // モンテカルロ探索の最大の思考時間。手の優劣がはっきりすれば、これより早く打ち切る
   const [think, setThink] = useState(saved?.think ?? 1200);
@@ -199,16 +199,23 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
           <input type="number" value={delay} min={0} max={3000} step={100} onChange={(e) => setDelay(Number(e.target.value))} />
         </label>
         <label className="row">
-          <input
-            type="checkbox"
-            checked={fx}
+          演出
+          <select
+            value={fx}
             onChange={(e) => {
-              setFx(e.target.checked);
-              saveFxEnabled(e.target.checked);
+              const m = e.target.value as FxMode;
+              setFx(m);
+              saveFxMode(m);
             }}
-          />
-          演出を表示する(ターンの切り替わり・攻撃・シールドブレイクなど。オフにすると、演出のための CPU の待ち時間もなくなります)
+          >
+            {FX_MODES.map((m) => (
+              <option key={m} value={m}>
+                {FX_MODE_LABEL[m]}
+              </option>
+            ))}
+          </select>
         </label>
+        <span className="muted">ターンの切り替わり・攻撃・破壊などの演出。高速は約2倍の速さ。オフにすると、演出のための CPU の待ち時間もなくなります(従来の表示)。</span>
         {mode === 'play' && (
         <>
         <label className="row">

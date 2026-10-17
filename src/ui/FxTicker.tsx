@@ -15,14 +15,17 @@ export function FxTicker({
   drawToken,
   step,
   enabled,
+  scale = 1,
 }: {
-  /** 直近の1手のドロー(drawCuesOf) */
+  /** 直近の1手の軽い演出(ドロー・離れたカードのチップ) */
   draws: LightCue[];
   /** 1手ごとに変わる値(同じ手を二重に出さない) */
   drawToken: unknown;
   /** 現在のステップ。切り替わりを検知して出す(最初の表示では出さない) */
   step: { key: string; step: string; active: number; me: number | null };
   enabled: boolean;
+  /** 長さの倍率(高速は 0.5) */
+  scale?: number;
 }) {
   const [items, setItems] = useState<Item[]>([]);
   const seq = useRef(0);
@@ -50,7 +53,7 @@ export function FxTicker({
     const prev = lastStep.current;
     lastStep.current = step.key;
     if (!enabled || prev === null || prev === step.key) return;
-    push([stepCueOf(step.step, step.active, step.me)]);
+    push([stepCueOf(step.step, step.active, step.me, scale)]);
   }, [step.key, enabled]);
 
   useEffect(() => {

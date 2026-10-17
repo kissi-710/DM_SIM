@@ -4,8 +4,8 @@
 //  1. 演出は、engine が返した Ev(イベント)から作る純粋関数 `cuesOf` だけで決まる。状態は読むだけで書き換えない。
 //  2. CPU の手の決定(`chooseWithWorker` への入力 = 状態 + シード)は、演出の有無・長さに依存しない。
 //     演出が CPU に与える影響は「次の手を打つまでの待ち時間」だけ(`cpuWaitMs`)。
-//  3. 「演出」設定をオフにすると、オーバーレイ・CSS アニメーション・待ち時間の上乗せのすべてが無効になる。
-import type { Ev, GameState } from '../engine/types';
+//  3. 「演出」設定は 通常 / 高速 / オフ の3段階。高速は長さを半分(約2倍の速さ)にし、オフはオーバーレイ・CSS アニメーション・待ち時間の上乗せのすべてを無効にする。
+import type { Ev, GameState, ZoneName } from '../engine/types';
 import { cardName } from './format';
 import { loadJson, saveJson } from './util';
 
@@ -22,15 +22,33 @@ function prefersReducedMotion(): boolean {
   }
 }
 
-/** 演出の有効・無効(演出スキップ設定の逆)。保存がなければ、OS の設定に従い、通常は有効 */
-export function loadFxEnabled(): boolean {
-  const saved = loadJson<{ enabled?: boolean } | null>(FX_KEY, null);
-  if (saved && typeof saved.enabled === 'boolean') return saved.enabled;
-  return !prefersReducedMotion();
+export type FxMode = 'normal' | 'fast' | 'off';
+export const FX_MODES: FxMode[] = ['normal', 'fast', 'off'];
+export const FX_MODE_LABEL: Record<FxMode, string> = { normal: '通常', fast: '高速', off: 'オフ' };
+
+/** 演出の長さの倍率。高速は半分(約2倍の速さ)。オフは使わない(0) */
+export function fxScale(mode: FxMode): number {
+  return mode === 'normal' ? 1 : mode === 'fast' ? 0.5 : 0;
 }
 
-export function saveFxEnabled(enabled: boolean): void {
-  saveJson(FX_KEY, { enabled });
+/** 長さ(ms)に倍率をかける(最低 1ms) */
+export function scaleMs(ms: number, scale: number): number {
+  return Math.max(1, Math.round(ms * scale));
+}
+
+/**
+ * 演出の設定(通常・高速・オフ)。保存がなければ、OS の設定に従い、通常は「通常」。
+ * 旧い保存({enabled: boolean})は、true=通常・false=オフとして読む。
+ */
+export function loadFxMode(): FxMode {
+  const saved = loadJson<{ mode?: unknown; enabled?: unknown } | null>(FX_KEY, null);
+  if (saved && FX_MODES.includes(saved.mode as FxMode)) return saved.mode as FxMode;
+  if (saved && typeof saved.enabled === 'boolean') return saved.enabled ? 'normal' : 'off';
+  return prefersReducedMotion() ? 'off' : 'normal';
+}
+
+export function saveFxMode(mode: FxMode): void {
+  saveJson(FX_KEY, { mode });
 }
 
 // ───────────────────────── 演出の種類と長さ ─────────────────────────
@@ -82,7 +100,7 @@ function who(owner: number, me: number | null): string {
  * - 人間が自分で行った 召喚・呪文・攻撃宣言 は、本人が分かっているので出さない(観戦では出す)。
  * - 隠れた情報は出さない(カード名は、公開された場面のものだけ。シールドブレイクは枚数だけ)。
  */
-export function cuesOf(s: GameState, events: Ev[], me: number | null): FxCue[] {
+export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1): FxCue[] {
   const out: FxCue[] = [];
   const own = (owner: number) => me !== null && owner === me;
   for (let i = 0; i < events.length; i++) {
@@ -150,7 +168,7 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null): FxCue[] {
         break;
     }
   }
-  return limitCues(out);
+  return limitCues(out).map((c) => ({ ...c, ms: scaleMs(c.ms, scale) }));
 }
 
 /** 数と合計の長さを制限する(先頭を優先。ターン遷移は必ず残す) */
@@ -218,7 +236,7 @@ export const STEP_LABEL: Record<string, string> = {
   end: 'ターン終了',
 };
 
-export type LightKind = 'draw' | 'step';
+export type LightKind = 'draw' | 'step' | 'remove';
 
 export interface LightCue {
   kind: LightKind;
@@ -228,10 +246,10 @@ export interface LightCue {
   ms: number;
 }
 
-export const LIGHT_MS: Record<LightKind, number> = { draw: 1100, step: 1200 };
+export const LIGHT_MS: Record<LightKind, number> = { draw: 1100, step: 1200, remove: 2000 };
 
 /** 1手の中のドローを、プレイヤーごとの枚数にまとめる(引いたカードの名前は出さない) */
-export function drawCuesOf(events: Ev[], me: number | null): LightCue[] {
+export function drawCuesOf(events: Ev[], me: number | null, scale = 1): LightCue[] {
   const n: Record<number, number> = {};
   const order: number[] = [];
   for (const e of events) {
@@ -248,17 +266,86 @@ export function drawCuesOf(events: Ev[], me: number | null): LightCue[] {
     title: me === null || o === me ? `ドロー ×${n[o]}` : `相手がドロー ×${n[o]}`,
     sub: me === null ? `プレイヤー${o + 1}` : undefined,
     side: sideOf(o, me),
-    ms: LIGHT_MS.draw,
+    ms: scaleMs(LIGHT_MS.draw, scale),
   }));
 }
 
 /** ステップが切り替わった時の表示(「相手 ▸ メイン」など) */
-export function stepCueOf(step: string, active: number, me: number | null): LightCue {
+export function stepCueOf(step: string, active: number, me: number | null, scale = 1): LightCue {
   return {
     kind: 'step',
     title: STEP_LABEL[step] ?? step,
     sub: me === null ? `プレイヤー${active + 1}` : active === me ? 'あなた' : '相手',
     side: sideOf(active, me),
-    ms: LIGHT_MS.step,
+    ms: scaleMs(LIGHT_MS.step, scale),
   };
+}
+
+// ───────────────────────── カードがフィールドなどから離れた時(破壊・バウンスなど) ─────────────────────────
+// 何が起きたか分かるよう、(1) 離れたカードを元の位置から行き先(墓地・手札など)へ飛ばす「ゴースト」と、
+// (2) 「破壊: カード名」のチップを出す。見えている情報(場・マナ・捨てた手札)だけを使い、シールド・山札の移動は扱わない。
+
+export interface Removal {
+  uid: number;
+  owner: number;
+  from: ZoneName;
+  to: ZoneName;
+  /** 「破壊」「手札に戻る」など */
+  label: string;
+}
+
+/** ゴーストの長さ(ms)。一瞬でよい */
+export const GHOST_MS = 550;
+
+/** 1手のイベントから、離れたカード(公開されているもの)を拾う */
+export function removalsOf(events: Ev[]): Removal[] {
+  const out: Removal[] = [];
+  for (const e of events) {
+    if (e.type !== 'moved' || typeof e.card !== 'number') continue;
+    const from = e.from as ZoneName;
+    const to = e.to as ZoneName;
+    const visible =
+      (from === 'battle' && (to === 'grave' || to === 'hand' || to === 'mana' || to === 'deck')) ||
+      (from === 'mana' && to === 'grave' && e.cause === 'destroy') ||
+      (from === 'hand' && to === 'grave' && e.cause === 'discard');
+    if (!visible) continue;
+    const label = e.cause === 'destroy' ? '破壊' : to === 'hand' ? '手札に戻る' : e.cause === 'discard' ? '捨てる' : to === 'mana' ? 'マナゾーンへ' : to === 'deck' ? '山札へ' : '墓地へ';
+    out.push({ uid: e.card, owner: e.owner as number, from, to, label });
+  }
+  return out;
+}
+
+const MAX_NAMES = 3;
+
+/** 離れたカードのチップ(「破壊: A、B ほか2枚」)。持ち主・種類ごとにまとめる */
+export function removalCuesOf(s: GameState, events: Ev[], me: number | null, scale = 1): LightCue[] {
+  const groups = new Map<string, { owner: number; label: string; uids: number[] }>();
+  for (const r of removalsOf(events)) {
+    const k = `${r.owner}:${r.label}`;
+    const g = groups.get(k) ?? { owner: r.owner, label: r.label, uids: [] };
+    g.uids.push(r.uid);
+    groups.set(k, g);
+  }
+  return [...groups.values()].map((g) => {
+    const names = [...new Set(g.uids.map((u) => cardName(s, u)))];
+    const shown = names.slice(0, MAX_NAMES).join('、');
+    const more = names.length > MAX_NAMES ? ` ほか${names.length - MAX_NAMES}枚` : '';
+    return {
+      kind: 'remove' as const,
+      title: `${g.label}: ${shown}${more}`,
+      sub: who(g.owner, me),
+      side: sideOf(g.owner, me),
+      ms: scaleMs(LIGHT_MS.remove, scale),
+    };
+  });
+}
+
+/**
+ * CPU が次の手を打つ前に待つ、演出の長さ(ms)。バナーの合計と、ゴーストの長さの大きいほう。
+ * (チップ・ステップ表示は待たせない)
+ */
+export function fxHoldMs(s: GameState, events: Ev[], me: number | null, scale: number): number {
+  const banners = fxTotalMs(cuesOf(s, events, me, scale));
+  const ghost = removalsOf(events).length > 0 ? scaleMs(GHOST_MS, scale) : 0;
+  return Math.max(banners, ghost);
 }

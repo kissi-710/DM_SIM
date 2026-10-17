@@ -106,6 +106,8 @@ interface BoardProps {
   hit?: Set<PlayerId>;
   /** 直近のイベントで攻撃を宣言したカード(演出で前に出す) */
   attackers?: Set<number>;
+  /** 直近のイベントでブロックしたカード(演出で光らせる) */
+  blockers?: Set<number>;
   /** キーボードからの一覧の表示要求(n が変わるたびに開く) */
   listReq?: { p: PlayerId; zone: 'mana' | 'grave' | 'shield'; n: number } | null;
   /** 今は使えない手札のカードがクリックされた(理由を出す) */
@@ -166,7 +168,7 @@ export function Board(b: BoardProps) {
   const renderHand = (p: PlayerId, mine: boolean) => {
     const z = s.players[p];
     return (
-      <div className="zone hand grow">
+      <div className="zone hand grow" data-zone={`hand:${p}`}>
         <div className="cards hscroll">
           {z.hand.map((u) => {
             const key = `hand:${u}`;
@@ -204,6 +206,7 @@ export function Board(b: BoardProps) {
     const free = z.mana.filter((u) => !s.cards[u].tapped).length;
     return (
       <div
+        data-zone={`mana:${p}`}
         className={(mine ? zcls('zone:mana') : 'zone') + ' mana grow'}
         {...(mine ? zoneProps('zone:mana') : {})}
         onDoubleClick={() => openList(p, 'mana')}
@@ -251,7 +254,7 @@ export function Board(b: BoardProps) {
             return (
               <div
                 key={perm.pid}
-                className={'pile' + (isTarget ? ' drop-ok' : '') + (b.attackers?.has(top) ? (mine ? ' lunge-up' : ' lunge-down') : '')}
+                className={'pile' + (isTarget ? ' drop-ok' : '') + (b.attackers?.has(top) ? (mine ? ' lunge-up' : ' lunge-down') : '') + (b.blockers?.has(top) ? ' block-flash' : '')}
                 data-drop={pileDropKey}
                 onClick={() => {
                   if (activeKey && liveDrops.has(pileDropKey)) exec(activeKey, pileDropKey);
@@ -310,7 +313,7 @@ export function Board(b: BoardProps) {
     const key = top !== null ? `grave:${top}` : '';
     const can = top !== null && mine && interactive && dropMap.has(key);
     return (
-      <div className="chip grave" onDoubleClick={() => openList(p, 'grave')} title="ダブルクリックで一覧">
+      <div className="chip grave" data-zone={`grave:${p}`} onDoubleClick={() => openList(p, 'grave')} title="ダブルクリックで一覧">
         <span className="chip-label">
           墓地 <b>{z.grave.length}</b>
           {z.hyper.length > 0 && <span className="chip-sub">超次元 {z.hyper.length}</span>}
@@ -342,7 +345,7 @@ export function Board(b: BoardProps) {
     const info = (
       <div className="zone-row info" key="info">
         {!mine && (
-          <div className="chip">
+          <div className="chip" data-zone={b.showOppHand ? undefined : `hand:${p}`}>
             <span className="chip-label">手札</span>
             <b>{z.hand.length}</b>
           </div>

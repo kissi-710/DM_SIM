@@ -38,20 +38,31 @@ describe('GameView の演出', () => {
     expect(container.querySelectorAll('.side-board.turn-active')).toHaveLength(1);
     expect(container.querySelector('.fx-ticker')).toBeNull();
   });
+  it('「高速」にすると、演出は有効なまま長さの倍率が半分になる', async () => {
+    const { container } = render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
+    await screen.findByText('あなたのターン');
+    await userEvent.click(screen.getByRole('button', { name: /表示/ }));
+    await userEvent.selectOptions(screen.getByLabelText(/演出/), 'fast');
+    const game = container.querySelector<HTMLElement>('.game')!;
+    expect(game.classList.contains('fx')).toBe(true);
+    expect(game.classList.contains('fx-fast')).toBe(true);
+    expect(game.style.getPropertyValue('--fx-scale')).toBe('0.5');
+    expect(JSON.parse(localStorage.getItem('dmsim.fx')!)).toEqual({ mode: 'fast' });
+  });
   it('演出スキップ(保存された設定が無効)なら、オーバーレイも fx の印も出ない', () => {
     localStorage.setItem('dmsim.fx', JSON.stringify({ enabled: false }));
     const { container } = render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
     expect(container.querySelector('.game.fx')).toBeNull();
     expect(container.querySelector('.fx-layer')).toBeNull();
   });
-  it('「演出を表示する」を切ると、その場で演出が消え、設定が保存される', async () => {
+  it('演出の設定を「オフ」にすると、その場で演出が消え、設定が保存される', async () => {
     const { container } = render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
     await screen.findByText('あなたのターン');
     await userEvent.click(screen.getByRole('button', { name: /表示/ }));
-    await userEvent.click(screen.getByLabelText(/演出を表示する/));
+    await userEvent.selectOptions(screen.getByLabelText(/演出/), 'off');
     expect(container.querySelector('.fx-layer')).toBeNull();
     expect(container.querySelector('.game.fx')).toBeNull();
-    expect(JSON.parse(localStorage.getItem('dmsim.fx')!)).toEqual({ enabled: false });
+    expect(JSON.parse(localStorage.getItem('dmsim.fx')!)).toEqual({ mode: 'off' });
   });
 });
 
