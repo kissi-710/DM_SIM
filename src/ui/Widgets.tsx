@@ -97,7 +97,7 @@ export function PickWidget({ s, spec, onAnswer, onHover, cursor }: Props & { spe
         )}
         {instant && (
           <span className="muted">
-            {touch ? (armed !== null ? 'もう一度タップで決定します' : 'タップで詳細を見て、もう一度タップで決定します') : 'クリックか番号キーで選びます。← → で詳細を見てから Enter でも選べます'}
+            {touch ? (armed !== null ? 'もう一度タップで決定' : 'タップで詳細、もう一度タップで決定') : 'クリックか番号キーで選択。← → で詳細を見て Enter で決定'}
           </span>
         )}
         {spec.min === 0 && (
@@ -161,7 +161,7 @@ export function AssignWidget({ s, spec, onAnswer, onHover, cursor }: Props & { s
               onHover={onHover}
             />
           ))}
-        {spec.items.every((u) => placed.has(u)) && <span className="muted">すべて割り振りました</span>}
+        {spec.items.every((u) => placed.has(u)) && <span className="muted">割り振り済み</span>}
       </div>
       <div className="slots">
         {spec.slots.map((sl, si) => (
@@ -190,7 +190,7 @@ export function AssignWidget({ s, spec, onAnswer, onHover, cursor }: Props & { s
         </div>
       )}
       <div className="row">
-        <span className="muted">札(数字キー)を選んで、枠(Q・W・E)に入れます。クリックやドラッグでも。{need}枚を割り振ります。</span>
+        <span className="muted">札(数字キー)を枠(Q・W・E)に割り振る。クリック・ドラッグも可({need}枚)</span>
         <button className="primary" disabled={placed.size !== need} onClick={() => onAnswer(asg)}>
           確定 <Kbd k="Enter" />
         </button>
@@ -267,7 +267,7 @@ export function OptionWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
       </div>
       <div className="row">
         <span className="muted">
-          {spec.pick}回選ぶ{spec.repeat ? '(同じものを何度でも)' : ''}。上に書かれたものから順に処理されます({sel.length}/{spec.pick})
+          {spec.pick}回選ぶ{spec.repeat ? '(重複可)' : ''}。上から順に処理({sel.length}/{spec.pick})
         </span>
         <button className="primary" disabled={sel.length !== spec.pick} onClick={() => onAnswer(sel)}>
           確定 <Kbd k="Enter" />
@@ -310,7 +310,7 @@ export function OrderWidget({ spec, onAnswer }: { spec: Extract<InputSpec, { sha
           {i < 9 && <Kbd k={String(i + 1)} />} {spec.labels[i]}
         </button>
       ))}
-      <span className="muted">同時に誘発した能力は、好きな順に解決できます。</span>
+      <span className="muted">同時に誘発した能力。解決する順を選ぶ</span>
     </div>
   );
 }

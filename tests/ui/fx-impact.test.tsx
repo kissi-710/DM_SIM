@@ -2,7 +2,7 @@
 // 演出の重み(試合結果への影響が大きい行動ほど豪華に): S・トリガー / G・ストライク / ラスト・シールド、
 // 決定的な見せ場の上限の扱い、FxLayer の描画、タップの向きを演出が壊さないこと
 import { readFileSync } from 'node:fs';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FxLayer } from '../../src/ui/FxLayer';
 import { FX_MAX_CUES, FX_MS, FX_TIER, cuesOf, fxHoldMs, limitCues, tierOf, type FxCue } from '../../src/ui/fx';
@@ -41,7 +41,7 @@ describe('S・トリガー / G・ストライクの演出(実際のエンジン�
     for (const me of [1, 0, null]) {
       const cues = cuesOf(sim.s, sim.events, me).filter((c) => c.kind === 'trigger');
       expect(cues).toHaveLength(1);
-      expect(cues[0]).toMatchObject({ title: 'S・トリガー!', variant: 'strigger', tag: '逆転の一手', ms: FX_MS.trigger });
+      expect(cues[0]).toMatchObject({ title: 'S・トリガー!', variant: 'strigger', ms: FX_MS.trigger });
       expect(tierOf(cues[0])).toBe('decisive');
       expect(cues[0].reveal).toMatchObject({ name: N, type: '呪文' });
       expect(cues[0].reveal!.text.length).toBeGreaterThan(0);
@@ -72,7 +72,7 @@ describe('ラスト・シールド', () => {
     const last = new Sim({ p0: { battle: ['ヨビニオン・マルル'] }, p1: { shield: 1 } });
     last.attack('ヨビニオン・マルル', 'player');
     const lc = cuesOf(last.s, last.events, 0).find((c) => c.kind === 'shield')!;
-    expect(lc).toMatchObject({ variant: 'last', tag: '王手' });
+    expect(lc.variant).toBe('last');
     expect(tierOf(lc)).toBe('decisive');
     expect(lc.sub).toContain('ラスト・シールド');
 
@@ -85,7 +85,7 @@ describe('ラスト・シールド', () => {
 });
 
 describe('FxLayer(重みごとの描画)', () => {
-  const base: FxCue = { id: 1, kind: 'trigger', title: 'S・トリガー!', sub: 'フェアリー・ライフ', side: 'opp', ms: 5000, variant: 'strigger', tag: '逆転の一手' };
+  const base: FxCue = { id: 1, kind: 'trigger', title: 'S・トリガー!', sub: 'フェアリー・ライフ', side: 'opp', ms: 5000, variant: 'strigger' };
   it('決定的な見せ場は、光線・見せ札・一言を出し、重みを属性に持つ', () => {
     const reveal = { name: 'フェアリー・ライフ', civs: ['nature'], cost: '2', type: '呪文', text: 'マナをふやす' };
     const { container } = render(<FxLayer cues={[{ ...base, reveal }]} token={1} enabled />);
@@ -95,7 +95,7 @@ describe('FxLayer(重みごとの描画)', () => {
     expect(container.querySelector('.fx-rays')).not.toBeNull();
     expect(container.querySelector('.fx-reveal-name')!.textContent).toBe('フェアリー・ライフ');
     expect(container.querySelector('.fx-reveal-text')!.textContent).toBe('マナをふやす');
-    expect(screen.getByText('逆転の一手')).toBeInTheDocument();
+    expect(container.textContent).not.toContain('逆転の一手');
   });
   it('重要・軽い演出は、光線も見せ札も出さない', () => {
     const { container } = render(<FxLayer cues={[{ id: 2, kind: 'cast', title: '呪文', side: 'opp', ms: 5000 }]} token={1} enabled />);

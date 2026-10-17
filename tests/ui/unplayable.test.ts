@@ -16,6 +16,6 @@ describe('whyUnplayable', () => {
   it('メインステップでマナが無い時は、足りない枚数を添える', () => {
     const s = { ...game(), step: 'main' as const };
     const u = s.players[0].hand.find((x) => reg.defs[s.cards[x].defId].faces[0].type !== 'evolution' && reg.defs[s.cards[x].defId].faces[0].cost > 0)!;
-    expect(whyUnplayable(s, 0, u)).toMatch(/マナが足りません\(コスト \d+、タップできるマナ 0枚\)/);
+    expect(whyUnplayable(s, 0, u)).toMatch(/マナが足りません\(コスト \d+ \/ 使えるマナ 0\)/);
   });
 });

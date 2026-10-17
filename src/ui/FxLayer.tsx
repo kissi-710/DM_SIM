@@ -72,7 +72,6 @@ export function FxLayer({ cues, token, enabled }: { cues: FxCue[]; token: unknow
           </div>
         )}
         <div className="fx-cue-main">
-          {c.tag && <div className="fx-tag">{c.tag}</div>}
           <div className="fx-title">{c.title}</div>
           {c.sub && <div className="fx-sub">{c.sub}</div>}
         </div>

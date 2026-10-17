@@ -215,7 +215,7 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
             ))}
           </select>
         </label>
-        <span className="muted">ターンの切り替わり・攻撃・破壊などの演出。高速は約2倍の速さ。オフにすると、演出のための CPU の待ち時間もなくなります(従来の表示)。</span>
+        <span className="muted">高速は約2倍の速さ。オフは演出なし(従来の表示)。</span>
         {mode === 'play' && (
         <>
         <label className="row">

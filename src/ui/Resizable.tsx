@@ -130,7 +130,7 @@ export function ResizablePanel({ boxKey, className, title, onClose, label, minW 
       onPointerCancel={onUp}
     >
       <div className="rzp-head">
-        <div className="rzp-grip" data-dir="move" title="ドラッグで移動(ダブルクリックで元の位置と大きさ)" onDoubleClick={reset}>
+        <div className="rzp-grip" data-dir="move" title="ドラッグで移動(ダブルクリックでリセット)" onDoubleClick={reset}>
           ⠿ {title}
         </div>
         {onClose && (
@@ -208,7 +208,7 @@ export function Splitter({ width, onChange, stageRef, fieldRef }: { width: numbe
       aria-valuemin={RAIL_MIN}
       aria-valuemax={RAIL_MAX}
       tabIndex={0}
-      title="ドラッグで右の欄の幅を変える(ダブルクリックで元に戻す)"
+      title="ドラッグで幅を変更(ダブルクリックでリセット)"
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}

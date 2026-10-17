@@ -82,8 +82,6 @@ export interface FxCue {
   tier?: FxTier;
   /** 種類の中の変種(ラスト・シールド / S・トリガー / G・ストライク) */
   variant?: 'last' | 'strigger' | 'gstrike';
-  /** 一言(「逆転の一手」など) */
-  tag?: string;
   /** 公開されたカードの見せ札 */
   reveal?: FxReveal;
   title: string;
@@ -188,7 +186,7 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
       }
       case 'cast':
         if (own(e.owner) || triggered.has(e.card)) break;
-        out.push({ id: e.id, kind: 'cast', title: cardName(s, e.card), sub: `${who(e.owner, me)}が呪文を唱えた`, side: sideOf(e.owner, me), ms: FX_MS.cast });
+        out.push({ id: e.id, kind: 'cast', title: cardName(s, e.card), sub: `${who(e.owner, me)}の呪文`, side: sideOf(e.owner, me), ms: FX_MS.cast });
         break;
       case 'entered':
         // 革命チェンジは切り札なので、自分の分も出す。入れ替わりで手札に戻ったクリーチャーの名前を添える
@@ -252,11 +250,11 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
           id: e.id,
           kind: 'shield',
           title: 'シールドブレイク!',
-          sub: last ? `${who(e.owner, me)}のラスト・シールド!` : `${who(e.owner, me)}のシールド`,
+          sub: last ? `${who(e.owner, me)}のラスト・シールド` : `${who(e.owner, me)}のシールド`,
           side: sideOf(e.owner, me),
           ms: last ? 1800 : FX_MS.shield,
           count: 1,
-          ...(last ? { tier: 'decisive' as const, variant: 'last' as const, tag: '王手' } : {}),
+          ...(last ? { tier: 'decisive' as const, variant: 'last' as const } : {}),
         });
         break;
       }
@@ -271,7 +269,6 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
           id: e.id,
           kind: 'trigger',
           variant: e.kind === 'gStrike' ? 'gstrike' : 'strigger',
-          tag: '逆転の一手',
           title: e.kind === 'gStrike' ? 'G・ストライク!' : 'S・トリガー!',
           sub: cardName(s, e.card),
           reveal: revealOf(s.cards[e.card]?.defId),

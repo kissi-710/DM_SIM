@@ -193,15 +193,15 @@ export interface Ward {
   chosen: boolean;
   /** 攻撃されない */
   attacked: boolean;
-  /** 短い名前(「触れない」「選ばれない」「攻撃されない」) */
+  /** 状態の名前(「選ばれない・攻撃されない」など) */
   label: string;
-  /** いつまでか(「持ち主の次のターンの開始まで」など) */
+  /** いつまでか(「持ち主の次のターンまで」など) */
   until: string;
 }
 
 /** 期限の言い方 */
 export function untilLabel(d: Duration): string {
-  return d.kind === 'endOfTurn' ? 'このターンの終わりまで' : d.kind === 'untilTurnStart' ? '持ち主の次のターンの開始まで' : '発生源が場にいる間';
+  return d.kind === 'endOfTurn' ? 'ターン終了まで' : d.kind === 'untilTurnStart' ? '持ち主の次のターンまで' : '場にいる間';
 }
 
 /**
@@ -223,7 +223,7 @@ export function wardOf(s: GameState, pid: number): Ward | null {
   return {
     chosen,
     attacked,
-    label: chosen && attacked ? '触れない' : chosen ? '選ばれない' : '攻撃されない',
+    label: chosen && attacked ? '選ばれない・攻撃されない' : chosen ? '選ばれない' : '攻撃されない',
     until: until ? untilLabel(until) : '',
   };
 }

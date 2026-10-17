@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 切り札の演出(革命チェンジ・侵略・進化)と、触れない状態(ジャストダイバー)の表示。実際のエンジンのイベントで確かめる
+// 切り札の演出(革命チェンジ・侵略・進化)と、選ばれない・攻撃されない状態(ジャストダイバー)の表示。実際のエンジンのイベントで確かめる
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CardView } from '../../src/ui/CardView';
@@ -76,7 +76,7 @@ describe('侵略の演出', () => {
   });
 });
 
-describe('触れない状態(ジャストダイバー)の表示', () => {
+describe('選ばれない・攻撃されない状態(ジャストダイバー)の表示', () => {
   const jd = () => {
     const sim = new Sim({ p0: { hand: ['魔誕の斬将オルゲイト'], mana: [W, W, W, D, D, N, N, ...mana(3)] } });
     sim.play('魔誕の斬将オルゲイト');
@@ -84,22 +84,22 @@ describe('触れない状態(ジャストダイバー)の表示', () => {
     return sim;
   };
 
-  it('ジャストダイバーで出たクリーチャーは、選ばれず攻撃されない(触れない)状態として分かる', () => {
+  it('ジャストダイバーで出たクリーチャーは、選ばれず攻撃されない状態として分かる', () => {
     const sim = jd();
     const pm = sim.s.players[0].battle.find((p) => sim.s.cards[p.cards[0]].defId.includes('rp4-S02'))!;
     const w = wardOf(sim.s, pm.pid);
-    expect(w).toMatchObject({ chosen: true, attacked: true, label: '触れない', until: untilLabel({ kind: 'untilTurnStart', player: 0, afterTurn: 1 }) });
-    expect(w!.until).toContain('次のターン');
+    expect(w).toMatchObject({ chosen: true, attacked: true, label: '選ばれない・攻撃されない', until: untilLabel({ kind: 'untilTurnStart', player: 0, afterTurn: 1 }) });
+    expect(w!.until).toBe('持ち主の次のターンまで');
   });
-  it('札に「触れない」の印と光る縁が付き、読み上げ・ツールチップにも出る。状態のないクリーチャーには出ない', () => {
+  it('札に🛡の印と光る縁が付き、読み上げ・ツールチップにも出る。状態のないクリーチャーには出ない', () => {
     const sim = jd();
     const pm = sim.s.players[0].battle.find((p) => sim.s.cards[p.cards[0]].defId.includes('rp4-S02'))!;
     const { container } = render(<CardView s={sim.s} uid={pm.cards[0]} />);
     const card = container.querySelector('.card')!;
     expect(card.classList.contains('ward')).toBe(true);
-    expect(container.querySelector('.ward-tag')!.textContent).toContain('触れない');
-    expect(card.getAttribute('aria-label')).toContain('触れない');
-    expect(card.getAttribute('title')).toContain('持ち主の次のターンの開始まで');
+    expect(container.querySelector('.ward-tag')!.textContent!.trim()).toBe('🛡'); // 文字は付けない(詳細はツールチップ・詳細欄)
+    expect(card.getAttribute('aria-label')).toContain('選ばれない・攻撃されない');
+    expect(card.getAttribute('title')).toContain('選ばれない・攻撃されない(持ち主の次のターンまで)');
     expect(card.textContent).toContain('JD');
 
     const plain = new Sim({ p0: { battle: ['天災 デドダム'] } });
@@ -108,11 +108,11 @@ describe('触れない状態(ジャストダイバー)の表示', () => {
     expect(r2.container.querySelector('.card.ward')).toBeNull();
     expect(r2.container.querySelector('.ward-tag')).toBeNull();
   });
-  it('カードの詳細に、いつまで触れないかを書く', () => {
+  it('カードの詳細に、いつまでかを書く', () => {
     const sim = jd();
     const pm = sim.s.players[0].battle.find((p) => sim.s.cards[p.cards[0]].defId.includes('rp4-S02'))!;
     const { container } = render(<CardDetail s={sim.s} uid={pm.cards[0]} />);
-    expect(container.textContent).toContain('相手に選ばれない(持ち主の次のターンの開始まで)');
-    expect(container.textContent).toContain('攻撃されない(持ち主の次のターンの開始まで)');
+    expect(container.textContent).toContain('選ばれない(持ち主の次のターンまで)');
+    expect(container.textContent).toContain('攻撃されない(持ち主の次のターンまで)');
   });
 });

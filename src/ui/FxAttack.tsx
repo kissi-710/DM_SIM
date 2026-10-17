@@ -101,7 +101,7 @@ export function FxAttack({ events, token, enabled, scale }: { events: Ev[]; toke
           className={`fx-line-tag fx-line-tag-${l.tone}`}
           style={{ left: l.x2, top: l.y2, animationDuration: `${l.ms}ms`, animationDelay: `${l.delay}ms` }}
         >
-          {l.tone === 'block' ? 'ブロック!' : `${l.label}へ攻撃`}
+          {l.tone === 'block' ? 'ブロック!' : `${l.label}攻撃`}
         </div>
       ))}
       {bursts.map((b) => (

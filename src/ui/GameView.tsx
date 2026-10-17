@@ -24,7 +24,7 @@ import { cuesOf, drawCuesOf, FX_MODE_LABEL, FX_MODES, fxHoldMs, fxScale, loadFxM
 
 export function CardDetail({ s, uid }: { s: GameState; uid: number | null }) {
   if (uid === null || !s.cards[uid] || s.cards[uid].defId === '?') {
-    return <div className="muted">カードにマウスを乗せると、ここに全文が表示されます。</div>;
+    return <div className="muted">カードにマウスを乗せると詳細を表示</div>;
   }
   const c = s.cards[uid];
   const def = reg.defs[c.defId];
@@ -61,7 +61,7 @@ const KW_LABEL: Record<string, string> = {
 };
 const EFFECT_LABEL: Record<string, string> = {
   cannotAttack: '攻撃できない',
-  cannotBeChosen: '相手に選ばれない',
+  cannotBeChosen: '選ばれない',
   cannotBeAttacked: '攻撃されない',
   mustBlock: 'ブロックしなければならない',
 };
@@ -158,22 +158,22 @@ export function LogPanel({ s, log, me }: { s: GameState; log: Session['log']; me
 const ASK_GUARD_MS = 250;
 
 const TIPS = [
-  'カードをクリックすると、できる操作が右下のパネルに出ます。ドラッグしても同じ操作ができます。',
-  '← → ↑ ↓ キーで手札やクリーチャーを選べます。数字キーで操作パネルの上から選べます。',
-  '「E」キーでターン終了、「M」キーでマナチャージを飛ばす・メインを終える。質問には Enter(はい・確定)と Esc(いいえ・選ばない)で答えられます。',
-  'カードにマウスを乗せると、右の「ログ・詳細」に現在のコストやパワーが出ます。',
-  '手札やマナが増えたら、横にスクロールできます(トラックパッドや Shift+ホイール)。',
-  'マナの払い方に選択があるときだけ、タップするマナを聞かれます。「⚙ 表示」で常に自動にもできます。',
-  '練習用設定なら「↶ 1手戻す」(または Z)でやり直せます。',
-  'ログの「自動」「手動」タグで、効果の自動解決とプレイヤーの操作を見分けられます。',
+  'カードをクリックすると操作を表示。ドラッグでも操作できる。',
+  '矢印キーでカードを選び、数字キーで操作を選ぶ。',
+  'E でターン終了、M でマナチャージを飛ばす。質問は Enter で決定、Esc で取り消し。',
+  'カードにマウスを乗せると、現在のコストとパワーを表示。',
+  '手札が増えたら横スクロール(Shift+ホイール)。',
+  'マナの払い方を選ぶかは「⚙ 表示」で切り替えられる。',
+  '練習設定なら Z で1手戻せる。',
+  'ログの「自動」「手動」で、効果の解決と操作を区別できる。',
 ];
 
 /** 観戦中に出す Tips(操作のヒントは出さない) */
 const WATCH_TIPS = [
-  'Space で一時停止、一時停止中は → で1手ずつ進められます。',
-  '「速度」のスライダーで、CPU の手の間隔を変えられます。',
-  '「⚙ 表示」から、相手の手札の表示を切り替えられます。',
-  'ログの「自動」「手動」タグで、効果の自動解決と、プレイヤーの操作を見分けられます。',
+  'Space で一時停止。停止中は → で1手ずつ進む。',
+  '「速度」で CPU の手の間隔を変えられる。',
+  '「⚙ 表示」で相手の手札を見られる。',
+  'ログの「自動」「手動」で、効果の解決と操作を区別できる。',
 ];
 
 function HelpPanel({ onClose }: { onClose: () => void }) {
@@ -661,7 +661,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             ))}
           </div>
         ) : (
-          <div className="muted">{selUid !== null ? whyUnplayable(s, viewer, selUid) : 'このカードで今できる操作はありません。'}</div>
+          <div className="muted">{selUid !== null ? whyUnplayable(s, viewer, selUid) : 'できる操作がありません'}</div>
         )}
       </div>
   );
@@ -672,7 +672,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   return (
     <div className={'game' + (fxActive ? ' fx' : '') + (fxActive && fxMode === 'fast' ? ' fx-fast' : '')} style={fxActive ? ({ '--fx-scale': scale } as React.CSSProperties) : undefined}>
       <div className="game-head">
-        <button className={confirmQuit ? 'on' : ''} onClick={onExit} title="メニューへ戻ります(対戦は自動保存され、メニューから再開できます)。キーは Q を2回">
+        <button className={confirmQuit ? 'on' : ''} onClick={onExit} title="メニューへ戻る(対戦は自動保存。Q を2回)">
           {confirmQuit ? 'もう一度 Q でメニューへ' : '← メニュー'} <Kbd k={KEY.quit} />
         </button>
         <span className={'status-chip ' + (setup.seats[s.active].kind === 'human' ? 'me' : 'cpu')}>
@@ -697,16 +697,16 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         )}
         {/* CPU の手番だけ出し入れすると、ヘッダーのレイアウトが揺れる。常に出して、効くのは CPU の手番(人間の番にも切り替えておける) */}
         {g.me !== null && (
-          <button className={g.fast ? 'on' : ''} aria-pressed={g.fast} onClick={() => g.setFast(!g.fast)} title="CPU の手の間隔をなくして、一気に進めます(切り替えておくと、CPU の手番から効きます)">
+          <button className={g.fast ? 'on' : ''} aria-pressed={g.fast} onClick={() => g.setFast(!g.fast)} title="CPU の待ち時間をなくす(CPU の手番から有効)">
             ⏩ 一気に進める <Kbd k={KEY.fast} />
           </button>
         )}
         {setup.allowUndo && (
           <button disabled={!g.canUndo || !humanTurn} onClick={g.undo} title={
               !humanTurn
-                ? '1手戻す: あなたの番になってから使えます'
+                ? '1手戻す: 自分の番で使えます'
                 : !g.canUndo
-                  ? '戻せる手がありません(CPUに手番が移った後や、シールドのブレイク・公開などで情報が出た後は、それ以前に戻せません)'
+                  ? '戻せる手がありません(CPU の手番後、シールドブレイク・公開の後は戻せない)'
                   : '1手戻す(Z)'
             }>
             ↶ 1手戻す <Kbd k={KEY.undo} />
@@ -724,11 +724,11 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                 </label>
               )}
               {g.me !== null && (
-                <label className="check" title="オフにすると、常に自動でタップするマナを決めます">
+                <label className="check" title="オフで常に自動払い">
                   <input type="checkbox" checked={askPay} onChange={(e) => setAskPay(e.target.checked)} /> 選べるときはタップするマナを選ぶ <Kbd k={KEY.askPay} />
                 </label>
               )}
-              <label className="check" title="ターンの切り替わり・攻撃・破壊などの演出。高速は約2倍の速さ。オフにすると、演出のための CPU の待ち時間もなくなります">
+              <label className="check" title="高速は約2倍の速さ。オフは演出なし(従来の表示)">
                 演出{' '}
                 <select
                   value={fxMode}
@@ -745,7 +745,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                   ))}
                 </select>
               </label>
-              <label className="check" title="出せるカードがあるのに何もせずにターンを終えようとした時などに、もう一度押すよう確認します">
+              <label className="check" title="出せるカードを残したまま終える時に確認">
                 <input type="checkbox" checked={confirmOn} onChange={toggleConfirm} /> ターン終了の確認を出す <Kbd k={KEY.confirmEnd} />
               </label>
               <label className="check">
@@ -766,7 +766,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             </div>
           )}
         </div>
-        <button onClick={() => setHelpOpen(true)} title="ショートカットキーと Tips(?)">
+        <button onClick={() => setHelpOpen(true)} title="ヘルプ(?)">
           ? ヘルプ <Kbd k={KEY.help} />
         </button>
         <button className={sideOpen ? 'on' : ''} onClick={() => setSideOpen((v) => !v)} title="カードの詳細・待機中の能力・ログ(L)">
@@ -815,7 +815,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         {/* CPU が考えている間の表示 */}
         {!interactive && !showHuman && s.winner === null && pend && (
           <div className="thinking-pill">
-            {activeLabel}が考えています…
+            {activeLabel}が考え中…
             {session.thinking && <span className="thinking" />}
             <div className="tip">💡 {tip}</div>
           </div>
@@ -883,10 +883,10 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
           {interactive && (
             <div className="rail-action">
               {selected ? (
-                !popover ? actionPanel : <div className="rail-hint">選んだカードの隣に、できる操作を出しています</div>
+                !popover ? actionPanel : <div className="rail-hint">操作は選んだカードの隣に表示</div>
               ) : (
                 <div className={'rail-hint' + (notice ? ' warn' : '')} role="status">
-                  {notice ?? 'カードを選ぶと、できる操作がここに出ます'}
+                  {notice ?? 'カードを選ぶと操作を表示'}
                 </div>
               )}
             </div>
@@ -943,8 +943,8 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         {g.saveStatus !== 'ok' && (
           <div className="toast" role="status" style={{ bottom: session.error ? 96 : undefined }}>
             {g.saveStatus === 'failed'
-              ? '⚠ 自動保存できません(ブラウザの保存領域が使えません)。このまま画面を閉じると、対戦は戻せません。'
-              : '⚠ 別のタブの対戦の自動保存を上書きしています。'}
+              ? '⚠ 自動保存できません。画面を閉じると対戦を再開できません。'
+              : '⚠ 別タブの自動保存を上書き中。'}
           </div>
         )}
         {session.error && (
@@ -953,7 +953,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             {g.cpuTurn && (
               <div className="row" style={{ marginTop: 6 }}>
                 <button onClick={g.retryCpu}>もう一度考えさせる</button>
-                <button onClick={g.forceMove} title="合法手の先頭で進めます(棋譜に残ります)">
+                <button onClick={g.forceMove} title="先頭の合法手で進める(棋譜に残る)">
                   合法手で進める
                 </button>
               </div>
@@ -986,7 +986,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
               <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
                 <h2>タップするマナを選ぶ</h2>
                 <p className="muted">
-                  {cardName(s, a.uid)} — {base.need}枚({base.civs.map((x) => CIV_NAME[x]).join('・')}を含める)。自動の候補を選んであります。
+                  {cardName(s, a.uid)} — {base.need}枚({base.civs.map((x) => CIV_NAME[x]).join('・')}を含む)。候補は自動で選択済み。
                 </p>
                 <PaymentWidget
                   s={s}
@@ -1030,7 +1030,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         <div className="modal-back" onClick={() => setRecText(null)}>
           <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <h2>棋譜(シード・デッキ・行動列)</h2>
-            <p className="muted">この JSON を「棋譜の再生」で読み込むと、同じ試合を再現できます。</p>
+            <p className="muted">この JSON を「棋譜の再生」で読み込むと再現できる。</p>
             <textarea className="json" readOnly value={recText} onFocus={(e) => e.target.select()} />
             <div className="row" style={{ marginTop: 8 }}>
               <button className="primary" onClick={() => downloadText(`dm-sim-record-${setup.seed}.json`, recText)}>

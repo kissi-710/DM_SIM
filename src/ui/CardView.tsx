@@ -130,7 +130,7 @@ export function CardView(p: CardProps) {
       if (hasKeyword(c, pm.perm, 'justDiver')) keywords.push('JD');
     }
   }
-  const wardTitle = ward ? `${ward.label}(${ward.until}): ${ward.chosen ? '相手の効果で選ばれず' : ''}${ward.chosen && ward.attacked ? '、' : ''}${ward.attacked ? '攻撃もされない' : ''}` : '';
+  const wardTitle = ward ? `${ward.label}(${ward.until})` : '';
   if (ward) {
     cls.push('ward');
     handlers['aria-label'] = (handlers['aria-label'] ?? def.name) + `(${ward.label})`;
@@ -160,7 +160,7 @@ export function CardView(p: CardProps) {
       </div>
       {ward ? (
         <span className="ward-tag" aria-hidden="true">
-          🛡 {ward.label}
+          🛡
         </span>
       ) : null}
       {p.badge ? <span className="badge">{p.badge}</span> : null}

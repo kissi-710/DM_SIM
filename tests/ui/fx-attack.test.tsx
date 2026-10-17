@@ -96,7 +96,7 @@ describe('FxAttack', () => {
     return b;
   };
 
-  it('シールドへの攻撃: 攻撃元から相手のシールドへ線を引き、「シールドへ攻撃」の札と、砕ける着弾を出す', () => {
+  it('シールドへの攻撃: 攻撃元から相手のシールドへ線を引き、「シールド攻撃」の札と、砕ける着弾を出す', () => {
     const b = board();
     const evs = [declared(11, 0, { kind: 'player' }), ev('shieldBroken', { card: 5, owner: 1, by: 7 })];
     const { container, rerender } = render(<FxAttack events={[]} token={0} enabled scale={1} />);
@@ -106,19 +106,19 @@ describe('FxAttack', () => {
     expect(core.getAttribute('y1')).toBe('440');
     expect(core.getAttribute('x2')).toBe('345'); // 相手のシールドの中心
     expect(core.getAttribute('y2')).toBe('85');
-    expect(container.querySelector('.fx-line-tag')!.textContent).toBe('シールドへ攻撃');
+    expect(container.querySelector('.fx-line-tag')!.textContent).toBe('シールド攻撃');
     expect(container.querySelector('.fx-burst-shield')).not.toBeNull();
     expect(container.querySelectorAll('.fx-shard').length).toBeGreaterThan(6);
     b.remove();
   });
-  it('クリーチャーへの攻撃: 相手のクリーチャーの位置を狙い、「クリーチャーへ攻撃」の札を出す', () => {
+  it('クリーチャーへの攻撃: 相手のクリーチャーの位置を狙い、「クリーチャー攻撃」の札を出す', () => {
     const b = board();
     const { container, rerender } = render(<FxAttack events={[]} token={0} enabled scale={1} />);
     rerender(<FxAttack events={[declared(11, 0, { kind: 'creature', pid: 33 })]} token={1} enabled scale={1} />);
     const core = container.querySelector('.fx-line-core')!;
     expect(core.getAttribute('x2')).toBe('230');
     expect(core.getAttribute('y2')).toBe('190');
-    expect(container.querySelector('.fx-line-tag')!.textContent).toBe('クリーチャーへ攻撃');
+    expect(container.querySelector('.fx-line-tag')!.textContent).toBe('クリーチャー攻撃');
     b.remove();
   });
   it('高速は、遅れと長さが半分。無効なら何も描かない。同じ手では一度だけ', () => {

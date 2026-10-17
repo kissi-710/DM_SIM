@@ -10,5 +10,5 @@ export function endTurnWarning(s: GameState, legal: Action[], me: PlayerId): str
   if (legal.some((a) => a.type === 'CHARGE_MANA')) return 'マナチャージをしていません';
   if (!legal.some((a) => a.type === 'PLAY_CARD')) return null;
   const acted = s.turnLog.some((e) => e.owner === me && (e.type === 'cast' || e.type === 'entered' || e.type === 'attackDeclared'));
-  return acted ? null : 'このターンはまだ何もしていません(出せるカードがあります)';
+  return acted ? null : 'まだ何もしていません(出せるカードあり)';
 }

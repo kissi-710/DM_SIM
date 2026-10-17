@@ -2066,17 +2066,6 @@ body.dragging .action-pop {
   font-size: 56px;
   letter-spacing: 0.1em;
 }
-.fx-tag {
-  display: inline-block;
-  margin-bottom: 6px;
-  padding: 1px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.3em;
-}
 /* S・トリガー(稲妻の黄)/ G・ストライク(白青)/ ラスト・シールド(赤)*/
 .fx-cue.fx-trigger {
   display: flex;
