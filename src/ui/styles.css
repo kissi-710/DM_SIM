@@ -1456,12 +1456,36 @@ body.dragging .action-pop {
     opacity: 0;
   }
 }
-/* 手番のプレイヤーの盤面を、うっすら縁取る(情報表示。演出が無効でも残す) */
-.side-board.turn-active {
-  border-color: var(--accent2);
+/* 手番の色(情報表示。演出が無効でも残す): 自分(観戦は1P)は青、相手(2P)は赤。
+   手番のプレイヤーの色で、盤面の外・ヘッダーを染め、手番の盤面を縁取る。手番でない側は少し暗くする */
+.game[data-turn='mine'] {
+  --turn-color: var(--accent);
 }
+.game[data-turn='theirs'] {
+  --turn-color: var(--bad);
+}
+.game[data-turn] {
+  background-color: color-mix(in srgb, var(--turn-color) 17%, var(--bg));
+}
+.game[data-turn] .game-head {
+  background-color: color-mix(in srgb, var(--turn-color) 26%, var(--bg2));
+  border-bottom-color: var(--turn-color);
+}
+.game[data-turn] .status-chip {
+  border-color: var(--turn-color);
+  color: var(--turn-color);
+}
+.game[data-turn] .side-board.turn-active {
+  border-color: var(--turn-color);
+  box-shadow: inset 0 0 0 1px var(--turn-color), inset 0 0 30px color-mix(in srgb, var(--turn-color) 24%, transparent);
+}
+.game[data-turn] .side-board:not(.turn-active) {
+  filter: brightness(0.82);
+}
+.game.fx,
+.game.fx .game-head,
 .game.fx .side-board {
-  transition: border-color calc(0.35s * var(--fx-scale, 1)) ease;
+  transition: background-color calc(0.5s * var(--fx-scale, 1)) ease, border-color calc(0.5s * var(--fx-scale, 1)) ease, box-shadow calc(0.5s * var(--fx-scale, 1)) ease, filter calc(0.5s * var(--fx-scale, 1)) ease;
 }
 /* 攻撃宣言したクリーチャーが、相手のほうへ一歩前に出る */
 .game.fx .pile.lunge-up {

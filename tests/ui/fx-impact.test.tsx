@@ -104,6 +104,18 @@ describe('FxLayer(重みごとの描画)', () => {
   });
 });
 
+describe('手番の色(styles.css)', () => {
+  const css = readFileSync('src/ui/styles.css', 'utf8');
+  it('自分は青(accent)、相手は赤(bad)。背景・ヘッダー・手番の盤面に使い、手番でない側は暗くする', () => {
+    expect(css).toMatch(/\.game\[data-turn='mine'\]\s*\{[^}]*--turn-color:\s*var\(--accent\)/);
+    expect(css).toMatch(/\.game\[data-turn='theirs'\]\s*\{[^}]*--turn-color:\s*var\(--bad\)/);
+    expect(css).toMatch(/\.game\[data-turn\]\s*\{[^}]*background-color:[^;]*var\(--turn-color\)/);
+    expect(css).toMatch(/\.game\[data-turn\] \.game-head\s*\{[^}]*var\(--turn-color\)/);
+    expect(css).toMatch(/\.game\[data-turn\] \.side-board\.turn-active\s*\{[^}]*border-color:\s*var\(--turn-color\)/);
+    expect(css).toMatch(/\.game\[data-turn\] \.side-board:not\(\.turn-active\)\s*\{[^}]*filter:\s*brightness/);
+  });
+});
+
 describe('タップの向きを、演出が壊さない(styles.css)', () => {
   const css = readFileSync('src/ui/styles.css', 'utf8');
   it('自分は左(反時計回り)、相手は右(時計回り)にタップする(変数 --rot)', () => {

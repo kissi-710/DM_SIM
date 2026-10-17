@@ -38,6 +38,26 @@ describe('GameView の演出', () => {
     expect(container.querySelectorAll('.side-board.turn-active')).toHaveLength(1);
     expect(container.querySelector('.fx-ticker')).toBeNull();
   });
+  it('手番の色: 自分の番は mine(青)、相手の番は theirs(赤)。演出が無効でも付く', () => {
+    localStorage.setItem('dmsim.fx', JSON.stringify({ mode: 'off' }));
+    const mine = render(<GameView setup={setup({ first: 0 })} onExit={() => {}} onRematch={() => {}} />);
+    expect(mine.container.querySelector('.game')!.getAttribute('data-turn')).toBe('mine');
+    mine.unmount();
+    // CPU が先攻(最初の描画では、まだ CPU の番)
+    const theirs = render(<GameView setup={setup({ first: 1 })} onExit={() => {}} onRematch={() => {}} />);
+    expect(theirs.container.querySelector('.game')!.getAttribute('data-turn')).toBe('theirs');
+  });
+  it('観戦では、1P の番が mine、2P の番が theirs', () => {
+    const watch = setup({
+      first: 1,
+      seats: [
+        { kind: 'cpu', agent: { kind: 'random' } },
+        { kind: 'cpu', agent: { kind: 'random' } },
+      ],
+    });
+    const { container } = render(<GameView setup={watch} onExit={() => {}} onRematch={() => {}} />);
+    expect(container.querySelector('.game')!.getAttribute('data-turn')).toBe('theirs');
+  });
   it('「高速」にすると、演出は有効なまま長さの倍率が半分になる', async () => {
     const { container } = render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
     await screen.findByText('あなたのターン');
