@@ -17,32 +17,22 @@
 | `npm run test:rust`(Rust 版と TS 版の差分テスト) | 成功(取り直したフィクスチャで) |
 | `npm run test:coverage` | 文 72.9%・分岐 70.3%・関数 62.3% |
 | `npm audit --omit=dev` | 脆弱性 0 |
-| 未解決の項目 | 2件(中 1・低 1。どちらも持ち主の操作・判断が必要) |
+| 未解決の項目 | 1件(低 1。ISSUE-19 は持ち主の判断。2026-10-17 に「何も変えない」と回答) |
 
 ## 一覧
 
 | ID | 優先度 | 確度 | 概要 |
 |---|---|---|---|
-| ISSUE-36 | 中 | 再現 | リポジトリの衛生: main が origin より先(未 push)、worktree 16 個(うち 4 個が prunable)、取り込み済みの作業用ブランチ多数。片付けと push は持ち主の操作 |
 | ISSUE-19 | 低 | 照合 | `package.json` の `repository` と、公開時のライセンスが未定(持ち主の判断) |
 
 ---
 
 ## 品質・保守性
 
-### ISSUE-36 リポジトリの衛生【再現】(持ち主の操作が必要)
-- 内容:
-  - `main` が `origin/main` より 43 コミット先(未 push。2026-10-17 時点)。push は持ち主が決める。
-  - `git worktree list` に 16 個(`.claude/worktrees/*` 15 個+`../DM_SIM_rust`)。うち 4 個(`interstellar-marulu-deck-342987`・`jaouga-effect-processing-b76efd`・`monte-carlo-rules-batch-improve-57571d`・`DM_SIM_rust`)は実体がなく prunable。対応するブランチ(`claude/*`・`feat/rust-engine`・`backup/jaouga-before-rebase`・`wip/main-uncommitted-20261015`)が残り、`git branch --merged main` では 13 本が取り込み済み。
-  - 同じ作業ツリーで複数のエージェントが並行して動くため、未コミットの変更が混ざる(部分的なステージングが必要になる)。
-  - 別のエージェントが `claude/mobile-responsive-ui-482d36` でスマホ幅の UI を作業中。`src/ui/styles.css` の狭い画面の規則(`d0460c4` の dock の余白)と衝突する可能性がある。
-- 影響: 履歴の把握が難しくなる。未 push のまま PC が故障すると失う。
-- 試したこと: `git worktree prune`(実体のない 4 件の記録を消すだけ)と、取り込み済みで worktree のないブランチの `git branch -d` を試したが、前者は `.git/worktrees/*` の削除が OS に拒否され(Permission denied)、後者は他のエージェントの作業領域に触れるため自動のガードに拒否された。
-- 修正案(持ち主の操作): `git worktree prune`、`git branch --merged main` で取り込み済みを確認して `git branch -d`、`git push`。
-
 
 ### ISSUE-19 `package.json` の `repository` と、公開時のライセンスが未定【照合】
 - 旧番号: ISSUE-25(CI・カバレッジ・`engines`・`license: UNLICENSED` は対応済み)
+- 持ち主の回答(2026-10-17): 何も変えない(`repository` も `UNLICENSED` もそのまま)。公開を決めた時に、`origin`(`https://github.com/kissi-710/DM_SIM.git`)を `repository` に入れ、ライセンスを選ぶ。
 - 内容: `repository` がない。`license` は `UNLICENSED`(private。公開時のライセンスは持ち主が決める)。
 - 修正案: リポジトリの URL と、公開する場合のライセンス(MIT など)を決めて入れる。
 
@@ -92,7 +82,7 @@
 | 保存した設定(localStorage)の読み込み | 壊れた値(型違い・範囲外・存在しないデッキ・壊れた目標)を、設定画面 2 種と確率調査に入れて描画 | **画面が落ちる不具合を発見**: 確率調査で選んだカスタムデッキを削除すると、確率シミュレータが毎回クラッシュ。`dmsim.setup.*`・`dmsim.sim` の不正な値も同様 → `24b1044` で読み込み時に検証して修正(ISSUE-34。HISTORY.md §6) |
 | 型検査・lint・テスト | `npm run typecheck` / `lint` / `test` | エラーなし。1136 件(76 ファイル、約 16 秒) |
 | 配布物 | `vite build` | 本体 515KB で警告 → `cb325b1` で画面ごとに分割し、339KB に(ISSUE-35) |
-| リポジトリ | `git worktree list`・`git branch`・`git rev-list` | 未 push・prunable な worktree 4 個(ISSUE-36。持ち主の操作) |
+| リポジトリ | `git worktree list`・`git branch`・`git rev-list` | 未 push・prunable な worktree 4 個(ISSUE-36)→ 持ち主の許可を得て片付けと push を実行(HISTORY.md §6) |
 | ROADMAP・docs | 項目 ID の重複・docs 内の相対リンクの有無 | ID の重複 2 件(M7-13・UX-29)→ `fc651cc` で振り直し(ISSUE-39)。リンク切れは 0(`path:行` の参照を除く) |
 | コードの衛生 | 未使用の export・検査の対象外のファイル | `ac2cac3`(未使用 export 8 個の削除。ISSUE-40)・`04271ee`(scripts を検査の対象に。ISSUE-38) |
 | 観戦・演出 | `cpuWaitMs` を読む | 速度が演出の長さで頭打ち → `f18fec1` で画面に明記(ISSUE-41) |
