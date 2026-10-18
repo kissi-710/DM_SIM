@@ -6,7 +6,7 @@ import { mkCtx, permByPid } from '../engine/state';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { Board, buildDropMap, selectedActions } from './Board';
 import { CardView, civGradient } from './CardView';
-import { buildLogTree, cardName, CIV_NAME, recentFeed, reg, untilLabel, type LogNode } from './format';
+import { buildLogTree, cardName, CIV_NAME, isConcealed, recentFeed, reg, untilLabel, type LogNode } from './format';
 import { endTurnWarning } from './endTurn';
 import { whyUnplayable } from './unplayable';
 import { Kbd } from './Kbd';
@@ -22,8 +22,12 @@ import { FxGhosts } from './FxGhosts';
 import { FxTicker } from './FxTicker';
 import { cuesOf, drawCuesOf, FX_MODE_LABEL, FX_MODES, fxHoldMs, fxScale, loadFxMode, removalCuesOf, removalsOf, saveFxMode, STEP_LABEL, type FxMode } from './fx';
 
-export function CardDetail({ s, uid }: { s: GameState; uid: number | null }) {
-  if (uid === null || !s.cards[uid] || s.cards[uid].defId === '?') {
+/** reveal: 本人にも見えないカード(シールドなど)を見せる(練習用の「自分のシールドを見る」) */
+export function CardDetail({ s, uid, reveal = false }: { s: GameState; uid: number | null; reveal?: boolean }) {
+  if (uid !== null && s.cards[uid] && (s.cards[uid].defId === '?' || (!reveal && isConcealed(s, uid)))) {
+    return <div className="muted">非公開のカード</div>;
+  }
+  if (uid === null || !s.cards[uid]) {
     return <div className="muted">カードにマウスを乗せると詳細を表示</div>;
   }
   const c = s.cards[uid];
@@ -879,7 +883,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         <div className="rail">
           {/* カードの詳細は、ホバー中のカード、なければ選択中のカードを出す(タッチ操作でも読める) */}
           <div className="rail-hover">
-            <CardDetail s={s} uid={hover ?? selUid} />
+            <CardDetail s={s} uid={hover ?? selUid} reveal={peek && (hover ?? selUid) !== null && s.cards[(hover ?? selUid) as number]?.owner === viewer} />
           </div>
           {!sideOpen && s.pool.length > 0 && <PoolPanel s={s} />}
           {interactive && (
