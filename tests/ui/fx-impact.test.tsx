@@ -58,6 +58,28 @@ describe('S・トリガー / G・ストライクの演出(実際のエンジン�
     expect(c).toMatchObject({ title: 'G・ストライク!', variant: 'gstrike' });
     expect(c.reveal!.name).toContain('フェアリー・Re:ライフ');
   });
+  it('宣言しても使えなかった S・トリガー(呪文を封じられている)は、演出を出さない', () => {
+    const sim = new Sim({ p0: { battle: ['終末縫合王 ザ=キラー・キーナリー'] }, p1: { shield: [N], deck: ['ティンパニ=シンバリー', 'ダミー'] } });
+    // 相手(席0)の効果で、席1は呪文を唱えられない(XXDDZ の「次の自分のターンのはじめまで、相手は呪文を唱えられない」)
+    sim.s.effects.push({ id: 9001, pid: -1, mod: { kind: 'cannotCast' }, until: { kind: 'endOfTurn', turn: sim.s.turn }, controller: 0 });
+    sim.attack('終末縫合王 ザ=キラー・キーナリー', 'player');
+    sim.pick(N); // 宣言はできるが、唱えられない
+    expect(sim.events.some((e) => e.type === 'triggerDeclared')).toBe(true);
+    expect(sim.events.some((e) => e.type === 'cast' && e.card === sim.uid(1, 'hand', N))).toBe(false);
+    for (const me of [0, 1, null]) {
+      const cues = cuesOf(sim.s, sim.events, me);
+      expect(cues.some((c) => c.kind === 'trigger')).toBe(false);
+    }
+    expect(fxHoldMs(sim.s, sim.events, 1, 1)).toBeLessThan(FX_MS.trigger);
+  });
+  it('使われた S・トリガーは、宣言ではなく使われた手で出る(宣言だけの手では出ない)', () => {
+    const sim = new Sim({ p0: { battle: ['終末縫合王 ザ=キラー・キーナリー'] }, p1: { shield: [N], deck: ['ティンパニ=シンバリー', 'ダミー'] } });
+    sim.attack('終末縫合王 ザ=キラー・キーナリー', 'player');
+    const declare = sim.events.filter((e) => e.type === 'triggerDeclared' || e.type === 'shieldBroken');
+    expect(cuesOf(sim.s, declare, 1).some((c) => c.kind === 'trigger')).toBe(false); // 宣言の質問が出た時点(まだ使われていない)
+    sim.pick(N);
+    expect(cuesOf(sim.s, sim.events, 1).filter((c) => c.kind === 'trigger')).toHaveLength(1);
+  });
   it('CPU の待ちに、見せ札の長さが入る(高速は半分)', () => {
     const sim = new Sim({ p0: { battle: ['終末縫合王 ザ=キラー・キーナリー'] }, p1: { shield: [N], deck: ['ティンパニ=シンバリー', 'ダミー'] } });
     sim.attack('終末縫合王 ザ=キラー・キーナリー', 'player');

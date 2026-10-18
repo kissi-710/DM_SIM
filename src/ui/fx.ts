@@ -253,20 +253,28 @@ export function cuesOf(s: GameState, events: Ev[], me: number | null, scale = 1)
           out.push({ id: e.id, kind: 'direct', title: 'ダイレクトアタック!', sub: `${who(e.winner, me)}の勝ち`, side: sideOf(e.winner, me), ms: FX_MS.direct });
         }
         break;
-      case 'triggerDeclared':
+      case 'resolve': {
+        // S・トリガー / G・ストライクは、宣言した時ではなく、**実際に使われた時**に出す。
+        // 宣言しても使えなかったもの(呪文を封じられている・コストを封じられている・進化元がない等)は、何も起きないので出さない。
+        // S・トリガーの使用は、宣言したカードが同じ手の中で唱えられた・出たことで確かめる。G・ストライクは解決した時
+        if (e.kind !== 'shieldTrigger' && e.kind !== 'gStrike') break;
+        const card = e.source as number;
+        const used = e.kind === 'gStrike' || events.slice(i + 1).some((x) => (x.type === 'cast' || x.type === 'entered') && x.card === card);
+        if (!used) break;
         out.push({
           id: e.id,
           kind: 'trigger',
           variant: e.kind === 'gStrike' ? 'gstrike' : 'strigger',
           title: e.kind === 'gStrike' ? 'G・ストライク!' : 'S・トリガー!',
-          sub: cardName(s, e.card),
-          reveal: revealOf(s.cards[e.card]?.defId),
-          side: sideOf(e.owner, me),
+          sub: cardName(s, card),
+          reveal: revealOf(s.cards[card]?.defId),
+          side: sideOf(e.controller, me),
           ms: FX_MS.trigger,
         });
-        // トリガーで唱えた・出したカードは、見せ札で出したので、同じ手の「呪文」「召喚」の帯は出さない
-        triggered.add(e.card);
+        // 使われたカードは、見せ札で出したので、同じ手の「呪文」「召喚」の帯は出さない
+        triggered.add(card);
         break;
+      }
       default:
         break;
     }
