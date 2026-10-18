@@ -16,5 +16,8 @@
     "allowImportingTsExtensions": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "tests", "scripts", "vite.config.ts"]
+  "include": ["src", "tests", "scripts", "vite.config.ts"],
+  // 履歴ベンチ(history-bench / historyWorker)は、bash scripts/legacy-extract.sh で作る scripts/legacy(git の管理外)を読み込む。
+  // 取り出していない環境(CI の新しい checkout など)で型エラーにならないよう、型チェックの対象から外す
+  "exclude": ["scripts/legacy", "scripts/historyWorker.ts", "scripts/history-bench.ts"]
 }
