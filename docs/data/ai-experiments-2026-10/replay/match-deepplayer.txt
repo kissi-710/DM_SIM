@@ -1,0 +1,7 @@
+=== --a cur --aspec mcts:iter=3000,z=99 --b cur --bspec mcts:ms=1200 --games 15 --seed 51 --name deep3000-vs-normal
+■ A=cur(mcts:iter=3000,z=99) 対 B=cur(mcts:ms=1200)  反復=300  seed=51  480試合
+  A の勝ち 54.8%(95%区間 50.3%〜59.2%)  1手あたり A 218.4ms / B 37.8ms  平均 10.8 ターン  524秒
+=== --a cur --aspec mcts:iter=10000,z=99 --b cur --bspec mcts:ms=1200 --games 15 --seed 51 --name deep10000-vs-normal
+■ A=cur(mcts:iter=10000,z=99) 対 B=cur(mcts:ms=1200)  反復=300  seed=51  480試合
+  A の勝ち 54.6%(95%区間 50.1%〜59.0%)  1手あたり A 708.2ms / B 37.1ms  平均 10.7 ターン  1570秒
+DONE

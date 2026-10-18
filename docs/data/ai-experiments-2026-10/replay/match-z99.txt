@@ -1,0 +1,7 @@
+=== --a cur --aextra z=99 --b cur --mode time --n 1200 --games 30 --seed 71 --name time-z99
+■ A=cur(z=99) 対 B=cur  ms=1200  seed=71  960試合
+  A の勝ち 52.7%(95%区間 49.5%〜55.8%)  1手あたり A 192.1ms / B 38.1ms  平均 11.0 ターン  971秒
+=== --a cur --aextra z=99,prec=0.003 --b cur --mode time --n 1200 --games 30 --seed 71 --name time-z99-prec0.003
+■ A=cur(z=99,prec=0.003) 対 B=cur  ms=1200  seed=71  960試合
+  A の勝ち 56.8%(95%区間 53.6%〜59.9%)  1手あたり A 675.1ms / B 38.1ms  平均 10.9 ターン  3135秒
+DONE

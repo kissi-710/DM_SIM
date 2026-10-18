@@ -1,0 +1,7 @@
+=== --a cur --aextra minit=3000 --b cur --mode time --n 1200 --games 30 --seed 61 --name minit-3000
+■ A=cur(minit=3000) 対 B=cur  ms=1200  seed=61  960試合
+  A の勝ち 49.6%(95%区間 46.4%〜52.7%)  1手あたり A 78.5ms / B 38.5ms  平均 11.0 ターン  504秒
+=== --a cur --aextra minit=1500 --b cur --mode time --n 1200 --games 30 --seed 61 --name minit-1500
+■ A=cur(minit=1500) 対 B=cur  ms=1200  seed=61  960試合
+  A の勝ち 48.2%(95%区間 45.1%〜51.4%)  1手あたり A 59.6ms / B 38.1ms  平均 11.0 ターン  411秒
+DONE
