@@ -18,8 +18,8 @@ const mode = arg('mode', 'iter') as 'iter' | 'time';
 const n = Number(arg('n', '300'));
 const games = Number(arg('games', '30'));
 const seed = Number(arg('seed', '1'));
-const a: AgentDesc = { ver: arg('a', 'cur'), mode, n: Number(arg('an', String(n))), extra: arg('aextra', '') || undefined };
-const b: AgentDesc = { ver: arg('b', 'v0'), mode, n: Number(arg('bn', String(n))), extra: arg('bextra', '') || undefined };
+const a: AgentDesc = { ver: arg('a', 'cur'), mode, n: Number(arg('an', String(n))), extra: arg('aextra', '') || undefined, spec: arg('aspec', '') || undefined };
+const b: AgentDesc = { ver: arg('b', 'v0'), mode, n: Number(arg('bn', String(n))), extra: arg('bextra', '') || undefined, spec: arg('bspec', '') || undefined };
 const name = arg('name', `${a.ver}-vs-${b.ver}-${mode}${n}`);
 const jobs = Math.max(1, Math.min(8, Number(arg('jobs', String(availableParallelism() - 1)))));
 
@@ -70,8 +70,8 @@ const pairs = outs.map((o, i) => {
 });
 const ci = wilson(Math.round(wins), total);
 const res = {
-  a: `${a.ver}${a.extra ? '(' + a.extra + ')' : ''}`,
-  b: `${b.ver}${b.extra ? '(' + b.extra + ')' : ''}`,
+  a: a.spec ? `cur(${a.spec})` : `${a.ver}${a.extra ? '(' + a.extra + ')' : ''}`,
+  b: b.spec ? `cur(${b.spec})` : `${b.ver}${b.extra ? '(' + b.extra + ')' : ''}`,
   mode,
   n: a.n === b.n ? a.n : `${a.n}/${b.n}`,
   games: total,

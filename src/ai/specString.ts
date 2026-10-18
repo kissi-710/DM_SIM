@@ -92,9 +92,11 @@ export function parseSpec(text: string): AgentSpec {
       (((tuning.weights ??= {}).l1 ??= {}) as Record<string, number>)[name] = n;
       continue;
     }
-    if (k === 'z' || k === 'sh') {
+    if (k === 'z' || k === 'sh' || k === 'prec' || k === 'minit') {
       if (!Number.isFinite(n)) throw new Error(`${k} は数で指定してください(指定値: ${v})`);
       if (k === 'z') tuning.elimZ = n;
+      else if (k === 'prec') tuning.precision = n;
+      else if (k === 'minit') tuning.minIterations = n;
       else tuning.halving = n !== 0;
       continue;
     }
@@ -134,6 +136,8 @@ export function specLabel(spec: AgentSpec): string {
   if (t?.treeC !== undefined) parts.push(`c=${t.treeC}`);
   if (t?.treeDepth !== undefined) parts.push(`depth=${t.treeDepth}`);
   if (t?.elimZ !== undefined) parts.push(`z=${t.elimZ}`);
+  if (t?.precision !== undefined) parts.push(`prec=${t.precision}`);
+  if (t?.minIterations !== undefined) parts.push(`minit=${t.minIterations}`);
   if (t?.halving !== undefined) parts.push(`sh=${t.halving ? 1 : 0}`);
   for (const [k, v] of Object.entries(t?.weights ?? {})) {
     if (k === 'model') continue;
