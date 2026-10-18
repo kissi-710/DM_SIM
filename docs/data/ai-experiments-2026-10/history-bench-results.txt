@@ -1,0 +1,28 @@
+=== --a cur --b v0 --mode iter --n 300 --games 30 --seed 11 --name iter-v0
+■ A=cur 対 B=v0  反復=300  seed=11  960試合
+  A の勝ち 94.7%(95%区間 93.1%〜95.9%)  1手あたり A 14.5ms / B 215.7ms  平均 11.4 ターン  588秒
+=== --a cur --b v1 --mode iter --n 300 --games 30 --seed 11 --name iter-v1
+■ A=cur 対 B=v1  反復=300  seed=11  960試合
+  A の勝ち 63.0%(95%区間 59.9%〜66.0%)  1手あたり A 13.1ms / B 155.2ms  平均 11.1 ターン  676秒
+=== --a cur --b v2 --mode iter --n 300 --games 30 --seed 11 --name iter-v2
+■ A=cur 対 B=v2  反復=300  seed=11  960試合
+  A の勝ち 59.6%(95%区間 56.4%〜62.6%)  1手あたり A 13.2ms / B 162.0ms  平均 11.2 ターン  695秒
+=== --a cur --b v3 --mode iter --n 300 --games 30 --seed 11 --name iter-v3
+■ A=cur 対 B=v3  反復=300  seed=11  960試合
+  A の勝ち 50.8%(95%区間 47.7%〜54.0%)  1手あたり A 13.4ms / B 150.0ms  平均 11.0 ターン  697秒
+=== --a cur --b cur --bextra infer=0 --mode iter --n 300 --games 100 --seed 11 --name iter-vmain
+■ A=cur 対 B=cur(infer=0)  反復=300  seed=11  3200試合
+  A の勝ち 50.1%(95%区間 48.4%〜51.8%)  1手あたり A 18.5ms / B 18.6ms  平均 11.0 ターン  987秒
+=== --a cur --b v0 --mode time --n 200 --games 15 --seed 12 --name time-v0
+■ A=cur 対 B=v0  ms=200  seed=12  480試合
+  A の勝ち 96.5%(95%区間 94.4%〜97.8%)  1手あたり A 19.5ms / B 200.0ms  平均 11.7 ターン  294秒
+=== --a cur --b v1 --mode time --n 200 --games 15 --seed 12 --name time-v1
+■ A=cur 対 B=v1  ms=200  seed=12  480試合
+  A の勝ち 65.2%(95%区間 60.8%〜69.3%)  1手あたり A 28.7ms / B 136.2ms  平均 10.8 ターン  313秒
+=== --a cur --b v2 --mode time --n 200 --games 15 --seed 12 --name time-v2
+■ A=cur 対 B=v2  ms=200  seed=12  480試合
+  A の勝ち 62.9%(95%区間 58.5%〜67.1%)  1手あたり A 29.6ms / B 129.1ms  平均 11.2 ターン  315秒
+=== --a cur --b v3 --mode time --n 200 --games 15 --seed 12 --name time-v3
+■ A=cur 対 B=v3  ms=200  seed=12  480試合
+  A の勝ち 54.8%(95%区間 50.3%〜59.2%)  1手あたり A 36.3ms / B 118.1ms  平均 11.0 ターン  384秒
+DONE

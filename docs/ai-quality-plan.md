@@ -476,3 +476,5 @@ A だけに情報を足して、公平な B と戦う(mcts 120 反復。4 デッ
 - つまり、この探索の枠組み(決定化 + L1 のプレイアウト + 手作りの評価)は、軌跡平均の時点でほぼ頭打ちになっている。以降の試行(§7〜§13)が、どれも数 pt 未満だったことと一致する。
 
 **再現**: `bash scripts/legacy-extract.sh` のあと、`npx tsx scripts/history-bench.ts --a cur --b v0 --mode iter --n 300 --games 30 --seed 11`(`--mode time --n 200` で時間を揃える。`--b cur --bextra infer=0` で直近の main)。
+
+計算量を増やした時の伸び(反復 300 → 1000 → 3000 → 10000)と、これまでの試みの総括は、[ai-strength-report.md](./ai-strength-report.md) にまとめた。

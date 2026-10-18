@@ -1,0 +1,116 @@
+{
+ "a": "cur",
+ "b": "v2",
+ "mode": "iter",
+ "n": 300,
+ "games": 960,
+ "winsA": 572,
+ "rate": 0.5958333333333333,
+ "ci95": [
+  0.5644679821169694,
+  0.626434755428287
+ ],
+ "avgTurns": 11.233333333333333,
+ "msA": 13.164757246399494,
+ "msB": 161.9586144136588,
+ "sec": 695.131,
+ "seed": 11,
+ "pairs": [
+  {
+   "deckA": "maruru",
+   "deckB": "maruru",
+   "rate": 0.6166666666666667,
+   "n": 60
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.6166666666666667,
+   "n": 60
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "zardy",
+   "rate": 0.65,
+   "n": 60
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.5833333333333334,
+   "n": 60
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "maruru",
+   "rate": 0.6333333333333333,
+   "n": 60
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.65,
+   "n": 60
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "zardy",
+   "rate": 0.6166666666666667,
+   "n": 60
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.4666666666666667,
+   "n": 60
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "maruru",
+   "rate": 0.55,
+   "n": 60
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "interstellar-maruru",
+   "rate": 0.5333333333333333,
+   "n": 60
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "zardy",
+   "rate": 0.6166666666666667,
+   "n": 60
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "lost-maruru",
+   "rate": 0.48333333333333334,
+   "n": 60
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "maruru",
+   "rate": 0.5833333333333334,
+   "n": 60
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.6833333333333333,
+   "n": 60
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "zardy",
+   "rate": 0.6333333333333333,
+   "n": 60
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.6166666666666667,
+   "n": 60
+  }
+ ]
+}

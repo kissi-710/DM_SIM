@@ -1,0 +1,13 @@
+=== --a cur --an 1000 --b cur --bn 300 --mode iter --games 30 --seed 21 --name scale-1000-300
+■ A=cur 対 B=cur  反復=1000/300  seed=21  960試合
+  A の勝ち 53.5%(95%区間 50.4%〜56.7%)  1手あたり A 31.6ms / B 12.5ms  平均 11.1 ターン  192秒
+=== --a cur --an 3000 --b cur --bn 300 --mode iter --games 30 --seed 21 --name scale-3000-300
+■ A=cur 対 B=cur  反復=3000/300  seed=21  960試合
+  A の勝ち 52.6%(95%区間 49.4%〜55.7%)  1手あたり A 61.5ms / B 12.8ms  平均 11.0 ターン  309秒
+=== --a cur --an 3000 --b cur --bn 1000 --mode iter --games 30 --seed 22 --name scale-3000-1000
+■ A=cur 対 B=cur  反復=3000/1000  seed=22  960試合
+  A の勝ち 51.9%(95%区間 48.7%〜55.0%)  1手あたり A 88.6ms / B 47.0ms  平均 11.1 ターン  1477秒
+=== --a cur --an 10000 --b cur --bn 3000 --mode iter --games 15 --seed 23 --name scale-10000-3000
+■ A=cur 対 B=cur  反復=10000/3000  seed=23  480試合
+  A の勝ち 50.6%(95%区間 46.2%〜55.1%)  1手あたり A 108.6ms / B 59.9ms  平均 11.2 ターン  355秒
+DONE

@@ -1,0 +1,58 @@
+=== chh=6 seed=201
+■ A=mcts:iter=300,chh=6  対  B=mcts:iter=300  seed=201 複製対局
+  maruru(A) vs maruru(B): 50.0%(100試合)
+  maruru(A) vs interstellar-maruru(B): 42.0%(100試合)
+  maruru(A) vs zardy(B): 43.0%(100試合)
+  maruru(A) vs lost-maruru(B): 54.0%(100試合)
+  interstellar-maruru(A) vs maruru(B): 55.0%(100試合)
+  interstellar-maruru(A) vs interstellar-maruru(B): 57.0%(100試合)
+  interstellar-maruru(A) vs zardy(B): 65.0%(100試合)
+  interstellar-maruru(A) vs lost-maruru(B): 46.0%(100試合)
+  zardy(A) vs maruru(B): 54.0%(100試合)
+  zardy(A) vs interstellar-maruru(B): 33.0%(100試合)
+  zardy(A) vs zardy(B): 58.0%(100試合)
+  zardy(A) vs lost-maruru(B): 46.0%(100試合)
+  lost-maruru(A) vs maruru(B): 49.0%(100試合)
+  lost-maruru(A) vs interstellar-maruru(B): 60.0%(100試合)
+  lost-maruru(A) vs zardy(B): 53.0%(100試合)
+  lost-maruru(A) vs lost-maruru(B): 49.0%(100試合)
+  合計: Aの勝ち 814/1600 = 50.9%(95%区間 48.4%〜53.3%)  1手あたり A 15.3ms / B 13.3ms  198秒
+=== chh=10 seed=201
+■ A=mcts:iter=300,chh=10  対  B=mcts:iter=300  seed=201 複製対局
+  maruru(A) vs maruru(B): 54.0%(100試合)
+  maruru(A) vs interstellar-maruru(B): 48.0%(100試合)
+  maruru(A) vs zardy(B): 39.0%(100試合)
+  maruru(A) vs lost-maruru(B): 54.0%(100試合)
+  interstellar-maruru(A) vs maruru(B): 52.0%(100試合)
+  interstellar-maruru(A) vs interstellar-maruru(B): 52.0%(100試合)
+  interstellar-maruru(A) vs zardy(B): 63.0%(100試合)
+  interstellar-maruru(A) vs lost-maruru(B): 46.0%(100試合)
+  zardy(A) vs maruru(B): 56.0%(100試合)
+  zardy(A) vs interstellar-maruru(B): 35.0%(100試合)
+  zardy(A) vs zardy(B): 48.0%(100試合)
+  zardy(A) vs lost-maruru(B): 50.0%(100試合)
+  lost-maruru(A) vs maruru(B): 51.0%(100試合)
+  lost-maruru(A) vs interstellar-maruru(B): 63.0%(100試合)
+  lost-maruru(A) vs zardy(B): 49.0%(100試合)
+  lost-maruru(A) vs lost-maruru(B): 52.0%(100試合)
+  合計: Aの勝ち 812/1600 = 50.7%(95%区間 48.3%〜53.2%)  1手あたり A 23.4ms / B 17.6ms  544秒
+=== chh=99 seed=201
+■ A=mcts:iter=300,chh=99  対  B=mcts:iter=300  seed=201 複製対局
+  maruru(A) vs maruru(B): 56.0%(100試合)
+  maruru(A) vs interstellar-maruru(B): 53.0%(100試合)
+  maruru(A) vs zardy(B): 47.0%(100試合)
+  maruru(A) vs lost-maruru(B): 55.0%(100試合)
+  interstellar-maruru(A) vs maruru(B): 52.0%(100試合)
+  interstellar-maruru(A) vs interstellar-maruru(B): 54.0%(100試合)
+  interstellar-maruru(A) vs zardy(B): 54.0%(100試合)
+  interstellar-maruru(A) vs lost-maruru(B): 39.0%(100試合)
+  zardy(A) vs maruru(B): 54.0%(100試合)
+  zardy(A) vs interstellar-maruru(B): 35.0%(100試合)
+  zardy(A) vs zardy(B): 48.0%(100試合)
+  zardy(A) vs lost-maruru(B): 45.0%(100試合)
+  lost-maruru(A) vs maruru(B): 54.0%(100試合)
+  lost-maruru(A) vs interstellar-maruru(B): 62.0%(100試合)
+  lost-maruru(A) vs zardy(B): 58.0%(100試合)
+  lost-maruru(A) vs lost-maruru(B): 56.0%(100試合)
+  合計: Aの勝ち 822/1600 = 51.4%(95%区間 48.9%〜53.8%)  1手あたり A 18.7ms / B 13.0ms  218秒
+DONE
