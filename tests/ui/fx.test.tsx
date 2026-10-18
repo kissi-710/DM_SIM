@@ -267,7 +267,7 @@ describe('軽い演出(ドロー・ステップ)', () => {
   });
 
   const step = (key: string, s = 'main') => ({ key, step: s, active: 0, me: 0 as number | null });
-  const draws = [{ kind: 'draw' as const, title: 'ドロー ×1', side: 'me' as const, ms: 40 }];
+  const draws = [{ kind: 'draw' as const, title: 'ドロー ×1', side: 'me' as const, ms: 3000 }]; // 負荷で検査が遅れても消えない長さ
   it('無効なら何も描かない', () => {
     const { container } = render(<FxTicker draws={draws} drawToken={1} step={step('a')} enabled={false} />);
     expect(container.querySelector('.fx-ticker')).toBeNull();

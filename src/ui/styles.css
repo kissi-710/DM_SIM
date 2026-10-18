@@ -368,6 +368,10 @@ th {
   .rail-tip {
     display: none;
   }
+  /* 右下に重ねて出す操作(dock)の高さ(ボタン2つ)だけ、盤面の下をあける。手札の下端がボタンに隠れない(はみ出す分は盤面の中でスクロールする) */
+  .field > .board {
+    padding-bottom: 112px;
+  }
 }
 .input-layer {
   position: absolute;
@@ -918,13 +922,13 @@ button.icon {
   font-weight: 700;
 }
 .card.tapped {
-  --rot: 90deg;
+  --rot: -90deg;
   transform: rotate(var(--rot));
   margin: 0 14px;
 }
-/* 向かいの相手の盤面は、卓の向こうから見た向き(自分と逆回り)でタップする */
+/* 自分は左(反時計回り)、相手は右(時計回り)に倒れる */
 .side-board.opp .card.tapped {
-  --rot: -90deg;
+  --rot: 90deg;
 }
 .card.small.tapped {
   margin: 0 10px;
@@ -1456,12 +1460,29 @@ body.dragging .action-pop {
     opacity: 0;
   }
 }
-/* 手番のプレイヤーの盤面を、うっすら縁取る(情報表示。演出が無効でも残す) */
-.side-board.turn-active {
-  border-color: var(--accent2);
+/* 手番の色(情報表示。演出が無効でも残す): 自分(観戦は1P)は青、相手(2P)は赤。
+   プレイに関わる盤面(.field)だけを、手番のプレイヤーの色でうっすら染め、手番の盤面を縁取る。
+   ヘッダー・ログ・カード詳細などの欄は染めない。手番でない側の盤面は少しだけ暗くする */
+.game[data-turn='mine'] {
+  --turn-color: var(--accent);
 }
+.game[data-turn='theirs'] {
+  --turn-color: var(--bad);
+}
+.game[data-turn] .field {
+  background-color: color-mix(in srgb, var(--turn-color) 7%, transparent);
+  border-radius: 12px;
+}
+.game[data-turn] .side-board.turn-active {
+  border-color: var(--turn-color);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--turn-color) 60%, transparent);
+}
+.game[data-turn] .side-board:not(.turn-active) {
+  filter: brightness(0.9);
+}
+.game.fx .field,
 .game.fx .side-board {
-  transition: border-color calc(0.35s * var(--fx-scale, 1)) ease;
+  transition: background-color calc(0.5s * var(--fx-scale, 1)) ease, border-color calc(0.5s * var(--fx-scale, 1)) ease, box-shadow calc(0.5s * var(--fx-scale, 1)) ease, filter calc(0.5s * var(--fx-scale, 1)) ease;
 }
 /* 攻撃宣言したクリーチャーが、相手のほうへ一歩前に出る */
 .game.fx .pile.lunge-up {
@@ -1991,8 +2012,8 @@ body.dragging .action-pop {
   white-space: nowrap;
 }
 
-/* ───────── 決定的な見せ場(S・トリガー / G・ストライク / ラスト・シールド / 切り札 / ダイレクトアタック)─────────
-   試合結果への影響が大きい行動ほど豪華に(docs/ui-effects.md 0.2)。画面を暗くし、光線・揺れ・見せ札で見せる。 */
+/* ───────── 決定的な見せ場(S・トリガー / G・ストライク / 切り札 / ダイレクトアタック)─────────
+   試合結果への影響が大きい行動ほど豪華に(docs/ui-effects.md 0.2)。画面を暗くし、揺れ・見せ札で見せる。 */
 .fx-layer[data-fx-tier='decisive'] {
   align-items: center;
   padding-top: 0;
@@ -2007,26 +2028,6 @@ body.dragging .action-pop {
   opacity: 0;
   animation: fx-flash-in 0.5s ease-out both;
   animation-duration: calc(0.5s * var(--fx-scale, 1));
-}
-.fx-rays {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 220%;
-  aspect-ratio: 1;
-  margin: -110% 0 0 -110%;
-  background: repeating-conic-gradient(rgba(255, 224, 140, 0.34) 0 4deg, transparent 4deg 14deg);
-  -webkit-mask-image: radial-gradient(circle, #000 4%, transparent 38%);
-  mask-image: radial-gradient(circle, #000 4%, transparent 38%);
-  animation-name: fx-rays;
-  animation-timing-function: linear;
-  animation-fill-mode: both;
-}
-.fx-layer[data-fx-variant='gstrike'] .fx-rays {
-  background: repeating-conic-gradient(rgba(150, 230, 255, 0.4) 0 4deg, transparent 4deg 14deg);
-}
-.fx-layer[data-fx-variant='last'] .fx-rays {
-  background: repeating-conic-gradient(rgba(255, 90, 90, 0.42) 0 4deg, transparent 4deg 14deg);
 }
 @keyframes fx-dim {
   0% {
@@ -2050,14 +2051,6 @@ body.dragging .action-pop {
     opacity: 0;
   }
 }
-@keyframes fx-rays {
-  0% {
-    transform: rotate(0deg) scale(0.6);
-  }
-  100% {
-    transform: rotate(50deg) scale(1.1);
-  }
-}
 .fx-layer[data-fx-tier='decisive'] .fx-cue {
   position: relative;
   z-index: 1;
@@ -2066,7 +2059,7 @@ body.dragging .action-pop {
   font-size: 56px;
   letter-spacing: 0.1em;
 }
-/* S・トリガー(稲妻の黄)/ G・ストライク(白青)/ ラスト・シールド(赤)*/
+/* S・トリガー(稲妻の黄)/ G・ストライク(白青)*/
 .fx-cue.fx-trigger {
   display: flex;
   align-items: center;
@@ -2087,15 +2080,6 @@ body.dragging .action-pop {
 .fx-layer[data-fx-variant='gstrike'] .fx-title {
   color: #d9f6ff;
   text-shadow: 0 0 22px #3cc8ff, 0 0 6px #fff, 0 2px 8px #000;
-}
-.fx-layer[data-fx-variant='last'] .fx-cue.fx-shield {
-  padding: 26px 24px;
-  border-color: #ff4d4d;
-  background: linear-gradient(90deg, transparent, rgba(70, 0, 0, 0.94) 14%, rgba(70, 0, 0, 0.94) 86%, transparent);
-}
-.fx-layer[data-fx-variant='last'] .fx-title {
-  color: #ffd0d0;
-  text-shadow: 0 0 22px #ff2d2d, 0 2px 8px #000;
 }
 .fx-cue-main {
   text-align: center;

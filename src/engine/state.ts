@@ -1,6 +1,6 @@
 // 状態の複製・乱数・ゾーン操作の下請け。
 import type { Registry } from './registry';
-import type { Card, Civ, Ev, Frame, GameState, Permanent, PlayerId, PlayerZones, Snap, ZoneName } from './types';
+import type { Civ, Ev, Frame, GameState, Permanent, PlayerId, PlayerZones, Snap } from './types';
 
 // ───────────────────────── 実行コンテキスト ─────────────────────────
 
@@ -105,10 +105,6 @@ export function cloneState(s: GameState): GameState {
 
 // ───────────────────────── ゾーン・参照 ─────────────────────────
 
-export function zoneList(s: GameState, owner: PlayerId, zone: Exclude<ZoneName, 'battle' | 'limbo'>): number[] {
-  return s.players[owner][zone];
-}
-
 export function permByPid(s: GameState, pid: number): { perm: Permanent; owner: PlayerId } | null {
   for (const p of [0, 1] as PlayerId[]) {
     for (const perm of s.players[p].battle) if (perm.pid === pid) return { perm, owner: p };
@@ -177,6 +173,3 @@ export function cardsOwnedBy(s: GameState, p: PlayerId): number[] {
   return r;
 }
 
-export function getCard(s: GameState, uid: number): Card {
-  return s.cards[uid];
-}

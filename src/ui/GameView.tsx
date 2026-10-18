@@ -171,7 +171,7 @@ const TIPS = [
 /** 観戦中に出す Tips(操作のヒントは出さない) */
 const WATCH_TIPS = [
   'Space で一時停止。停止中は → で1手ずつ進む。',
-  '「速度」で CPU の手の間隔を変えられる。',
+  '「速度」で CPU の手の間隔を変えられる(演出が有効だと、演出の長さが下限。最速にするには、設定の「演出」をなしにする)。',
   '「⚙ 表示」で相手の手札を見られる。',
   'ログの「自動」「手動」で、効果の解決と操作を区別できる。',
 ];
@@ -284,6 +284,9 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     return set;
   }, [fxActive, session.last]);
 
+  // 手番の色: 自分(観戦は1P)は青、相手(2P)は赤。盤面の外・ヘッダーをこの色に染めて、どちらの番かを一目で分かるようにする
+  const turnColor = (g.me === null ? s.active === 0 : s.active === g.me) ? 'mine' : 'theirs';
+
   // 盤面の下に出す「直近の出来事」(CPU の手を目で追えるように)
   const feed = useMemo(() => recentFeed(s, session.log.slice(-80), g.me, 3), [s, session.log, g.me]);
 
@@ -311,7 +314,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     const t = setTimeout(() => setNotice(null), 6000);
     return () => clearTimeout(t);
   }, [notice]);
-  const [confirmOn, setConfirmOn] = useState(() => loadJson<boolean>('dmsim.confirmEnd', true));
+  const [confirmOn, setConfirmOn] = useState(() => loadJson<unknown>('dmsim.confirmEnd', true) !== false);
   const toggleConfirm = () =>
     setConfirmOn((v) => {
       saveJson('dmsim.confirmEnd', !v);
@@ -669,7 +672,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const tip = tips[Math.floor(s.turn / 2) % tips.length];
 
   return (
-    <div className={'game' + (fxActive ? ' fx' : '') + (fxActive && fxMode === 'fast' ? ' fx-fast' : '')} style={fxActive ? ({ '--fx-scale': scale } as React.CSSProperties) : undefined}>
+    <div data-turn={s.winner === null ? turnColor : undefined} className={'game' + (fxActive ? ' fx' : '') + (fxActive && fxMode === 'fast' ? ' fx-fast' : '')} style={fxActive ? ({ '--fx-scale': scale } as React.CSSProperties) : undefined}>
       <div className="game-head">
         <button className={confirmQuit ? 'on' : ''} onClick={onExit} title="メニューへ戻る(対戦は自動保存。Q を2回)">
           {confirmQuit ? 'もう一度 Q でメニューへ' : '← メニュー'} <Kbd k={KEY.quit} />
@@ -688,7 +691,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
             <button disabled={!g.paused} onClick={g.stepOnce}>
               ⏭ 1手進める <Kbd k="ArrowRight" />
             </button>
-            <label className="speed">
+            <label className="speed" title="演出が有効な間は、演出の長さより速くならない(さらに速くするには、設定の「演出」をなしにする)">
               速度
               <input type="range" min={0} max={1500} step={50} value={1500 - g.speed} onChange={(e) => g.setSpeed(1500 - Number(e.target.value))} />
             </label>

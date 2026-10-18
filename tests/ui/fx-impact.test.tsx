@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 演出の重み(試合結果への影響が大きい行動ほど豪華に): S・トリガー / G・ストライク / ラスト・シールド、
+// 演出の重み(試合結果への影響が大きい行動ほど豪華に): S・トリガー / G・ストライク、
 // 決定的な見せ場の上限の扱い、FxLayer の描画、タップの向きを演出が壊さないこと
 import { readFileSync } from 'node:fs';
 import { cleanup, render } from '@testing-library/react';
@@ -67,49 +67,57 @@ describe('S・トリガー / G・ストライクの演出(実際のエンジン�
   });
 });
 
-describe('ラスト・シールド', () => {
-  it('最後のシールドが割れた時は決定的な見せ場(王手)。まだ残っている時は通常のシールドブレイク', () => {
+describe('最後のシールド', () => {
+  it('最後のシールドが割れても、特別な演出にはしない(通常のシールドブレイクと同じ)', () => {
     const last = new Sim({ p0: { battle: ['ヨビニオン・マルル'] }, p1: { shield: 1 } });
     last.attack('ヨビニオン・マルル', 'player');
     const lc = cuesOf(last.s, last.events, 0).find((c) => c.kind === 'shield')!;
-    expect(lc.variant).toBe('last');
-    expect(tierOf(lc)).toBe('decisive');
-    expect(lc.sub).toContain('ラスト・シールド');
-
-    const many = new Sim({ p0: { battle: ['ヨビニオン・マルル'] }, p1: { shield: 5 } });
-    many.attack('ヨビニオン・マルル', 'player');
-    const mc = cuesOf(many.s, many.events, 0).find((c) => c.kind === 'shield')!;
-    expect(mc.variant).toBeUndefined();
-    expect(tierOf(mc)).toBe('major');
+    expect(lc.variant).toBeUndefined();
+    expect(tierOf(lc)).toBe('major');
+    expect(lc.ms).toBe(FX_MS.shield);
+    expect(lc.sub).not.toContain('ラスト');
   });
 });
 
 describe('FxLayer(重みごとの描画)', () => {
   const base: FxCue = { id: 1, kind: 'trigger', title: 'S・トリガー!', sub: 'フェアリー・ライフ', side: 'opp', ms: 5000, variant: 'strigger' };
-  it('決定的な見せ場は、光線・見せ札・一言を出し、重みを属性に持つ', () => {
+  it('決定的な見せ場は、見せ札を出し、光が回る装飾は付けず、重みを属性に持つ', () => {
     const reveal = { name: 'フェアリー・ライフ', civs: ['nature'], cost: '2', type: '呪文', text: 'マナをふやす' };
     const { container } = render(<FxLayer cues={[{ ...base, reveal }]} token={1} enabled />);
     const layer = container.querySelector('.fx-layer')!;
     expect(layer.getAttribute('data-fx-tier')).toBe('decisive');
     expect(layer.getAttribute('data-fx-variant')).toBe('strigger');
-    expect(container.querySelector('.fx-rays')).not.toBeNull();
+    expect(container.querySelector('.fx-rays')).toBeNull(); // 光が回る装飾は、くどいので付けない
     expect(container.querySelector('.fx-reveal-name')!.textContent).toBe('フェアリー・ライフ');
     expect(container.querySelector('.fx-reveal-text')!.textContent).toBe('マナをふやす');
     expect(container.textContent).not.toContain('逆転の一手');
   });
-  it('重要・軽い演出は、光線も見せ札も出さない', () => {
+  it('重要・軽い演出は、見せ札を出さない', () => {
     const { container } = render(<FxLayer cues={[{ id: 2, kind: 'cast', title: '呪文', side: 'opp', ms: 5000 }]} token={1} enabled />);
     expect(container.querySelector('.fx-layer')!.getAttribute('data-fx-tier')).toBe('major');
-    expect(container.querySelector('.fx-rays')).toBeNull();
     expect(container.querySelector('.fx-reveal')).toBeNull();
+  });
+});
+
+describe('手番の色(styles.css)', () => {
+  const css = readFileSync('src/ui/styles.css', 'utf8');
+  it('自分は青(accent)、相手は赤(bad)。盤面(.field)と手番の盤面だけに使い、ヘッダー・ログ・詳細欄は染めない', () => {
+    expect(css).toMatch(/\.game\[data-turn='mine'\]\s*\{[^}]*--turn-color:\s*var\(--accent\)/);
+    expect(css).toMatch(/\.game\[data-turn='theirs'\]\s*\{[^}]*--turn-color:\s*var\(--bad\)/);
+    expect(css).toMatch(/\.game\[data-turn\] \.field\s*\{[^}]*background-color:[^;]*var\(--turn-color\)/);
+    // 染めない場所(画面全体の背景・ヘッダー・状態表示・右の欄)
+    expect(css).not.toMatch(/\.game\[data-turn\]\s*\{[^}]*background/);
+    expect(css).not.toMatch(/\.game\[data-turn\] \.(game-head|status-chip|rail)/);
+    expect(css).toMatch(/\.game\[data-turn\] \.side-board\.turn-active\s*\{[^}]*border-color:\s*var\(--turn-color\)/);
+    expect(css).toMatch(/\.game\[data-turn\] \.side-board:not\(\.turn-active\)\s*\{[^}]*filter:\s*brightness/);
   });
 });
 
 describe('タップの向きを、演出が壊さない(styles.css)', () => {
   const css = readFileSync('src/ui/styles.css', 'utf8');
-  it('自分は時計回り、向かいの相手は逆回りにタップする(変数 --rot)', () => {
-    expect(css).toMatch(/\.card\.tapped\s*\{[^}]*--rot:\s*90deg;[^}]*transform:\s*rotate\(var\(--rot\)\)/);
-    expect(css).toMatch(/\.side-board\.opp \.card\.tapped\s*\{[^}]*--rot:\s*-90deg/);
+  it('自分は左(反時計回り)、相手は右(時計回り)にタップする(変数 --rot)', () => {
+    expect(css).toMatch(/\.card\.tapped\s*\{[^}]*--rot:\s*-90deg;[^}]*transform:\s*rotate\(var\(--rot\)\)/);
+    expect(css).toMatch(/\.side-board\.opp \.card\.tapped\s*\{[^}]*--rot:\s*90deg/);
   });
   it('札の transform を動かす演出のキーフレームは、回転(--rot)を保つ', () => {
     for (const name of ['fx-pop', 'fx-block', 'fx-trump-in']) {

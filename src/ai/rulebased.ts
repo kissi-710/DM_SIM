@@ -256,5 +256,3 @@ export function makeRuleBased(o: RuleOpts = {}): Agent {
     },
   };
 }
-
-export const ruleBasedAgent: Agent = makeRuleBased();

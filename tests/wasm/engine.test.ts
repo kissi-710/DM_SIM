@@ -15,6 +15,12 @@ const wasmPath = new URL('../../src/wasm/dmsim.wasm', import.meta.url);
 const has = existsSync(wasmPath);
 
 describe.skipIf(!has)('Rust 版エンジン(WASM)', () => {
+  it('アロケータの最大のクラス(4MB)を超える入力でも確保に失敗しない', () => {
+    // 空白で 9MB に水増ししたカード定義。確保が null を返すと、読み込みで例外になる
+    const big = JSON.stringify(reg.defs) + ' '.repeat(9 * 1024 * 1024);
+    expect(() => DmEngine.createSync(readFileSync(wasmPath), big)).not.toThrow();
+  });
+
   it('ラウンドの評価が TS 版と一致する(複数の局面・シード)', () => {
     const eng = DmEngine.createSync(readFileSync(wasmPath), JSON.stringify(reg.defs));
     const native = eng.asNativeRounds();

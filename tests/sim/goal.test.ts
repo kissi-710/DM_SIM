@@ -9,6 +9,7 @@ import {
   GoalTracker,
   goalHasNot,
   goalMaxTurn,
+  isGoal,
   matchCard,
   myTurnNo,
   nameMatches,
@@ -274,5 +275,29 @@ describe('GoalTracker', () => {
     expect(c.holds()).toBe(false);
     expect(t.signature()).not.toBe(sig0);
     expect(c.signature()).toBe(sig0);
+  });
+});
+
+describe('isGoal(信用できない入力の形の検査)', () => {
+  it('プリセットはすべて正しい形', () => {
+    for (const p of GOAL_PRESETS) expect(isGoal(p.goal), p.id).toBe(true);
+  });
+  it('and / or / not を入れ子にできる', () => {
+    const a = GOAL_PRESETS[0].goal;
+    expect(isGoal({ op: 'and', args: [a, { op: 'not', arg: a }, { op: 'or', args: [a] }] })).toBe(true);
+  });
+  it('実行時に例外になる形は断る(葉がない・種類が不明・ターンが数でない・空の and・循環のような深い入れ子)', () => {
+    const a = GOAL_PRESETS[0].goal;
+    for (const bad of [null, 5, 'x', [], {}, { op: 'pred' }, { op: 'and', args: [] }, { op: 'and', args: [5] }, { op: 'not' }, { op: 'xor', args: [a] },
+      { op: 'pred', timing: { turn: 'a', at: 'anyMain' }, pred: { kind: 'manaCount', min: 1 } },
+      { op: 'pred', timing: { turn: 1, at: 'someday' }, pred: { kind: 'manaCount', min: 1 } },
+      { op: 'pred', timing: { turn: 1, at: 'anyMain' }, pred: { kind: 'nope' } },
+      { op: 'pred', timing: { turn: 1, at: 'anyMain' }, pred: { kind: 'zoneHas', zone: 'deck', card: {} } },
+      { op: 'pred', timing: { turn: 1, at: 'anyMain' }, pred: { kind: 'castable' } }]) {
+      expect(isGoal(bad), JSON.stringify(bad)).toBe(false);
+    }
+    let deep: unknown = a;
+    for (let i = 0; i < 30; i++) deep = { op: 'not', arg: deep };
+    expect(isGoal(deep)).toBe(false);
   });
 });

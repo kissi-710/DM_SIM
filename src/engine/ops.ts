@@ -4,7 +4,7 @@ import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
 import { charsLite, infoOf, payNeed } from './derive';
 import type { Ctx } from './state';
-import { nextId, opponentOf, permByPid, rngInt, shuffleInPlace, snapOf } from './state';
+import { nextId, opponentOf, permByPid, shuffleInPlace, snapOf } from './state';
 import {
   type AbilityRef,
   type Ev,
@@ -597,13 +597,6 @@ export function addShieldFromDeck(c: Ctx, player: PlayerId): number | null {
   const uid = deck[0];
   moveCards(c, [uid], { to: 'shield', cause: 'addShield' });
   return uid;
-}
-
-export function randomPick<T>(c: Ctx, arr: T[], n: number): T[] {
-  const pool = arr.slice();
-  const out: T[] = [];
-  while (out.length < n && pool.length > 0) out.push(pool.splice(rngInt(c.s, pool.length), 1)[0]);
-  return out;
 }
 
 export { payNeed, opponentOf };
