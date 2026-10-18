@@ -25,9 +25,9 @@ await new Promise<void>((resolve, reject) => {
       cur = next++;
       w.postMessage(tasks[cur]);
     };
-    w.on('message', (m: any) => {
+    w.on('message', (m: { ok: boolean; error?: string } & Partial<L1qOut>) => {
       if (!m.ok) return reject(new Error(m.error));
-      outs[cur] = m;
+      outs[cur] = m as L1qOut;
       done++;
       console.error(`  ${done}/${tasks.length} (${((Date.now() - t0) / 1000).toFixed(0)}秒)`);
       if (done === tasks.length) resolve();

@@ -9,7 +9,7 @@ import { FEATURE_NAMES, N_FEATURES, handFeatures, turnRecord, type TurnRecord } 
 import { loadRegistry } from '../src/engine/registry';
 import { FAIR, toPlayerView } from '../src/engine/view';
 import { playGameSync } from '../src/sim/playGame';
-import type { PlayerId } from '../src/engine/types';
+import type { GameState, PlayerId } from '../src/engine/types';
 
 const reg = loadRegistry(CARD_DB);
 const perPair = Number(process.argv[2] ?? 300);
@@ -37,7 +37,7 @@ for (const a of ids) {
     for (let g = 0; g < perPair; g++) {
       const game = gameId++;
       const hist: [TurnRecord[], TurnRecord[]] = [[], []];
-      let prev: any = null;
+      let prev: GameState | null = null;
       playGameSync(reg, agents, {
         decks: [deckCards(a), deckCards(b)],
         seed: seed0 * 100000 + game,

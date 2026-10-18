@@ -3,7 +3,8 @@ import tseslint from 'typescript-eslint';
 import globals from 'globals';
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules'] },
+  // scripts/legacy は、履歴ベンチ用に過去のコミットから取り出したコピー(bash scripts/legacy-extract.sh。git の管理外)。元のコードのまま検査しない
+  { ignores: ['dist', 'node_modules', 'scripts/legacy/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
