@@ -1,6 +1,6 @@
 // 対戦設定: 座席ごとの人間/CPU・強さ・情報条件・デッキ・先攻後攻・シード(spec 5.1)。
 import { useEffect, useState } from 'react';
-import { AGENT_LABEL, type AgentKind } from '../ai';
+import { AGENT_LABEL, STRONG_TUNING, type AgentKind } from '../ai';
 import { checkHypotheses, hypothesisProblems, makePolicy } from '../ai/policy';
 import { checkDeck } from '../engine/engine';
 import { CARD_DB } from '../cards';
@@ -18,6 +18,8 @@ interface SeatForm {
   agent: AgentKind;
   info: InfoPreset;
   deck: string;
+  /** モンテカルロを「強く考える」設定にする(手を外す判定をせず、近い手を細かい精度まで比べる。1手の平均は約 0.7 秒) */
+  strong?: boolean;
   /** 決め打ち(hypothesis)の仮説: 相手が手札に持っていそうなカード名(カンマ区切り) */
   hypo?: string;
 }
@@ -84,7 +86,7 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
       if (problems.length) throw new Error(problems.join(' / '));
       const mk = (f: SeatForm, i: number): Seat => ({
         kind: mode === 'watch' ? 'cpu' : f.kind,
-        agent: { kind: f.agent, policy: makePolicy(f.info, { hypotheses: hypoIds[i] }), candidateDecks: decks.filter((d) => d.preset).map((d) => d.cards), ms: think },
+        agent: { kind: f.agent, policy: makePolicy(f.info, { hypotheses: hypoIds[i] }), candidateDecks: decks.filter((d) => d.preset).map((d) => d.cards), ms: think, ...(f.agent === 'mcts' && f.strong ? { tuning: { ...STRONG_TUNING } } : {}) },
       });
       saveJson('dmsim.setup.' + mode, { seats, first, seed, autoOrder, undo, delay, think });
       onStart({
@@ -141,6 +143,12 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
                     ))}
                   </select>
                 </label>
+                {seats[i].agent === 'mcts' && (
+                  <label className="row" title="手を外す判定をせず、近い手を細かい精度まで比べます。1手の平均は約0.7秒(通常の約18倍)で、通常のモンテカルロに約+7pt勝ちます。">
+                    <input type="checkbox" checked={!!seats[i].strong} onChange={(e) => setSeat(i, { strong: e.target.checked })} />
+                    強く考える(1手が長くなります)
+                  </label>
+                )}
                 <label className="row">
                   情報条件
                   <select value={seats[i].info} onChange={(e) => setSeat(i, { info: e.target.value as InfoPreset })}>

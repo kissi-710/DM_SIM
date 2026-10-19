@@ -59,6 +59,18 @@ export function treeOptsOf(t: AiTuning | undefined): TreeOpts | undefined {
   return { c: t?.treeC ?? DEFAULT_TREE_OPTS.c, maxDepth: t?.treeDepth ?? DEFAULT_TREE_OPTS.maxDepth };
 }
 
+/**
+ * 「強い」CPU の設定(docs/ai-replay-analysis.md)。手を外す判定をせず(elimZ=99)、近い手の比較を細かい精度まで続ける(precision=0.003)。
+ * 時間主導(ms)の探索に重ねると、通常の設定に 56.8%(960 試合、区間 53.6〜59.9%)で勝つ。1 手の平均は約 675ms(通常の約 18 倍)。
+ * 1 手の上限(ms)を小さくすると、強さも落ちる(既定の 1200ms 以上を勧める)。
+ */
+export const STRONG_TUNING: Pick<AiTuning, 'elimZ' | 'precision'> = { elimZ: 99, precision: 0.003 };
+
+/** mcts の設定に、「強い」CPU の設定を重ねる(spec.tuning に明示した値が優先)。mcts 以外はそのまま */
+export function withStrong(spec: AgentSpec): AgentSpec {
+  return spec.kind === 'mcts' ? { ...spec, tuning: { ...STRONG_TUNING, ...spec.tuning } } : spec;
+}
+
 export const AGENT_LABEL: Record<AgentKind, string> = {
   random: 'ランダム',
   rule: 'ルールベース',

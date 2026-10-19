@@ -17,6 +17,7 @@ export interface SavedSeat {
   agent: AgentKind;
   info: InfoPreset;
   deck: string;
+  strong?: boolean;
   hypo?: string;
 }
 
@@ -37,7 +38,7 @@ function seatOf(x: unknown): SavedSeat | null {
   const agent = x.agent === 'random' || x.agent === 'rule' || x.agent === 'mcts' ? x.agent : null;
   const info = typeof x.info === 'string' && x.info in INFO_PRESET_LABEL ? (x.info as InfoPreset) : null;
   if (!kind || !agent || !info || !deckExists(x.deck)) return null;
-  return { kind, agent, info, deck: x.deck, ...(typeof x.hypo === 'string' ? { hypo: x.hypo } : {}) };
+  return { kind, agent, info, deck: x.deck, ...(typeof x.strong === 'boolean' ? { strong: x.strong } : {}), ...(typeof x.hypo === 'string' ? { hypo: x.hypo } : {}) };
 }
 
 /** 対戦・観戦の設定の保存を、項目ごとに確かめて読む。席は、2席とも正しい時だけ使う(消したデッキを選んでいたら、席ごと既定に戻す) */

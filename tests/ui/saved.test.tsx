@@ -23,6 +23,16 @@ const crashed = (el: React.ReactElement) => {
 
 const BAD: unknown[] = [null, 5, 'x', [], {}, { seats: 5 }, { seats: [{ kind: 'x', agent: 'y', info: 'z', deck: 'nope' }, null] }, { trials: 'abc', seed: {}, maxNodes: 'x', goal: 5, deckId: 'nope', first: 7 }, { goal: { op: 'pred' } }];
 
+describe('保存した席の「強く考える」', () => {
+  it('真偽値なら読み込み、真偽値でなければ捨てる', () => {
+    const seat = (strong: unknown) => ({ kind: 'cpu', agent: 'mcts', info: 'fair', deck: 'maruru', strong });
+    put('dmsim.setup.play', { seats: [seat(true), seat('yes')] });
+    const s = loadSavedSetup('play').seats!;
+    expect(s[0].strong).toBe(true);
+    expect('strong' in s[1]).toBe(false);
+  });
+});
+
 describe('壊れた保存でも、設定・調査の画面が開ける', () => {
   for (const [i, v] of BAD.entries()) {
     it(`保存の形 #${i}: ${JSON.stringify(v)?.slice(0, 50)}`, () => {

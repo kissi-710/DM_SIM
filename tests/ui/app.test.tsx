@@ -157,6 +157,20 @@ describe('SetupScreen', () => {
     expect(await screen.findByText(/探索エンジン: TS 版/)).toBeInTheDocument();
     expect(screen.getByText(/npm run build:wasm/)).toBeInTheDocument();
   });
+  it('モンテカルロを選ぶと「強く考える」が出て、入れると、その席の設定に「強い」CPU の設定が入る(他の席には入らない)', async () => {
+    render(<SetupScreen mode="watch" onBack={() => {}} onStart={start} />);
+    expect(screen.queryByLabelText(/強く考える/)).toBeNull();
+    const strength = screen.getAllByRole('combobox').filter((s) => [...(s as HTMLSelectElement).options].some((o) => o.value === 'mcts'));
+    await userEvent.selectOptions(strength[0], 'mcts');
+    await userEvent.selectOptions(strength[1], 'mcts');
+    const boxes = screen.getAllByLabelText(/強く考える/);
+    expect(boxes).toHaveLength(2);
+    await userEvent.click(boxes[0]);
+    await userEvent.click(screen.getByRole('button', { name: '観戦開始' }));
+    const seats = start.mock.calls[0][0].seats;
+    expect(seats[0].agent.tuning).toMatchObject({ elimZ: 99, precision: 0.003 });
+    expect(seats[1].agent.tuning).toBeUndefined();
+  });
   it('決め打ちを選んだ時は、仮説のカードの入力欄が出て、空のままでは始められない', async () => {
     render(<SetupScreen mode="watch" onBack={() => {}} onStart={start} />);
     expect(screen.queryByText('仮説のカード')).toBeNull();

@@ -1,6 +1,7 @@
 // 探索の早期終了の設定(precision / minIterations)と、spec 文字列の prec= minit=
 import { describe, expect, it } from 'vitest';
 import { MctsSearch, pairedVerdict } from '../../src/ai/mcts';
+import { STRONG_TUNING, withStrong } from '../../src/ai';
 import { parseSpec, specLabel } from '../../src/ai/specString';
 
 /** 2 つの手が、毎ラウンドまったく同じ報酬(差が 0)の探索を、終わるまで進めて、使った反復数を返す */
@@ -33,6 +34,23 @@ describe('早期終了の設定', () => {
     // n = 200 ラウンド、差の平均 0、分散は下限(0.0025)
     expect(pairedVerdict(200, 0, 0, 0)).toBe('precise');
     expect(pairedVerdict(200, 0, 0, 0, 2.5, 0.001)).toBe('open');
+  });
+});
+
+describe('「強い」CPU の設定', () => {
+  it('STRONG_TUNING: 手を外す判定をせず、精度の基準を細かくする(docs/ai-replay-analysis.md)', () => {
+    expect(STRONG_TUNING).toEqual({ elimZ: 99, precision: 0.003 });
+  });
+  it('withStrong は mcts にだけ設定を重ね、明示した値が優先される', () => {
+    expect(withStrong({ kind: 'mcts', ms: 1200 }).tuning).toEqual({ elimZ: 99, precision: 0.003 });
+    expect(withStrong({ kind: 'mcts', tuning: { precision: 0.01, horizonTurns: 4 } }).tuning).toEqual({ elimZ: 99, precision: 0.01, horizonTurns: 4 });
+    expect(withStrong({ kind: 'rule' })).toEqual({ kind: 'rule' });
+  });
+  it('spec 文字列の strong=1: 設定が入り、明示した z・prec が優先。strong=0 は入らない', () => {
+    expect(parseSpec('mcts:ms=1200,strong=1').tuning).toEqual({ elimZ: 99, precision: 0.003 });
+    expect(parseSpec('mcts:strong=1,prec=0.006').tuning).toMatchObject({ elimZ: 99, precision: 0.006 });
+    expect(parseSpec('mcts:strong=1,z=3').tuning).toMatchObject({ elimZ: 3, precision: 0.003 });
+    expect(parseSpec('mcts:strong=0').tuning).toBeUndefined();
   });
 });
 
