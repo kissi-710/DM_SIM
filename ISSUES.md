@@ -1,6 +1,6 @@
 # ISSUES(DM_SIM の未解決の問題点)
 
-- 更新日: 2026-10-17(プロジェクト全体の再調査と、その修正。未解決は 0 件)
+- 更新日: 2026-10-20(リファクタリング(docs/refactoring.md)の中で ISSUE-44 を追加。未解決は 1 件)
 - 解決済みの項目と、そのときの調査記録は [HISTORY.md](./HISTORY.md) に移した(基本的に読む必要はない)。
 - **番号は固定**(振り直さない)。解決した項目の番号は欠番になる。旧番号(2026-10-15 の振り直し前)との対応は HISTORY.md §1。
 - 修正はこの文書の対象外。項目ごとに別コミットで直す(CLAUDE.md)。直したら、この文書から消して HISTORY.md に移す。
@@ -13,23 +13,33 @@
 | 確認 | 結果 |
 |---|---|
 | `npm run typecheck` / `npm run lint` | エラー・警告なし(`noUnusedLocals` / `noUnusedParameters` を有効化済み) |
-| `npm test` | 1145 件成功(76 ファイル。約 16 秒) |
+| `npm test` | 1212 件成功・6 件スキップ(WASM なし。86 ファイル。約 25 秒)。WASM あり(`npm run build:wasm` 後)は 1218 件・スキップなし |
 | `npm run test:rust`(Rust 版と TS 版の差分テスト) | 成功(取り直したフィクスチャで) |
 | `npm run test:coverage` | 文 72.9%・分岐 70.3%・関数 62.3% |
 | `npm audit --omit=dev` | 脆弱性 0 |
-| 未解決の項目 | 0件(ISSUE-19 は、持ち主が 2026-10-17 に「何も変えない」と決定して終了) |
+| 未解決の項目 | 1件(ISSUE-44。ISSUE-19 は、持ち主が 2026-10-17 に「何も変えない」と決定して終了) |
 
 ## 一覧
 
 | ID | 優先度 | 確度 | 概要 |
 |---|---|---|---|
-| (なし) | | | 未解決の項目はありません |
+| ISSUE-44 | 低 | 【再現】 | Rust 版(WASM)が、ランダムなデッキの探索の局面の一部で例外(`unreachable`)を出す。探索は TS 版で評価し直すので結果は正しいが、その局面では WASM の速度が出ない |
 
 ---
 
 ## 品質・保守性
 
 (未解決の項目はありません)
+
+## 性能
+
+### ISSUE-44 Rust 版(WASM)が、一部の局面で `unreachable` の例外を出す(低・【再現】)
+
+- **見つけた経緯**: 2026-10-20 のリファクタリング(docs/refactoring.md §5.5)で、`scripts/diff-fuzz.ts` を回した時。**リファクタリング前のコミット(70a0a4b)でも同じ局面・同じ件数**なので、リファクタリングが原因ではない。
+- **再現**: `npm run build:wasm` のあと `npx tsx scripts/diff-fuzz.ts 120 1`。出力の先頭が `{ games: 120, checked: 1241, diffs: 0, rustErr: 72, tsErrors: 0 }`(`diffs: 0` = 例外を出さなかった局面では、TS 版と Rust 版の結果は一致)。
+- **影響**: `evalRound`(ai/mcts.ts)は、外部の評価器(Rust 版)が例外を出すと TS 版で評価し直す。勝敗・選ぶ手は変わらず、その局面で WASM の高速化が効かないだけ。
+- **未調査**: どのカード・局面で出るか。ランダムなデッキ(構築制限内、進化クリーチャーなし)を使うので、通常のデッキでは出ない可能性がある。`rust/src` の `unreachable!()` / `panic` の箇所と、例外を出した局面(`scratch/survey/`)を突き合わせる。
+- **直す時の注意**: Rust 版を変えたら、`npm run test:rust` と `scripts/dump-fixtures.ts` で正解データを作り直す(CLAUDE.md)。
 
 ---
 

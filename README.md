@@ -72,8 +72,8 @@ src/
 ├─ ai/       random / rulebased / mcts / determinize
 ├─ sim/      batch(バッチ対戦)・solitaire(確率・パターン調査)・goal・strength
 ├─ workers/  ai.worker / sim.worker
-├─ ui/       React 画面
-└─ cli/      batch / prob
+├─ ui/       React 画面(GameView・盤面 Board・ダイアログ・キー入力 gameKeys など)
+└─ cli/      batch / prob / aiquality など(引数 args・Worker プール pool を共有)
 tests/       ルール・カード別シナリオ(33種)・台帳・AI・シミュレータ・画面
 ```
 
