@@ -5,7 +5,6 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
-import { Worker } from 'node:worker_threads';
 import { CARD_DB, DECK_PRESETS, deckCards } from '../cards';
 import { specLabel, parseSpec } from '../ai/specString';
 import { loadRegistry } from '../engine/registry';
@@ -13,23 +12,13 @@ import { collectPositions, summarize, type Judgement, type Position, type Teache
 import type { MatchStats } from '../sim/batch';
 import { wilson } from '../sim/stats';
 import { installNativeFromEnv } from '../wasm/installNode';
+import { parseArgs } from './args';
 import { runParallel } from './parallel';
+import { runPool } from './pool';
 import type { QualityOut, QualityTask } from './qualityWorker';
 
-function parseArgs(argv: string[]): { cmd: string; opts: Record<string, string> } {
-  const opts: Record<string, string> = {};
-  let cmd = '';
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a.startsWith('--')) {
-      const v = argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') ? argv[++i] : 'true';
-      opts[a.slice(2)] = v;
-    } else if (!cmd) cmd = a;
-  }
-  return { cmd, opts };
-}
-
-const { cmd, opts } = parseArgs(process.argv.slice(2));
+const { opts, positional } = parseArgs(process.argv.slice(2));
+const cmd = positional[0] ?? '';
 
 function usage(): never {
   console.log(`使い方: npx tsx src/cli/aiquality.ts <match|teacher> [オプション]
@@ -126,37 +115,11 @@ async function runMatch() {
 // ───────────────────────── teacher ─────────────────────────
 
 function runTasks(tasks: QualityTask[], workers: number): Promise<QualityOut[]> {
-  const url = new URL('./qualityWorker.ts', import.meta.url);
-  const results: QualityOut[] = new Array(tasks.length);
-  let next = 0;
-  let done = 0;
-  const pool: Worker[] = [];
-  return new Promise((resolve, reject) => {
-    if (tasks.length === 0) return resolve([]);
-    const start = () => {
-      const w = new Worker(url);
-      pool.push(w);
-      let cur = -1;
-      const feed = () => {
-        if (next >= tasks.length) return void w.terminate();
-        cur = next++;
-        w.postMessage(tasks[cur]);
-      };
-      w.on('message', (m: QualityOut) => {
-        if (!m.ok) {
-          pool.forEach((p) => void p.terminate());
-          return reject(new Error(m.error));
-        }
-        results[cur] = m;
-        if (++done === tasks.length) {
-          pool.forEach((p) => void p.terminate());
-          resolve(results);
-        } else feed();
-      });
-      w.on('error', reject);
-      feed();
-    };
-    for (let i = 0; i < Math.min(workers, tasks.length); i++) start();
+  return runPool<QualityTask, QualityOut>(new URL('./qualityWorker.ts', import.meta.url), tasks, workers, {
+    unwrap: (m) => {
+      if (!m.ok) throw new Error(m.error);
+      return m;
+    },
   });
 }
 

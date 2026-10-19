@@ -3,20 +3,9 @@
 // 各ラウンドは別のシードで測る(特定の試合の並びに合わせ込まないため)。同じラウンド内では全候補を同じシードで比べる。
 import { DEFAULT_WEIGHTS, type EvalWeights } from '../ai/eval';
 import { benchAi } from './benchCore';
+import { parseArgs } from './args';
 
-function parseArgs(argv: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a.startsWith('--')) {
-      const k = a.slice(2);
-      const v = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : 'true';
-      out[k] = v;
-    }
-  }
-  return out;
-}
-const args = parseArgs(process.argv.slice(2));
+const args = parseArgs(process.argv.slice(2)).opts;
 const games = Number(args.games ?? 100);
 const rounds = Number(args.rounds ?? 2);
 const iterations = Number(args.iterations ?? 120);

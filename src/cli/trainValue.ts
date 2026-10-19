@@ -4,7 +4,6 @@
 // 保留(対局単位で 20%)での対数損失・正解率を、手作りの評価(尺度だけ当てはめたもの)と比べて出す。
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
-import { Worker } from 'node:worker_threads';
 import { parseSpec } from '../ai/specString';
 import type { TrainOut, TrainTask } from './trainWorker';
 import { dirname } from 'node:path';
@@ -20,15 +19,10 @@ import {
   weightsToModel,
   type Sample,
 } from '../sim/valueTrain';
+import { parseArgs } from './args';
+import { runPool } from './pool';
 
-function parseArgs(argv: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith('--')) out[argv[i].slice(2)] = argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') ? argv[++i] : 'true';
-  }
-  return out;
-}
-const a = parseArgs(process.argv.slice(2));
+const a = parseArgs(process.argv.slice(2)).opts;
 if (a.help) {
   console.log(`使い方: npx tsx src/cli/trainValue.ts [オプション]
   --games <n>        自己対戦の試合数(既定 6000)
@@ -56,42 +50,20 @@ const sp = featureSpace(a['no-cards'] ? [] : defIds);
 const spec = parseSpec(a.agent ?? 'rule');
 const jobs = Math.max(1, Math.min(8, a.jobs ? Number(a.jobs) : availableParallelism() - 1));
 
-function collect(): Promise<Sample[]> {
-  const url = new URL('./trainWorker.ts', import.meta.url);
+async function collect(): Promise<Sample[]> {
   const size = Math.max(1, Math.ceil(games / (jobs * 4)));
-  const ranges: [number, number][] = [];
-  for (let g = 0; g < games; g += size) ranges.push([g, Math.min(games, g + size)]);
-  const results: Sample[][] = new Array(ranges.length);
-  let next = 0;
-  let done = 0;
-  const pool: Worker[] = [];
-  return new Promise((resolve, reject) => {
-    const start = () => {
-      const w = new Worker(url);
-      pool.push(w);
-      let cur = -1;
-      const feed = () => {
-        if (next >= ranges.length) return void w.terminate();
-        cur = next++;
-        const task: TrainTask = { decks: deckIds, games, range: ranges[cur], seed, spec, eps, defs: sp.defs };
-        w.postMessage(task);
-      };
-      w.on('message', (o: TrainOut) => {
-        const rows: Sample[] = [];
-        for (let i = 0; i < o.ys.length; i++) {
-          rows.push({ x: o.xs.slice(i * o.dim, (i + 1) * o.dim), y: o.ys[i], game: o.gameNos[i], turn: o.turns[i], hand: o.hands[i] });
-        }
-        results[cur] = rows;
-        if (++done === ranges.length) {
-          pool.forEach((p) => void p.terminate());
-          resolve(results.flat());
-        } else feed();
-      });
-      w.on('error', reject);
-      feed();
-    };
-    for (let i = 0; i < Math.min(jobs, ranges.length); i++) start();
+  const tasks: TrainTask[] = [];
+  for (let g = 0; g < games; g += size) tasks.push({ decks: deckIds, games, range: [g, Math.min(games, g + size)], seed, spec, eps, defs: sp.defs });
+  const results = await runPool<TrainTask, TrainOut, Sample[]>(new URL('./trainWorker.ts', import.meta.url), tasks, jobs, {
+    unwrap: (o) => {
+      const rows: Sample[] = [];
+      for (let i = 0; i < o.ys.length; i++) {
+        rows.push({ x: o.xs.slice(i * o.dim, (i + 1) * o.dim), y: o.ys[i], game: o.gameNos[i], turn: o.turns[i], hand: o.hands[i] });
+      }
+      return rows;
+    },
   });
+  return results.flat();
 }
 
 const t0 = Date.now();

@@ -7,19 +7,7 @@ import { formatStats, type FirstMode, type MatchStats } from '../sim/batch';
 import { mergeMatches } from '../sim/jobs';
 import type { CardStrength } from '../sim/strength';
 import { runParallel } from './parallel';
-
-function parseArgs(argv: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a.startsWith('--')) {
-      const k = a.slice(2);
-      const v = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : 'true';
-      out[k] = v;
-    }
-  }
-  return out;
-}
+import { parseArgs } from './args';
 
 function usage(): never {
   console.log(`使い方: npm run batch -- [オプション]
@@ -43,7 +31,7 @@ function usage(): never {
   process.exit(0);
 }
 
-const args = parseArgs(process.argv.slice(2));
+const args = parseArgs(process.argv.slice(2)).opts;
 if (args.help) usage();
 
 function fail(msg: string): never {

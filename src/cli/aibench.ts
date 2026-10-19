@@ -4,21 +4,9 @@
 import type { AiTuning } from '../ai';
 import type { EvalWeights } from '../ai/eval';
 import { benchAi, formatBench } from './benchCore';
+import { parseArgs } from './args';
 
-function parseArgs(argv: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a.startsWith('--')) {
-      const k = a.slice(2);
-      const v = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : 'true';
-      out[k] = v;
-    }
-  }
-  return out;
-}
-
-const args = parseArgs(process.argv.slice(2));
+const args = parseArgs(process.argv.slice(2)).opts;
 if (args.help) {
   console.log(`使い方: npm run aibench -- [オプション]
   --games <n>       デッキの組ごとの試合数(既定 100。組は maruru/zardy の4通り)

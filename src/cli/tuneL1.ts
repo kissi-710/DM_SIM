@@ -8,15 +8,9 @@ import { L1_DEFAULT, type L1Params } from '../ai/l1params';
 import { wilson } from '../sim/stats';
 import type { MatchStats } from '../sim/batch';
 import { runParallel } from './parallel';
+import { parseArgs } from './args';
 
-function parseArgs(argv: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith('--')) out[argv[i].slice(2)] = argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') ? argv[++i] : 'true';
-  }
-  return out;
-}
-const a = parseArgs(process.argv.slice(2));
+const a = parseArgs(process.argv.slice(2)).opts;
 const games = Number(a.games ?? 300); // デッキの組ごと(偶数)
 const rounds = Number(a.rounds ?? 2);
 const seed0 = Number(a.seed ?? 5000);

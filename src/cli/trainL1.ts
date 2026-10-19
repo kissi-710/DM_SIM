@@ -15,15 +15,9 @@ import { FAIR, toPlayerView } from '../engine/view';
 import { collectPositions } from '../sim/aiEval';
 import { mulberry } from '../sim/playGame';
 import { installNativeFromEnv } from '../wasm/installNode';
+import { parseArgs } from './args';
 
-function parseArgs(argv: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith('--')) out[argv[i].slice(2)] = argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') ? argv[++i] : 'true';
-  }
-  return out;
-}
-const a = parseArgs(process.argv.slice(2));
+const a = parseArgs(process.argv.slice(2)).opts;
 const N = Number(a.positions ?? 3000);
 const IT = Number(a.iterations ?? 1400);
 const SEED = Number(a.seed ?? 9100);
