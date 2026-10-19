@@ -75,4 +75,49 @@
 | R1-9 | `ui/GameView.tsx` | 1071 行の中に、カード詳細・派生値・ログ・待機中の能力・ヘルプが同居。`GameView` 1 関数が約 840 行。直近の 1 手のイベントから `Set` を作る `useMemo` が 5 つ、ほぼ同じ形で並ぶ | 表示だけの部品を別ファイルに移し(元のファイルから再エクスポート)、イベントから `Set` を作る処理を 1 つの補助関数にまとめる | 保 |
 | R1-10 | その他 | 重複 import(`cli/prob.ts` の `node:fs` など) | 1 本にまとめる | 保 |
 
+### 4.3 実施結果(第 1 回)
+
+全項目を実施した。コミット: `de66327`(R1-1〜R1-6)/ `453f11a`(R1-7・R1-8)/ `9ee5f36`(R1-9)/ `7da0216`(R1-10)。
+
+| ID | 結果 |
+|---|---|
+| R1-1 | `derive.ts` に `faceIdxOf`(非公開)・`faceTypeOf` を足し、`costBase` / `manaCivs` / `isSick` / `infoOf` を、オブジェクト生成なしで求めるようにした。ai・engine・sim の `charsLite(...).cost` / `.civs` / `.type`(hint なし)の約 24 か所を置き換えた(`charsLite` は、面・種族なども使う箇所に残した) |
+| R1-2 | `activeStatics(c, modType?)` で種類を先に絞る。`costOf` / `canCast` / `playerAttackBlockedByEntry` が使う |
+| R1-3 | `tryTrigger` で、`subject` / `turn` の判定を、スナップショット・評価コンテキストの作成より前に。`limitKey` に集約 |
+| R1-4 | `defaultPlayFace(def)` を `derive.ts` に置き、`engine.ts` / `legal.ts` / `goal.ts` で共有 |
+| R1-5 | `legal.ts` の `void hasKeyword`・`repeat ? start : start`・未使用の `used` 集合・JSON 複製を整理 |
+| R1-6 | `vm.ts` の冗長な `any`(2 か所)を外した。`cond` の `any` は、判別共用体に `nonEmpty` が無いため残した(型の穴だが、実行は変えない) |
+| R1-7 | `rolloutL1` を `WeakMap` で重みごとに 1 回に。`./eval` の二重 import を解消 |
+| R1-8 | `chooseAnswer` の重みを、`makeRuleBased` の作成時に 1 回だけ作る |
+| R1-9 | `GameView.tsx` 1071 → 871 行。`CardDetail.tsx`(90 行)・`SidePanels.tsx`(59 行)・`HelpPanel.tsx`(65 行)・`GameDialogs.tsx`(支払い・棋譜。107 行)を新設。`cardsOfEvents` で 4 つの `useMemo` を集約。`GameView` から `CardDetail` / `PoolPanel` / `LogPanel` を再エクスポートし、既存の import は無変更 |
+| R1-10 | 重複 import 5 か所を 1 本に |
+
+**動作不変の確認(すべて通過)**
+
+| 確認 | 結果 |
+|---|---|
+| `npm run typecheck` / `npm run lint` | エラーなし |
+| `npm test` | 1201 件成功(6 件スキップ。着手前と同じ) |
+| 挙動スナップショット(178 件) | 全件一致(手順・イベント列・最終状態の hash が着手前と同じ) |
+| `npm run test:rust` | 5 件成功(TS 版の出力から作り直した正解データと Rust 版が一致) |
+| `npm run build` | 成功 |
+| 実機(ブラウザ) | 対戦画面で、カード詳細・ログ・ヘルプ・棋譜ダイアログが表示され、コンソールにエラーなし。**支払いダイアログ(PayDialog)は実機で出していない**(UI テストと型で確認。第 2 回で、マナ選択が出る場面を作って確認する) |
+
+**速度**(1 スレッド。同じ PC で、着手前のコミットと交互に測定。ぶれは ±5% 程度)
+
+| 項目 | 着手前 | 第 1 回後 |
+|---|---|---|
+| ルールベース 400 試合 | 163〜170 試合/秒 | 174〜213 試合/秒(約 +10〜25%) |
+| ランダム 400 試合 | 337 試合/秒 | 339 試合/秒(差なし) |
+| MCTS(120 反復)4 試合 | 1.42〜1.52 秒/試合 | 1.42 秒/試合(誤差内) |
+
+効いたのは、合法手の列挙・支払い計画・誘発の収集で呼ばれる軽量アクセサと、`activeStatics` の絞り込み。MCTS は Rust 版(WASM)が使えれば探索の本体がそちらで動くので、TS 側の速度は主に UI のない環境(CLI・テスト)に効く。
+
+### 4.4 第 1 回で見送ったもの(第 2 回の候補)
+
+- `GameView` のキー入力の処理(約 200 行の 1 つの `useEffect`)の切り出し。状態の多くを閉じ込めているので、フックに分ける設計が要る。
+- `engine/procs.ts`(1090 行)の、攻撃・ブレイク・チェックポイントの分割。
+- `collect`(誘発の収集)が、イベントごとに全カードを走査する。トリガーを持つカードの索引を持てば減らせるが、`uid` 順の走査順(= 誘発の発生順)を保つ設計が要る。
+- `planPayment` の中間の `Map` / `Set` の削減。
+
 対象にしないもの(理由つき): `rust/`(TS が基準で、差分テストが守っている。内部の整理は別の機会)、`docs/data/`(実験の記録)、`scripts/` の単発の実験スクリプト(再実行が目的ではなく、記録として残す)、`scratch/`(git の管理外)。

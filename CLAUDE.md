@@ -68,6 +68,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 | `npx tsx scripts/bench-accuracy.ts [試合数] [繰り返し]` | バッチ対戦の精度の測定(別シードで繰り返し、推定の SD・区間の半幅・被覆率) |
 | `npm run build:wasm` | Rust 版エンジンを WASM にビルドして `src/wasm/dmsim.wasm` に置く(要 Rust。あれば AI の探索が自動で使う。無ければ TS 版) |
 | `npx tsx scripts/diff-fuzz.ts [試合数] [シード]` | TS 版と Rust 版(WASM)のラウンド評価の一致を、ランダムなデッキ・局面で広く確かめる(要 `build:wasm`)。ずれた局面は `scratch/survey/` に書き出す。まれなずれは、固定フィクスチャの `test:rust` では見つからない |
+| `npx tsx scripts/behavior-snapshot.ts --check tests/fixtures/behavior-snapshot.json` | 挙動スナップショットの確認(全デッキ・全 AI の固定シードの対局と調査を hash にした 178 件。**リファクタリング・高速化など、挙動を変えない変更の後に必ず回す**。ルール・カード・AI を意図して変えた時だけ、`behavior-snapshot.ts <出力先>` で取り直す。docs/refactoring.md) |
 | `npm run test:rust` | Rust 版と TS 版の差分テスト。正解データ(`rust/fixtures/games.json`)を TS 版で作り直してから `cargo test --release` を実行する。ルール・カード・プレイアウトを変えたら必ず回す(フィクスチャが無いとテストはスキップされる) |
 
 注意: この環境(Windows)では `python` / `python3` は Microsoft Store のスタブで動かない。Python が必要なときは `py` で実行する(例: `py script.py`)。

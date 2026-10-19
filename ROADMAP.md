@@ -224,6 +224,8 @@
 
 - [x] M7-34 「強い」CPU(`feat/strong-cpu`。docs/ai-replay-analysis.md §9.1): 手を外す判定なし + 精度の基準を細かく(`STRONG_TUNING`)を、対戦設定の「強く考える」(座席ごと。モンテカルロのみ。初期オフ)と、設定文字列 `strong=1` から選べる。通常のモンテカルロに 56.8%(960 試合)、1 手の平均は約 675ms。既定の動作は変えていない
 
+- [x] M7-35 リファクタリング(動作を変えずに、保守性と速度を上げる): 方針・対象一覧・結果は [docs/refactoring.md](./docs/refactoring.md)。挙動スナップショット(`scripts/behavior-snapshot.ts`)で、ルール・カード・AI の挙動が変わっていないことを固定した。第 1 回(R1-1〜R1-10)を実施
+
 ---
 
 ## M-UX. UX 改善(HISTORY.md §4)
