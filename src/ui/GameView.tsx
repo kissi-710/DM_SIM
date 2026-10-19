@@ -20,6 +20,7 @@ import { FxLayer } from './FxLayer';
 import { FxAttack } from './FxAttack';
 import { FxGhosts } from './FxGhosts';
 import { useFxGate } from './useFxGate';
+import { loadThinkInFx, logicalCores, saveThinkInFx, thinkInFxWarning } from './thinkInFx';
 import { FxTicker } from './FxTicker';
 import { cuesOf, drawCuesOf, FX_MODE_LABEL, FX_MODES, fxHoldMs, fxScale, loadFxMode, removalCuesOf, removalsOf, saveFxMode, STEP_LABEL, type FxMode } from './fx';
 
@@ -229,7 +230,9 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [fxMode, setFxMode] = useState<FxMode>(loadFxMode);
   const fxOn = fxMode !== 'off';
   const scale = fxScale(fxMode);
-  const g = useGame(setup, fxMode);
+  // 「演出中も考える」(既定はオフ。重くなる懸念があるので、警告を添える)
+  const [thinkInFx, setThinkInFx] = useState(loadThinkInFx);
+  const g = useGame(setup, fxMode, thinkInFx);
   const { session } = g;
   const s = session.state;
   const [hover, setHover] = useState<number | null>(null);
@@ -759,6 +762,20 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
                   ))}
                 </select>
               </label>
+              <label className="check" title="待ち時間(演出・手の間隔)の間も CPU が探索を続け、より深く考える。打つまでの時間は増えない">
+                <input
+                  type="checkbox"
+                  checked={thinkInFx}
+                  onChange={(e) => {
+                    setThinkInFx(e.target.checked);
+                    saveThinkInFx(e.target.checked);
+                  }}
+                />{' '}
+                演出中も考える
+              </label>
+              <div className="muted think-warn" role="note">
+                {thinkInFxWarning(logicalCores())}
+              </div>
               <label className="check" title="出せるカードを残したまま終える時に確認">
                 <input type="checkbox" checked={confirmOn} onChange={toggleConfirm} /> ターン終了の確認を出す <Kbd k={KEY.confirmEnd} />
               </label>
