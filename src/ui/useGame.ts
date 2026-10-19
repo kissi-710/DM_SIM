@@ -110,7 +110,14 @@ export function useGame(setup: GameSetup, fxMode: FxMode = 'off') {
   });
 
   // 画面を離れる・対戦をやり直す(再生成される)時は、実行中の探索を取り消す
-  useEffect(() => () => cancelAi(), []);
+  // (取り消された探索は、使い回さない: 始めた探索を覚えている searchRef も捨てる)
+  useEffect(
+    () => () => {
+      cancelAi();
+      searchRef.current = null;
+    },
+    [],
+  );
 
   // 自動保存: 進行中は毎手保存し、勝敗が出たら消す
   const winner = session.state.winner;
@@ -182,6 +189,29 @@ export function useGame(setup: GameSetup, fxMode: FxMode = 'off') {
     setSession({ state: snap.state, log: cur.log.slice(0, snap.logLen), last: [], actions: cur.actions.slice(0, snap.actionsLen), thinking: false, error: null });
   }, []);
 
+  /**
+   * CPU の探索を始める(同じ局面なら、始めた探索を使い回す)。
+   * 演出・手の間隔の待ち時間の間にも、探索を進めておくために、待つ前に始める(下の CPU の手番)。
+   * 何を打つかは、局面とシード(cpuSeed)だけで決まるので、いつ始めても手は変わらない。
+   */
+  const searchRef = useRef<{ state: GameState; promise: Promise<Action> } | null>(null);
+  const startSearch = useCallback(
+    (cur: Session): Promise<Action> => {
+      const hit = searchRef.current;
+      if (hit && hit.state === cur.state) return hit.promise;
+      const spec = setup.seats[cur.state.pending!.player].agent;
+      const seed = cpuSeed(hashSeed(setup.seed), cur.actions.length);
+      const promise = chooseWithWorker({ state: cur.state, spec, seed });
+      // 失敗(取り消しを含む)した探索は、使い回さない。待たずに捨てた探索の失敗を、未処理の失敗にもしない
+      promise.catch(() => {
+        if (searchRef.current?.promise === promise) searchRef.current = null;
+      });
+      searchRef.current = { state: cur.state, promise };
+      return promise;
+    },
+    [setup],
+  );
+
   // CPU の手番
   const { state } = session;
   const pend = state.pending;
@@ -202,15 +232,15 @@ export function useGame(setup: GameSetup, fxMode: FxMode = 'off') {
         fxEnabled: fxRef.current !== 'off',
         fxHoldMs: fxRef.current !== 'off' ? fxHoldMs(cur.state, cur.last, me, fxScale(fxRef.current)) : 0,
       });
-      await new Promise((r) => setTimeout(r, wait));
-      if (cancelled) return;
       try {
-        const spec = setup.seats[pend!.player].agent;
-        const seed = cpuSeed(hashSeed(setup.seed), sessionRef.current.actions.length);
-        const a = await chooseWithWorker({ state: sessionRef.current.state, spec, seed });
+        // 待ち時間(演出・手の間隔)の間も、CPU に考えさせる。探索の時間制限はそのままで、待ちと探索が重なる分だけ早く打てる
+        // (待ち → 探索 の順だと、待ち + 探索 かかっていた。重ねれば、長いほうだけ)
+        const search = startSearch(cur);
+        const [a] = await Promise.all([search, new Promise((r) => setTimeout(r, wait))]);
         if (cancelled || stamp.current !== my) return;
         perform(a);
       } catch (e) {
+        searchRef.current = null; // 失敗した探索は使い回さない(「もう一度考えさせる」でやり直せるように)
         if (!cancelled) setSession((s) => ({ ...s, thinking: false, error: errorMessage(e) }));
       }
     };
@@ -235,19 +265,18 @@ export function useGame(setup: GameSetup, fxMode: FxMode = 'off') {
     stepping.current = true; // 連打で、同じ状態に対する手を2回決めない
     void (async () => {
       try {
-        const spec = setup.seats[cur.state.pending!.player].agent;
-        const seed = cpuSeed(hashSeed(setup.seed), cur.actions.length);
-        const a = await chooseWithWorker({ state: cur.state, spec, seed });
+        const a = await startSearch(cur);
         // 待っている間に状態が変わった(別の操作・再開)なら、古い状態向けの手は捨てる
         if (sessionRef.current.state === cur.state) perform(a);
       } catch (e) {
+        searchRef.current = null;
         if (e instanceof AiCancelled) return; // 画面を離れて取り消された(エラーとして出さない)
         setSession((s) => ({ ...s, error: errorMessage(e) }));
       } finally {
         stepping.current = false;
       }
     })();
-  }, [setup, perform]);
+  }, [setup, perform, startSearch]);
 
   const legal = state.pending && state.winner === null ? legalActions(state, reg) : [];
   /** CPU の手が決まらない時の復帰: 合法手の先頭で進める(棋譜には通常の手として残る) */
