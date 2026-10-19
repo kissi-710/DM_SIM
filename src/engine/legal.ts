@@ -65,7 +65,7 @@ function turnActions(c: Ctx, player: PlayerId): Action[] {
     return out;
   }
   if (s.step === 'main') {
-    for (const a of playActions(c, player)) add(a, JSON.stringify([a.type, s.cards[a.uid].defId, a.from, a.face, a.extra]));
+    for (const a of playActions(c, player, true)) add(a, playActionKey(s, a));
     add({ type: 'END_MAIN' });
   }
   if (s.step === 'main' || s.step === 'attack') {
@@ -90,14 +90,29 @@ export function attackActions(c: Ctx, player: PlayerId): Action[] {
   return out;
 }
 
-/** 使えるカード(召喚・詠唱)の行動を列挙する。各カードの種類・面・進化先・ハイパーエナジーの組み合わせ。 */
-export function playActions(c: Ctx, player: PlayerId): Extract<Action, { type: 'PLAY_CARD' }>[] {
+/** 同じ札どうし(定義・ゾーン・面・追加情報が同じ)の PLAY_CARD を同一視するキー。合法手は、同名の札を 1 枚に間引く */
+export function playActionKey(s: GameState, a: Extract<Action, { type: 'PLAY_CARD' }>): string {
+  return JSON.stringify([a.type, s.cards[a.uid].defId, a.from, a.face, a.extra]);
+}
+
+/**
+ * 使えるカード(召喚・詠唱)の行動を列挙する。各カードの種類・面・進化先・ハイパーエナジーの組み合わせ。
+ * skipCopies: 同じゾーンにある同名の札は、最初の 1 枚だけ調べる(2 枚目以降は、同名で同じ行動になり、間引かれるため。
+ * 同名の札は区別がないので、使えるかどうかも同じ。tests/rules/same-name-actions.test.ts で、間引き後の一覧が変わらないことを確かめている)。
+ */
+export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extract<Action, { type: 'PLAY_CARD' }>[] {
   const s = c.s;
   const out: Extract<Action, { type: 'PLAY_CARD' }>[] = [];
   const zones = ['hand', 'mana', 'grave'] as const;
   for (const z of zones) {
     const list: number[] = s.players[player][z];
+    const seenDefs = skipCopies ? new Set<string>() : null;
     for (const uid of list) {
+      if (seenDefs) {
+        const defId = s.cards[uid].defId;
+        if (seenDefs.has(defId)) continue;
+        seenDefs.add(defId);
+      }
       const def = c.reg.defs[s.cards[uid].defId];
       for (let fi = 0; fi < def.faces.length; fi++) {
         const face = def.faces[fi];
