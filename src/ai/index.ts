@@ -40,6 +40,10 @@ export interface AiTuning {
   treeDepth?: number;
   /** 劣る手を外す判定の厳しさ(既定 2.5) */
   elimZ?: number;
+  /** 近い手の比較を打ち切る精度(報酬の単位。小さいほど、僅差の判断に長く考える。既定 0.012) */
+  precision?: number;
+  /** 時間主導の探索で、1位と2位の判定による早期終了をしない反復数の下限(僅差の判断に、最低限これだけは考えさせる。既定 0) */
+  minIterations?: number;
   /** 予算を段階に分け、段階ごとに下位の半分を外す(反復回数を決めた時) */
   halving?: boolean;
   /** 学習した価値関数のファイル(測定用。仕様文字列 value=<path> で指定する) */
@@ -53,6 +57,18 @@ export const DEFAULT_ALGO: NonNullable<AiTuning['algo']> = 'ptree';
 export function treeOptsOf(t: AiTuning | undefined): TreeOpts | undefined {
   if ((t?.algo ?? DEFAULT_ALGO) !== 'ptree') return undefined;
   return { c: t?.treeC ?? DEFAULT_TREE_OPTS.c, maxDepth: t?.treeDepth ?? DEFAULT_TREE_OPTS.maxDepth };
+}
+
+/**
+ * 「強い」CPU の設定(docs/ai-replay-analysis.md)。手を外す判定をせず(elimZ=99)、近い手の比較を細かい精度まで続ける(precision=0.003)。
+ * 時間主導(ms)の探索に重ねると、通常の設定に 56.8%(960 試合、区間 53.6〜59.9%)で勝つ。1 手の平均は約 675ms(通常の約 18 倍)。
+ * 1 手の上限(ms)を小さくすると、強さも落ちる(既定の 1200ms 以上を勧める)。
+ */
+export const STRONG_TUNING: Pick<AiTuning, 'elimZ' | 'precision'> = { elimZ: 99, precision: 0.003 };
+
+/** mcts の設定に、「強い」CPU の設定を重ねる(spec.tuning に明示した値が優先)。mcts 以外はそのまま */
+export function withStrong(spec: AgentSpec): AgentSpec {
+  return spec.kind === 'mcts' ? { ...spec, tuning: { ...STRONG_TUNING, ...spec.tuning } } : spec;
 }
 
 export const AGENT_LABEL: Record<AgentKind, string> = {

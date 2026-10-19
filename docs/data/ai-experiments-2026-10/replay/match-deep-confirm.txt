@@ -1,0 +1,4 @@
+=== deep3000 z=99 vs normal, seed 52, 30 games/pair
+■ A=cur(mcts:iter=3000,z=99) 対 B=cur(mcts:ms=1200)  反復=300  seed=52  960試合
+  A の勝ち 54.1%(95%区間 50.9%〜57.2%)  1手あたり A 266.8ms / B 43.8ms  平均 11.0 ターン  2328秒
+DONE

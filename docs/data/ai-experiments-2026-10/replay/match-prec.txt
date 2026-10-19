@@ -1,0 +1,13 @@
+=== --a cur --aextra prec=0.003 --b cur --mode time --n 1200 --games 30 --seed 41 --name prec-0.003
+■ A=cur(prec=0.003) 対 B=cur  ms=1200  seed=41  960試合
+  A の勝ち 53.3%(95%区間 50.2%〜56.5%)  1手あたり A 117.7ms / B 37.9ms  平均 11.0 ターン  694秒
+=== --a cur --aextra prec=0.0015 --b cur --mode time --n 1200 --games 30 --seed 41 --name prec-0.0015
+■ A=cur(prec=0.0015) 対 B=cur  ms=1200  seed=41  960試合
+  A の勝ち 51.8%(95%区間 48.6%〜54.9%)  1手あたり A 149.4ms / B 37.5ms  平均 11.0 ターン  804秒
+=== --a cur --aextra z=3.5 --b cur --mode time --n 1200 --games 30 --seed 41 --name z-3.5
+■ A=cur(z=3.5) 対 B=cur  ms=1200  seed=41  960試合
+  A の勝ち 50.7%(95%区間 47.6%〜53.9%)  1手あたり A 56.8ms / B 39.8ms  平均 11.0 ターン  417秒
+=== --a cur --aextra z=3.5,prec=0.003 --b cur --mode time --n 1200 --games 30 --seed 41 --name z3.5-prec0.003
+■ A=cur(z=3.5,prec=0.003) 対 B=cur  ms=1200  seed=41  960試合
+  A の勝ち 52.2%(95%区間 49.0%〜55.3%)  1手あたり A 228.8ms / B 53.5ms  平均 11.0 ターン  2438秒
+DONE

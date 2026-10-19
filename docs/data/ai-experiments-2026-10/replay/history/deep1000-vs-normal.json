@@ -1,0 +1,116 @@
+{
+ "a": "cur(mcts:iter=1000,z=99)",
+ "b": "cur(mcts:ms=1200)",
+ "mode": "iter",
+ "n": 300,
+ "games": 480,
+ "winsA": 247,
+ "rate": 0.5145833333333333,
+ "ci95": [
+  0.4699336030515549,
+  0.5590014864488104
+ ],
+ "avgTurns": 10.822916666666666,
+ "msA": 75.22857175443154,
+ "msB": 38.7340297001998,
+ "sec": 230.744,
+ "seed": 51,
+ "pairs": [
+  {
+   "deckA": "maruru",
+   "deckB": "maruru",
+   "rate": 0.5333333333333333,
+   "n": 30
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.5,
+   "n": 30
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "zardy",
+   "rate": 0.43333333333333335,
+   "n": 30
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.5666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "maruru",
+   "rate": 0.5333333333333333,
+   "n": 30
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.4666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "zardy",
+   "rate": 0.5333333333333333,
+   "n": 30
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.5666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "maruru",
+   "rate": 0.43333333333333335,
+   "n": 30
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "interstellar-maruru",
+   "rate": 0.4666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "zardy",
+   "rate": 0.5666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "lost-maruru",
+   "rate": 0.4,
+   "n": 30
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "maruru",
+   "rate": 0.5333333333333333,
+   "n": 30
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.5,
+   "n": 30
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "zardy",
+   "rate": 0.6666666666666666,
+   "n": 30
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.5333333333333333,
+   "n": 30
+  }
+ ]
+}

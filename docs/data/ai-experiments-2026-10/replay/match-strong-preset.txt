@@ -1,0 +1,4 @@
+=== strong=1 preset vs normal
+■ A=cur(mcts:ms=1200,strong=1) 対 B=cur(mcts:ms=1200)  反復=300  seed=81  384試合
+  A の勝ち 54.2%(95%区間 49.2%〜59.1%)  1手あたり A 682.6ms / B 39.4ms  平均 10.9 ターン  1322秒
+DONE

@@ -4,12 +4,14 @@
 // キー: algo=flat|tree|ptree c(木の探索定数) depth(木の深さ) iter(反復回数) ms(最大思考時間) horizon(先読みターン数。99でゲーム終了まで) prior(L1の手への上乗せ) w.<重み名>
 //       lookahead=1(プレイアウトの効果の選択を1手先読みで決める) rl1.<調整値名>=<値>(プレイアウトの L1 の調整値)
 //       l1.<調整値名>=<値>(rule: ai/l1params.ts の調整値)
+//       strong=1(「強い」CPU の設定。手を外す判定をしない z=99 と、精度の基準 prec=0.003。明示した z・prec が優先。docs/ai-replay-analysis.md)
+//       prec=<近い手の比較を打ち切る精度。既定 0.012> minit=<早期終了をしない反復数の下限。既定 0>
 //       infer=0(公開されて山札の下に戻った札の推論を切る。既定は入。新旧の比較用)
 //       z=<外す判定の厳しさ。既定 2.5> sh=1(Sequential Halving)
 //       value=<パス>(学習した価値関数の JSON。trainValue の出力。Node の CLI 専用)
 //       pm=<パス>(学習した召喚の方針。scripts/l1q-fit.ts の出力。プレイアウト(TS・Rust)と L1 に入れる。Node の CLI 専用)
 import { readFileSync } from 'node:fs';
-import type { AgentKind, AgentSpec, AiTuning } from './index';
+import { STRONG_TUNING, type AgentKind, type AgentSpec, type AiTuning } from './index';
 import type { RewardWeights } from './eval';
 import { FAIR, FULL } from '../engine/view';
 import { L1_DEFAULT, type L1Params } from './l1params';
@@ -23,6 +25,7 @@ export function parseSpec(text: string): AgentSpec {
   const tuning: AiTuning = {};
   const weights: Record<string, number> = {};
   let modelPath: string | undefined;
+  let strong = false;
   for (const kv of rest.split(',').filter((x) => x.trim() !== '')) {
     const [k, v] = kv.split('=');
     const n = Number(v);
@@ -45,6 +48,10 @@ export function parseSpec(text: string): AgentSpec {
       if (!Number.isFinite(n)) throw new Error(k + ' は数で指定してください(指定値: ' + v + ')');
       (spec.l1 as Record<string, number>) ??= {};
       (spec.l1 as Record<string, number>)[name] = n;
+      continue;
+    }
+    if (k === 'strong') {
+      strong = n !== 0;
       continue;
     }
     if (k === 'infer') {
@@ -92,9 +99,11 @@ export function parseSpec(text: string): AgentSpec {
       (((tuning.weights ??= {}).l1 ??= {}) as Record<string, number>)[name] = n;
       continue;
     }
-    if (k === 'z' || k === 'sh') {
+    if (k === 'z' || k === 'sh' || k === 'prec' || k === 'minit') {
       if (!Number.isFinite(n)) throw new Error(`${k} は数で指定してください(指定値: ${v})`);
       if (k === 'z') tuning.elimZ = n;
+      else if (k === 'prec') tuning.precision = n;
+      else if (k === 'minit') tuning.minIterations = n;
       else tuning.halving = n !== 0;
       continue;
     }
@@ -116,6 +125,8 @@ export function parseSpec(text: string): AgentSpec {
     else if (k.startsWith('w.')) weights[k.slice(2)] = n;
     else throw new Error(`未知の設定キー: ${k}`);
   }
+  // 「強い」CPU の設定は、明示した z・prec より下(明示が優先)
+  if (strong) Object.assign(tuning, { ...STRONG_TUNING, ...tuning });
   if (Object.keys(weights).length) tuning.weights = { ...tuning.weights, ...(weights as Partial<RewardWeights>) };
   if (modelPath) tuning.modelPath = modelPath;
   if (Object.keys(tuning).length) spec.tuning = tuning;
@@ -134,6 +145,8 @@ export function specLabel(spec: AgentSpec): string {
   if (t?.treeC !== undefined) parts.push(`c=${t.treeC}`);
   if (t?.treeDepth !== undefined) parts.push(`depth=${t.treeDepth}`);
   if (t?.elimZ !== undefined) parts.push(`z=${t.elimZ}`);
+  if (t?.precision !== undefined) parts.push(`prec=${t.precision}`);
+  if (t?.minIterations !== undefined) parts.push(`minit=${t.minIterations}`);
   if (t?.halving !== undefined) parts.push(`sh=${t.halving ? 1 : 0}`);
   for (const [k, v] of Object.entries(t?.weights ?? {})) {
     if (k === 'model') continue;

@@ -23,6 +23,8 @@ export interface AgentDesc {
   mode: 'iter' | 'time';
   n: number;
   extra?: string;
+  /** 現在の版の設定を、文字列でそのまま指定する(mode・n・extra より優先。例 mcts:iter=10000,z=99) */
+  spec?: string;
 }
 
 const BIG = 10_000_000;
@@ -30,6 +32,7 @@ export function makeAgentOf(d: AgentDesc): Agent {
   const iterOpts = d.mode === 'iter' ? { iterations: d.n, ms: BIG } : { iterations: BIG, ms: d.n };
   switch (d.ver) {
     case 'cur':
+      if (d.spec) return makeCurrent(parseSpec(d.spec));
       return makeCurrent(parseSpec(d.mode === 'iter' ? `mcts:iter=${d.n}${d.extra ? ',' + d.extra : ''}` : `mcts:ms=${d.n}${d.extra ? ',' + d.extra : ''}`));
     case 'v0':
       return makeV0(iterOpts);

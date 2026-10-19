@@ -1,0 +1,116 @@
+{
+ "a": "cur(mcts:iter=3000)",
+ "b": "cur(mcts:ms=1200)",
+ "mode": "iter",
+ "n": 300,
+ "games": 480,
+ "winsA": 256,
+ "rate": 0.5333333333333333,
+ "ci95": [
+  0.4886142566433803,
+  0.5775230907860264
+ ],
+ "avgTurns": 10.7875,
+ "msA": 72.90372235340169,
+ "msB": 36.91980775954102,
+ "sec": 224.119,
+ "seed": 51,
+ "pairs": [
+  {
+   "deckA": "maruru",
+   "deckB": "maruru",
+   "rate": 0.4666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.5666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "zardy",
+   "rate": 0.5666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.5333333333333333,
+   "n": 30
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "maruru",
+   "rate": 0.6,
+   "n": 30
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.5333333333333333,
+   "n": 30
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "zardy",
+   "rate": 0.4666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.5666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "maruru",
+   "rate": 0.6333333333333333,
+   "n": 30
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "interstellar-maruru",
+   "rate": 0.36666666666666664,
+   "n": 30
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "zardy",
+   "rate": 0.5666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "lost-maruru",
+   "rate": 0.6,
+   "n": 30
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "maruru",
+   "rate": 0.5,
+   "n": 30
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.5,
+   "n": 30
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "zardy",
+   "rate": 0.5666666666666667,
+   "n": 30
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.5,
+   "n": 30
+  }
+ ]
+}

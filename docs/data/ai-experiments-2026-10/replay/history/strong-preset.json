@@ -1,0 +1,116 @@
+{
+ "a": "cur(mcts:ms=1200,strong=1)",
+ "b": "cur(mcts:ms=1200)",
+ "mode": "iter",
+ "n": 300,
+ "games": 384,
+ "winsA": 208,
+ "rate": 0.5416666666666666,
+ "ci95": [
+  0.4916632032339097,
+  0.5908447072120042
+ ],
+ "avgTurns": 10.942708333333334,
+ "msA": 682.6262743063387,
+ "msB": 39.3565472568295,
+ "sec": 1322.041,
+ "seed": 81,
+ "pairs": [
+  {
+   "deckA": "maruru",
+   "deckB": "maruru",
+   "rate": 0.5,
+   "n": 24
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.4583333333333333,
+   "n": 24
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "zardy",
+   "rate": 0.4166666666666667,
+   "n": 24
+  },
+  {
+   "deckA": "maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.4166666666666667,
+   "n": 24
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "maruru",
+   "rate": 0.4583333333333333,
+   "n": 24
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.6666666666666666,
+   "n": 24
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "zardy",
+   "rate": 0.5416666666666666,
+   "n": 24
+  },
+  {
+   "deckA": "interstellar-maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.6666666666666666,
+   "n": 24
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "maruru",
+   "rate": 0.5416666666666666,
+   "n": 24
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "interstellar-maruru",
+   "rate": 0.5833333333333334,
+   "n": 24
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "zardy",
+   "rate": 0.625,
+   "n": 24
+  },
+  {
+   "deckA": "zardy",
+   "deckB": "lost-maruru",
+   "rate": 0.5416666666666666,
+   "n": 24
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "maruru",
+   "rate": 0.4583333333333333,
+   "n": 24
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "interstellar-maruru",
+   "rate": 0.5833333333333334,
+   "n": 24
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "zardy",
+   "rate": 0.625,
+   "n": 24
+  },
+  {
+   "deckA": "lost-maruru",
+   "deckB": "lost-maruru",
+   "rate": 0.5833333333333334,
+   "n": 24
+  }
+ ]
+}

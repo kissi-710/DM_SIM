@@ -42,6 +42,10 @@ export interface MctsOpts {
   tree?: TreeOpts;
   /** 劣る手を外す判定の厳しさ(差が誤差の何倍以上か。既定 2.5) */
   elimZ?: number;
+  /** 近い手の比較を打ち切る精度(報酬の単位。小さいほど、僅差の判断に長く考える。既定 0.012) */
+  precision?: number;
+  /** 時間主導の探索で、早期終了をしない反復数の下限(既定 0) */
+  minIterations?: number;
   /** 反復の予算を段階に分け、段階ごとに下位の半分を外す(Sequential Halving。反復回数が決まっている時だけ) */
   halving?: boolean;
   /** 1回の探索が終わるたびに呼ばれる(計測・表示用) */
@@ -122,12 +126,12 @@ const MIN_ROUNDS = 8;
  * ahead: 差が誤差(約2.5σ)より大きい / precise: 差は判定できないが、これ以上反復しても精度は変わらない(2.5σ < 1.2pt) / open: まだ分からない。
  * 手ごとに別の世界を引くと、手の差より世界のばらつきが大きくなる。同じ世界・同じ乱数で比べる(ペア比較)と、その分が打ち消される。
  */
-export function pairedVerdict(n: number, dsum: number, dsq: number, bonusGap: number, z = 2.5): 'ahead' | 'precise' | 'open' {
+export function pairedVerdict(n: number, dsum: number, dsq: number, bonusGap: number, z = 2.5, precise = 0.012): 'ahead' | 'precise' | 'open' {
   if (n < MIN_ROUNDS) return 'open';
   const mean = dsum / n;
   const se = Math.sqrt(Math.max(0.0025, dsq / n - mean * mean) / n);
   if (mean + bonusGap > z * se) return 'ahead';
-  if (2.5 * se < 0.012) return 'precise';
+  if (2.5 * se < precise) return 'precise';
   return 'open';
 }
 
@@ -295,6 +299,10 @@ export class MctsSearch {
     readonly z = 2.5,
     /** 段階ごとに下位の半分を外す(予算が決まっている時だけ) */
     readonly halving = false,
+    /** 「これ以上反復しても精度は変わらない」とみなす誤差(報酬の単位。2.5σ がこれ未満になるまで、近い手の比較を続ける。既定 0.012) */
+    readonly precise = 0.012,
+    /** 時間主導の探索で、1位と2位の判定による早期終了をしない反復数の下限(僅差の判断に、最低限これだけは考えさせる。既定 0) */
+    readonly minIt = 0,
   ) {
     this.alive = Array.from({ length: n }, (_, i) => i);
     this.sum = new Array(n).fill(0);
@@ -318,7 +326,7 @@ export class MctsSearch {
   private verdict(a: number, b: number) {
     const dsum = this.sum[a] - this.sum[b];
     const dsq = this.sq[a] + this.sq[b] - 2 * this.cross[a][b];
-    return pairedVerdict(this.rounds, dsum, dsq, this.bonus[a] - this.bonus[b], this.z);
+    return pairedVerdict(this.rounds, dsum, dsq, this.bonus[a] - this.bonus[b], this.z, this.precise);
   }
 
   /** 次のラウンドの結果を反映する(alive でない手の値は無視する) */
@@ -359,7 +367,7 @@ export class MctsSearch {
       this.stageIt = 0;
     }
     // 時間主導の時は、1位と2位が判定できる精度に達していれば打ち切る
-    if (this.timeDriven && this.rounds % 4 === 0) {
+    if (this.timeDriven && this.rounds % 4 === 0 && this.it >= this.minIt) {
       let second = -1;
       for (const k of this.alive) if (k !== lead && (second < 0 || this.mean(k) > this.mean(second))) second = k;
       if (second >= 0 && this.verdict(lead, second) !== 'open') {
@@ -405,6 +413,8 @@ export interface SearchPlan {
   base: number;
   elimZ?: number;
   halving?: boolean;
+  precision?: number;
+  minIterations?: number;
 }
 
 export function planSearch(
@@ -437,10 +447,12 @@ export function planSearch(
     base: Math.floor(ctx.rand() * 0x7fffffff),
     elimZ: o.elimZ,
     halving: o.halving,
+    precision: o.precision,
+    minIterations: o.minIterations,
   };
 }
 
-const newSearch = (p: SearchPlan) => new MctsSearch(p.env.legal.length, p.baseIdx, p.prior, p.maxIt, p.timeDriven, p.elimZ ?? 2.5, p.halving ?? false);
+const newSearch = (p: SearchPlan) => new MctsSearch(p.env.legal.length, p.baseIdx, p.prior, p.maxIt, p.timeDriven, p.elimZ ?? 2.5, p.halving ?? false, p.precision ?? 0.012, p.minIterations ?? 0);
 
 function infoOf(s: MctsSearch, plan: SearchPlan, ms: number, workers: number): SearchInfo {
   return { iterations: s.it, ms, timeDriven: plan.timeDriven, decided: s.decided, arms: s.n, rounds: s.rounds, errors: s.errors, workers };
