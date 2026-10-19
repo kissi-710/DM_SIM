@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { CARD_DB, DECK_PRESETS, deckCards } from '../src/cards';
 import { makeAgent, type AgentSpec } from '../src/ai';
+import { legalActions } from '../src/engine/engine';
 import { loadRegistry } from '../src/engine/registry';
 import { playGameSync } from '../src/sim/playGame';
 import { runPatterns, runProbability } from '../src/sim/solitaire';
@@ -22,6 +23,9 @@ const hash = (s: string) => {
   return x >>> 0;
 };
 
+/** 合法手の列挙の広い確認に使う対局数 */
+const LEGAL_FUZZ_GAMES = 800;
+
 const AGENTS: [string, AgentSpec][] = [
   ['random', { kind: 'random' }],
   ['rule', { kind: 'rule' }],
@@ -30,15 +34,22 @@ const AGENTS: [string, AgentSpec][] = [
   ['mcts12-tree', { kind: 'mcts', iterations: 12, ms: 1e9, tuning: { algo: 'tree' } }],
 ];
 
-/** 1試合 → [手数, 手順の hash, イベント列の hash, 勝者, ターン, seq, rng, カードの hash] */
+/**
+ * 1試合 → [手数, 手順の hash, イベント列の hash, 勝者, ターン, seq, rng, カードの hash, 終了理由, 合法手の列の hash]
+ * 合法手の列の hash は、毎手のあとの legalActions(選ばれなかった手も含む)の並び全体。選ばれた手の列だけでは見えない、列挙の変化を捉える。
+ */
 function play(a: AgentSpec, b: AgentSpec, da: string, db: string, seed: number): unknown[] {
   const ev: string[] = [];
+  const legal: string[] = [];
   const r = playGameSync(reg, [makeAgent(a), makeAgent(b)], {
     decks: [deckCards(da), deckCards(db)],
     seed,
-    onStep: (_s, _a, events) => ev.push(JSON.stringify(events)),
+    onStep: (st, _a, events) => {
+      ev.push(JSON.stringify(events));
+      legal.push(String(hash(JSON.stringify(legalActions(st, reg)))));
+    },
   });
-  return [r.actions.length, hash(JSON.stringify(r.actions)), hash(ev.join('|')), r.winner, r.turns, r.state.seq, r.state.rng, hash(JSON.stringify(r.state.cards)), r.reason];
+  return [r.actions.length, hash(JSON.stringify(r.actions)), hash(ev.join('|')), r.winner, r.turns, r.state.seq, r.state.rng, hash(JSON.stringify(r.state.cards)), r.reason, hash(legal.join(','))];
 }
 
 export function snapshot(): Record<string, unknown> {
@@ -60,6 +71,20 @@ export function snapshot(): Record<string, unknown> {
       out[`mix|${an}|${bn}|maruru|zardy|7`] = play(as, bs, 'maruru', 'zardy', 7);
       out[`mix|${an}|${bn}|interstellar-maruru|lost-maruru|8`] = play(as, bs, 'interstellar-maruru', 'lost-maruru', 8);
     }
+  }
+  // 合法手の列挙の広い確認: 多数の対局(全デッキの組・ランダム/ルールベース)で、毎手のあとの合法手の列の hash を 1 つにまとめる。
+  // まれな局面(同名の札のタップ状態が違うなど)での列挙の変化を拾う
+  const pairs: [string, string][] = ids.flatMap((a) => ids.map((b) => [a, b] as [string, string]));
+  for (let i = 0; i < LEGAL_FUZZ_GAMES; i++) {
+    const [da, db] = pairs[i % pairs.length];
+    const kind = i % 2 === 0 ? 'random' : 'rule';
+    const legal: string[] = [];
+    const r = playGameSync(reg, [makeAgent({ kind }), makeAgent({ kind })], {
+      decks: [deckCards(da), deckCards(db)],
+      seed: 1000 + i,
+      onStep: (st) => legal.push(String(hash(JSON.stringify(legalActions(st, reg))))),
+    });
+    out[`legalfuzz|${i}`] = [kind, da, db, r.actions.length, hash(legal.join(','))];
   }
   // 確率調査・パターン調査
   const goal: Goal = { op: 'pred', timing: { turn: 6, at: 'byTurn' }, pred: { kind: 'zoneHas', zone: 'battle', card: { names: ['ヨビニオン・マルル'] } } };
