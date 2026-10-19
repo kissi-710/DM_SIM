@@ -11,11 +11,9 @@ import type { Action } from '../../src/engine/types';
 import { GameView } from '../../src/ui/GameView';
 import { SetupScreen } from '../../src/ui/SetupScreen';
 import {
-  DEFAULT_THINK_MS,
   loadThinkInFx,
   saveThinkInFx,
   THINK_IN_FX_KEY,
-  THINK_IN_FX_MAX_MS,
   THINK_IN_FX_MIN_MS,
   thinkInFxWarning,
   thinkSpecFor,
@@ -60,19 +58,17 @@ describe('thinkSpecFor', () => {
     expect(thinkSpecFor(s, THINK_IN_FX_MIN_MS - 1, true)).toBe(s);
     expect(thinkSpecFor(s, 0, true)).toBe(s);
   });
-  it('待ちが設定より長ければ、最大の思考時間を待ちまで延ばし、「強い」CPU の設定にする', () => {
-    const out = thinkSpecFor(mcts(), 2500, true);
-    expect(out.ms).toBe(2500);
-    expect(out.tuning).toMatchObject(STRONG_TUNING);
+  it('待ちが十分なら、「強い」CPU の設定にする。最大の思考時間は延ばさない(測定で、延ばしても上乗せが測れなかった)', () => {
+    for (const w of [THINK_IN_FX_MIN_MS, 1000, 2500, 60_000]) {
+      const out = thinkSpecFor(mcts({ ms: 1200 }), w, true);
+      expect(out.ms).toBe(1200);
+      expect(out.tuning).toMatchObject(STRONG_TUNING);
+    }
   });
-  it('待ちが設定より短くても(下限以上)、設定の最大の思考時間は下回らない。強い設定にはする', () => {
-    const out = thinkSpecFor(mcts({ ms: 1200 }), 800, true);
-    expect(out.ms).toBe(1200);
+  it('最大の思考時間が未指定なら、未指定のまま(探索の既定に任せる)', () => {
+    const out = thinkSpecFor({ kind: 'mcts' }, 1500, true);
+    expect(out.ms).toBeUndefined();
     expect(out.tuning).toMatchObject(STRONG_TUNING);
-  });
-  it('延長には上限がある。設定の最大の思考時間が未指定なら既定(1200ms)を使う', () => {
-    expect(thinkSpecFor(mcts(), 60_000, true).ms).toBe(THINK_IN_FX_MAX_MS);
-    expect(thinkSpecFor({ kind: 'mcts' }, 700, true).ms).toBe(DEFAULT_THINK_MS);
   });
   it('設定に明示した調整値は、強い設定より優先される。元の設定を書き換えない', () => {
     const s = mcts({ tuning: { precision: 0.02 } });
@@ -99,7 +95,7 @@ describe('設定と警告', () => {
     expect(w).toContain('⚠');
     expect(w).toContain('カクつく');
     expect(w).toContain('重く');
-    expect(w).toContain('わずか');
+    expect(w).toContain('小さめ');
     expect(w).not.toContain('論理コア');
     expect(thinkInFxWarning(0)).not.toContain('論理コア'); // 分からない時は足さない
     expect(thinkInFxWarning(4)).toContain('論理コアが 4 個と少なく');
@@ -137,9 +133,9 @@ describe('useGame: 探索への反映', () => {
     expect(s.ms).toBe(1200);
     expect(s.tuning).toBeUndefined();
   });
-  it('オンで待ちが十分なら、待ちまで延ばして、強い設定で探索する', async () => {
+  it('オンで待ちが十分なら、強い設定で探索する(最大の思考時間は延ばさない)', async () => {
     const s = await run(true, 1500);
-    expect(s.ms).toBe(1500);
+    expect(s.ms).toBe(1200);
     expect(s.tuning).toMatchObject(STRONG_TUNING);
   });
   it('オンでも、待ちが短い(間隔 300ms)なら、設定のまま', async () => {
