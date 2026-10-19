@@ -1,89 +1,12 @@
 // 盤面。ドラッグ(手札→マナ/バトルゾーン、クリーチャー→相手/シールド)と、
 // すべてのクリック代替(札をクリック → 強調された行き先/ボタンをクリック)を提供する。
-// ルール判定はせず、legalActions から作る「ドロップ先マップ」だけを使う(effects 11.3)。
+// ルール判定はせず、legalActions から作る「ドロップ先マップ」(dropMap.ts)だけを使う(effects 11.3)。
 import { useEffect, useMemo, useState } from 'react';
-import { powerOf } from '../engine/derive';
-import { expandSameNameActions } from '../engine/legal';
-import { mkCtx } from '../engine/state';
 import { CardView } from './CardView';
-import { cardName, reg } from './format';
+import { buildDropMap, type Drop } from './dropMap';
 import { Kbd } from './Kbd';
 import { useDrag } from './useDrag';
 import type { Action, GameState, PlayerId } from '../engine/types';
-
-export interface Drop {
-  dropKey: string;
-  action: Action;
-  label: string;
-}
-
-/**
- * 攻撃先のクリーチャーの表記。名前に、パワー・タップ状態を添える。同名が並んでいる時は左から何体目かも添える
- * (キーボードでは見分けがつかないため)。
- */
-export function targetLabel(s: GameState, pid: number): string {
-  const owner = [0, 1].find((p) => s.players[p].battle.some((x) => x.pid === pid));
-  if (owner === undefined) return 'クリーチャー';
-  const row = s.players[owner].battle;
-  const idx = row.findIndex((x) => x.pid === pid);
-  const pm = row[idx];
-  const name = cardName(s, pm.cards[0]);
-  const same = row.filter((x) => cardName(s, x.cards[0]) === name).length > 1;
-  const power = powerOf(mkCtx(s, reg), pm);
-  const notes = [`パワー${power}`, pm.tapped ? 'タップ' : 'アンタップ', same ? `左から${idx + 1}体目` : null].filter(Boolean);
-  return `${name}(${notes.join('・')})`;
-}
-
-/** ドラッグ元のキー → 行き先 */
-export function buildDropMap(s: GameState, legal: Action[]): Map<string, Drop[]> {
-  const map = new Map<string, Drop[]>();
-  const add = (src: string, d: Drop) => {
-    const l = map.get(src) ?? [];
-    l.push(d);
-    map.set(src, l);
-  };
-  const N = (u: number) => cardName(s, u);
-  // legalActions は同名の札を1枚に間引いているので、他の同名の札にも行き先を付ける
-  for (const a of expandSameNameActions(s, reg, legal)) {
-    if (a.type === 'CHARGE_MANA') {
-      add(`hand:${a.uid}`, { dropKey: 'zone:mana', action: a, label: 'マナチャージ' });
-    } else if (a.type === 'PLAY_CARD') {
-      const from = a.from ?? 'hand';
-      const def = reg.defs[s.cards[a.uid].defId];
-      const fi = a.face ?? 0;
-      const face = def.faces[fi];
-      const isSpell = face.type === 'spell';
-      let label = `${isSpell ? '唱える' : '召喚'}: ${face.name}`;
-      if (from === 'mana') label += '(マナゾーンから)';
-      if (from === 'grave') label += '(墓地から)';
-      if (a.extra?.onto !== undefined) {
-        const pm = [...s.players[0].battle, ...s.players[1].battle].find((p) => p.pid === a.extra!.onto);
-        if (pm) label += ` → ${N(pm.cards[0])}の上に重ねる`;
-      }
-      if (a.extra?.tap?.length) {
-        const names = a.extra.tap.map((pid) => {
-          const pm = [...s.players[0].battle, ...s.players[1].battle].find((p) => p.pid === pid);
-          return pm ? N(pm.cards[0]) : '?';
-        });
-        label += ` [ハイパーエナジー: ${names.join('、')}をタップ]`;
-      }
-      const dropKey = a.extra?.onto !== undefined ? `pile:${a.extra.onto}` : 'zone:battle';
-      add(`${from}:${a.uid}`, { dropKey, action: a, label });
-      // 進化は、バトルゾーン全体へのドロップでも選べるようにする
-      if (a.extra?.onto !== undefined) add(`${from}:${a.uid}`, { dropKey: 'zone:battle', action: a, label });
-    } else if (a.type === 'ATTACK') {
-      const pid = a.attacker;
-      if (a.target.kind === 'player') {
-        const defender = s.players[0].battle.some((p) => p.pid === pid) ? 1 : 0;
-        add(`pile:${pid}`, { dropKey: 'zone:oppShield', action: a, label: `プレイヤーを攻撃(シールド ${s.players[defender].shield.length}枚)` });
-      } else {
-        const targetPid = a.target.pid;
-        add(`pile:${pid}`, { dropKey: `opp-pile:${a.target.pid}`, action: a, label: `${targetLabel(s, targetPid)}を攻撃` });
-      }
-    }
-  }
-  return map;
-}
 
 interface BoardProps {
   s: GameState;
@@ -469,8 +392,5 @@ export function Board(b: BoardProps) {
   );
 }
 
-/** 選択中のカードの行き先(クリック代替のボタン)を作る */
-export function selectedActions(s: GameState, legal: Action[], selected: string | null): Drop[] {
-  if (!selected) return [];
-  return buildDropMap(s, legal).get(selected) ?? [];
-}
+// ドロップ先マップは dropMap.ts に分けた。既存の import(GameView・ReplayViewer・テスト)を壊さないよう、ここからも出す。
+export { buildDropMap, selectedActions, targetLabel, type Drop } from './dropMap';
