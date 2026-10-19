@@ -97,8 +97,10 @@ export function playActionKey(s: GameState, a: Extract<Action, { type: 'PLAY_CAR
 
 /**
  * 使えるカード(召喚・詠唱)の行動を列挙する。各カードの種類・面・進化先・ハイパーエナジーの組み合わせ。
- * skipCopies: 同じゾーンにある同名の札は、最初の 1 枚だけ調べる(2 枚目以降は、同名で同じ行動になり、間引かれるため。
- * 同名の札は区別がないので、使えるかどうかも同じ。tests/rules/same-name-actions.test.ts で、間引き後の一覧が変わらないことを確かめている)。
+ * skipCopies: 手札にある同名の札は、最初の 1 枚だけ調べる(2 枚目以降は、同名で同じ行動になり、間引かれるため)。
+ * 手札の札には、札ごとの状態がなく、同名なら使えるかどうかも同じ。マナゾーンの札は、タップ状態が札ごとに違い
+ * (自分自身をマナの支払いに使えるかが変わる)、同名でも使えるかどうかが違うことがあるので、対象にしない
+ * (tests/engine/play-actions-copies.test.ts)。
  */
 export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extract<Action, { type: 'PLAY_CARD' }>[] {
   const s = c.s;
@@ -106,7 +108,7 @@ export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extra
   const zones = ['hand', 'mana', 'grave'] as const;
   for (const z of zones) {
     const list: number[] = s.players[player][z];
-    const seenDefs = skipCopies ? new Set<string>() : null;
+    const seenDefs = skipCopies && z === 'hand' ? new Set<string>() : null;
     for (const uid of list) {
       if (seenDefs) {
         const defId = s.cards[uid].defId;

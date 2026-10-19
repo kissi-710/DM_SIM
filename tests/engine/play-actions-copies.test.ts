@@ -9,6 +9,7 @@ import { playActionKey, playActions } from '../../src/engine/legal';
 import { loadRegistry } from '../../src/engine/registry';
 import { playGameSync } from '../../src/sim/playGame';
 import type { GameState } from '../../src/engine/types';
+import { Sim, mana } from '../scenario';
 
 const reg = loadRegistry(CARD_DB);
 
@@ -26,6 +27,20 @@ function thinned(s: GameState, skipCopies: boolean): string[] {
 }
 
 describe('playActions の skipCopies', () => {
+  it('マナゾーンの同名の札は、タップ状態が違えば使えるかどうかも違う(だから対象にしない)', () => {
+    // ヨビニオン・トライブ(コスト4・マナゾーンから召喚できる)。アンタップの1枚は、自分以外の3枚では払えず使えない。
+    // タップ済みの1枚は、アンタップの1枚と他の3枚の計4枚で払えて使える
+    const sim = new Sim({ p0: { mana: ['ヨビニオン・トライブ', { c: 'ヨビニオン・トライブ', tapped: true }, ...mana(3)] } });
+    const c = mkCtx(sim.s, reg);
+    const [untapped, tapped] = [sim.uid(0, 'mana', 'ヨビニオン・トライブ', 0), sim.uid(0, 'mana', 'ヨビニオン・トライブ', 1)];
+    expect(sim.s.cards[untapped].tapped).toBe(false);
+    expect(sim.s.cards[tapped].tapped).toBe(true);
+    const uids = (skip: boolean) => playActions(c, 0, skip).filter((a) => a.from === 'mana').map((a) => a.uid);
+    expect(uids(false)).toEqual([tapped]); // 使えるのは、タップ済みの 2 枚目だけ
+    expect(uids(true)).toEqual([tapped]); // 省略しても、見落とさない
+  });
+
+
   it('全デッキの組・対局の毎手で、間引き後の一覧(札の uid まで)が同じ', () => {
     let checked = 0;
     let games = 0;
