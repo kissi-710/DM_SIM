@@ -1,5 +1,6 @@
 // エンジンの入口: 初期化・step(reducer)・実行ループ(design 5)。
 import { loadRegistry, type Registry } from './registry';
+import { defaultPlayFace } from './derive';
 import { runSba, pushProc, runProc } from './procs';
 import { collectBatch, emit, moveCards } from './ops';
 import { legalActions, validateAction } from './legal';
@@ -181,11 +182,7 @@ function applyTurnAction(c: Ctx, a: Exclude<Action, { type: 'ANSWER' }>): void {
     case 'PLAY_CARD': {
       const card = s.cards[a.uid];
       const def = c.reg.defs[card.defId];
-      let fi = a.face;
-      if (fi === undefined) {
-        const k = def.faces.findIndex((f) => f.type !== 'spell');
-        fi = k >= 0 ? k : 0;
-      }
+      const fi = a.face ?? defaultPlayFace(def);
       pushProc(c, 'settle');
       pushProc(c, 'play', { uid: a.uid, ep: card.ep, from: a.from ?? 'hand', face: fi, extra: a.extra ?? null, free: false, after: null });
       return;

@@ -341,7 +341,7 @@ function inertBody(cc: CC, f: EffectFrame, prog: Instr[], from: number, end: num
       case 'act': {
         const key = Object.keys(ins.act)[0];
         if (!INERT_ON_EMPTY.has(key)) return null;
-        const a: any = (ins.act as any)[key];
+        const a = ins.act[key];
         const sel: string | Selector = a.sel;
         const none = typeof sel === 'string' ? isEmpty(sel) : selectCards(cc, sel).length === 0;
         if (!none) return null;
@@ -420,7 +420,7 @@ function durationOf(c: Ctx, f: EffectFrame, until: string): ContEffect['until'] 
 function execAct(c: Ctx, f: EffectFrame, cc: CC, act: ActDef): void {
   const s = c.s;
   const key = Object.keys(act)[0];
-  const a: any = act[key];
+  const a = act[key];
   switch (key) {
     case 'draw': {
       const n = typeof a === 'number' ? a : evalExpr(cc, a.n);

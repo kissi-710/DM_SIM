@@ -2,7 +2,7 @@
 // 規約: 入力待ち(ask)は、状態を変更する前に行う。再実行しても二重に変更されない。
 import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
-import { charsLite, infoOf, payNeed } from './derive';
+import { charsLite, infoOf, manaCivs, payNeed } from './derive';
 import type { Ctx } from './state';
 import { nextId, opponentOf, permByPid, shuffleInPlace, snapOf } from './state';
 import {
@@ -73,17 +73,23 @@ export function collect(c: Ctx, ev: Ev): void {
   }
 }
 
+/** 回数制限(limit)の記録のキー。誘発の判定と、使った回数の更新で同じキーを使う */
+function limitKey(uid: number, ep: number, face: number, idx: number): string {
+  return `${uid}:${ep}:${face}:${idx}`;
+}
+
 function tryTrigger(c: Ctx, ev: Ev, uid: number, face: number, idx: number, spec: TriggerSpec, batch: number): void {
   const s = c.s;
   const card = s.cards[uid];
   const controller = card.owner;
-  const cc = mkCC(c, controller, { self: uid, selfSnap: snapOf(c, uid), event: ev });
-  const ons = Array.isArray(spec.on) ? spec.on : [spec.on];
-  if (!ons.some((p: Pattern) => matchPattern(cc, p, ev))) return;
+  // 評価コンテキスト(スナップショットを作る)は高くつくので、安い判定を先に済ませる。ここまでの判定は、どれも状態を書き換えない
   if (spec.subject === 'self' && ev.card !== uid) return;
   if (spec.subject === 'other' && ev.card === uid) return;
   if (spec.turn === 'own' && s.active !== controller) return;
   if (spec.turn === 'opponent' && s.active === controller) return;
+  const cc = mkCC(c, controller, { self: uid, selfSnap: snapOf(c, uid), event: ev });
+  const ons = Array.isArray(spec.on) ? spec.on : [spec.on];
+  if (!ons.some((p: Pattern) => matchPattern(cc, p, ev))) return;
   if (spec.nthThisTurn !== undefined) {
     let n = 0;
     for (const e of s.turnLog) {
@@ -93,7 +99,7 @@ function tryTrigger(c: Ctx, ev: Ev, uid: number, face: number, idx: number, spec
     if (n !== spec.nthThisTurn) return;
   }
   if (spec.limit) {
-    const key = `${uid}:${card.ep}:${face}:${idx}`;
+    const key = limitKey(uid, card.ep, face, idx);
     const used = s.usage[key];
     if (used === s.turn && (s.usage[key + '#'] ?? 0) >= spec.limit.perTurn) return;
   }
@@ -104,7 +110,7 @@ function tryTrigger(c: Ctx, ev: Ev, uid: number, face: number, idx: number, spec
   if (suppressesTrigger(c, ev, uid, controller)) return;
 
   if (spec.limit) {
-    const key = `${uid}:${card.ep}:${face}:${idx}`;
+    const key = limitKey(uid, card.ep, face, idx);
     if (s.usage[key] !== s.turn) s.usage[key + '#'] = 0;
     s.usage[key] = s.turn;
     s.usage[key + '#'] = (s.usage[key + '#'] ?? 0) + 1;
@@ -314,7 +320,7 @@ export function moveCards(c: Ctx, uids: number[], opts: MoveOpts): MoveResult[] 
 
 /** マナゾーンに置かれる時にタップ状態か。多色カード(ツインパクトは両面の和集合)はタップして置く(spec 3.4.1 M-1)。 */
 function entersManaTapped(c: Ctx, uid: number, opts: MoveOpts): boolean {
-  return charsLite(c, uid, -1).civs.length > 1 || !!opts.tapped;
+  return manaCivs(c, uid).length > 1 || !!opts.tapped;
 }
 
 /** 実際の移動(置換は済んでいる)。進化の山は下のカードも一緒に動かす。 */

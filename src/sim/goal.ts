@@ -1,6 +1,6 @@
 // ソリティア調査の「目標(Goal)」: 条件ビルダーが組み立てる木構造(spec 6.3 / design 8.2)。
 // JSON として保存・再利用できる。追跡器(GoalTracker)が、実行中に各述語の成立を記録する。
-import { charsLite, costOf } from '../engine/derive';
+import { costOf, defaultPlayFace, manaCivs } from '../engine/derive';
 import { legalActions } from '../engine/engine';
 import type { Registry } from '../engine/registry';
 import { mkCtx } from '../engine/state';
@@ -248,7 +248,7 @@ export class GoalTracker {
     switch (p.kind) {
       case 'manaCount': {
         const c = mkCtx(s, reg);
-        const n = s.players[0].mana.filter((u) => !p.civ || charsLite(c, u, -1).civs.includes(p.civ)).length;
+        const n = s.players[0].mana.filter((u) => !p.civ || manaCivs(c, u).includes(p.civ)).length;
         return n >= p.min;
       }
       case 'zoneHas': {
@@ -262,11 +262,7 @@ export class GoalTracker {
         return acts.some((a) => {
           if (a.type !== 'PLAY_CARD') return false;
           const def = reg.defs[s.cards[a.uid].defId];
-          let fi = a.face;
-          if (fi === undefined) {
-            const k = def.faces.findIndex((f) => f.type !== 'spell');
-            fi = k >= 0 ? k : 0;
-          }
+          const fi = a.face ?? defaultPlayFace(def);
           const eff = costOf(c, a.uid, fi, { taps: a.extra?.tap });
           return matchCard(reg, s, a.uid, p.card, fi, eff);
         });
@@ -429,7 +425,7 @@ export function predicateDistance(reg: Registry, s: GameState, p: Predicate): nu
   switch (p.kind) {
     case 'manaCount': {
       const c = mkCtx(s, reg);
-      const n = s.players[0].mana.filter((u) => !p.civ || charsLite(c, u, -1).civs.includes(p.civ)).length;
+      const n = s.players[0].mana.filter((u) => !p.civ || manaCivs(c, u).includes(p.civ)).length;
       return Math.max(0, p.min - n);
     }
     case 'zoneHas': {

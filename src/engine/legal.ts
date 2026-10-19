@@ -1,6 +1,5 @@
 // 合法手の列挙と検証(design 5 / effects 12)。
-import { canAttack } from './derive';
-import { charsLite, charsOf, costOf, hasKeyword, isSick } from './derive';
+import { canAttack, charsOf, costBase, costOf, defaultPlayFace, isSick } from './derive';
 import { evalCond, mkCC } from './cond';
 import { planPlay } from './procs';
 import type { Registry } from './registry';
@@ -138,7 +137,7 @@ function extraVariants(c: Ctx, player: PlayerId, uid: number, fi: number): (Play
     const free = s.players[player].battle.filter((p) => !p.tapped);
     const byCost = new Map<number, typeof free>();
     for (const p of free) {
-      const cost = charsLite(c, p.cards[0], -1).cost;
+      const cost = costBase(c, p.cards[0]);
       const l = byCost.get(cost) ?? [];
       l.push(p);
       byCost.set(cost, l);
@@ -157,7 +156,6 @@ function extraVariants(c: Ctx, player: PlayerId, uid: number, fi: number): (Play
       else out.push(extra);
     }
   }
-  void hasKeyword;
   return out;
 }
 
@@ -224,7 +222,7 @@ function enumerateRaw(p: Pending, limit: number): AnswerValue[] {
           res.push(cur.slice());
           return;
         }
-        for (let i = inp.repeat ? start : start; i < n; i++) {
+        for (let i = start; i < n; i++) {
           cur.push(i);
           go(inp.repeat ? i : i + 1, cur);
           cur.pop();
@@ -249,21 +247,18 @@ function enumerateAssign(inp: Extract<InputSpec, { shape: 'assign' }>, limit: nu
   const res: Record<string, number[]>[] = [];
   const cur: Record<string, number[]> = {};
   for (const sl of slots) cur[sl.id] = [];
-  const used = new Set<number>();
   const go = (i: number, assigned: number) => {
     if (res.length >= limit) return;
     if (i === items.length) {
-      if (assigned === need) res.push(JSON.parse(JSON.stringify(cur)));
+      if (assigned === need) res.push(Object.fromEntries(Object.entries(cur).map(([k, v]) => [k, v.slice()])));
       return;
     }
     // この札を、どの枠に入れるか(または入れない)
     for (const sl of slots) {
       if (cur[sl.id].length >= sl.count) continue;
       cur[sl.id].push(items[i]);
-      used.add(items[i]);
       go(i + 1, assigned + 1);
       cur[sl.id].pop();
-      used.delete(items[i]);
     }
     if (items.length - i - 1 + assigned >= need) go(i + 1, assigned);
   };
@@ -355,7 +350,7 @@ export function validateAction(s: GameState, reg: Registry, a: Action): string |
       if (!card) return 'カードがありません';
       const from = a.from ?? 'hand';
       const def = reg.defs[card.defId];
-      const fi = a.face ?? (def.faces.findIndex((f) => f.type !== 'spell') >= 0 ? def.faces.findIndex((f) => f.type !== 'spell') : 0);
+      const fi = a.face ?? defaultPlayFace(def);
       const plan = planPlay(c, player, a.uid, from, fi, a.extra, false);
       return plan.ok ? null : plan.err ?? '使えません';
     }

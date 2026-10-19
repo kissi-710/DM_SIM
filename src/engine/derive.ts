@@ -1,10 +1,10 @@
 // 派生ビュー: コスト・パワー・文明・能力・攻撃可否など(effects 7)。状態を書き換えない。
-import type { Ability, Cond } from './ast';
+import type { Ability, Cond, StaticMod } from './ast';
 import { evalCond, mkCC } from './cond';
 import type { FaceInfo } from './registry';
 import type { Ctx } from './state';
 import { opponentOf, permByPid } from './state';
-import type { Civ, ContEffect, Face, FaceType, PlayerId, Permanent } from './types';
+import type { Card, CardDef, Civ, ContEffect, Face, FaceType, PlayerId, Permanent } from './types';
 
 export interface Chars {
   face: Face;
@@ -27,6 +27,14 @@ function unionCivs(faces: Face[]): Civ[] {
     unionCache.set(faces, r);
   }
   return r;
+}
+
+/**
+ * 使用中の面の添字(hint なし)。場(battle / limbo)なら card.face(無効なら 0)、それ以外は面0。
+ * charsLite(c, uid, -1) の faceIdx と同じ値を、オブジェクトを作らずに求める。
+ */
+function faceIdxOf(card: Card, def: CardDef): number {
+  return (card.zone === 'battle' || card.zone === 'limbo') && def.faces[card.face] ? card.face : 0;
 }
 
 /** カードの特性(パワーを計算しない軽量版)。power は面の基本パワー。コスト・面・文明・種類・種族だけを使う呼び出しはこちらを使う */
@@ -53,15 +61,29 @@ export function charsOf(c: Ctx, uid: number, hint: number = -1): Chars {
   return ch;
 }
 
+/** PLAY_CARD で面を省いた時に使う面(最初のクリーチャー面。呪文だけなら 0) */
+export function defaultPlayFace(def: CardDef): number {
+  const k = def.faces.findIndex((f) => f.type !== 'spell');
+  return k >= 0 ? k : 0;
+}
+
 /** 表記コスト(使用中の面。場以外は面0) */
 export function costBase(c: Ctx, uid: number): number {
-  return charsLite(c, uid, -1).face.cost;
+  const card = c.s.cards[uid];
+  const def = c.reg.defs[card.defId];
+  return def.faces[faceIdxOf(card, def)].cost;
+}
+
+/** 使用中の面の種類(hint なし。charsLite(c, uid, -1).type と同じ) */
+export function faceTypeOf(c: Ctx, uid: number): FaceType {
+  const card = c.s.cards[uid];
+  const def = c.reg.defs[card.defId];
+  return def.faces[faceIdxOf(card, def)].type;
 }
 
 export function infoOf(c: Ctx, uid: number): FaceInfo {
   const card = c.s.cards[uid];
-  const ch = charsLite(c, uid, -1);
-  return c.reg.getInfo(card.defId, ch.faceIdx);
+  return c.reg.getInfo(card.defId, faceIdxOf(card, c.reg.defs[card.defId]));
 }
 
 // ───────────────────────── 継続効果 ─────────────────────────
@@ -76,14 +98,18 @@ interface ActiveStatic {
   ability: Extract<Ability, { kind: 'static' }>;
 }
 
-/** バトルゾーンの一番上のカードが持つ常在型能力 */
-export function activeStatics(c: Ctx): ActiveStatic[] {
+/**
+ * バトルゾーンの一番上のカードが持つ常在型能力。modType を渡すと、その種類だけを返す。
+ * 種類で先に絞ってから `while` を評価する(評価は状態を書き換えないので、返る内容は絞らない場合の部分集合と同じ)。
+ */
+export function activeStatics(c: Ctx, modType?: StaticMod['type']): ActiveStatic[] {
   const out: ActiveStatic[] = [];
   for (const p of [0, 1] as PlayerId[]) {
     for (const perm of c.s.players[p].battle) {
       const uid = perm.cards[0];
       const info = infoOf(c, uid);
       for (const st of info.statics) {
+        if (modType !== undefined && st.ability.mod.type !== modType) continue;
         if (st.ability.while) {
           const cc = mkCC(c, p, { self: uid });
           if (!evalCond(cc, st.ability.while)) continue;
@@ -174,8 +200,8 @@ export function hasEffect(c: Ctx, pid: number, kind: string): boolean {
 /** 相手クリーチャーの「出たターンに自分を攻撃できない」(ガイアッシュ・カイザー) */
 function playerAttackBlockedByEntry(c: Ctx, perm: Permanent, owner: PlayerId): boolean {
   if (perm.enteredTurn !== c.s.turn) return false;
-  for (const st of activeStatics(c)) {
-    if (st.ability.mod.type === 'cannotAttackPlayerWhenEntered' && st.controller !== owner) return true;
+  for (const st of activeStatics(c, 'cannotAttackPlayerWhenEntered')) {
+    if (st.controller !== owner) return true;
   }
   return false;
 }
@@ -187,7 +213,7 @@ function playerAttackBlockedByEntry(c: Ctx, perm: Permanent, owner: PlayerId): b
  */
 export function isSick(c: Ctx, perm: Permanent): boolean {
   if (!perm.sick) return false;
-  const t = charsLite(c, perm.cards[0], -1).type;
+  const t = faceTypeOf(c, perm.cards[0]);
   return t !== 'evolution' && t !== 'smaxEvolution';
 }
 
@@ -247,11 +273,12 @@ export function costOf(c: Ctx, uid: number, faceIdx: number, opts: CostOpts = {}
   const info = c.reg.getInfo(card.defId, faceIdx);
   if (info.sympathy) cost -= s.players[card.owner].mana.length;
   if (info.hyperEnergy && opts.taps?.length) cost -= 2 * opts.taps.length;
-  for (const st of activeStatics(c)) {
-    if (st.ability.mod.type !== 'costDelta') continue;
+  for (const st of activeStatics(c, 'costDelta')) {
     if (st.controller !== card.owner) continue;
+    const mod = st.ability.mod;
+    if (mod.type !== 'costDelta') continue;
     const cc = mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx });
-    if (evalCond(cc, st.ability.mod.cond as Cond)) cost += st.ability.mod.delta;
+    if (evalCond(cc, mod.cond as Cond)) cost += mod.delta;
   }
   return Math.max(0, cost);
 }
@@ -266,7 +293,9 @@ export function payNeed(cost: number, civCount: number): number {
 }
 
 export function manaCivs(c: Ctx, uid: number): Civ[] {
-  return charsLite(c, uid, -1).civs;
+  const card = c.s.cards[uid];
+  const def = c.reg.defs[card.defId];
+  return card.zone === 'battle' || card.zone === 'limbo' ? def.faces[faceIdxOf(card, def)].civs : unionCivs(def.faces);
 }
 
 /**
@@ -352,11 +381,12 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
 export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
   // 「次の自分のターンのはじめまで、相手は呪文を唱えられない」(XXDDZ)
   for (const e of c.s.effects) if (e.mod.kind === 'cannotCast' && e.controller !== player) return false;
-  for (const st of activeStatics(c)) {
-    if (st.ability.mod.type !== 'cannotCast') continue;
+  for (const st of activeStatics(c, 'cannotCast')) {
     if (st.controller === player) continue; // 「相手は〜できない」
+    const mod = st.ability.mod;
+    if (mod.type !== 'cannotCast') continue;
     const cc = mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx });
-    if (evalCond(cc, st.ability.mod.cond as Cond)) return false;
+    if (evalCond(cc, mod.cond as Cond)) return false;
   }
   return true;
 }

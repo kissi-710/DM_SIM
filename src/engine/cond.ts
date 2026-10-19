@@ -1,6 +1,6 @@
 // 条件・式・セレクタの評価、イベントパターンの照合(effects 6.4 / 4.3)。
 import type { Cond, Expr, Pattern, Selector } from './ast';
-import { canBeChosen, charsLite, charsOf, costBase } from './derive';
+import { canBeChosen, charsLite, charsOf, costBase, manaCivs } from './derive';
 import type { Ctx } from './state';
 import { opponentOf, permByPid } from './state';
 import type { Civ, Ev, PlayerId, Snap } from './types';
@@ -120,12 +120,12 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   }
   if ('fiveCivs' in o) {
     const set = new Set<Civ>();
-    for (const u of selectCards(cc, o.fiveCivs)) for (const civ of charsLite(cc.c, u, -1).civs) set.add(civ);
+    for (const u of selectCards(cc, o.fiveCivs)) for (const civ of manaCivs(cc.c, u)) set.add(civ);
     return set.size >= 5;
   }
   if ('civsPresent' in o) {
     const set = new Set<Civ>();
-    for (const u of selectCards(cc, o.civsPresent.sel)) for (const civ of charsLite(cc.c, u, -1).civs) set.add(civ);
+    for (const u of selectCards(cc, o.civsPresent.sel)) for (const civ of manaCivs(cc.c, u)) set.add(civ);
     return (o.civsPresent.civs as Civ[]).every((x) => set.has(x));
   }
   if ('nonEmpty' in o) return varUids(cc, o.nonEmpty, { ignoreEp: true }).length > 0;
@@ -187,7 +187,7 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('sameCivAs' in o) {
     const refs = varUids(cc, o.sameCivAs, { ignoreEp: true });
     if (refs.length === 0) return false;
-    const civs = charsLite(cc.c, refs[0], -1).civs;
+    const civs = manaCivs(cc.c, refs[0]);
     return ch.civs.some((x) => civs.includes(x));
   }
   throw new Error('未知の条件: ' + JSON.stringify(cond));

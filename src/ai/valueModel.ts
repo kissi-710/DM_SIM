@@ -2,7 +2,7 @@
 // 特徴量(プレイヤーごと)の差の線形和 + 手番 + カードごとの価値、をロジスティック関数に通す。
 // 手作りの評価(eval.ts)の代わりに、プレイアウトの打ち切りの報酬として使う。
 // 特徴量の計算は rust/src/ai.rs(side_features / model_score)と同じ式にする(差分テストで固定)。
-import { breakerCount, canBlock, charsLite, hasKeyword, isSick, powerOf } from '../engine/derive';
+import { breakerCount, canBlock, costBase, hasKeyword, isSick, manaCivs, powerOf } from '../engine/derive';
 import { mkCtx } from '../engine/state';
 import type { Registry } from '../engine/registry';
 import type { GameState, PlayerId } from '../engine/types';
@@ -77,7 +77,7 @@ export function sideFeatures(s: GameState, reg: Registry, p: PlayerId, out: Floa
   let handCost = 0;
   let playable = 0;
   for (const u of z.hand) {
-    const cost = charsLite(c, u, -1).cost;
+    const cost = costBase(c, u);
     if (cost < 99) {
       handCost += Math.min(cost, 8);
       if (cost <= manaN) playable++;
@@ -88,7 +88,7 @@ export function sideFeatures(s: GameState, reg: Registry, p: PlayerId, out: Floa
     }
   }
   const civs = new Set<string>();
-  for (const m of z.mana) for (const cv of charsLite(c, m, -1).civs) civs.add(cv);
+  for (const m of z.mana) for (const cv of manaCivs(c, m)) civs.add(cv);
   f(0, z.battle.length);
   f(1, power);
   f(2, blockersUp);

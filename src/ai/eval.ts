@@ -1,5 +1,5 @@
 // 盤面の評価関数(AIの先読み・プレイアウトの打ち切りで使う)。
-import { hasKeyword, powerOf, charsLite } from '../engine/derive';
+import { costBase, hasKeyword, powerOf } from '../engine/derive';
 import { mkCtx } from '../engine/state';
 import type { Registry } from '../engine/registry';
 import type { GameState, PlayerId } from '../engine/types';
@@ -93,7 +93,7 @@ function side(s: GameState, reg: Registry, p: PlayerId, w: EvalWeights): number 
   v += z.hand.length * w.hand;
   v += Math.min(z.mana.length, 10) * w.mana;
   for (const u of z.hand) {
-    const cost = charsLite(c, u, -1).cost;
+    const cost = costBase(c, u);
     if (cost < 99) v += Math.min(cost, 8) * w.handCost;
   }
   // 山札が尽きそうなら不利

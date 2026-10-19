@@ -1,6 +1,6 @@
 // 実験: ターン中の行動(マナチャージ・召喚・攻撃・ターン終了)を、学習した線形の評価で選ぶ方針。
 // 目標は「その手のあと L1 で続けた時の勝率」(教師の手の価値)。ルールベース(L1)の1回分の方針改善(policy iteration)。
-import { breakerCount, canBlock, charsLite, costOf, hasKeyword, isUnblockable, payNeed, powerOf } from '../engine/derive';
+import { breakerCount, canBlock, charsLite, costBase, costOf, hasKeyword, isUnblockable, manaCivs, payNeed, powerOf } from '../engine/derive';
 import { mkCtx } from '../engine/state';
 import type { Registry } from '../engine/registry';
 import type { Action, GameState, PlayerId } from '../engine/types';
@@ -88,7 +88,7 @@ export function situationOf(view: GameState, reg: Registry): Situation {
   let castable = 0;
   const untapped = z.mana.filter((u) => !view.cards[u].tapped).length;
   for (const u of z.hand) {
-    const cost = charsLite(c, u, -1).cost;
+    const cost = costBase(c, u);
     if (cost < 99) maxHandCost = Math.max(maxHandCost, cost);
     if (cost <= untapped) castable++;
   }
@@ -127,11 +127,11 @@ export function features(view: GameState, reg: Registry, sit: Situation, a: Acti
       attrs(c, reg, a.uid, out, B_CHARGE + 1);
       const at = B_CHARGE + 1 + N_ATTR;
       const have = new Set<string>();
-      for (const m of view.players[me].mana) for (const cv of charsLite(c, m, -1).civs) have.add(cv);
+      for (const m of view.players[me].mana) for (const cv of manaCivs(c, m)) have.add(cv);
       const need = new Set<string>();
       for (const h of view.players[me].hand) {
         if (h === a.uid) continue;
-        for (const cv of charsLite(c, h, -1).civs) if (!have.has(cv)) need.add(cv);
+        for (const cv of manaCivs(c, h)) if (!have.has(cv)) need.add(cv);
       }
       out[at] = ch.civs.some((cv) => need.has(cv)) ? 1 : 0;
       out[at + 1] = ch.civs.some((cv) => !have.has(cv)) ? 1 : 0;
@@ -205,8 +205,8 @@ export function features(view: GameState, reg: Registry, sit: Situation, a: Acti
         out[at] = 1;
         if (tp) {
           const pt = powerOf(c, tp);
-          const tcost = charsLite(c, tp.cards[0], -1).cost;
-          const mycost = charsLite(c, pm.cards[0], -1).cost;
+          const tcost = costBase(c, tp.cards[0]);
+          const mycost = costBase(c, pm.cards[0]);
           out[at + 1] = pa > pt ? 1 : 0;
           out[at + 2] = pa === pt ? 1 : 0;
           out[at + 3] = Math.min(tcost, 12) / 10;
