@@ -14,7 +14,8 @@ import { LogPanel, PoolPanel } from './SidePanels';
 import { endTurnWarning } from './endTurn';
 import { whyUnplayable } from './unplayable';
 import { Kbd } from './Kbd';
-import { digitOf, KEY, keyToken } from './keymap';
+import { handleGameKey, type GameKeyCtx } from './gameKeys';
+import { KEY } from './keymap';
 import { InputWidget } from './Widgets';
 import { makeRecord, type GameSetup, useGame } from './useGame';
 import { loadJson, saveJson } from './util';
@@ -25,9 +26,6 @@ import { FxGhosts } from './FxGhosts';
 import { useFxGate } from './useFxGate';
 import { FxTicker } from './FxTicker';
 import { cuesOf, drawCuesOf, FX_MODE_LABEL, FX_MODES, fxHoldMs, fxScale, loadFxMode, removalCuesOf, removalsOf, saveFxMode, STEP_LABEL, type FxMode } from './fx';
-
-/** 質問が出てからこの間は、肯定のキー(Enter・Space・Y)を受け付けない(前の Enter の持ち越しで「はい」にならないように) */
-const ASK_GUARD_MS = 250;
 
 /** 直近の1手で動いたカードとして強調するイベント */
 const FLASH_EVENTS = ['moved', 'entered', 'cast', 'attackDeclared', 'evolved', 'blocked'];
@@ -235,199 +233,46 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   // 一覧(墓地・マナ・シールド)のキーボードからの表示要求
   const [listReq, setListReq] = useState<{ p: PlayerId; zone: 'mana' | 'grave' | 'shield'; n: number } | null>(null);
 
+  // キーボード操作は、描画のたびに最新の状態・操作を渡して処理する(handleGameKey は gameKeys.ts)
+  const keyCtx: GameKeyCtx = {
+    s,
+    pend,
+    viewer,
+    interactive,
+    showHuman,
+    cpuOnly,
+    humanTurn,
+    allowUndo: !!setup.allowUndo,
+    selected,
+    selActs,
+    stepActs,
+    cycleRows,
+    menuOpen,
+    pickCursor,
+    confirmQuit,
+    g,
+    askedAt,
+    endAfterSkip,
+    act,
+    holdEnd,
+    rec,
+    toggleConfirm,
+    onExit,
+    onRematch,
+    setSelected,
+    setMenuOpen,
+    setHelpOpen,
+    setSideOpen,
+    setRecText,
+    setPeek,
+    setAskPay,
+    setShowOpp,
+    setListReq,
+    setPickCursor,
+    setConfirmQuit,
+  };
   useEffect(() => {
-    const clickNth = (sel: string, n: number) => {
-      const el = document.querySelectorAll<HTMLElement>(sel)[n];
-      if (!el || (el as HTMLButtonElement).disabled) return false;
-      el.click();
-      return true;
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const k = keyToken(e);
-      if (k === null) return;
-      const arrow = k.startsWith('Arrow');
-      // 押しっぱなし(キーリピート)は無視する。確認つきの操作(ターン終了)や、次の質問への「はい」が連続して通らないように。矢印だけは続けて動かせる
-      if (e.repeat && !arrow) return;
-      const t = e.target as HTMLElement | null;
-      const tag = t?.tagName;
-      const inType = tag === 'INPUT' ? (t as HTMLInputElement).type : '';
-      const back = document.querySelector<HTMLElement>('.modal-back');
-      // 入力欄の中ではショートカットを使わない(ダイアログを閉じる Esc だけは通す)
-      if ((tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'INPUT' && inType !== 'checkbox' && inType !== 'range')) && !(k === 'Escape' && back)) return;
-      // スライダー・チェックボックスの操作(矢印・Space)は、その部品に任せる
-      if ((inType === 'range' || inType === 'checkbox') && (arrow || k === ' ')) return;
-      const digit = digitOf(k);
-      const done = () => e.preventDefault();
-
-      // 盤面のダイアログ(行き先の選択・マナの支払い・一覧・棋譜・ヘルプ)が開いているとき
-      if (back) {
-        if (k === 'Escape') {
-          back.click();
-          return done();
-        }
-        if (/^[a-z]$/.test(k) && clickNth(`.modal-back [data-key="${k}"]`, 0)) return done();
-        if (digit >= 0 && clickNth('.modal-back .choice, .modal-back .card.selectable', digit)) return done();
-        if ((k === 'Enter' || k === ' ') && clickNth('.modal-back button.primary', 0)) return done();
-        return;
-      }
-      // Esc: 開いているものを閉じる → 選択を外す → 質問に「いいえ・選ばない・やり直す」と答える
-      if (k === 'Escape') {
-        if (menuOpen) {
-          setMenuOpen(false);
-          return done();
-        }
-        if (selected) {
-          setSelected(null);
-          return done();
-        }
-        if (showHuman && s.winner === null && clickNth('.input-panel [data-key="n"], .input-panel [data-key="r"]', 0)) return done();
-        return;
-      }
-      // 入力パネル(選ぶ・答える)。この中のキー(Q W E など)は、画面全体のキーより先に使う
-      if (showHuman && s.winner === null) {
-        const shape = (pend!.input as { shape: string } | null)?.shape;
-        const affirm = k === 'Enter' || k === ' ' || k === KEY.yes;
-        if (affirm && Date.now() - askedAt.current < ASK_GUARD_MS) return done();
-        // 候補のカード(pick・割り振りの札・マナの支払い)の上のカーソル: 詳細を読んでから Enter で選ぶ
-        if (shape === 'pick' || shape === 'assign' || shape === 'payment') {
-          const cardSel = shape === 'assign' ? '.input-panel .cards.items .card' : '.input-panel .cards .card';
-          const n = document.querySelectorAll(cardSel).length;
-          if (n > 0 && (k === 'ArrowLeft' || k === 'ArrowRight')) {
-            setPickCursor((cur) => (cur === null ? (k === 'ArrowRight' ? 0 : n - 1) : (cur + (k === 'ArrowRight' ? 1 : n - 1)) % n));
-            return done();
-          }
-          if (k === 'Enter' && pickCursor !== null && pickCursor < n && clickNth(cardSel, pickCursor)) return done();
-        }
-        if (/^[a-z]$/.test(k) && clickNth(`.input-panel [data-key="${k}"]`, 0)) return done();
-        if (digit >= 0) {
-          const sel = shape === 'option' || shape === 'order' ? '.input-panel .choice' : shape === 'assign' ? '.input-panel .cards.items .card' : '.input-panel .cards .card';
-          if (clickNth(sel, digit)) return done();
-        }
-        if ((k === 'Enter' || k === ' ') && clickNth('.input-panel button.primary', 0)) return done();
-      }
-      // 画面全体のキー
-      if (k === '?' || k === KEY.help) {
-        setHelpOpen(true);
-        return done();
-      }
-      if (k === KEY.log) {
-        setSideOpen((v) => !v);
-        return done();
-      }
-      if (k === KEY.options) {
-        setMenuOpen((v) => !v);
-        return done();
-      }
-      if (k === KEY.record) {
-        setRecText(rec());
-        return done();
-      }
-      if (k === KEY.quit) {
-        if (confirmQuit) onExit();
-        else setConfirmQuit(true);
-        return done();
-      }
-      if (k === KEY.fast && g.me !== null) {
-        g.setFast(!g.fast);
-        return done();
-      }
-      if (g.me !== null && k === KEY.peek) {
-        setPeek((v) => !v);
-        return done();
-      }
-      if (g.me !== null && k === KEY.askPay) {
-        setAskPay((v) => !v);
-        return done();
-      }
-      if (k === KEY.confirmEnd) {
-        toggleConfirm();
-        return done();
-      }
-      if (k === KEY.oppHand && g.me !== null) {
-        setShowOpp((v) => !v);
-        return done();
-      }
-      if (k === KEY.grave || k === KEY.manaList) {
-        // Shift を押すと相手の一覧
-        const who: PlayerId = e.shiftKey ? (viewer === 0 ? 1 : 0) : viewer;
-        setListReq((cur) => ({ p: who, zone: k === KEY.grave ? 'grave' : 'mana', n: (cur?.n ?? 0) + 1 }));
-        return done();
-      }
-      if (showHuman && s.winner === null) return;
-      if (s.winner !== null) {
-        if (k === 'Enter' && Date.now() - askedAt.current < ASK_GUARD_MS) return done();
-        if (k === 'Enter' || k === KEY.redo) {
-          onRematch();
-          return done();
-        }
-        return;
-      }
-      // CPU 同士の観戦
-      if (cpuOnly) {
-        if (k === ' ') {
-          g.setPaused(!g.paused);
-          return done();
-        }
-        if (k === 'ArrowRight' && g.paused) {
-          g.stepOnce();
-          return done();
-        }
-        return;
-      }
-      if (k === KEY.undo && setup.allowUndo && g.canUndo && humanTurn) {
-        g.undo();
-        return done();
-      }
-      if (!interactive) return;
-      // 自分の行動
-      if (digit >= 0 && selActs[digit]) {
-        act(selActs[digit].action);
-        return done();
-      }
-      if (k === 'Enter' && selActs.length === 1) {
-        act(selActs[0].action);
-        return done();
-      }
-      if (arrow) {
-        if (cycleRows.length === 0) return;
-        const r = selected ? cycleRows.findIndex((row) => row.includes(selected)) : -1;
-        if (r < 0) {
-          // 何も選んでいない時: 手札の列から始める(← ↑ は末尾、→ ↓ は先頭)
-          const hand = cycleRows.findIndex((row) => row[0].startsWith('hand:'));
-          const row = cycleRows[hand >= 0 ? hand : cycleRows.length - 1];
-          setSelected(k === 'ArrowLeft' || k === 'ArrowUp' ? row[row.length - 1] : row[0]);
-          return done();
-        }
-        const row = cycleRows[r];
-        const i = row.indexOf(selected!);
-        if (k === 'ArrowLeft' || k === 'ArrowRight') {
-          setSelected(row[(i + (k === 'ArrowRight' ? 1 : row.length - 1)) % row.length]);
-        } else {
-          const to = cycleRows[r + (k === 'ArrowDown' ? 1 : -1)];
-          if (to) setSelected(to[Math.min(i, to.length - 1)]);
-        }
-        return done();
-      }
-      if (k === KEY.skipMana && (stepActs.skipMana || stepActs.endMain)) {
-        act((stepActs.skipMana ?? stepActs.endMain)!);
-        return done();
-      }
-      if (k === KEY.endTurn) {
-        if (stepActs.endTurn) {
-          act(stepActs.endTurn);
-          return done();
-        }
-        // マナステップ: マナチャージを飛ばして、そのままターンを終える(出せる・チャージできるカードがあれば、1回目は確認)
-        if (stepActs.skipMana) {
-          if (!holdEnd()) {
-            endAfterSkip.current = true;
-            g.perform(stepActs.skipMana);
-          }
-          return done();
-        }
-      }
-    };
+    const onKey = (e: KeyboardEvent) => handleGameKey(e, keyCtx);
     // ボタンをクリックしたあとにフォーカスが残ると、Enter/Space でそのボタンが再度押されてしまう
     const onClick = (e: MouseEvent) => {
       const el = e.target as HTMLElement | null;
