@@ -8,6 +8,7 @@ import type { Ev, GameState, ZoneName } from '../engine/types';
 import { CardView } from './CardView';
 import { CardDetail } from './GameView';
 import { allDecks, findDeck } from './decks';
+import { DeckSelect } from './DeckSelect';
 import { cardName, ZONE_NAME } from './format';
 import { useDrag } from './useDrag';
 
@@ -82,16 +83,7 @@ export function ManualView() {
             カードを自由に動かして回す練習用のモードです。ルール処理・効果の自動処理は行いません(自分で処理します)。ドラッグでゾーン間を移動、クリックでタップ/アンタップ。
           </p>
           <div className="panel col">
-            <label className="row">
-              デッキ
-              <select value={deckId} onChange={(e) => setDeckId(e.target.value)}>
-                {decks.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <DeckSelect decks={decks} value={deckId} onChange={setDeckId} />
             <label className="row">
               シード <input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} />
             </label>

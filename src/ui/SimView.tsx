@@ -15,6 +15,7 @@ import {
 import { GoalBuilder } from './GoalBuilder';
 import { ReplayViewer } from './ReplayViewer';
 import { allDecks, findDeck } from './decks';
+import { DeckSelect } from './DeckSelect';
 import { reg } from './format';
 import { runSimJob, type RunningJob } from './simClient';
 import { loadSavedSim } from './saved';
@@ -130,16 +131,7 @@ export function SimView() {
         <div className="grid2">
           <div className="panel col">
             <h3>デッキと先攻・後攻</h3>
-            <label className="row">
-              デッキ
-              <select value={deckId} onChange={(e) => setDeckId(e.target.value)}>
-                {decks.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <DeckSelect decks={decks} value={deckId} onChange={setDeckId} />
             <label className="row">
               <select value={first} onChange={(e) => setFirst(Number(e.target.value) as 0 | 1)}>
                 <option value={0}>先攻(1ターン目はドローなし)</option>

@@ -6,6 +6,7 @@ import { checkDeck } from '../engine/engine';
 import { CARD_DB } from '../cards';
 import { INFO_PRESET_LABEL, type InfoPreset } from '../engine/view';
 import { allDecks, findDeck } from './decks';
+import { DeckSelect } from './DeckSelect';
 import type { GameSetup, Seat } from './useGame';
 import { FX_MODE_LABEL, FX_MODES, loadFxMode, saveFxMode, type FxMode } from './fx';
 import { loadSavedSetup } from './saved';
@@ -121,16 +122,7 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
                 </select>
               </label>
             )}
-            <label className="row">
-              デッキ
-              <select value={seats[i].deck} onChange={(e) => setSeat(i, { deck: e.target.value })}>
-                {decks.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <DeckSelect decks={decks} value={seats[i].deck} onChange={(deck) => setSeat(i, { deck })} />
             {(mode === 'watch' || seats[i].kind === 'cpu') && (
               <>
                 <label className="row">

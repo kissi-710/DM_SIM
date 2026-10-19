@@ -8,6 +8,7 @@ import { pct } from '../sim/export';
 import type { FirstMode, MatchStats } from '../sim/batch';
 import type { CardStrength } from '../sim/strength';
 import { allDecks, findDeck } from './decks';
+import { DeckSelect } from './DeckSelect';
 import { runSimJob, type RunningJob } from './simClient';
 import { downloadText } from './util';
 import { errorMessage } from '../engine/types';
@@ -160,16 +161,7 @@ export function BatchView() {
           ].map((x) => (
             <div key={x.k} className="panel col">
               <h3>{x.k}</h3>
-              <label className="row">
-                デッキ
-                <select value={x.deck} onChange={(e) => x.setDeck(e.target.value)}>
-                  {decks.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <DeckSelect decks={decks} value={x.deck} onChange={x.setDeck} />
               <label className="row">
                 AI
                 <select value={x.kind} onChange={(e) => x.setKind(e.target.value as AgentKind)}>
