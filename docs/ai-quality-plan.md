@@ -478,3 +478,5 @@ A だけに情報を足して、公平な B と戦う(mcts 120 反復。4 デッ
 **再現**: `bash scripts/legacy-extract.sh` のあと、`npx tsx scripts/history-bench.ts --a cur --b v0 --mode iter --n 300 --games 30 --seed 11`(`--mode time --n 200` で時間を揃える。`--b cur --bextra infer=0` で直近の main)。
 
 計算量を増やした時の伸び(反復 300 → 1000 → 3000 → 10000)と、これまでの試みの総括は、[ai-strength-report.md](./ai-strength-report.md) にまとめた。
+
+- 参考(UI の「演出中も考える」オプションの効果測定。2026-10-20): 強い設定(`strong=1`)を、最大 1200ms のまま使うと、通常に 57.8%(400 試合、区間 52.9〜62.5%。別の測定の 56.8% と合わせて約 57%)。最大 2000ms に延ばしても、上乗せは測れなかった(対 強い設定・1200ms で 51.0%)。詳細と生データは docs/ui-effects.md 4.2、docs/data/ui-fx-think-2026-10/。
