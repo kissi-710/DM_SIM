@@ -10,6 +10,7 @@ import { AiCancelled, cancelAi, chooseWithWorker } from './aiClient';
 import { RECORD_VERSION, type GameRecord } from './record';
 import { clearAutosave, writeAutosave, type SaveStatus } from './autosave';
 import { cpuSeed, cpuWaitMs, fxHoldMs, fxScale, MIN_CPU_GAP_MS, type FxMode } from './fx';
+import { thinkSpecFor } from './thinkInFx';
 
 export type { GameRecord } from './record';
 
@@ -79,8 +80,9 @@ export function makeRecord(setup: GameSetup, session: Session): GameRecord {
 
 /**
  * @param fxMode 演出の設定(通常・高速・オフ)。CPU の手の「待ち時間」にだけ影響し、手の選択には影響しない(fx.ts)。
+ * @param thinkInFx 「演出中も考える」。待ち時間の間の探索の予算を延ばす(thinkInFx.ts。既定はオフ)。
  */
-export function useGame(setup: GameSetup, fxMode: FxMode = 'off') {
+export function useGame(setup: GameSetup, fxMode: FxMode = 'off', thinkInFx = false) {
   const [session, setSession] = useState<Session>(() => {
     const g = createGame(reg, {
       decks: setup.decks,
@@ -150,6 +152,8 @@ export function useGame(setup: GameSetup, fxMode: FxMode = 'off') {
   // 演出の切り替えで CPU の手番の effect を作り直さない(待ち時間の計算の時点の値を読む)
   const fxRef = useRef(fxMode);
   fxRef.current = fxMode;
+  const thinkRef = useRef(thinkInFx);
+  thinkRef.current = thinkInFx;
   const stamp = useRef(0);
 
   const humanSeats = ([0, 1] as PlayerId[]).filter((p) => setup.seats[p].kind === 'human');
@@ -195,10 +199,11 @@ export function useGame(setup: GameSetup, fxMode: FxMode = 'off') {
    */
   const searchRef = useRef<{ state: GameState; promise: Promise<Action> } | null>(null);
   const startSearch = useCallback(
-    (cur: Session): Promise<Action> => {
+    (cur: Session, windowMs = 0): Promise<Action> => {
       const hit = searchRef.current;
       if (hit && hit.state === cur.state) return hit.promise;
-      const spec = setup.seats[cur.state.pending!.player].agent;
+      // 「演出中も考える」: 待ち時間が十分あれば、その間に探索を続ける設定にする(オフなら、設定のまま)
+      const spec = thinkSpecFor(setup.seats[cur.state.pending!.player].agent, windowMs, thinkRef.current);
       const seed = cpuSeed(hashSeed(setup.seed), cur.actions.length);
       const promise = chooseWithWorker({ state: cur.state, spec, seed });
       // 失敗(取り消しを含む)した探索は、使い回さない。待たずに捨てた探索の失敗を、未処理の失敗にもしない
@@ -234,7 +239,7 @@ export function useGame(setup: GameSetup, fxMode: FxMode = 'off') {
       try {
         // 待ち時間(演出・手の間隔)の間も、CPU に考えさせる。探索の時間制限はそのままで、待ちと探索が重なる分だけ早く打てる
         // (待ち → 探索 の順だと、待ち + 探索 かかっていた。重ねれば、長いほうだけ)
-        const search = startSearch(cur);
+        const search = startSearch(cur, wait);
         const [a] = await Promise.all([search, new Promise((r) => setTimeout(r, wait))]);
         if (cancelled || stamp.current !== my) return;
         perform(a);

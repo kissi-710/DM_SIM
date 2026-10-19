@@ -62,7 +62,7 @@ describe('GameView の演出', () => {
     const { container } = render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
     await screen.findByText('あなたのターン');
     await userEvent.click(screen.getByRole('button', { name: /表示/ }));
-    await userEvent.selectOptions(screen.getByLabelText(/演出/), 'fast');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /演出/ }), 'fast');
     const game = container.querySelector<HTMLElement>('.game')!;
     expect(game.classList.contains('fx')).toBe(true);
     expect(game.classList.contains('fx-fast')).toBe(true);
@@ -79,7 +79,7 @@ describe('GameView の演出', () => {
     const { container } = render(<GameView setup={setup()} onExit={() => {}} onRematch={() => {}} />);
     await screen.findByText('あなたのターン');
     await userEvent.click(screen.getByRole('button', { name: /表示/ }));
-    await userEvent.selectOptions(screen.getByLabelText(/演出/), 'off');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /演出/ }), 'off');
     expect(container.querySelector('.fx-layer')).toBeNull();
     expect(container.querySelector('.game.fx')).toBeNull();
     expect(JSON.parse(localStorage.getItem('dmsim.fx')!)).toEqual({ mode: 'off' });

@@ -1,0 +1,6 @@
+■ A=mcts:ms=2000,z=99,prec=0.003  対  B=mcts:ms=1200  seed=23 複製対局
+  maruru(A) vs maruru(B): 55.0%(100試合)
+  maruru(A) vs zardy(B): 50.0%(100試合)
+  zardy(A) vs maruru(B): 56.0%(100試合)
+  zardy(A) vs zardy(B): 59.0%(100試合)
+  合計: Aの勝ち 220/400 = 55.0%(95%区間 50.1%〜59.8%)  1手あたり A 880.6ms / B 33.3ms  1692秒

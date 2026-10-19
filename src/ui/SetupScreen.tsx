@@ -9,6 +9,7 @@ import { allDecks, findDeck } from './decks';
 import { DeckSelect } from './DeckSelect';
 import type { GameSetup, Seat } from './useGame';
 import { FX_MODE_LABEL, FX_MODES, loadFxMode, saveFxMode, type FxMode } from './fx';
+import { loadThinkInFx, logicalCores, saveThinkInFx, thinkInFxWarning } from './thinkInFx';
 import { loadSavedSetup } from './saved';
 import { saveJson } from './util';
 import { errorMessage } from '../engine/types';
@@ -46,6 +47,7 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
   const [undo, setUndo] = useState(saved.undo ?? true);
   // 演出(対戦画面の「演出を表示する」と同じ設定)
   const [fx, setFx] = useState<FxMode>(loadFxMode);
+  const [thinkInFx, setThinkInFx] = useState(loadThinkInFx);
   const [delay, setDelay] = useState(saved.delay ?? (mode === 'watch' ? 600 : 500));
   // モンテカルロ探索の最大の思考時間。手の優劣がはっきりすれば、これより早く打ち切る
   const [think, setThink] = useState(saved.think ?? 1200);
@@ -217,6 +219,20 @@ export function SetupScreen({ mode, onStart, onBack }: { mode: 'play' | 'watch';
           </select>
         </label>
         <span className="muted">高速は約2倍の速さ。オフは演出なし(従来の表示)。</span>
+        <label className="row">
+          <input
+            type="checkbox"
+            checked={thinkInFx}
+            onChange={(e) => {
+              setThinkInFx(e.target.checked);
+              saveThinkInFx(e.target.checked);
+            }}
+          />
+          演出中も考える(待ち時間の間も CPU が探索を続け、より深く考える)
+        </label>
+        <span className="muted think-warn" role="note">
+          {thinkInFxWarning(logicalCores())}
+        </span>
         {mode === 'play' && (
         <>
         <label className="row">
