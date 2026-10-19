@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 // 入力ウィジェット7種・ErrorBoundary のコンポーネントテスト(Testing Library)
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deckCards } from '../../src/cards';
 import { createGame } from '../../src/engine/engine';
 import type { AnswerValue, GameState, InputSpec, Pending } from '../../src/engine/types';
 import { ErrorBoundary } from '../../src/ui/ErrorBoundary';
-import { InputWidget } from '../../src/ui/Widgets';
+import { AUTO_CONFIRM_MS, InputWidget, PaymentWidget } from '../../src/ui/Widgets';
 import { reg } from '../scenario';
 
 afterEach(cleanup);
@@ -34,20 +34,99 @@ describe('InputWidget: pick', () => {
     await user.click(screen.getByRole('button', { name: nameOf(s0, b) }));
     expect(onAnswer).toHaveBeenCalledWith([b]);
   });
-  it('複数枚を選ぶ時は、選んで「確定」するまで回答しない。上限を超えて選べない', async () => {
+  it('複数枚を選ぶ時は、上限(max)まで選ぶと、確定ボタンを押さなくても回答する。上限を超えて選べない', async () => {
     const s0 = game();
     const [a, b, c] = s0.players[0].hand;
     const { onAnswer, user } = setup({ shape: 'pick', candidates: [a, b, c], min: 1, max: 2 });
-    const confirm = screen.getByRole('button', { name: '確定' });
-    expect(confirm).toBeDisabled();
+    const cards = screen.getAllByRole('button').filter((x) => x.classList.contains('card'));
+    await user.click(cards[0]);
+    // まだ上限(2枚)に達していない間は、回答しない
+    await new Promise((r) => setTimeout(r, AUTO_CONFIRM_MS + 80));
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '確定' })).toBeEnabled(); // 1枚でも確定できる(min=1)
+    await user.click(cards[1]);
+    await user.click(cards[2]); // 上限 2 枚を超える分は無視される
+    await waitFor(() => expect(onAnswer).toHaveBeenCalledWith([a, b]));
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+  });
+  it('規定数に達した時に選び直せば、自動の回答は取り消される。手で確定したら、自動の回答は重ねて送られない', async () => {
+    const s0 = game();
+    const [a, b, c] = s0.players[0].hand;
+    const { onAnswer, user } = setup({ shape: 'pick', candidates: [a, b, c], min: 1, max: 2 });
     const cards = screen.getAllByRole('button').filter((x) => x.classList.contains('card'));
     await user.click(cards[0]);
     await user.click(cards[1]);
-    await user.click(cards[2]); // 上限 2 枚を超える分は無視される
+    await user.click(cards[1]); // すぐ外す: 規定数でなくなり、自動の回答は出ない
+    await new Promise((r) => setTimeout(r, AUTO_CONFIRM_MS + 80));
     expect(onAnswer).not.toHaveBeenCalled();
-    expect(confirm).toBeEnabled();
-    await user.click(confirm);
-    expect(onAnswer).toHaveBeenCalledWith([a, b]);
+    await user.click(cards[2]);
+    await user.click(screen.getByRole('button', { name: '確定' })); // 規定数に達した直後に手で確定
+    await new Promise((r) => setTimeout(r, AUTO_CONFIRM_MS + 80));
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+    expect(onAnswer).toHaveBeenCalledWith([a, c]);
+  });
+  it('ちょうど N 枚を選ぶ時(min=max=N)は、N 枚目で自動で回答する。1枚だけの時は、これまで通りクリックで回答', async () => {
+    const s0 = game();
+    const [a, b, c] = s0.players[0].hand;
+    const { onAnswer, user } = setup({ shape: 'pick', candidates: [a, b, c], min: 2, max: 2 });
+    const cards = screen.getAllByRole('button').filter((x) => x.classList.contains('card'));
+    await user.click(cards[2]);
+    expect(onAnswer).not.toHaveBeenCalled();
+    await user.click(cards[0]);
+    await waitFor(() => expect(onAnswer).toHaveBeenCalledWith([c, a]));
+  });
+  describe('ドラッグでまとめて選ぶ', () => {
+    /** jsdom には座標がないので、ポインタの下にある札を、ドラッグの経路の指定で決める */
+    const dragOver = (down: HTMLElement, path: HTMLElement[]) => {
+      let cur: HTMLElement = down;
+      const doc = document as unknown as { elementFromPoint?: (x: number, y: number) => Element | null };
+      doc.elementFromPoint = () => cur; // jsdom には elementFromPoint がない
+      fireEvent.pointerDown(down, { button: 0, pointerType: 'mouse', clientX: 1, clientY: 1 });
+      for (const el of path) {
+        cur = el;
+        fireEvent.pointerMove(window, { clientX: 2, clientY: 2 });
+      }
+      fireEvent.pointerUp(window);
+      delete doc.elementFromPoint;
+    };
+    it('札をなぞると、なぞった札をすべて選ぶ(規定数に達したら自動で回答)', async () => {
+      const s0 = game();
+      const [a, b, c, d] = s0.players[0].hand;
+      const { onAnswer, container } = setup({ shape: 'pick', candidates: [a, b, c, d], min: 3, max: 3 });
+      const cards = [...container.querySelectorAll<HTMLElement>('.card')];
+      expect(container.querySelector('[data-dragpick]')).not.toBeNull();
+      dragOver(cards[0], [cards[1], cards[2]]);
+      expect(cards.slice(0, 3).every((el) => el.classList.contains('selected'))).toBe(true);
+      expect(cards[3].classList.contains('selected')).toBe(false);
+      await waitFor(() => expect(onAnswer).toHaveBeenCalledWith([a, b, c]));
+    });
+    it('ドラッグの後に続くクリックで、選び直しにならない。上限を超えて選べない', async () => {
+      const s0 = game();
+      const [a, b, c, d] = s0.players[0].hand;
+      const { onAnswer, container } = setup({ shape: 'pick', candidates: [a, b, c, d], min: 1, max: 3 });
+      const cards = [...container.querySelectorAll<HTMLElement>('.card')];
+      dragOver(cards[0], [cards[1], cards[2], cards[3]]); // 4枚なぞっても、3枚まで
+      fireEvent.click(cards[3]); // ドラッグの直後のクリックは無視
+      expect(cards.filter((el) => el.classList.contains('selected'))).toHaveLength(3);
+      await waitFor(() => expect(onAnswer).toHaveBeenCalledWith([a, b, c]));
+    });
+    it('選択済みの札から始めてなぞると、なぞった札を外す(消しゴム)', async () => {
+      const s0 = game();
+      const [a, b, c, d] = s0.players[0].hand;
+      const { onAnswer, container } = setup({ shape: 'pick', candidates: [a, b, c, d], min: 0, max: 4 });
+      const cards = [...container.querySelectorAll<HTMLElement>('.card')];
+      dragOver(cards[0], [cards[1], cards[2]]);
+      expect(cards.filter((el) => el.classList.contains('selected'))).toHaveLength(3);
+      dragOver(cards[1], [cards[2]]);
+      expect(cards.filter((el) => el.classList.contains('selected')).length).toBe(1);
+      expect(onAnswer).not.toHaveBeenCalled();
+    });
+    it('1枚だけ選ぶ質問では、ドラッグ選択を有効にしない', () => {
+      const s0 = game();
+      const [a, b] = s0.players[0].hand;
+      const { container } = setup({ shape: 'pick', candidates: [a, b], min: 1, max: 1 });
+      expect(container.querySelector('[data-dragpick]')).toBeNull();
+    });
   });
   it('0枚から選べる時は「選ばない」で空の回答になる', async () => {
     const s0 = game();
@@ -273,5 +352,40 @@ describe('InputWidget: 候補の詳細を読んでから選ぶ', () => {
     } finally {
       window.matchMedia = orig;
     }
+  });
+});
+
+describe('InputWidget: 規定数で自動確定(option / payment)', () => {
+  it('option: 2回以上選べる時は、規定の回数に達したら確定ボタンなしで回答する。1回だけの時は、確定ボタンを使う', async () => {
+    const { onAnswer, user } = setup({ shape: 'option', options: ['ドロー', '破壊', 'マナ'], pick: 2, repeat: false } as InputSpec);
+    await user.click(screen.getByRole('button', { name: /ドロー/ }));
+    await new Promise((r) => setTimeout(r, AUTO_CONFIRM_MS + 80));
+    expect(onAnswer).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /マナ/ }));
+    await waitFor(() => expect(onAnswer).toHaveBeenCalledWith([0, 2]));
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+  });
+  it('option: 1つだけ選ぶ時は、選んだだけでは回答しない(確定で回答)', async () => {
+    const { onAnswer, user } = setup({ shape: 'option', options: ['ドロー', '破壊'], pick: 1, repeat: false } as InputSpec);
+    await user.click(screen.getByRole('button', { name: /破壊/ }));
+    await new Promise((r) => setTimeout(r, AUTO_CONFIRM_MS + 80));
+    expect(onAnswer).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: '確定' }));
+    expect(onAnswer).toHaveBeenCalledWith([1]);
+  });
+  it('payment: 自動の候補が最初から選ばれている間は回答しない。選び直して規定数になったら自動で回答する', async () => {
+    const s0 = game();
+    const mana = s0.players[0].hand.slice(0, 4);
+    const onAnswer = vi.fn<(v: AnswerValue) => void>();
+    const user = userEvent.setup();
+    const { container } = render(
+      <PaymentWidget s={s0} pending={pend({ shape: 'payment', need: 2, mana } as InputSpec)} me={0} spec={{ shape: 'payment', need: 2, mana }} onAnswer={onAnswer} initial={[mana[0], mana[1]]} />,
+    );
+    await new Promise((r) => setTimeout(r, AUTO_CONFIRM_MS + 80));
+    expect(onAnswer).not.toHaveBeenCalled(); // 初期選択だけでは回答しない
+    const cards = [...container.querySelectorAll<HTMLElement>('.card')];
+    await user.click(cards[1]); // 外す
+    await user.click(cards[3]); // 別のマナを選ぶ: 2枚に戻る
+    await waitFor(() => expect(onAnswer).toHaveBeenCalledWith([mana[0], mana[3]]));
   });
 });

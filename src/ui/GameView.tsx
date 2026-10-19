@@ -6,7 +6,7 @@ import { mkCtx, permByPid } from '../engine/state';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { Board, buildDropMap, selectedActions } from './Board';
 import { CardView, civGradient } from './CardView';
-import { buildLogTree, cardName, CIV_NAME, recentFeed, reg, untilLabel, type LogNode } from './format';
+import { buildLogTree, cardName, CIV_NAME, isConcealed, recentFeed, reg, untilLabel, type LogNode } from './format';
 import { endTurnWarning } from './endTurn';
 import { whyUnplayable } from './unplayable';
 import { Kbd } from './Kbd';
@@ -19,11 +19,16 @@ import { Splitter, ResizablePanel, useRailWidth } from './Resizable';
 import { FxLayer } from './FxLayer';
 import { FxAttack } from './FxAttack';
 import { FxGhosts } from './FxGhosts';
+import { useFxGate } from './useFxGate';
 import { FxTicker } from './FxTicker';
 import { cuesOf, drawCuesOf, FX_MODE_LABEL, FX_MODES, fxHoldMs, fxScale, loadFxMode, removalCuesOf, removalsOf, saveFxMode, STEP_LABEL, type FxMode } from './fx';
 
-export function CardDetail({ s, uid }: { s: GameState; uid: number | null }) {
-  if (uid === null || !s.cards[uid] || s.cards[uid].defId === '?') {
+/** reveal: 本人にも見えないカード(シールドなど)を見せる(練習用の「自分のシールドを見る」) */
+export function CardDetail({ s, uid, reveal = false }: { s: GameState; uid: number | null; reveal?: boolean }) {
+  if (uid !== null && s.cards[uid] && (s.cards[uid].defId === '?' || (!reveal && isConcealed(s, uid)))) {
+    return <div className="muted">非公開のカード</div>;
+  }
+  if (uid === null || !s.cards[uid]) {
     return <div className="muted">カードにマウスを乗せると詳細を表示</div>;
   }
   const c = s.cards[uid];
@@ -263,6 +268,10 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
     const t = setTimeout(() => setResultShown(true), fxHoldMs(s, session.last, g.me, scale));
     return () => clearTimeout(t);
   }, [s.winner, fxActive]);
+  // 質問(選択・確認の入力パネル)は、直前の手の演出が終わってから出す。演出の途中に選択画面が割り込まないように。
+  // 演出が無効なら待たない。待つのは表示だけで、質問そのもの(状態)は変わらない
+  const inputHold = useMemo(() => (fxActive ? fxHoldMs(s, session.last, g.me, scale) : 0), [fxActive, session.last, scale]);
+  const inputReady = useFxGate(inputHold, session.last);
   const trumps = useMemo(() => {
     const set = new Set<number>();
     if (fxActive) for (const e of session.last) if (((e.type === 'entered' && e.via === 'revolutionChange') || (e.type === 'evolved' && e.via === 'invade')) && typeof e.card === 'number') set.add(e.card);
@@ -380,7 +389,10 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   }, [selected, s]);
   const selDef = selUid !== null && s.cards[selUid] ? reg.defs[s.cards[selUid].defId] : null;
   const cpuOnly = setup.seats.every((x) => x.kind === 'cpu');
-  const showHuman = humanTurn && pend!.why !== 'turnAction';
+  const askHuman = humanTurn && pend!.why !== 'turnAction';
+  const showHuman = askHuman && inputReady;
+  /** 質問が出ているが、演出が終わるのを待っている間(「考え中」は出さない) */
+  const waitingInput = askHuman && !inputReady;
 
   // ── ショートカットキー ──(キーの意味と割り当ては keymap.ts)
   // 選べるカードの並び。列ごとに持つ(画面の上から: バトル・マナ・墓地・手札)。← → は列の中、↑ ↓ は列の移動
@@ -815,7 +827,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         />
 
         {/* CPU が考えている間の表示 */}
-        {!interactive && !showHuman && s.winner === null && pend && (
+        {!interactive && !showHuman && !waitingInput && s.winner === null && pend && (
           <div className="thinking-pill">
             {activeLabel}が考え中…
             {session.thinking && <span className="thinking" />}
@@ -879,7 +891,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         <div className="rail">
           {/* カードの詳細は、ホバー中のカード、なければ選択中のカードを出す(タッチ操作でも読める) */}
           <div className="rail-hover">
-            <CardDetail s={s} uid={hover ?? selUid} />
+            <CardDetail s={s} uid={hover ?? selUid} reveal={peek && (hover ?? selUid) !== null && s.cards[(hover ?? selUid) as number]?.owner === viewer} />
           </div>
           {!sideOpen && s.pool.length > 0 && <PoolPanel s={s} />}
           {interactive && (

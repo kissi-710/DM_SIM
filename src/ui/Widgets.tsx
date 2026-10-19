@@ -1,9 +1,9 @@
 // 入力ウィジェット7種(effects 11.2): pick / assign / option / yesno / order / payment / ack。
 // カードの数が増えてもウィジェットは増えない。UI は pending の input だけを見て部品を選ぶ。
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { AnswerValue, GameState, InputSpec, Pending } from '../engine/types';
 import { CardView } from './CardView';
-import { cardName } from './format';
+import { cardName, isConcealed } from './format';
 import { Kbd } from './Kbd';
 import { SLOT_KEYS } from './keymap';
 import { useDrag } from './useDrag';
@@ -40,6 +40,82 @@ export function InputWidget(p: Props) {
   );
 }
 
+/** 規定数まで選んだら、確定ボタンを押さなくても、この時間だけ見せてから回答する(ms) */
+export const AUTO_CONFIRM_MS = 160;
+
+/**
+ * 規定数に達したら自動で回答する(2つ以上を同時に選べる時)。
+ * 最初から選ばれている状態(自動の候補など)では回答しない: 人が選び直した(touched)時だけ。
+ * 選びなおせば取り消され、自動の回答は1度しか送らない。
+ * 戻り値は「手で回答した」ことを知らせる関数。手で確定した後に、自動の回答が重ねて送られないようにする。
+ */
+function useAutoConfirm(ready: boolean, touched: boolean, sel: number[], onAnswer: (v: AnswerValue) => void): () => void {
+  const done = useRef(false);
+  const answer = useRef(onAnswer);
+  answer.current = onAnswer;
+  useEffect(() => {
+    if (!ready || !touched || done.current) return;
+    const timer = setTimeout(() => {
+      if (done.current) return;
+      done.current = true;
+      answer.current(sel);
+    }, AUTO_CONFIRM_MS);
+    return () => clearTimeout(timer);
+  }, [ready, touched, sel]);
+  return () => {
+    done.current = true;
+  };
+}
+
+/**
+ * マウス(タッチ)のドラッグで、並んだ札をまとめて選ぶ。最初の札が選択済みなら、なぞった札を外す(消しゴム)。
+ * ドラッグが札をまたいだ時だけ働き、1枚だけの普通のクリックは、これまで通りクリックとして扱う。
+ * 札を並べた入れ物に data-dragpick を付け、札は data-uid を持つ(CardView)。
+ */
+function useDragPick(apply: (uid: number, mode: 'add' | 'remove') => void, isSelected: (uid: number) => boolean, enabled: boolean) {
+  const justDragged = useRef(false);
+  const latest = useRef({ apply, isSelected });
+  latest.current = { apply, isSelected };
+  /** 札の onPointerDown に渡す */
+  const begin = (uid: number) => (e: ReactPointerEvent) => {
+    if (!enabled || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const mode: 'add' | 'remove' = latest.current.isSelected(uid) ? 'remove' : 'add';
+    const seen = new Set<number>([uid]);
+    let active = false;
+    const move = (ev: PointerEvent) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-uid]');
+      if (!el || !el.closest('[data-dragpick]')) return;
+      const v = Number(el.dataset.uid);
+      if (seen.has(v)) return;
+      if (!active) {
+        active = true;
+        latest.current.apply(uid, mode);
+      }
+      seen.add(v);
+      latest.current.apply(v, mode);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      if (active) {
+        // ドラッグの後に続くクリックは、選び直しになってしまうので無視する
+        justDragged.current = true;
+        setTimeout(() => (justDragged.current = false), 0);
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+  /** 札の onClick を包む(ドラッグ直後のクリックを無視) */
+  const click = (fn: () => void) => () => {
+    if (justDragged.current) return;
+    fn();
+  };
+  return { begin, click };
+}
+
 // ── pick: 候補を強調して選ぶ ──
 export function PickWidget({ s, spec, onAnswer, onHover, cursor }: Props & { spec: Extract<InputSpec, { shape: 'pick' }> }) {
   const [sel, setSel] = useState<number[]>([]);
@@ -48,6 +124,9 @@ export function PickWidget({ s, spec, onAnswer, onHover, cursor }: Props & { spe
   const touch = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(hover: none)').matches;
   // 1枚だけ選ぶ時(0枚も選べる「ブロックしますか?」などを含む)は、クリックした時点で回答する
   const instant = spec.min <= 1 && spec.max === 1;
+  // 2枚以上を同時に選べる時: ドラッグでまとめて選べる。規定数(max)に達したら、確定ボタンなしで回答する
+  const multi = !instant && spec.max >= 2;
+  const [touched, setTouched] = useState(false);
   const toggle = (u: number) => {
     if (instant) {
       if (touch && armed !== u) {
@@ -57,12 +136,22 @@ export function PickWidget({ s, spec, onAnswer, onHover, cursor }: Props & { spe
       }
       return onAnswer([u]);
     }
+    setTouched(true);
     setSel((cur) => (cur.includes(u) ? cur.filter((x) => x !== u) : cur.length < spec.max ? [...cur, u] : cur));
   };
   const ok = sel.length >= spec.min && sel.length <= spec.max;
+  const drag = useDragPick(
+    (u, mode) => {
+      setTouched(true);
+      setSel((cur) => (mode === 'add' ? (cur.includes(u) || cur.length >= spec.max ? cur : [...cur, u]) : cur.filter((x) => x !== u)));
+    },
+    (u) => sel.includes(u),
+    multi,
+  );
+  const answered = useAutoConfirm(multi && sel.length === spec.max && ok, touched, sel, onAnswer);
   return (
     <>
-      <div className="cards">
+      <div className="cards" data-dragpick={multi ? '' : undefined}>
         {spec.candidates.map((u, i) => (
           <CardView
             key={u}
@@ -71,11 +160,12 @@ export function PickWidget({ s, spec, onAnswer, onHover, cursor }: Props & { spe
             small
             selectable
             selected={sel.includes(u)}
-            hidden={s.cards[u].defId === '?'}
+            hidden={isConcealed(s, u)}
             num={i + 1}
             cursor={cursor === i}
-            onClick={() => toggle(u)}
-            onHover={onHover}
+            onClick={multi ? drag.click(() => toggle(u)) : () => toggle(u)}
+            onPointerDown={multi ? drag.begin(u) : undefined}
+            onHover={isConcealed(s, u) ? undefined : onHover}
           />
         ))}
       </div>
@@ -83,9 +173,16 @@ export function PickWidget({ s, spec, onAnswer, onHover, cursor }: Props & { spe
         {!instant && (
           <>
             <span className="muted">
-              {spec.min === spec.max ? `${spec.min}枚` : `${spec.min}〜${spec.max}枚`}を選ぶ({sel.length}枚選択中)
+              {spec.min === spec.max ? `${spec.min}枚` : `${spec.min}〜${spec.max}枚`}を選ぶ({sel.length}枚選択中)。ドラッグでまとめて選択、{spec.max}枚で確定
             </span>
-            <button className="primary" disabled={!ok} onClick={() => onAnswer(sel)}>
+            <button
+              className="primary"
+              disabled={!ok}
+              onClick={() => {
+                answered();
+                onAnswer(sel);
+              }}
+            >
               確定 <Kbd k="Enter" />
             </button>
             {sel.length > 0 && (
@@ -101,7 +198,13 @@ export function PickWidget({ s, spec, onAnswer, onHover, cursor }: Props & { spe
           </span>
         )}
         {spec.min === 0 && (
-          <button data-key="n" onClick={() => onAnswer([])}>
+          <button
+            data-key="n"
+            onClick={() => {
+              answered();
+              onAnswer([]);
+            }}
+          >
             選ばない <Kbd k="n" />
           </button>
         )}
@@ -158,7 +261,8 @@ export function AssignWidget({ s, spec, onAnswer, onHover, cursor }: Props & { s
                 if (e.detail === 0) setPicked((cur) => (cur === u ? null : u));
               }}
               onPointerDown={begin(`item:${u}`)}
-              onHover={onHover}
+              hidden={isConcealed(s, u)}
+              onHover={isConcealed(s, u) ? undefined : onHover}
             />
           ))}
         {spec.items.every((u) => placed.has(u)) && <span className="muted">割り振り済み</span>}
@@ -178,7 +282,7 @@ export function AssignWidget({ s, spec, onAnswer, onHover, cursor }: Props & { s
             </div>
             <div className="cards">
               {asg[sl.id].map((u) => (
-                <CardView key={u} s={s} uid={u} small selectable onClick={() => unplace(u)} onHover={onHover} />
+                <CardView key={u} s={s} uid={u} small selectable hidden={isConcealed(s, u)} onClick={() => unplace(u)} onHover={isConcealed(s, u) ? undefined : onHover} />
               ))}
             </div>
           </div>
@@ -186,7 +290,7 @@ export function AssignWidget({ s, spec, onAnswer, onHover, cursor }: Props & { s
       </div>
       {drag && (
         <div className="drag-ghost" style={{ left: drag.x, top: drag.y }}>
-          <CardView s={s} uid={Number(drag.key.replace('item:', ''))} small />
+          <CardView s={s} uid={Number(drag.key.replace('item:', ''))} small hidden={isConcealed(s, Number(drag.key.replace('item:', '')))} />
         </div>
       )}
       <div className="row">
@@ -225,7 +329,9 @@ export function AssignWidget({ s, spec, onAnswer, onHover, cursor }: Props & { s
 // ── option: 選択肢(回数・重複可・「全部使う」) ──
 export function OptionWidget({ s, spec, onAnswer, onHover }: Props & { spec: Extract<InputSpec, { shape: 'option' }> }) {
   const [sel, setSel] = useState<number[]>([]);
+  const [touched, setTouched] = useState(false);
   const add = (i: number) => {
+    setTouched(true);
     setSel((cur) => {
       if (spec.pick === 1 && !spec.repeat) return [i];
       if (!spec.repeat && cur.includes(i)) return cur.filter((x) => x !== i);
@@ -238,6 +344,8 @@ export function OptionWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
     sel.forEach((i) => m.set(i, (m.get(i) ?? 0) + 1));
     return m;
   }, [sel]);
+  // 2つ以上を選べる時は、規定の回数に達したら確定ボタンなしで回答する
+  const answered = useAutoConfirm(spec.pick >= 2 && sel.length === spec.pick, touched, sel, onAnswer);
   return (
     <>
       {spec.seen && spec.seen.length > 0 && (
@@ -267,9 +375,16 @@ export function OptionWidget({ s, spec, onAnswer, onHover }: Props & { spec: Ext
       </div>
       <div className="row">
         <span className="muted">
-          {spec.pick}回選ぶ{spec.repeat ? '(重複可)' : ''}。上から順に処理({sel.length}/{spec.pick})
+          {spec.pick}回選ぶ{spec.repeat ? '(重複可)' : ''}。上から順に処理({sel.length}/{spec.pick}){spec.pick >= 2 ? `。${spec.pick}回で確定` : ''}
         </span>
-        <button className="primary" disabled={sel.length !== spec.pick} onClick={() => onAnswer(sel)}>
+        <button
+          className="primary"
+          disabled={sel.length !== spec.pick}
+          onClick={() => {
+            answered();
+            onAnswer(sel);
+          }}
+        >
           確定 <Kbd k="Enter" />
         </button>
         {spec.allIf && (
@@ -318,9 +433,21 @@ export function OrderWidget({ spec, onAnswer }: { spec: Extract<InputSpec, { sha
 // ── payment: マナの割り当て(手動支払い) ──
 export function PaymentWidget({ s, spec, onAnswer, onHover, initial, cursor }: Props & { spec: Extract<InputSpec, { shape: 'payment' }>; initial?: number[] }) {
   const [sel, setSel] = useState<number[]>(initial ?? []);
+  // 自動の候補が最初から選ばれているので、人が選び直した時だけ、規定数で自動回答する
+  const [touched, setTouched] = useState(false);
+  const multi = spec.need >= 2;
+  const drag = useDragPick(
+    (u, mode) => {
+      setTouched(true);
+      setSel((cur) => (mode === 'add' ? (cur.includes(u) || cur.length >= spec.need ? cur : [...cur, u]) : cur.filter((x) => x !== u)));
+    },
+    (u) => sel.includes(u),
+    multi,
+  );
+  const answered = useAutoConfirm(multi && sel.length === spec.need, touched, sel, onAnswer);
   return (
     <>
-      <div className="cards">
+      <div className="cards" data-dragpick={multi ? '' : undefined}>
         {spec.mana.map((u, i) => (
           <CardView
             key={u}
@@ -331,16 +458,27 @@ export function PaymentWidget({ s, spec, onAnswer, onHover, initial, cursor }: P
             selected={sel.includes(u)}
             num={i + 1}
             cursor={cursor === i}
-            onClick={() => setSel((c) => (c.includes(u) ? c.filter((x) => x !== u) : c.length < spec.need ? [...c, u] : c))}
+            onClick={drag.click(() => {
+              setTouched(true);
+              setSel((c) => (c.includes(u) ? c.filter((x) => x !== u) : c.length < spec.need ? [...c, u] : c));
+            })}
+            onPointerDown={multi ? drag.begin(u) : undefined}
             onHover={onHover}
           />
         ))}
       </div>
       <div className="row">
         <span className="muted">
-          タップするマナを{spec.need}枚選ぶ({sel.length}/{spec.need})
+          タップするマナを{spec.need}枚選ぶ({sel.length}/{spec.need}){multi ? '。ドラッグでまとめて選択、' + spec.need + '枚で確定' : ''}
         </span>
-        <button className="primary" disabled={sel.length !== spec.need} onClick={() => onAnswer(sel)}>
+        <button
+          className="primary"
+          disabled={sel.length !== spec.need}
+          onClick={() => {
+            answered();
+            onAnswer(sel);
+          }}
+        >
           確定 <Kbd k="Enter" />
         </button>
       </div>
