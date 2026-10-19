@@ -9,10 +9,9 @@ import type { Registry } from '../engine/registry';
 import type { Action, GameState, PlayerId } from '../engine/types';
 import { FAIR, type InfoPolicy } from '../engine/view';
 import { determinize } from './determinize';
-import { reward, withWeights, type RewardWeights } from './eval';
+import { evaluate, reward, RULE_WEIGHTS, withWeights, type RewardWeights } from './eval';
 import { L1_DEFAULT, withL1, type L1Params } from './l1params';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
-import { evaluate, RULE_WEIGHTS } from './eval';
 import type { Agent, AgentCtx } from './types';
 
 /** ターン内の行動列を木にする探索の設定(tree.ts) */
@@ -159,9 +158,17 @@ export function seedOfRound(base: number, r: number, anti: boolean): number {
   return anti ? (((roundSeed(base, r >> 1) & ~1) | (r & 1)) >>> 0) : roundSeed(base, r);
 }
 
+// 同じ重みでの全プレイアウト(1ラウンドの全候補手・全反復)で、同じ調整値を使い回す(重みは作成後に書き換えない)
+const rolloutL1Cache = new WeakMap<RewardWeights, L1Params>();
+
 /** プレイアウトの L1 の調整値(rl1 の指定に、atkTrade の指定を重ねる) */
 export function rolloutL1(w: RewardWeights): L1Params {
-  return withL1({ ...w.l1, ...(w.atkTrade === undefined ? {} : { atkTrade: w.atkTrade }), ...(w.playModel ? { playModel: w.playModel } : {}) });
+  let r = rolloutL1Cache.get(w);
+  if (!r) {
+    r = withL1({ ...w.l1, ...(w.atkTrade === undefined ? {} : { atkTrade: w.atkTrade }), ...(w.playModel ? { playModel: w.playModel } : {}) });
+    rolloutL1Cache.set(w, r);
+  }
+  return r;
 }
 
 export function rollout(start: GameState, reg: Registry, me: PlayerId, rand: () => number, horizon: number, w: RewardWeights): number {

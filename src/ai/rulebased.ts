@@ -9,7 +9,7 @@ import { FAIR, type InfoPolicy } from '../engine/view';
 import { determinize } from './determinize';
 import { choosePlayLearned } from './l1learn';
 import { L1_DEFAULT, withL1, type L1Params } from './l1params';
-import { evaluate, RULE_WEIGHTS } from './eval';
+import { evaluate, RULE_WEIGHTS, type EvalWeights } from './eval';
 import { spellNeedsOpponentCreature } from './spellTargets';
 import type { Agent, AgentCtx } from './types';
 
@@ -198,7 +198,7 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
 }
 
 /** 効果の選択: 実際に1手進めてみて、評価が最も高いものを選ぶ */
-function chooseAnswer(view: GameState, legalAll: Action[], ctx: AgentCtx, o: RuleOpts): Action {
+function chooseAnswer(view: GameState, legalAll: Action[], ctx: AgentCtx, o: RuleOpts, w: EvalWeights): Action {
   let legal = legalAll;
   if (legal.length === 1) return legal[0];
   const me = view.pending!.player;
@@ -212,8 +212,6 @@ function chooseAnswer(view: GameState, legalAll: Action[], ctx: AgentCtx, o: Rul
     if (use.length > 0) legal = use;
     if (legal.length === 1) return legal[0];
   }
-  const pr = withL1(o.params);
-  const w = pr.ansMana === RULE_WEIGHTS.mana ? RULE_WEIGHTS : { ...RULE_WEIGHTS, mana: pr.ansMana };
   const det = determinize(view, me, { rand: ctx.rand, reg: ctx.reg, policy: o.policy ?? FAIR, candidateDecks: o.candidateDecks });
   let best = legal[0];
   let bs = -Infinity;
@@ -243,6 +241,8 @@ function chooseAnswer(view: GameState, legalAll: Action[], ctx: AgentCtx, o: Rul
 
 export function makeRuleBased(o: RuleOpts = {}): Agent {
   const params = withL1(o.params);
+  // 効果の選択を評価する重み(マナの重みだけ、調整値で差し替える)。作成時に 1 回だけ作る
+  const answerWeights: EvalWeights = params.ansMana === RULE_WEIGHTS.mana ? RULE_WEIGHTS : { ...RULE_WEIGHTS, mana: params.ansMana };
   return {
     name: 'ルールベース',
     policy: o.policy ?? FAIR,
@@ -252,7 +252,7 @@ export function makeRuleBased(o: RuleOpts = {}): Agent {
       if (legal.length === 1) return legal[0];
       const p = view.pending!;
       if (p.why === 'turnAction') return chooseTurnAction(view, legal, ctx, params);
-      return chooseAnswer(view, legal, ctx, o);
+      return chooseAnswer(view, legal, ctx, o, answerWeights);
     },
   };
 }
