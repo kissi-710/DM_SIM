@@ -1,20 +1,23 @@
 // 対戦画面: 盤面・待機プール・因果ツリーのログ・入力ウィジェット・操作ボタン。
+// カード詳細(CardDetail)・待機中の能力/ログ(PoolPanel / LogPanel)は別ファイルに分けた。他の画面からは、従来どおりここから import できる。
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { costOf, effectsOnPerm, hasKeyword, powerOf, type KwName } from '../engine/derive';
-import { entryLabel, payChoice, planPlay } from '../engine/procs';
+import { payChoice } from '../engine/procs';
 import { mkCtx, permByPid } from '../engine/state';
-import type { Action, GameState, PlayerId } from '../engine/types';
+import type { Action, Ev, PlayerId } from '../engine/types';
 import { Board, buildDropMap, selectedActions } from './Board';
-import { CardView, civGradient } from './CardView';
-import { buildLogTree, cardName, CIV_NAME, isConcealed, recentFeed, reg, untilLabel, type LogNode } from './format';
+import { CardDetail } from './CardDetail';
+import { CardView } from './CardView';
+import { cardName, recentFeed, reg } from './format';
+import { PayDialog, RecordDialog } from './GameDialogs';
+import { HelpPanel, TIPS, WATCH_TIPS } from './HelpPanel';
+import { LogPanel, PoolPanel } from './SidePanels';
 import { endTurnWarning } from './endTurn';
 import { whyUnplayable } from './unplayable';
 import { Kbd } from './Kbd';
-import { digitOf, KEY, keyToken, SHORTCUTS } from './keymap';
-import { InputWidget, PaymentWidget } from './Widgets';
-import { parseRecord, saveRecord } from './record';
-import { makeRecord, type GameSetup, type Session, useGame } from './useGame';
-import { downloadText, loadJson, saveJson } from './util';
+import { digitOf, KEY, keyToken } from './keymap';
+import { InputWidget } from './Widgets';
+import { makeRecord, type GameSetup, useGame } from './useGame';
+import { loadJson, saveJson } from './util';
 import { Splitter, ResizablePanel, useRailWidth } from './Resizable';
 import { FxLayer } from './FxLayer';
 import { FxAttack } from './FxAttack';
@@ -23,205 +26,17 @@ import { useFxGate } from './useFxGate';
 import { FxTicker } from './FxTicker';
 import { cuesOf, drawCuesOf, FX_MODE_LABEL, FX_MODES, fxHoldMs, fxScale, loadFxMode, removalCuesOf, removalsOf, saveFxMode, STEP_LABEL, type FxMode } from './fx';
 
-/** reveal: 本人にも見えないカード(シールドなど)を見せる(練習用の「自分のシールドを見る」) */
-export function CardDetail({ s, uid, reveal = false }: { s: GameState; uid: number | null; reveal?: boolean }) {
-  if (uid !== null && s.cards[uid] && (s.cards[uid].defId === '?' || (!reveal && isConcealed(s, uid)))) {
-    return <div className="muted">非公開のカード</div>;
-  }
-  if (uid === null || !s.cards[uid]) {
-    return <div className="muted">カードにマウスを乗せると詳細を表示</div>;
-  }
-  const c = s.cards[uid];
-  const def = reg.defs[c.defId];
-  return (
-    <div className="col">
-      <strong>{def.name}</strong>
-      {def.faces.map((f, i) => (
-        <div key={i} className="panel" style={{ padding: 6 }}>
-          <div className="row" style={{ gap: 6 }}>
-            <span className="tag">{f.type === 'spell' ? '呪文' : f.type === 'evolution' ? '進化' : f.type === 'smaxEvolution' ? 'S-MAX進化' : 'クリーチャー'}</span>
-            <span className="tag">コスト {f.cost}</span>
-            {f.power !== undefined && <span className="tag">パワー {f.power}</span>}
-            <span style={{ width: 60, height: 8, background: civGradient(f.civs), borderRadius: 4, display: 'inline-block' }} title={f.civs.map((x) => CIV_NAME[x]).join('・')} />
-          </div>
-          <div className="muted" style={{ fontSize: 12 }}>
-            {f.civs.map((x) => CIV_NAME[x]).join('・')}
-            {f.races?.length ? ` / ${f.races.join('・')}` : ''}
-          </div>
-        </div>
-      ))}
-      <div style={{ fontSize: 12.5 }}>{def.text}</div>
-      <Derived s={s} uid={uid} />
-    </div>
-  );
-}
-
-const KW_LABEL: Record<string, string> = {
-  blocker: 'ブロッカー',
-  speedAttacker: 'スピードアタッカー',
-  machFighter: 'マッハファイター',
-  shieldTrigger: 'S・トリガー',
-  justDiver: 'ジャストダイバー',
-  exLife: 'EXライフ',
-};
-const EFFECT_LABEL: Record<string, string> = {
-  cannotAttack: '攻撃できない',
-  cannotBeChosen: '選ばれない',
-  cannotBeAttacked: '攻撃されない',
-  mustBlock: 'ブロックしなければならない',
-};
-
-/** 現在のコスト・パワー・付与された能力(画像なしなので、全文と一緒に派生値を出す) */
-function Derived({ s, uid }: { s: GameState; uid: number }) {
-  const c = mkCtx(s, reg);
-  const card = s.cards[uid];
-  const lines: string[] = [];
-  if (card.zone === 'battle') {
-    const pm = permByPid(s, card.pid);
-    if (pm && pm.perm.cards[0] === uid) {
-      lines.push(`現在のパワー: ${powerOf(c, pm.perm)}`);
-      const kws = (['blocker', 'speedAttacker', 'machFighter', 'shieldTrigger', 'justDiver', 'exLife'] as KwName[]).filter((k) => hasKeyword(c, pm.perm, k));
-      if (kws.length) lines.push('持っている能力: ' + kws.map((k) => KW_LABEL[k]).join('、'));
-      for (const e of effectsOnPerm(c, pm.perm.pid)) {
-        if (e.mod.kind === 'powerAdd') lines.push(`パワー ${e.mod.n > 0 ? '+' : ''}${e.mod.n}(${e.until.kind === 'endOfTurn' ? 'このターン中' : '次の自分のターンのはじめまで'})`);
-        else if (e.mod.kind === 'grant') lines.push(`${KW_LABEL[e.mod.keyword] ?? e.mod.keyword} を得ている`);
-        else if (e.mod.kind === 'cannotBeChosen' || e.mod.kind === 'cannotBeAttacked') lines.push(`🛡 ${EFFECT_LABEL[e.mod.kind]}(${untilLabel(e.until)})`);
-        else lines.push(EFFECT_LABEL[e.mod.kind] ?? e.mod.kind);
-      }
-      lines.push(`${pm.perm.tapped ? 'タップ' : 'アンタップ'}状態${pm.perm.sick ? '(召喚酔い)' : ''}${pm.perm.cards.length > 1 ? ' / 進化元 ' + (pm.perm.cards.length - 1) + '枚' : ''}`);
-    }
-  } else if (card.zone === 'hand' || card.zone === 'mana' || card.zone === 'grave') {
-    const def = reg.defs[card.defId];
-    def.faces.forEach((f, i) => {
-      const now = costOf(c, uid, i, {});
-      lines.push(`${def.faces.length > 1 ? f.name + ': ' : ''}現在のコスト ${now}${now !== f.cost ? `(表記 ${f.cost})` : ''}`);
-    });
-  }
-  if (lines.length === 0) return null;
-  return (
-    <div className="panel" style={{ padding: 6, fontSize: 12.5 }}>
-      {lines.map((l, i) => (
-        <div key={i}>{l}</div>
-      ))}
-    </div>
-  );
-}
-
-function LogTree({ nodes, depth = 0 }: { nodes: LogNode[]; depth?: number }) {
-  return (
-    <>
-      {nodes.map((n) => (
-        <div key={n.id} className={depth > 0 ? 'log-node' : ''}>
-          <div className={n.heading ? 'log-heading' : 'log-line'}>
-            {n.tag && <span className={'tag' + (n.tag === '自動' ? ' auto' : '')}>{n.tag}</span>} {n.text}
-          </div>
-          {n.children.length > 0 && <LogTree nodes={n.children} depth={depth + 1} />}
-        </div>
-      ))}
-    </>
-  );
-}
-
-export function PoolPanel({ s }: { s: GameState }) {
-  const c = mkCtx(s, reg);
-  const resolving = s.cont.filter((f) => f.kind === 'effect').slice(-1)[0];
-  return (
-    <div className="box">
-      <h3>待機中の能力({s.pool.length})</h3>
-      {resolving && resolving.kind === 'effect' && (
-        <div className="pool-item" style={{ borderLeft: '3px solid var(--good)' }}>
-          解決中: {reg.defs[resolving.lki.defId]?.name}
-        </div>
-      )}
-      {s.pool.length === 0 && !resolving && <div className="muted">なし</div>}
-      {s.pool.map((e) => (
-        <div key={e.id} className={'pool-item' + (e.stLayer ? ' st' : '')}>
-          {entryLabel(c, e)}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function LogPanel({ s, log, me }: { s: GameState; log: Session['log']; me: number | null }) {
-  const nodes = useMemo(() => buildLogTree(s, log.slice(-500), me), [s, log, me]);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [log.length]);
-  return (
-    <div className="box" style={{ flex: 1, minHeight: 120, display: 'flex', flexDirection: 'column' }}>
-      <h3>対戦ログ(因果ツリー)</h3>
-      <div ref={ref} style={{ overflow: 'auto', flex: 1 }}>
-        <LogTree nodes={nodes} />
-      </div>
-    </div>
-  );
-}
-
 /** 質問が出てからこの間は、肯定のキー(Enter・Space・Y)を受け付けない(前の Enter の持ち越しで「はい」にならないように) */
 const ASK_GUARD_MS = 250;
 
-const TIPS = [
-  'カードをクリックすると操作を表示。ドラッグでも操作できる。',
-  '矢印キーでカードを選び、数字キーで操作を選ぶ。',
-  'E でターン終了、M でマナチャージを飛ばす。質問は Enter で決定、Esc で取り消し。',
-  'カードにマウスを乗せると、現在のコストとパワーを表示。',
-  '手札が増えたら横スクロール(Shift+ホイール)。',
-  'マナの払い方を選ぶかは「⚙ 表示」で切り替えられる。',
-  '練習設定なら Z で1手戻せる。',
-  'ログの「自動」「手動」で、効果の解決と操作を区別できる。',
-];
+/** 直近の1手で動いたカードとして強調するイベント */
+const FLASH_EVENTS = ['moved', 'entered', 'cast', 'attackDeclared', 'evolved', 'blocked'];
 
-/** 観戦中に出す Tips(操作のヒントは出さない) */
-const WATCH_TIPS = [
-  'Space で一時停止。停止中は → で1手ずつ進む。',
-  '「速度」で CPU の手の間隔を変えられる(演出が有効だと、演出の長さが下限。最速にするには、設定の「演出」をなしにする)。',
-  '「⚙ 表示」で相手の手札を見られる。',
-  'ログの「自動」「手動」で、効果の解決と操作を区別できる。',
-];
-
-function HelpPanel({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal help" role="dialog" aria-modal="true" aria-label="操作ヘルプ" onClick={(e) => e.stopPropagation()}>
-        <h2>操作ヘルプ</h2>
-        <div className="help-grid">
-          <div>
-            <h3>ショートカットキー</h3>
-            <table>
-              <tbody>
-                {SHORTCUTS.map(([scene, key, what]) => (
-                  <tr key={scene + key}>
-                    <td className="muted" style={{ whiteSpace: 'nowrap' }}>
-                      {scene}
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <span className="kbd">{key}</span>
-                    </td>
-                    <td>{what}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div>
-            <h3>Tips</h3>
-            <ul className="tips">
-              {TIPS.map((x, i) => (
-                <li key={i}>{x}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-        <div className="row" style={{ marginTop: 8 }}>
-          <button className="primary" onClick={onClose}>
-            閉じる <Kbd k="Escape" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+/** イベントのうち match に合うものの、カード(uid)の集合 */
+function cardsOfEvents(events: Ev[], match: (e: Ev) => boolean): Set<number> {
+  const set = new Set<number>();
+  for (const e of events) if (match(e) && typeof e.card === 'number') set.add(e.card);
+  return set;
 }
 
 export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExit: () => void; onRematch: () => void }) {
@@ -245,13 +60,7 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   const [railW, setRailW] = useRailWidth();
   const stageRef = useRef<HTMLDivElement>(null);
   // 直近の1手で動いたカードを強調する(イベントの再生。design 9)
-  const flash = useMemo(() => {
-    const set = new Set<number>();
-    for (const e of session.last) {
-      if (['moved', 'entered', 'cast', 'attackDeclared', 'evolved', 'blocked'].includes(e.type) && typeof e.card === 'number') set.add(e.card);
-    }
-    return set;
-  }, [session.last]);
+  const flash = useMemo(() => cardsOfEvents(session.last, (e) => FLASH_EVENTS.includes(e.type)), [session.last]);
 
   // 演出: 直近の1手のイベントから作る(開始直後は、最初のターンの開始を見せる)。「一気に進める」中は出さない
   const fxActive = fxOn && !g.fast;
@@ -272,21 +81,12 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
   // 演出が無効なら待たない。待つのは表示だけで、質問そのもの(状態)は変わらない
   const inputHold = useMemo(() => (fxActive ? fxHoldMs(s, session.last, g.me, scale) : 0), [fxActive, session.last, scale]);
   const inputReady = useFxGate(inputHold, session.last);
-  const trumps = useMemo(() => {
-    const set = new Set<number>();
-    if (fxActive) for (const e of session.last) if (((e.type === 'entered' && e.via === 'revolutionChange') || (e.type === 'evolved' && e.via === 'invade')) && typeof e.card === 'number') set.add(e.card);
-    return set;
-  }, [fxActive, session.last]);
-  const blockers = useMemo(() => {
-    const set = new Set<number>();
-    if (fxActive) for (const e of session.last) if (e.type === 'blocked' && typeof e.card === 'number') set.add(e.card);
-    return set;
-  }, [fxActive, session.last]);
-  const attackers = useMemo(() => {
-    const set = new Set<number>();
-    if (fxActive) for (const e of session.last) if (e.type === 'attackDeclared' && typeof e.card === 'number') set.add(e.card);
-    return set;
-  }, [fxActive, session.last]);
+  const trumps = useMemo(
+    () => (fxActive ? cardsOfEvents(session.last, (e) => (e.type === 'entered' && e.via === 'revolutionChange') || (e.type === 'evolved' && e.via === 'invade')) : new Set<number>()),
+    [fxActive, session.last],
+  );
+  const blockers = useMemo(() => (fxActive ? cardsOfEvents(session.last, (e) => e.type === 'blocked') : new Set<number>()), [fxActive, session.last]);
+  const attackers = useMemo(() => (fxActive ? cardsOfEvents(session.last, (e) => e.type === 'attackDeclared') : new Set<number>()), [fxActive, session.last]);
   const shieldHit = useMemo(() => {
     const set = new Set<PlayerId>();
     if (fxActive) for (const e of session.last) if (e.type === 'shieldBroken') set.add(e.owner as PlayerId);
@@ -988,84 +788,30 @@ export function GameView({ setup, onExit, onRematch }: { setup: GameSetup; onExi
         </div>
       )}
       {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
-      {payFor &&
-        (() => {
-          const a = payFor.action;
-          const me = g.me ?? 0;
-          const ctx = mkCtx(s, reg);
-          const base = planPlay(ctx, me, a.uid, a.from ?? 'hand', a.face ?? 0, a.extra, false);
-          const mana = s.players[me].mana.filter((u) => !s.cards[u].tapped && u !== a.uid);
-          return (
-            <div className="modal-back" onClick={() => setPayFor(null)}>
-              <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-                <h2>タップするマナを選ぶ</h2>
-                <p className="muted">
-                  {cardName(s, a.uid)} — {base.need}枚({base.civs.map((x) => CIV_NAME[x]).join('・')}を含む)。候補は自動で選択済み。
-                </p>
-                <PaymentWidget
-                  s={s}
-                  pending={{ id: 0, player: me, why: 'ack', input: null }}
-                  me={me}
-                  spec={{ shape: 'payment', need: base.need, mana }}
-                  initial={payFor.auto}
-                  onHover={setHover}
-                  onAnswer={(v) => {
-                    const pay = v as number[];
-                    const chk = planPlay(ctx, me, a.uid, a.from ?? 'hand', a.face ?? 0, { ...(a.extra ?? {}), pay }, false);
-                    if (!chk.ok) {
-                      setPayErr(chk.err ?? '支払えません');
-                      return;
-                    }
-                    setPayFor(null);
-                    g.perform({ ...a, extra: { ...(a.extra ?? {}), pay } });
-                  }}
-                />
-                {payErr && <div style={{ color: 'var(--bad)' }}>{payErr}</div>}
-                <div className="row" style={{ marginTop: 8 }}>
-                  <button
-                    data-key="a"
-                    onClick={() => {
-                      setPayFor(null);
-                      g.perform(a);
-                    }}
-                  >
-                    自動で払う <Kbd k={KEY.auto} />
-                  </button>
-                  <button data-key="c" onClick={() => setPayFor(null)}>
-                    キャンセル <Kbd k={KEY.cancel} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-      {recText !== null && (
-        <div className="modal-back" onClick={() => setRecText(null)}>
-          <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <h2>棋譜(シード・デッキ・行動列)</h2>
-            <p className="muted">この JSON を「棋譜の再生」で読み込むと再現できる。</p>
-            <textarea className="json" readOnly value={recText} onFocus={(e) => e.target.select()} />
-            <div className="row" style={{ marginTop: 8 }}>
-              <button className="primary" onClick={() => downloadText(`dm-sim-record-${setup.seed}.json`, recText)}>
-                ダウンロード <Kbd k="Enter" />
-              </button>
-              <button
-                onClick={() => {
-                  const c = parseRecord(recText);
-                  if (c.ok) saveRecord(c.rec);
-                  setRecText(null);
-                }}
-              >
-                ブラウザに保存
-              </button>
-              <button onClick={() => setRecText(null)}>閉じる</button>
-            </div>
-          </div>
-        </div>
+      {payFor && (
+        <PayDialog
+          s={s}
+          me={g.me ?? 0}
+          action={payFor.action}
+          auto={payFor.auto}
+          error={payErr}
+          onHover={setHover}
+          onError={setPayErr}
+          onPay={(pay) => {
+            setPayFor(null);
+            g.perform({ ...payFor.action, extra: { ...(payFor.action.extra ?? {}), pay } });
+          }}
+          onAuto={() => {
+            setPayFor(null);
+            g.perform(payFor.action);
+          }}
+          onCancel={() => setPayFor(null)}
+        />
       )}
+
+      {recText !== null && <RecordDialog seed={setup.seed} text={recText} onClose={() => setRecText(null)} />}
     </div>
   );
 }
 
-export { CardView };
+export { CardDetail, CardView, LogPanel, PoolPanel };
