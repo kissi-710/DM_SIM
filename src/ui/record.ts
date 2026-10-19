@@ -1,9 +1,8 @@
 // 試合の記録(棋譜)の形・版・検証・ブラウザへの保存(design 10)。画面(React)に依存しない純関数。
 import type { AgentSpec } from '../ai';
 import { CARD_DB } from '../cards';
-import type { Action, GameConfig, PlayerId } from '../engine/types';
+import { errorMessage, type Action, type GameConfig, type PlayerId } from '../engine/types';
 import { loadJson, saveJson } from './util';
-import { errorMessage } from '../engine/types';
 
 /**
  * 棋譜・自動保存の版。エンジンの変更で「同じシード・同じ行動列」の意味が変わった時に上げる。

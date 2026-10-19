@@ -1,8 +1,7 @@
 // 確率調査・パターン調査 CLI。
 //   npm run prob -- --deck maruru --goal cost7-t4 --trials 500 --maxNodes 3000
 //   npm run prob -- --deck maruru --goal mana5-t3 --mode patterns --trials 100 --top-n 5
-import { writeFileSync } from 'node:fs';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { CARD_DB, DECK_PRESETS, deckCards } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import { formatPatterns, formatProb, patternsToCsv, probToCsv } from '../sim/export';

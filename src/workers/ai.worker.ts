@@ -7,9 +7,8 @@ import { evalRound, setNativeRounds, type SearchEnv } from '../ai/mcts';
 import { PairedTree, setNativePairedRound, setNativeTree } from '../ai/tree';
 import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
-import type { Action } from '../engine/types';
+import { errorMessage, type Action } from '../engine/types';
 import { DmEngine } from '../wasm/dmEngine';
-import { errorMessage } from '../engine/types';
 
 export type AiWorkerIn =
   | { id: number; req: DecideReq }

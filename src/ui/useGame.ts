@@ -5,11 +5,10 @@ import { CARD_DB } from '../cards';
 import { createGame, legalActions, step } from '../engine/engine';
 import { loadRegistry } from '../engine/registry';
 import { hashSeed } from '../engine/state';
-import type { Action, Ev, GameConfig, GameState, PlayerId } from '../engine/types';
+import { errorMessage, type Action, type Ev, type GameConfig, type GameState, type PlayerId } from '../engine/types';
 import { AiCancelled, cancelAi, chooseWithWorker } from './aiClient';
 import { RECORD_VERSION, type GameRecord } from './record';
 import { clearAutosave, writeAutosave, type SaveStatus } from './autosave';
-import { errorMessage } from '../engine/types';
 import { cpuSeed, cpuWaitMs, fxHoldMs, fxScale, MIN_CPU_GAP_MS, type FxMode } from './fx';
 
 export type { GameRecord } from './record';

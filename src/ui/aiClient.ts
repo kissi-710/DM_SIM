@@ -1,7 +1,6 @@
 // AI Worker のクライアント。Worker が使えない環境では、その場で同期的に決定する。
 // モンテカルロ探索は、複数の Worker に探索のラウンドを分けて並列に評価する(結果は逐次の探索と同じ)。
-import { decide } from '../ai/decide';
-import type { DecideReq } from '../ai/decide';
+import { decide, type DecideReq } from '../ai/decide';
 import { canParallelize, decideParallel, poolDispatch } from '../ai/parallel';
 import type { RoundDispatch, SearchEnv } from '../ai/mcts';
 import type { AiWorkerIn, AiWorkerOut } from '../workers/ai.worker';
