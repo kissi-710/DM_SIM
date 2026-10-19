@@ -1,6 +1,6 @@
 // 状態の複製・乱数・ゾーン操作の下請け。
 import type { Registry } from './registry';
-import type { Civ, Ev, Frame, GameState, Permanent, PlayerId, PlayerZones, Snap } from './types';
+import type { Card, Civ, Ev, Frame, GameState, Permanent, PlayerId, PlayerZones, Snap } from './types';
 
 // ───────────────────────── 実行コンテキスト ─────────────────────────
 
@@ -67,6 +67,11 @@ export function cloneJson<T>(v: T): T {
   return o as T;
 }
 
+/** カードの複製。フィールドを1つずつ書く(スプレッドの約2倍速い。Card にフィールドを足したら、ここも足す。型検査が漏れを知らせる) */
+function cloneCard(c: Card): Card {
+  return { defId: c.defId, owner: c.owner, zone: c.zone, ep: c.ep, tapped: c.tapped, ex: c.ex, exPid: c.exPid, pid: c.pid, face: c.face };
+}
+
 function clonePlayer(p: PlayerZones): PlayerZones {
   return {
     deck: p.deck.slice(),
@@ -87,7 +92,7 @@ function cloneFrame(f: Frame): Frame {
 export function cloneState(s: GameState): GameState {
   return {
     ...s,
-    cards: s.cards.map((c) => ({ ...c })),
+    cards: s.cards.map(cloneCard),
     players: [clonePlayer(s.players[0]), clonePlayer(s.players[1])],
     limbo: s.limbo.slice(),
     cont: s.cont.map(cloneFrame),
