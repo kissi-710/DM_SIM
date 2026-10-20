@@ -141,7 +141,7 @@ export function revealOf(defId: string | undefined): FxReveal | undefined {
     }
   }
   const f = def.faces[fi];
-  const type = f.type === 'spell' ? '呪文' : f.type === 'evolution' ? '進化' : f.type === 'smaxEvolution' ? 'S-MAX進化' : 'クリーチャー';
+  const type = f.type === 'spell' ? '呪文' : f.type === 'castle' ? 'G城' : f.type === 'evolution' ? '進化' : f.type === 'smaxEvolution' ? 'S-MAX進化' : 'クリーチャー';
   return { name: f.name ?? def.name, civs: f.civs, cost: String(f.cost), power: f.power, type, text: def.text ?? '' };
 }
 

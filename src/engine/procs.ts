@@ -67,7 +67,7 @@ export interface PlayPlan {
   ok: boolean;
   err?: string;
   face: number;
-  kind: 'summon' | 'cast';
+  kind: 'summon' | 'cast' | 'castle';
   cost: number;
   need: number;
   civs: Civ[];
@@ -95,7 +95,7 @@ export function planPlay(
   const face = def.faces[faceIdx];
   if (!face) return fail('面がありません');
   const info = c.reg.getInfo(card.defId, faceIdx);
-  const kind = face.type === 'spell' ? 'cast' : 'summon';
+  const kind = face.type === 'spell' ? 'cast' : face.type === 'castle' ? 'castle' : 'summon';
   let after: 'deckBottom' | null = null;
   if (from !== 'hand' && !free) {
     const perm = info.permissions.find((p) => p.from === from && p.play === kind);
@@ -358,6 +358,16 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         s.batchNo++;
         collectBatch(c, evs);
         s.dirtySba = true;
+        f.stage = 3;
+        return;
+      }
+      if (p.kind === 'castle') {
+        // G城の実行: 呪文を唱えたことにはならない。表向きのシールドとして置く(シールドゾーンに置かれた時の誘発を集める)
+        emit(c, 'executed', { card: uid, owner, free: p.free, paid: p.paid, cost: p.cost, face: p.face, from: v.fromZone });
+        const evx = c.out[c.out.length - 1];
+        s.batchNo++;
+        collectBatch(c, [evx]);
+        moveCards(c, [uid], { to: 'shield', cause: 'castle', up: true, noReplace: true });
         f.stage = 3;
         return;
       }

@@ -69,7 +69,9 @@ export function cloneJson<T>(v: T): T {
 
 /** カードの複製。フィールドを1つずつ書く(スプレッドの約2倍速い。Card にフィールドを足したら、ここも足す。型検査が漏れを知らせる) */
 function cloneCard(c: Card): Card {
-  return { defId: c.defId, owner: c.owner, zone: c.zone, ep: c.ep, tapped: c.tapped, ex: c.ex, exPid: c.exPid, pid: c.pid, face: c.face };
+  const o: Card = { defId: c.defId, owner: c.owner, zone: c.zone, ep: c.ep, tapped: c.tapped, ex: c.ex, exPid: c.exPid, pid: c.pid, face: c.face };
+  if (c.up) o.up = true; // 表向きのシールド(G城)。ふつうは無い
+  return o;
 }
 
 function clonePlayer(p: PlayerZones): PlayerZones {

@@ -17,7 +17,7 @@ import {
 } from './ops';
 import type { Ctx } from './state';
 import { nextId, opponentOf, permByPid, rngInt, shuffleInPlace, snapOf } from './state';
-import type { ContEffect, EffectFrame, EffectMod, Ev, InputSpec, ObjRef, PlayerId } from './types';
+import { type ContEffect, type EffectFrame, type EffectMod, type Ev, type InputSpec, isCreatureType, type ObjRef, type PlayerId } from './types';
 
 // ───────────────────────── コンテキスト ─────────────────────────
 
@@ -260,7 +260,7 @@ export function interchangeable(c: Ctx, f: EffectFrame, cand: number[]): boolean
   for (const u of cand) {
     const x = s.cards[u];
     if (x.defId !== a.defId || x.zone !== a.zone || x.owner !== a.owner || x.face !== a.face) return false;
-    if (x.tapped !== a.tapped || x.ex !== a.ex || (x.ex && x.exPid !== a.exPid)) return false;
+    if (x.tapped !== a.tapped || x.ex !== a.ex || (x.ex && x.exPid !== a.exPid) || !!x.up !== !!a.up) return false;
   }
   const refs = referencedIds(c, f);
   if (cand.some((u) => refs.has(u))) return false;
@@ -403,7 +403,7 @@ function playerOf(f: EffectFrame, who: string | undefined): PlayerId {
 /** 創造面(クリーチャー面)のインデックス。呪文のみなら -1 */
 function creatureFace(c: Ctx, uid: number): number {
   const def = c.reg.defs[c.s.cards[uid].defId];
-  return def.faces.findIndex((x) => x.type !== 'spell');
+  return def.faces.findIndex((x) => isCreatureType(x.type));
 }
 function spellFace(c: Ctx, uid: number): number {
   const def = c.reg.defs[c.s.cards[uid].defId];
@@ -592,7 +592,7 @@ function actPut(c: Ctx, f: EffectFrame, cc: CC, a: any, key: string): void {
     if (face.type === 'evolution') continue; // 進化元がないので出せない
     if (key === 'summon' && !canSummon(c, s.cards[u].owner, face.cost)) continue; // 召喚できない効果を受けている
     const r = enterBattle(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0 }, evs);
-    entered.push({ uid: u, ep: r.ep });
+    if (r.to === 'battle') entered.push({ uid: u, ep: r.ep }); // G城の置換でマナゾーンに置かれたものは、出ていない
   }
   if (a.as) f.vars[a.as] = entered;
   s.batchNo++;
@@ -687,7 +687,8 @@ function actRevolutionChange(c: Ctx, f: EffectFrame, cc: CC, _a: any, _key: stri
   if (!res[0]?.moved) return; // 置換されて離れなかった(EXライフなど): 入れ替わらない
   const evs: Ev[] = [];
   enterBattle(c, uid, { to: 'battle', cause: 'revolutionChange', via: 'revolutionChange', face: fi, tapped: true, paid: 0 }, evs);
-  fr.vars.pid = s.cards[uid].pid;
+  // G城の置換でマナゾーンに置かれた時は、入れ替わらない(攻撃していたクリーチャーは手札に戻った後で、攻撃は終わる)
+  if (s.cards[uid].zone === 'battle') fr.vars.pid = s.cards[uid].pid;
   s.batchNo++;
   collectBatch(c, evs);
   s.dirtySba = true;

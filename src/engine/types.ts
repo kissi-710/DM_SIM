@@ -21,7 +21,11 @@ export function errorMessage(e: unknown): string {
 
 import type { Ability, Cond } from './ast';
 
-export type FaceType = 'creature' | 'spell' | 'evolution' | 'smaxEvolution';
+/** castle = G城(実行すると、表向きのシールドになるカード。クリーチャーでも呪文でもない) */
+export type FaceType = 'creature' | 'spell' | 'evolution' | 'smaxEvolution' | 'castle';
+
+/** クリーチャーとして出る種類か(呪文でも城でもない) */
+export const isCreatureType = (t: FaceType): boolean => t === 'creature' || t === 'evolution' || t === 'smaxEvolution';
 
 export interface Face {
   name: string;
@@ -56,6 +60,8 @@ export interface Card {
   tapped: boolean;
   /** EXライフのシールドか */
   ex: boolean;
+  /** 表向きのシールドか(G城。シールドゾーンにある間だけ true。無ければ裏向き) */
+  up?: boolean;
   exPid: number;
   /** バトルゾーンでの山の識別子(それ以外は -1) */
   pid: number;

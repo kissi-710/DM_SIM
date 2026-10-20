@@ -2,7 +2,7 @@
 // 規約: 入力待ち(ask)は、状態を変更する前に行う。再実行しても二重に変更されない。
 import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
-import { activeStatics, battlePower, charsLite, hasKeyword, infoOf, manaCivs, payNeed } from './derive';
+import { activeStatics, battlePower, charsLite, hasKeyword, infoOf, manaCivs, payNeed, shieldStatic } from './derive';
 import type { Ctx } from './state';
 import { nextId, opponentOf, permByPid, shuffleInPlace, snapOf } from './state';
 import {
@@ -191,6 +191,8 @@ export interface MoveOpts {
   face?: number;
   /** 進化・侵略などで下に入るカードを一緒に動かさない */
   alone?: boolean;
+  /** シールドゾーンへ表向きで置く(G城の実行) */
+  up?: boolean;
 }
 
 export interface MoveResult {
@@ -283,7 +285,10 @@ export function moveCards(c: Ctx, uids: number[], opts: MoveOpts): MoveResult[] 
   const proposals: Proposal[] = [];
   for (const uid of uids) {
     const card = s.cards[uid];
-    proposals.push({ uid, from: card.zone, to: opts.to, cause: opts.cause, pos: opts.pos });
+    // 表向きのシールド(G城)がシールドゾーンを離れる時は、かわりに墓地に置く(手札に加わらない)
+    if (card.zone === 'shield' && card.up && opts.to !== 'shield' && opts.to !== 'grave') {
+      proposals.push({ uid, from: card.zone, to: 'grave', cause: 'replaced', pos: opts.pos, replaced: true });
+    } else proposals.push({ uid, from: card.zone, to: opts.to, cause: opts.cause, pos: opts.pos });
   }
   // フェーズA: 置換の判定(状態を変更しない)
   if (!opts.noReplace) {
@@ -329,7 +334,8 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
   const card = s.cards[uid];
   const from = card.zone;
   const snap = snapOf(c, uid);
-  const kind = charsLite(c, uid, card.zone === 'battle' || card.zone === 'limbo' ? card.face : -1).type === 'spell' ? 'spell' : 'creature';
+  const faceType = charsLite(c, uid, card.zone === 'battle' || card.zone === 'limbo' ? card.face : -1).type;
+  const kind = faceType === 'spell' ? 'spell' : faceType === 'castle' ? 'castle' : 'creature';
   const wasEx = card.ex;
   // 山(進化元)を一緒に動かす
   let under: number[] = [];
@@ -348,6 +354,8 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
   card.tapped = false;
   card.ex = false;
   card.exPid = -1;
+  if (card.up) delete card.up;
+  if (to === 'shield' && opts.up) card.up = true;
   if (to === 'mana') card.tapped = entersManaTapped(c, uid, opts);
   card.face = 0;
   placeInZone(c, uid, to, pos);
@@ -362,6 +370,7 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
       ex: wasEx,
       lki: snap,
       via: opts.via,
+      ...(card.up ? { up: true } : {}),
     }),
   );
   for (const u of under) {
@@ -390,6 +399,10 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   const snap = snapOf(c, uid);
   const faceIdx = opts.face ?? card.face ?? 0;
   const via = opts.via ?? 'effect';
+  // 相手の表向きのシールド(G城)がある間、召喚以外の方法で出る時は、かわりにマナゾーンに置く
+  if (from !== 'battle' && via !== 'summon' && shieldStatic(c, opponentOf(owner), 'nonSummonEntryToMana')) {
+    return doMove(c, uid, 'mana', 'replaced', undefined, evs, { ...opts, to: 'mana' });
+  }
   removeFromZone(c, uid);
   card.zone = 'battle';
   card.ep++;

@@ -1,6 +1,6 @@
 // カードDBの検証・正規化・索引化・能力のコンパイル(spec 4.3 / effects 4.3, 6)。
 import type { Ability, ActDef, Cond, StepDef, TriggerSpec } from './ast';
-import type { AbilityRef, CardDB, CardDef, Face } from './types';
+import { type AbilityRef, type CardDB, type CardDef, type Face, isCreatureType } from './types';
 
 // ───────────────────────── 命令(バイトコード) ─────────────────────────
 
@@ -217,10 +217,10 @@ export function validateCardDb(db: CardDB): string[] {
     if (!def.faces?.length) errs.push(`${w0}: faces がありません`);
     def.faces?.forEach((f, fi) => {
       const w = `${w0}面${fi}(${f.name})`;
-      if (!['creature', 'spell', 'evolution', 'smaxEvolution'].includes(f.type)) errs.push(`${w}: 未知の種類 ${f.type}`);
+      if (!['creature', 'spell', 'evolution', 'smaxEvolution', 'castle'].includes(f.type)) errs.push(`${w}: 未知の種類 ${f.type}`);
       if (typeof f.cost !== 'number') errs.push(`${w}: cost がありません`);
       if (!f.civs?.length) errs.push(`${w}: civs がありません`);
-      if (f.type !== 'spell' && typeof f.power !== 'number') errs.push(`${w}: power がありません`);
+      if (isCreatureType(f.type) && typeof f.power !== 'number') errs.push(`${w}: power がありません`);
       if (f.type === 'evolution' && !f.evolveFrom) errs.push(`${w}: 進化には evolveFrom が必要です`);
       f.abilities?.forEach((a, ai) => {
         const wa = `${w}能力${ai}`;

@@ -4,7 +4,7 @@ import { costOf, defaultPlayFace, manaCivs } from '../engine/derive';
 import { legalActions } from '../engine/engine';
 import type { Registry } from '../engine/registry';
 import { mkCtx } from '../engine/state';
-import type { Action, Civ, Ev, GameState } from '../engine/types';
+import { type Action, type Civ, type Ev, type GameState, isCreatureType } from '../engine/types';
 
 export interface CardMatcher {
   /** カード名(面の名前でも可)のどれか */
@@ -166,14 +166,9 @@ function matchCardRaw(reg: Registry, s: GameState, uid: number, m: CardMatcher, 
     const f = def.faces[fi];
     if (!f) return false;
     if (m.names?.length && !m.names.some((n) => nameMatches(def, f.name, n))) return false;
-    if (m.type) {
-      const isCreature = f.type !== 'spell';
-      if ((m.type === 'creature') !== isCreature) return false;
-    }
-    if (m.face) {
-      const isCreature = f.type !== 'spell';
-      if ((m.face === 'creature') !== isCreature) return false;
-    }
+    // 城(G城)は、クリーチャーでも呪文でもない
+    if (m.type && !(m.type === 'creature' ? isCreatureType(f.type) : f.type === 'spell')) return false;
+    if (m.face && !(m.face === 'creature' ? isCreatureType(f.type) : f.type === 'spell')) return false;
     if (m.civs?.length && !m.civs.some((c) => f.civs.includes(c))) return false;
     if (m.cost) {
       const cost = m.costBasis === 'effective' && effCost !== undefined && faceIdx !== undefined ? effCost : f.cost;

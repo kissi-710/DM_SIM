@@ -94,4 +94,26 @@ export const BATTLE_TEST_CARDS: CardDef[] = [
     ],
     { power: 6000 },
   ),
+  // G城(実行すると表向きのシールドになる)。表向きでシールドに置かれた時、山札の上1枚をタップしてマナに置く。表向きの間、相手の召喚以外の出現をマナに置換
+  {
+    id: 'tc-castle',
+    name: 'T城',
+    faces: [
+      {
+        name: 'T城',
+        type: 'castle',
+        cost: 3,
+        civs: ['nature'],
+        abilities: [
+          {
+            kind: 'trigger',
+            label: 'T:城が置かれた時',
+            spec: { on: { type: 'moved', to: 'shield', up: true }, subject: 'self', watch: ['shield'] },
+            steps: [{ op: 'act', act: { moveTop: { n: 1, to: 'mana', cause: 'boost', tapped: true } } }],
+          },
+          { kind: 'static', mod: { type: 'nonSummonEntryToMana' } },
+        ],
+      },
+    ],
+  } as unknown as CardDef,
 ];

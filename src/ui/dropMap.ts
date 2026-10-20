@@ -46,8 +46,8 @@ export function buildDropMap(s: GameState, legal: Action[]): Map<string, Drop[]>
       const def = reg.defs[s.cards[a.uid].defId];
       const fi = a.face ?? 0;
       const face = def.faces[fi];
-      const isSpell = face.type === 'spell';
-      let label = `${isSpell ? '唱える' : '召喚'}: ${face.name}`;
+      const verb = face.type === 'spell' ? '唱える' : face.type === 'castle' ? '実行' : '召喚';
+      let label = `${verb}: ${face.name}`;
       if (from === 'mana') label += '(マナゾーンから)';
       if (from === 'grave') label += '(墓地から)';
       if (a.extra?.onto !== undefined) {

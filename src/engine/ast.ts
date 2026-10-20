@@ -127,6 +127,8 @@ export type StaticMod =
   | { type: 'infinitePowerInBattle' }
   /** 相手の、cond に合うクリーチャーは、タップして出る(プチョヘンザ)。cond の $it = 出るクリーチャー */
   | { type: 'entersTapped'; cond: Cond }
+  /** シールドゾーンに表向きである間(G城)、相手のクリーチャーが召喚以外の方法で出る時、かわりにマナゾーンに置く */
+  | { type: 'nonSummonEntryToMana' }
   /** 自分のクリーチャー(cond に合うもの)すべてにキーワードを与える。unblockable = ブロックされない */
   | { type: 'grantKeyword'; keyword: 'speedAttacker' | 'machFighter' | 'slayer' | 'unblockable'; cond: Cond };
 

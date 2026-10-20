@@ -4,7 +4,7 @@ import { evalCond, mkCC } from './cond';
 import type { FaceInfo } from './registry';
 import type { Ctx } from './state';
 import { opponentOf, permByPid } from './state';
-import type { Card, CardDef, Civ, ContEffect, Face, FaceType, PlayerId, Permanent } from './types';
+import { type Card, type CardDef, type Civ, type ContEffect, type Face, type FaceType, isCreatureType, type PlayerId, type Permanent } from './types';
 
 export interface Chars {
   face: Face;
@@ -63,7 +63,7 @@ export function charsOf(c: Ctx, uid: number, hint: number = -1): Chars {
 
 /** PLAY_CARD で面を省いた時に使う面(最初のクリーチャー面。呪文だけなら 0) */
 export function defaultPlayFace(def: CardDef): number {
-  const k = def.faces.findIndex((f) => f.type !== 'spell');
+  const k = def.faces.findIndex((f) => isCreatureType(f.type));
   return k >= 0 ? k : 0;
 }
 
@@ -119,6 +119,24 @@ export function activeStatics(c: Ctx, modType?: StaticMod['type']): ActiveStatic
     }
   }
   return out;
+}
+
+/**
+ * プレイヤーの表向きのシールド(G城)が持つ常在型能力に、modType があるか。
+ * 城は、シールドゾーンに表向きである間だけ働く(バトルゾーンの常在型能力は activeStatics)。
+ */
+export function shieldStatic(c: Ctx, controller: PlayerId, modType: StaticMod['type']): boolean {
+  const s = c.s;
+  for (const uid of s.players[controller].shield) {
+    const card = s.cards[uid];
+    if (!card.up) continue;
+    for (const st of c.reg.getInfo(card.defId, 0).statics) {
+      if (st.ability.mod.type !== modType) continue;
+      if (st.ability.while && !evalCond(mkCC(c, controller, { self: uid }), st.ability.while)) continue;
+      return true;
+    }
+  }
+  return false;
 }
 
 // ───────────────────────── パワー・能力 ─────────────────────────

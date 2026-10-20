@@ -53,7 +53,7 @@ export function kindsOf(reg: Registry, defId: string): string[] {
   if (!def) return [];
   const out = new Set<string>();
   def.faces.forEach((f, fi) => {
-    out.add(f.type === 'spell' ? 'spell' : 'creature');
+    out.add(f.type === 'spell' ? 'spell' : f.type === 'castle' ? 'castle' : 'creature');
     const info = reg.getInfo(defId, fi);
     if (info.shieldTriggers.length > 0) out.add('shieldTrigger');
     if (info.blocker) out.add('blocker');
@@ -75,7 +75,8 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
   // 自分の隠れた領域(山札・シールドは本人にも見えない)
   const rv = policy.preset === 'partial' ? policy.reveal : undefined;
   if (!rv?.ownDeck) for (const u of v.players[player].deck) hide(u);
-  if (!rv?.ownShield) for (const u of v.players[player].shield) hide(u);
+  // 表向きのシールド(G城)は、両者に見えている
+  if (!rv?.ownShield) for (const u of v.players[player].shield) if (!v.cards[u].up) hide(u);
   // 相手の隠れた領域
   const oppHand = v.players[opp].hand.slice();
   let reveal = 0;
@@ -93,7 +94,7 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
   oppHand.forEach((u, i) => {
     if (i >= reveal) hide(u);
   });
-  if (!rv?.opponentShield) for (const u of v.players[opp].shield) hide(u);
+  if (!rv?.opponentShield) for (const u of v.players[opp].shield) if (!v.cards[u].up) hide(u);
   if (!rv?.opponentDeck) for (const u of v.players[opp].deck) hide(u);
   // 自分への質問で提示されたカードは見える(デドダムの上3枚など)
   const p = state.pending;

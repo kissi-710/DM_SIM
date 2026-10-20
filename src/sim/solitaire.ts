@@ -6,7 +6,7 @@ import { makeAgent, type AgentSpec } from '../ai';
 import { createGame, legalActions, registryOf, step } from '../engine/engine';
 import type { Registry } from '../engine/registry';
 import { hashSeed } from '../engine/state';
-import type { Action, CardDB, Ev, GameState } from '../engine/types';
+import { type Action, type CardDB, type Ev, type GameState, isCreatureType } from '../engine/types';
 import { FAIR, toPlayerView } from '../engine/view';
 import { FAR, goalDistance, goalHasNot, goalMaxTurn, GoalTracker, myTurnNo, nameMatches, type Goal } from './goal';
 import { deriveSeed } from '../engine/prng';
@@ -445,7 +445,7 @@ export function exactDrawProbability(reg: Registry, p: Pick<SolitaireParams, 'de
     const c = m;
     if (c.names?.length && !c.names.some((n) => def.faces.some((f) => nameMatches(def, f.name, n)))) return false;
     const f = def.faces[0];
-    if (c.type && (c.type === 'creature') !== (f.type !== 'spell')) return false;
+    if (c.type && !(c.type === 'creature' ? isCreatureType(f.type) : f.type === 'spell')) return false;
     if (c.civs?.length && !c.civs.some((x) => f.civs.includes(x))) return false;
     if (c.cost) {
       if (c.cost.eq !== undefined && f.cost !== c.cost.eq) return false;

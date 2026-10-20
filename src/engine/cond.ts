@@ -3,7 +3,7 @@ import type { Cond, Expr, Pattern, Selector } from './ast';
 import { canBeChosen, charsLite, charsOf, costBase, manaCivs } from './derive';
 import type { Ctx } from './state';
 import { opponentOf, permByPid } from './state';
-import type { Civ, Ev, PlayerId, Snap } from './types';
+import { type Civ, type Ev, isCreatureType, type PlayerId, type Snap } from './types';
 
 export interface CC {
   c: Ctx;
@@ -180,7 +180,7 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   }
   if ('powerLtSelf' in o) return cc.self != null && ch.power < charsOf(cc.c, cc.self).power;
   if ('type' in o) {
-    if (o.type === 'creature') return ch.type === 'creature' || ch.type === 'evolution' || ch.type === 'smaxEvolution';
+    if (o.type === 'creature') return isCreatureType(ch.type);
     return ch.type === 'spell';
   }
   if ('evolution' in o) {
@@ -254,11 +254,11 @@ function faceHint(cc: CC, uid: number, type: Selector['type']): number | null {
   if (card.zone === 'battle' || card.zone === 'limbo') {
     const f = def.faces[card.face] ?? def.faces[0];
     if (type === 'spell') return f.type === 'spell' ? card.face : null;
-    if (type === 'creature') return f.type !== 'spell' ? card.face : null;
+    if (type === 'creature') return isCreatureType(f.type) ? card.face : null;
     return card.face;
   }
   if (!type || type === 'card') return -1;
-  const idx = def.faces.findIndex((f) => (type === 'spell' ? f.type === 'spell' : f.type !== 'spell'));
+  const idx = def.faces.findIndex((f) => (type === 'spell' ? f.type === 'spell' : isCreatureType(f.type)));
   return idx < 0 ? null : idx;
 }
 
@@ -301,6 +301,7 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
   if (pat.step !== undefined && ev.step !== pat.step) return false;
   if (pat.paid !== undefined && ev.paid !== pat.paid) return false;
   if (pat.free !== undefined && !!ev.free !== pat.free) return false;
+  if (pat.up !== undefined && !!ev.up !== pat.up) return false;
   if (pat.causeType !== undefined && ev.cause?.type !== pat.causeType) return false;
   // abilityTriggered: その能力の持ち主が、トリガーの原因のイベントのカード自身(出たクリーチャー自身の能力)か。
   // 他のクリーチャーが出たことでトリガーした能力は含めない(オルゲイト: 公式 Q&A 46068。キーナリーの抑制と同じ範囲)
