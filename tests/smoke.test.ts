@@ -6,7 +6,7 @@ import type { CardDB } from '../src/engine/types';
 
 describe('スモーク', () => {
   it('全デッキが40枚で、全カードが読み込める', () => {
-    for (const id of ['maruru', 'zardy', 'lost-maruru', 'interstellar-maruru']) {
+    for (const id of ['maruru', 'zardy', 'lost-maruru', 'interstellar-maruru', 'zardy-rev5c']) {
       const d = deckCards(id);
       expect(d.length).toBe(40);
       expect(checkDeck(CARD_DB, d, true).ok).toBe(true);
@@ -16,10 +16,10 @@ describe('スモーク', () => {
     expect(Object.keys(loadRegistryFor().defs).length).toBe(Object.keys(CARD_DB).length + 1);
   });
 
-  it('デッキに含まれる異なるカードは33種', () => {
+  it('デッキに含まれる異なるカードは41種', () => {
     const ids = new Set<string>();
     for (const p of DECK_PRESETS) for (const [id] of p.list) ids.add(id);
-    expect(ids.size).toBe(33);
+    expect(ids.size).toBe(41);
     for (const id of ids) expect(CARD_DB[id]).toBeDefined();
   });
 

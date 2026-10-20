@@ -82,6 +82,17 @@ for (const [a, b, seed, k] of [
   ['interstellar-maruru', 'interstellar-maruru', 24, ['rule', 'random']],
   ['interstellar-maruru', 'interstellar-maruru', 25, ['random', 'random']],
   ['interstellar-maruru', 'interstellar-maruru', 26, ['random', 'random']],
+  // 革命5cザーディ(G城・効果バトル・革命チェンジ・ファイナル革命・タップして出る・召喚封じ)
+  ['zardy-rev5c', 'zardy-rev5c', 51, ['random', 'random']],
+  ['zardy-rev5c', 'zardy-rev5c', 52, ['rule', 'rule']],
+  ['zardy-rev5c', 'zardy-rev5c', 53, ['random', 'random']],
+  ['zardy-rev5c', 'maruru', 54, ['rule', 'rule']],
+  ['interstellar-maruru', 'zardy-rev5c', 55, ['random', 'random']],
+  ['zardy-rev5c', 'zardy-rev5c', 56, ['rule', 'random']],
+  ['zardy-rev5c', 'zardy-rev5c', 57, ['random', 'random']],
+  ['zardy-rev5c', 'zardy-rev5c', 58, ['random', 'rule']],
+  ['zardy-rev5c', 'zardy-rev5c', 59, ['random', 'random']],
+  ['zardy-rev5c', 'zardy-rev5c', 60, ['rule', 'rule']],
 ] as const) {
   games.push(play(a, b, seed, [k[0], k[1]]));
 }

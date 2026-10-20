@@ -143,6 +143,54 @@
   "ダイレクトアタック",
   1326037413
  ],
+ "random|maruru|zardy-rev5c|1": [
+  127,
+  3620706436,
+  444946138,
+  1,
+  32,
+  639,
+  -2094906900,
+  4234663366,
+  "山札切れ",
+  714234420
+ ],
+ "random|maruru|zardy-rev5c|2": [
+  105,
+  1450306170,
+  1350551636,
+  1,
+  25,
+  550,
+  176670993,
+  1392485341,
+  "ダイレクトアタック",
+  1085111497
+ ],
+ "random|maruru|zardy-rev5c|3": [
+  106,
+  3816632973,
+  4275022874,
+  1,
+  26,
+  518,
+  -831235558,
+  1580138080,
+  "ダイレクトアタック",
+  2705229790
+ ],
+ "random|maruru|zardy-rev5c|4": [
+  64,
+  271544365,
+  2738109680,
+  1,
+  18,
+  336,
+  -2030965700,
+  344800927,
+  "ダイレクトアタック",
+  2802028977
+ ],
  "random|maruru|lost-maruru|1": [
   96,
   2647504584,
@@ -334,6 +382,54 @@
   1986289800,
   "山札切れ",
   1419237750
+ ],
+ "random|interstellar-maruru|zardy-rev5c|1": [
+  66,
+  2477467655,
+  1149048475,
+  1,
+  21,
+  329,
+  -2030965703,
+  681714912,
+  "ダイレクトアタック",
+  2537864523
+ ],
+ "random|interstellar-maruru|zardy-rev5c|2": [
+  90,
+  1519616200,
+  2411974059,
+  1,
+  25,
+  463,
+  1632165924,
+  889380362,
+  "ダイレクトアタック",
+  991536555
+ ],
+ "random|interstellar-maruru|zardy-rev5c|3": [
+  112,
+  2426033033,
+  16597329,
+  1,
+  27,
+  568,
+  1568224728,
+  26271741,
+  "山札切れ",
+  2007645389
+ ],
+ "random|interstellar-maruru|zardy-rev5c|4": [
+  68,
+  3009158227,
+  2466547998,
+  1,
+  20,
+  340,
+  -2030965700,
+  3085007410,
+  "ダイレクトアタック",
+  1573025386
  ],
  "random|interstellar-maruru|lost-maruru|1": [
   124,
@@ -527,6 +623,54 @@
   "山札切れ",
   2862348615
  ],
+ "random|zardy|zardy-rev5c|1": [
+  97,
+  1479342996,
+  640774694,
+  1,
+  25,
+  475,
+  -199399890,
+  3457431297,
+  "ダイレクトアタック",
+  2879486650
+ ],
+ "random|zardy|zardy-rev5c|2": [
+  136,
+  307699385,
+  1575884012,
+  1,
+  31,
+  676,
+  -263341086,
+  451213652,
+  "ダイレクトアタック",
+  518696749
+ ],
+ "random|zardy|zardy-rev5c|3": [
+  111,
+  3975785527,
+  227200975,
+  0,
+  29,
+  573,
+  1632165925,
+  1433453513,
+  "ダイレクトアタック",
+  3266097422
+ ],
+ "random|zardy|zardy-rev5c|4": [
+  114,
+  3185374662,
+  1018353453,
+  0,
+  26,
+  625,
+  -2094906897,
+  2444226852,
+  "山札切れ",
+  103823023
+ ],
  "random|zardy|lost-maruru|1": [
   113,
   118840287,
@@ -574,6 +718,246 @@
   3667594604,
   "ダイレクトアタック",
   3126706136
+ ],
+ "random|zardy-rev5c|maruru|1": [
+  104,
+  3648109262,
+  3852643114,
+  0,
+  22,
+  553,
+  -1463071230,
+  781180434,
+  "ダイレクトアタック",
+  1050862217
+ ],
+ "random|zardy-rev5c|maruru|2": [
+  77,
+  1782152573,
+  2911870394,
+  1,
+  19,
+  402,
+  936389057,
+  1450903506,
+  "ダイレクトアタック",
+  777566993
+ ],
+ "random|zardy-rev5c|maruru|3": [
+  77,
+  3480645184,
+  2475873338,
+  1,
+  22,
+  410,
+  -2094906898,
+  2736106362,
+  "ダイレクトアタック",
+  1607089084
+ ],
+ "random|zardy-rev5c|maruru|4": [
+  106,
+  1872308479,
+  968673259,
+  0,
+  27,
+  611,
+  -831235557,
+  1370915023,
+  "ダイレクトアタック",
+  2415515246
+ ],
+ "random|zardy-rev5c|interstellar-maruru|1": [
+  69,
+  3152522089,
+  2665137691,
+  0,
+  18,
+  351,
+  -2030965703,
+  2070554188,
+  "ダイレクトアタック",
+  1211530907
+ ],
+ "random|zardy-rev5c|interstellar-maruru|2": [
+  77,
+  684310208,
+  1329734646,
+  0,
+  20,
+  400,
+  1632165924,
+  3847016206,
+  "ダイレクトアタック",
+  1597587850
+ ],
+ "random|zardy-rev5c|interstellar-maruru|3": [
+  114,
+  537395987,
+  2974600856,
+  0,
+  27,
+  590,
+  2136119201,
+  3864612135,
+  "ダイレクトアタック",
+  174707860
+ ],
+ "random|zardy-rev5c|interstellar-maruru|4": [
+  143,
+  2562677604,
+  3119799191,
+  0,
+  28,
+  752,
+  1568224729,
+  729590652,
+  "山札切れ",
+  2279090886
+ ],
+ "random|zardy-rev5c|zardy|1": [
+  123,
+  1464576796,
+  1590302887,
+  1,
+  28,
+  651,
+  368494583,
+  246471063,
+  "山札切れ",
+  453525536
+ ],
+ "random|zardy-rev5c|zardy|2": [
+  90,
+  2285101683,
+  2842008054,
+  1,
+  27,
+  450,
+  -831235559,
+  2219965432,
+  "ダイレクトアタック",
+  4088380942
+ ],
+ "random|zardy-rev5c|zardy|3": [
+  110,
+  432449860,
+  1985870952,
+  0,
+  25,
+  537,
+  -2030965701,
+  2145452862,
+  "ダイレクトアタック",
+  2823906823
+ ],
+ "random|zardy-rev5c|zardy|4": [
+  89,
+  3901725720,
+  688525995,
+  1,
+  26,
+  486,
+  -1463071227,
+  340892558,
+  "ダイレクトアタック",
+  1655163889
+ ],
+ "random|zardy-rev5c|zardy-rev5c|1": [
+  95,
+  781633272,
+  2095330623,
+  1,
+  25,
+  516,
+  -831235560,
+  23360062,
+  "ダイレクトアタック",
+  552125314
+ ],
+ "random|zardy-rev5c|zardy-rev5c|2": [
+  46,
+  1349396066,
+  38326363,
+  0,
+  16,
+  244,
+  1632165924,
+  3381990564,
+  "ダイレクトアタック",
+  99153938
+ ],
+ "random|zardy-rev5c|zardy-rev5c|3": [
+  130,
+  3993699183,
+  2861220877,
+  0,
+  29,
+  645,
+  -831235558,
+  4071472454,
+  "ダイレクトアタック",
+  1099700751
+ ],
+ "random|zardy-rev5c|zardy-rev5c|4": [
+  68,
+  1561055496,
+  1515773797,
+  0,
+  19,
+  358,
+  -1463071227,
+  3007170773,
+  "ダイレクトアタック",
+  1296227236
+ ],
+ "random|zardy-rev5c|lost-maruru|1": [
+  112,
+  1872554784,
+  2743142057,
+  1,
+  24,
+  570,
+  1568224726,
+  3807077579,
+  "山札切れ",
+  2350073732
+ ],
+ "random|zardy-rev5c|lost-maruru|2": [
+  110,
+  2418106327,
+  737820943,
+  0,
+  24,
+  560,
+  -1463071229,
+  825897026,
+  "ダイレクトアタック",
+  2683050131
+ ],
+ "random|zardy-rev5c|lost-maruru|3": [
+  133,
+  471491471,
+  1596712433,
+  0,
+  35,
+  679,
+  1632165925,
+  3035946768,
+  "ダイレクトアタック",
+  4059324376
+ ],
+ "random|zardy-rev5c|lost-maruru|4": [
+  141,
+  1409453189,
+  232564855,
+  1,
+  30,
+  774,
+  -327282281,
+  2656475465,
+  "ダイレクトアタック",
+  3591675131
  ],
  "random|lost-maruru|maruru|1": [
   94,
@@ -718,6 +1102,54 @@
   2245933825,
   "ダイレクトアタック",
   4201527204
+ ],
+ "random|lost-maruru|zardy-rev5c|1": [
+  120,
+  344631446,
+  787777088,
+  0,
+  30,
+  610,
+  -831235560,
+  2535501480,
+  "ダイレクトアタック",
+  1352608580
+ ],
+ "random|lost-maruru|zardy-rev5c|2": [
+  127,
+  1124730371,
+  3297658391,
+  0,
+  37,
+  671,
+  872447860,
+  2065926955,
+  "山札切れ",
+  1159757123
+ ],
+ "random|lost-maruru|zardy-rev5c|3": [
+  88,
+  4128685384,
+  3246891265,
+  0,
+  23,
+  437,
+  -2030965701,
+  3039224821,
+  "ダイレクトアタック",
+  3211678206
+ ],
+ "random|lost-maruru|zardy-rev5c|4": [
+  75,
+  2921596611,
+  1764489276,
+  0,
+  19,
+  387,
+  -2030965700,
+  527932883,
+  "ダイレクトアタック",
+  931179213
  ],
  "random|lost-maruru|lost-maruru|1": [
   90,
@@ -911,6 +1343,54 @@
   "ダイレクトアタック",
   2278809191
  ],
+ "rule|maruru|zardy-rev5c|1": [
+  41,
+  2481408193,
+  941231793,
+  0,
+  12,
+  236,
+  -1463071230,
+  3833586807,
+  "ダイレクトアタック",
+  377099700
+ ],
+ "rule|maruru|zardy-rev5c|2": [
+  51,
+  3928177882,
+  357042193,
+  0,
+  12,
+  312,
+  1000330254,
+  377756511,
+  "ダイレクトアタック",
+  1079290913
+ ],
+ "rule|maruru|zardy-rev5c|3": [
+  74,
+  1178364779,
+  3474968969,
+  0,
+  15,
+  403,
+  -1463071228,
+  2281014827,
+  "ダイレクトアタック",
+  3748294675
+ ],
+ "rule|maruru|zardy-rev5c|4": [
+  39,
+  3210713717,
+  144134608,
+  0,
+  9,
+  226,
+  -895176754,
+  1175411195,
+  "ダイレクトアタック",
+  618711387
+ ],
  "rule|maruru|lost-maruru|1": [
   46,
   280662152,
@@ -1102,6 +1582,54 @@
   1973325618,
   "ダイレクトアタック",
   2045676548
+ ],
+ "rule|interstellar-maruru|zardy-rev5c|1": [
+  31,
+  2978183071,
+  3552309221,
+  0,
+  10,
+  186,
+  1000330253,
+  3563393535,
+  "ダイレクトアタック",
+  3276236925
+ ],
+ "rule|interstellar-maruru|zardy-rev5c|2": [
+  50,
+  1060644581,
+  3834372525,
+  0,
+  12,
+  287,
+  -2030965702,
+  1957247000,
+  "ダイレクトアタック",
+  2864632483
+ ],
+ "rule|interstellar-maruru|zardy-rev5c|3": [
+  102,
+  4217288404,
+  3986649049,
+  0,
+  19,
+  604,
+  -1527012425,
+  110657559,
+  "ダイレクトアタック",
+  149675628
+ ],
+ "rule|interstellar-maruru|zardy-rev5c|4": [
+  71,
+  810426548,
+  1788589154,
+  1,
+  16,
+  415,
+  -831235557,
+  3174465800,
+  "ダイレクトアタック",
+  2054988032
  ],
  "rule|interstellar-maruru|lost-maruru|1": [
   85,
@@ -1295,6 +1823,54 @@
   "ダイレクトアタック",
   1925887140
  ],
+ "rule|zardy|zardy-rev5c|1": [
+  57,
+  3976269720,
+  3873497076,
+  1,
+  13,
+  347,
+  1632165923,
+  3207517588,
+  "ダイレクトアタック",
+  114132601
+ ],
+ "rule|zardy|zardy-rev5c|2": [
+  45,
+  1893004235,
+  3421629017,
+  0,
+  16,
+  262,
+  -2030965702,
+  536662445,
+  "ダイレクトアタック",
+  1655439758
+ ],
+ "rule|zardy|zardy-rev5c|3": [
+  68,
+  2939040766,
+  237894965,
+  0,
+  15,
+  387,
+  -831235558,
+  3749693917,
+  "ダイレクトアタック",
+  2524107946
+ ],
+ "rule|zardy|zardy-rev5c|4": [
+  59,
+  2871946431,
+  2431501200,
+  0,
+  15,
+  338,
+  1632165926,
+  1769017287,
+  "ダイレクトアタック",
+  758247253
+ ],
  "rule|zardy|lost-maruru|1": [
   46,
   365611225,
@@ -1342,6 +1918,246 @@
   1912582950,
   "ダイレクトアタック",
   4084262989
+ ],
+ "rule|zardy-rev5c|maruru|1": [
+  48,
+  4182575493,
+  3335151625,
+  1,
+  11,
+  280,
+  304553386,
+  628420370,
+  "ダイレクトアタック",
+  3655671075
+ ],
+ "rule|zardy-rev5c|maruru|2": [
+  47,
+  3938831963,
+  2175395466,
+  1,
+  11,
+  276,
+  -199399889,
+  3692776336,
+  "ダイレクトアタック",
+  1247275062
+ ],
+ "rule|zardy-rev5c|maruru|3": [
+  68,
+  361141526,
+  3130075501,
+  1,
+  16,
+  432,
+  1568224728,
+  1605919469,
+  "ダイレクトアタック",
+  1957385995
+ ],
+ "rule|zardy-rev5c|maruru|4": [
+  77,
+  1097739082,
+  1574398345,
+  0,
+  13,
+  462,
+  -1463071227,
+  4156367609,
+  "ダイレクトアタック",
+  2544698043
+ ],
+ "rule|zardy-rev5c|interstellar-maruru|1": [
+  41,
+  2123522097,
+  299762216,
+  0,
+  12,
+  250,
+  -327282284,
+  413656796,
+  "ダイレクトアタック",
+  612228048
+ ],
+ "rule|zardy-rev5c|interstellar-maruru|2": [
+  60,
+  3346959822,
+  2301689885,
+  1,
+  11,
+  368,
+  368494584,
+  1288351426,
+  "ダイレクトアタック",
+  2086417397
+ ],
+ "rule|zardy-rev5c|interstellar-maruru|3": [
+  63,
+  3219690258,
+  2808016706,
+  1,
+  14,
+  374,
+  1632165925,
+  2855553592,
+  "ダイレクトアタック",
+  3592266676
+ ],
+ "rule|zardy-rev5c|interstellar-maruru|4": [
+  61,
+  3654767968,
+  3453922297,
+  0,
+  11,
+  356,
+  1000330256,
+  3402405754,
+  "ダイレクトアタック",
+  3692439052
+ ],
+ "rule|zardy-rev5c|zardy|1": [
+  48,
+  4227005895,
+  3424980979,
+  0,
+  14,
+  289,
+  1000330253,
+  3036590373,
+  "ダイレクトアタック",
+  3179308229
+ ],
+ "rule|zardy-rev5c|zardy|2": [
+  48,
+  843816519,
+  1157405789,
+  1,
+  15,
+  281,
+  1632165924,
+  2715262420,
+  "ダイレクトアタック",
+  4125812096
+ ],
+ "rule|zardy-rev5c|zardy|3": [
+  50,
+  1302449160,
+  3468084953,
+  1,
+  14,
+  276,
+  -2030965701,
+  2553869817,
+  "ダイレクトアタック",
+  1589167578
+ ],
+ "rule|zardy-rev5c|zardy|4": [
+  70,
+  1103685272,
+  1722366886,
+  1,
+  14,
+  426,
+  -1463071227,
+  2331417337,
+  "ダイレクトアタック",
+  2654316633
+ ],
+ "rule|zardy-rev5c|zardy-rev5c|1": [
+  52,
+  4005429831,
+  1051739150,
+  1,
+  15,
+  301,
+  368494583,
+  2443262823,
+  "ダイレクトアタック",
+  290604406
+ ],
+ "rule|zardy-rev5c|zardy-rev5c|2": [
+  36,
+  662146267,
+  350770549,
+  0,
+  14,
+  212,
+  1632165924,
+  1133249960,
+  "ダイレクトアタック",
+  3332843752
+ ],
+ "rule|zardy-rev5c|zardy-rev5c|3": [
+  65,
+  2650973864,
+  3369540755,
+  1,
+  18,
+  360,
+  -2030965701,
+  3526857101,
+  "ダイレクトアタック",
+  3710937450
+ ],
+ "rule|zardy-rev5c|zardy-rev5c|4": [
+  44,
+  698864836,
+  3271473799,
+  0,
+  11,
+  258,
+  -2030965700,
+  2491584721,
+  "ダイレクトアタック",
+  3697994464
+ ],
+ "rule|zardy-rev5c|lost-maruru|1": [
+  52,
+  1822894710,
+  3197968223,
+  1,
+  11,
+  290,
+  -1527012427,
+  2181932990,
+  "ダイレクトアタック",
+  890859955
+ ],
+ "rule|zardy-rev5c|lost-maruru|2": [
+  80,
+  165455053,
+  4087550788,
+  1,
+  15,
+  457,
+  -1463071229,
+  3744171103,
+  "ダイレクトアタック",
+  585388243
+ ],
+ "rule|zardy-rev5c|lost-maruru|3": [
+  52,
+  1153601186,
+  322382016,
+  1,
+  12,
+  316,
+  1632165925,
+  1705584395,
+  "ダイレクトアタック",
+  379533394
+ ],
+ "rule|zardy-rev5c|lost-maruru|4": [
+  47,
+  3310836941,
+  584404566,
+  0,
+  9,
+  265,
+  -2030965700,
+  4228503194,
+  "ダイレクトアタック",
+  4026341879
  ],
  "rule|lost-maruru|maruru|1": [
   62,
@@ -1486,6 +2302,54 @@
   1782313081,
   "ダイレクトアタック",
   462051209
+ ],
+ "rule|lost-maruru|zardy-rev5c|1": [
+  59,
+  1448206772,
+  1267870532,
+  0,
+  12,
+  335,
+  -831235560,
+  2598958901,
+  "ダイレクトアタック",
+  1015055653
+ ],
+ "rule|lost-maruru|zardy-rev5c|2": [
+  56,
+  1422806739,
+  2416005180,
+  0,
+  12,
+  337,
+  1632165924,
+  1275258727,
+  "ダイレクトアタック",
+  2053482756
+ ],
+ "rule|lost-maruru|zardy-rev5c|3": [
+  64,
+  2965425984,
+  3481795064,
+  1,
+  14,
+  364,
+  368494585,
+  1082163943,
+  "ダイレクトアタック",
+  143438793
+ ],
+ "rule|lost-maruru|zardy-rev5c|4": [
+  49,
+  2600720969,
+  3640443210,
+  0,
+  9,
+  278,
+  1000330256,
+  1718230785,
+  "ダイレクトアタック",
+  4157736795
  ],
  "rule|lost-maruru|lost-maruru|1": [
   87,
@@ -2063,954 +2927,954 @@
  "legalfuzz|3": [
   "rule",
   "maruru",
-  "lost-maruru",
-  89,
-  4061264951
+  "zardy-rev5c",
+  75,
+  2800956530
  ],
  "legalfuzz|4": [
   "random",
-  "interstellar-maruru",
   "maruru",
-  133,
-  1295047716
+  "lost-maruru",
+  99,
+  3113892650
  ],
  "legalfuzz|5": [
   "rule",
   "interstellar-maruru",
-  "interstellar-maruru",
-  54,
-  3997602503
+  "maruru",
+  60,
+  1668515752
  ],
  "legalfuzz|6": [
   "random",
   "interstellar-maruru",
-  "zardy",
-  105,
-  919320521
+  "interstellar-maruru",
+  108,
+  533856477
  ],
  "legalfuzz|7": [
   "rule",
   "interstellar-maruru",
-  "lost-maruru",
-  61,
-  2442026665
+  "zardy",
+  71,
+  1414845753
  ],
  "legalfuzz|8": [
   "random",
-  "zardy",
-  "maruru",
-  93,
-  3887731622
+  "interstellar-maruru",
+  "zardy-rev5c",
+  68,
+  679971256
  ],
  "legalfuzz|9": [
   "rule",
-  "zardy",
   "interstellar-maruru",
-  65,
-  3628017334
+  "lost-maruru",
+  84,
+  4238364601
  ],
  "legalfuzz|10": [
   "random",
   "zardy",
-  "zardy",
-  103,
-  1336028331
+  "maruru",
+  134,
+  1702822939
  ],
  "legalfuzz|11": [
   "rule",
   "zardy",
-  "lost-maruru",
-  93,
-  505107744
+  "interstellar-maruru",
+  72,
+  201641169
  ],
  "legalfuzz|12": [
   "random",
-  "lost-maruru",
-  "maruru",
-  132,
-  1643991609
+  "zardy",
+  "zardy",
+  65,
+  3226195120
  ],
  "legalfuzz|13": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  56,
-  255799770
+  "zardy",
+  "zardy-rev5c",
+  45,
+  1830091943
  ],
  "legalfuzz|14": [
   "random",
-  "lost-maruru",
   "zardy",
+  "lost-maruru",
   94,
-  3431630675
+  2520948897
  ],
  "legalfuzz|15": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  78,
-  2141125938
+  "zardy-rev5c",
+  "maruru",
+  60,
+  2658352420
  ],
  "legalfuzz|16": [
   "random",
-  "maruru",
-  "maruru",
-  140,
-  1904739288
+  "zardy-rev5c",
+  "interstellar-maruru",
+  101,
+  3627989364
  ],
  "legalfuzz|17": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  44,
-  2653532456
+  "zardy-rev5c",
+  "zardy",
+  56,
+  3569828098
  ],
  "legalfuzz|18": [
   "random",
-  "maruru",
-  "zardy",
-  110,
-  2708986367
+  "zardy-rev5c",
+  "zardy-rev5c",
+  48,
+  856122706
  ],
  "legalfuzz|19": [
   "rule",
-  "maruru",
+  "zardy-rev5c",
   "lost-maruru",
-  66,
-  1822705021
+  76,
+  25065821
  ],
  "legalfuzz|20": [
   "random",
-  "interstellar-maruru",
+  "lost-maruru",
   "maruru",
   58,
-  3806486496
+  2732888813
  ],
  "legalfuzz|21": [
   "rule",
+  "lost-maruru",
   "interstellar-maruru",
-  "interstellar-maruru",
-  82,
-  307163810
+  48,
+  3826551405
  ],
  "legalfuzz|22": [
   "random",
-  "interstellar-maruru",
+  "lost-maruru",
   "zardy",
-  93,
-  1219815545
+  95,
+  3673022423
  ],
  "legalfuzz|23": [
   "rule",
-  "interstellar-maruru",
   "lost-maruru",
-  80,
-  4249991249
+  "zardy-rev5c",
+  36,
+  2800521486
  ],
  "legalfuzz|24": [
   "random",
-  "zardy",
-  "maruru",
-  64,
-  621476641
+  "lost-maruru",
+  "lost-maruru",
+  68,
+  226259100
  ],
  "legalfuzz|25": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  70,
-  4092761213
+  "maruru",
+  "maruru",
+  125,
+  3012629070
  ],
  "legalfuzz|26": [
   "random",
-  "zardy",
-  "zardy",
-  120,
-  3082223594
+  "maruru",
+  "interstellar-maruru",
+  82,
+  3475330020
  ],
  "legalfuzz|27": [
   "rule",
+  "maruru",
   "zardy",
-  "lost-maruru",
-  38,
-  857491209
+  67,
+  766918764
  ],
  "legalfuzz|28": [
   "random",
-  "lost-maruru",
   "maruru",
-  90,
-  2583813431
+  "zardy-rev5c",
+  100,
+  2095024571
  ],
  "legalfuzz|29": [
   "rule",
+  "maruru",
   "lost-maruru",
-  "interstellar-maruru",
-  74,
-  1654380648
+  58,
+  1303833961
  ],
  "legalfuzz|30": [
   "random",
-  "lost-maruru",
-  "zardy",
-  120,
-  2053654038
+  "interstellar-maruru",
+  "maruru",
+  48,
+  421693559
  ],
  "legalfuzz|31": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  82,
-  2389565238
+  "interstellar-maruru",
+  "interstellar-maruru",
+  80,
+  3913178520
  ],
  "legalfuzz|32": [
   "random",
-  "maruru",
-  "maruru",
-  69,
-  643503824
+  "interstellar-maruru",
+  "zardy",
+  76,
+  3217132898
  ],
  "legalfuzz|33": [
   "rule",
-  "maruru",
   "interstellar-maruru",
-  52,
-  4038858030
+  "zardy-rev5c",
+  71,
+  1516643951
  ],
  "legalfuzz|34": [
   "random",
-  "maruru",
-  "zardy",
-  97,
-  1126574511
+  "interstellar-maruru",
+  "lost-maruru",
+  80,
+  2951666961
  ],
  "legalfuzz|35": [
   "rule",
+  "zardy",
   "maruru",
-  "lost-maruru",
-  106,
-  2105094067
+  56,
+  509746340
  ],
  "legalfuzz|36": [
   "random",
+  "zardy",
   "interstellar-maruru",
-  "maruru",
-  106,
-  4289571589
+  72,
+  4152109366
  ],
  "legalfuzz|37": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  70,
-  372505611
+  "zardy",
+  "zardy",
+  125,
+  4201206315
  ],
  "legalfuzz|38": [
   "random",
-  "interstellar-maruru",
   "zardy",
-  94,
-  2971852300
+  "zardy-rev5c",
+  90,
+  1408286517
  ],
  "legalfuzz|39": [
   "rule",
-  "interstellar-maruru",
+  "zardy",
   "lost-maruru",
-  73,
-  1031160067
+  61,
+  4208604517
  ],
  "legalfuzz|40": [
   "random",
-  "zardy",
+  "zardy-rev5c",
   "maruru",
-  130,
-  3273510313
+  142,
+  2433317000
  ],
  "legalfuzz|41": [
   "rule",
-  "zardy",
+  "zardy-rev5c",
   "interstellar-maruru",
-  77,
-  4103260788
+  49,
+  2548611063
  ],
  "legalfuzz|42": [
   "random",
+  "zardy-rev5c",
   "zardy",
-  "zardy",
-  107,
-  846514137
+  77,
+  1031029312
  ],
  "legalfuzz|43": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  64,
-  2682202394
+  "zardy-rev5c",
+  "zardy-rev5c",
+  39,
+  1727579003
  ],
  "legalfuzz|44": [
   "random",
+  "zardy-rev5c",
   "lost-maruru",
-  "maruru",
-  70,
-  3925215394
+  94,
+  1721415187
  ],
  "legalfuzz|45": [
   "rule",
   "lost-maruru",
-  "interstellar-maruru",
-  68,
-  1763226942
+  "maruru",
+  73,
+  4287521002
  ],
  "legalfuzz|46": [
   "random",
   "lost-maruru",
-  "zardy",
-  136,
-  3803684932
+  "interstellar-maruru",
+  85,
+  810935824
  ],
  "legalfuzz|47": [
   "rule",
   "lost-maruru",
-  "lost-maruru",
-  57,
-  1554116974
+  "zardy",
+  94,
+  851042180
  ],
  "legalfuzz|48": [
   "random",
-  "maruru",
-  "maruru",
-  115,
-  2930137706
+  "lost-maruru",
+  "zardy-rev5c",
+  117,
+  3887924881
  ],
  "legalfuzz|49": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  41,
-  2738119010
+  "lost-maruru",
+  "lost-maruru",
+  152,
+  2370584224
  ],
  "legalfuzz|50": [
   "random",
   "maruru",
-  "zardy",
-  86,
-  1635191625
+  "maruru",
+  62,
+  587892541
  ],
  "legalfuzz|51": [
   "rule",
   "maruru",
-  "lost-maruru",
-  52,
-  1529141772
+  "interstellar-maruru",
+  73,
+  4178637377
  ],
  "legalfuzz|52": [
   "random",
-  "interstellar-maruru",
   "maruru",
-  114,
-  1578058689
+  "zardy",
+  132,
+  2693172696
  ],
  "legalfuzz|53": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  73,
-  3131410161
+  "maruru",
+  "zardy-rev5c",
+  49,
+  775899721
  ],
  "legalfuzz|54": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  115,
-  3555349901
+  "maruru",
+  "lost-maruru",
+  100,
+  2491167021
  ],
  "legalfuzz|55": [
   "rule",
   "interstellar-maruru",
-  "lost-maruru",
-  70,
-  2740362089
+  "maruru",
+  75,
+  3536480170
  ],
  "legalfuzz|56": [
   "random",
-  "zardy",
-  "maruru",
-  88,
-  3789866242
+  "interstellar-maruru",
+  "interstellar-maruru",
+  142,
+  3860133257
  ],
  "legalfuzz|57": [
   "rule",
-  "zardy",
   "interstellar-maruru",
-  47,
-  1695106637
+  "zardy",
+  62,
+  1492304425
  ],
  "legalfuzz|58": [
   "random",
-  "zardy",
-  "zardy",
-  115,
-  3849304237
+  "interstellar-maruru",
+  "zardy-rev5c",
+  56,
+  454251286
  ],
  "legalfuzz|59": [
   "rule",
-  "zardy",
+  "interstellar-maruru",
   "lost-maruru",
-  57,
-  3240921698
+  50,
+  2944183686
  ],
  "legalfuzz|60": [
   "random",
-  "lost-maruru",
+  "zardy",
   "maruru",
-  68,
-  1652504110
+  138,
+  314628080
  ],
  "legalfuzz|61": [
   "rule",
-  "lost-maruru",
+  "zardy",
   "interstellar-maruru",
-  38,
-  1896643519
+  75,
+  1523553082
  ],
  "legalfuzz|62": [
   "random",
-  "lost-maruru",
   "zardy",
-  103,
-  2167429413
+  "zardy",
+  99,
+  3246703035
  ],
  "legalfuzz|63": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  55,
-  2352948951
+  "zardy",
+  "zardy-rev5c",
+  51,
+  3189896934
  ],
  "legalfuzz|64": [
   "random",
-  "maruru",
-  "maruru",
-  87,
-  193087944
+  "zardy",
+  "lost-maruru",
+  105,
+  1112769447
  ],
  "legalfuzz|65": [
   "rule",
+  "zardy-rev5c",
   "maruru",
-  "interstellar-maruru",
-  77,
-  2175436323
+  36,
+  282544441
  ],
  "legalfuzz|66": [
   "random",
-  "maruru",
-  "zardy",
-  97,
-  1276017264
+  "zardy-rev5c",
+  "interstellar-maruru",
+  146,
+  1511303909
  ],
  "legalfuzz|67": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  38,
-  2156777067
+  "zardy-rev5c",
+  "zardy",
+  52,
+  1647731748
  ],
  "legalfuzz|68": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  77,
-  2538539849
+  "zardy-rev5c",
+  "zardy-rev5c",
+  120,
+  2575321722
  ],
  "legalfuzz|69": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  85,
-  847072258
+  "zardy-rev5c",
+  "lost-maruru",
+  42,
+  1674671595
  ],
  "legalfuzz|70": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  113,
-  4239518731
+  "lost-maruru",
+  "maruru",
+  104,
+  2352681579
  ],
  "legalfuzz|71": [
   "rule",
-  "interstellar-maruru",
   "lost-maruru",
-  63,
-  2265069964
+  "interstellar-maruru",
+  87,
+  2785990210
  ],
  "legalfuzz|72": [
   "random",
+  "lost-maruru",
   "zardy",
-  "maruru",
-  92,
-  2116180864
+  67,
+  1525605943
  ],
  "legalfuzz|73": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  44,
-  1647818005
+  "lost-maruru",
+  "zardy-rev5c",
+  33,
+  2528761695
  ],
  "legalfuzz|74": [
   "random",
-  "zardy",
-  "zardy",
-  100,
-  3106088220
+  "lost-maruru",
+  "lost-maruru",
+  73,
+  3931104957
  ],
  "legalfuzz|75": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  51,
-  2450813407
+  "maruru",
+  "maruru",
+  82,
+  3800731774
  ],
  "legalfuzz|76": [
   "random",
-  "lost-maruru",
   "maruru",
-  97,
-  2480610851
+  "interstellar-maruru",
+  100,
+  441623982
  ],
  "legalfuzz|77": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  92,
-  1569269463
+  "maruru",
+  "zardy",
+  40,
+  851183460
  ],
  "legalfuzz|78": [
   "random",
-  "lost-maruru",
-  "zardy",
-  94,
-  2254257854
+  "maruru",
+  "zardy-rev5c",
+  91,
+  2105027081
  ],
  "legalfuzz|79": [
   "rule",
+  "maruru",
   "lost-maruru",
-  "lost-maruru",
-  71,
-  4284360469
+  86,
+  3244409267
  ],
  "legalfuzz|80": [
   "random",
+  "interstellar-maruru",
   "maruru",
-  "maruru",
-  54,
-  664486761
+  85,
+  876707645
  ],
  "legalfuzz|81": [
   "rule",
-  "maruru",
   "interstellar-maruru",
-  82,
-  4157407019
+  "interstellar-maruru",
+  69,
+  732407376
  ],
  "legalfuzz|82": [
   "random",
-  "maruru",
+  "interstellar-maruru",
   "zardy",
-  94,
-  3273391169
+  70,
+  405600949
  ],
  "legalfuzz|83": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  131,
-  502591126
+  "interstellar-maruru",
+  "zardy-rev5c",
+  51,
+  3673050494
  ],
  "legalfuzz|84": [
   "random",
   "interstellar-maruru",
-  "maruru",
-  142,
-  3040292167
+  "lost-maruru",
+  63,
+  3406713045
  ],
  "legalfuzz|85": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  58,
-  879049294
+  "zardy",
+  "maruru",
+  73,
+  3482125114
  ],
  "legalfuzz|86": [
   "random",
-  "interstellar-maruru",
   "zardy",
-  120,
-  1931424799
+  "interstellar-maruru",
+  81,
+  2484036250
  ],
  "legalfuzz|87": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  66,
-  4238684896
+  "zardy",
+  "zardy",
+  70,
+  1828023822
  ],
  "legalfuzz|88": [
   "random",
   "zardy",
-  "maruru",
-  114,
-  1214751687
+  "zardy-rev5c",
+  89,
+  314356513
  ],
  "legalfuzz|89": [
   "rule",
   "zardy",
-  "interstellar-maruru",
-  53,
-  3456096994
+  "lost-maruru",
+  62,
+  4272771888
  ],
  "legalfuzz|90": [
   "random",
-  "zardy",
-  "zardy",
-  122,
-  2359811033
+  "zardy-rev5c",
+  "maruru",
+  86,
+  2091472273
  ],
  "legalfuzz|91": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  81,
-  2212513032
+  "zardy-rev5c",
+  "interstellar-maruru",
+  55,
+  617362953
  ],
  "legalfuzz|92": [
   "random",
-  "lost-maruru",
-  "maruru",
-  107,
-  2693413518
+  "zardy-rev5c",
+  "zardy",
+  105,
+  2285820546
  ],
  "legalfuzz|93": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  53,
-  4219969309
+  "zardy-rev5c",
+  "zardy-rev5c",
+  57,
+  2629744761
  ],
  "legalfuzz|94": [
   "random",
+  "zardy-rev5c",
   "lost-maruru",
-  "zardy",
-  109,
-  687598266
+  108,
+  3699053488
  ],
  "legalfuzz|95": [
   "rule",
   "lost-maruru",
-  "lost-maruru",
-  52,
-  3260364747
+  "maruru",
+  37,
+  2164984456
  ],
  "legalfuzz|96": [
   "random",
-  "maruru",
-  "maruru",
-  145,
-  1619321429
+  "lost-maruru",
+  "interstellar-maruru",
+  151,
+  253268723
  ],
  "legalfuzz|97": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  59,
-  2588819931
+  "lost-maruru",
+  "zardy",
+  66,
+  1532545617
  ],
  "legalfuzz|98": [
   "random",
-  "maruru",
-  "zardy",
-  104,
-  1113959969
+  "lost-maruru",
+  "zardy-rev5c",
+  124,
+  2375493085
  ],
  "legalfuzz|99": [
   "rule",
-  "maruru",
   "lost-maruru",
-  80,
-  1769993810
+  "lost-maruru",
+  72,
+  1115408350
  ],
  "legalfuzz|100": [
   "random",
-  "interstellar-maruru",
   "maruru",
-  94,
-  848822441
+  "maruru",
+  116,
+  3971664288
  ],
  "legalfuzz|101": [
-  "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  48,
-  3367896381
- ],
- "legalfuzz|102": [
-  "random",
-  "interstellar-maruru",
-  "zardy",
-  51,
-  3603704681
- ],
- "legalfuzz|103": [
-  "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  80,
-  3337712543
- ],
- "legalfuzz|104": [
-  "random",
-  "zardy",
-  "maruru",
-  109,
-  1446297992
- ],
- "legalfuzz|105": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  70,
-  4203273219
- ],
- "legalfuzz|106": [
-  "random",
-  "zardy",
-  "zardy",
-  72,
-  638304634
- ],
- "legalfuzz|107": [
-  "rule",
-  "zardy",
-  "lost-maruru",
-  65,
-  2054012781
- ],
- "legalfuzz|108": [
-  "random",
-  "lost-maruru",
-  "maruru",
-  139,
-  3873592024
- ],
- "legalfuzz|109": [
-  "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  41,
-  4092697137
- ],
- "legalfuzz|110": [
-  "random",
-  "lost-maruru",
-  "zardy",
-  86,
-  2856917411
- ],
- "legalfuzz|111": [
-  "rule",
-  "lost-maruru",
-  "lost-maruru",
-  90,
-  331097366
- ],
- "legalfuzz|112": [
-  "random",
-  "maruru",
-  "maruru",
-  85,
-  2180198739
- ],
- "legalfuzz|113": [
   "rule",
   "maruru",
   "interstellar-maruru",
   42,
-  1508185603
+  1870800484
+ ],
+ "legalfuzz|102": [
+  "random",
+  "maruru",
+  "zardy",
+  78,
+  3119802506
+ ],
+ "legalfuzz|103": [
+  "rule",
+  "maruru",
+  "zardy-rev5c",
+  36,
+  1217162519
+ ],
+ "legalfuzz|104": [
+  "random",
+  "maruru",
+  "lost-maruru",
+  95,
+  1462725485
+ ],
+ "legalfuzz|105": [
+  "rule",
+  "interstellar-maruru",
+  "maruru",
+  66,
+  3857162926
+ ],
+ "legalfuzz|106": [
+  "random",
+  "interstellar-maruru",
+  "interstellar-maruru",
+  106,
+  995739581
+ ],
+ "legalfuzz|107": [
+  "rule",
+  "interstellar-maruru",
+  "zardy",
+  52,
+  3982585548
+ ],
+ "legalfuzz|108": [
+  "random",
+  "interstellar-maruru",
+  "zardy-rev5c",
+  110,
+  4243117288
+ ],
+ "legalfuzz|109": [
+  "rule",
+  "interstellar-maruru",
+  "lost-maruru",
+  30,
+  3128574003
+ ],
+ "legalfuzz|110": [
+  "random",
+  "zardy",
+  "maruru",
+  132,
+  1915843316
+ ],
+ "legalfuzz|111": [
+  "rule",
+  "zardy",
+  "interstellar-maruru",
+  30,
+  368199647
+ ],
+ "legalfuzz|112": [
+  "random",
+  "zardy",
+  "zardy",
+  74,
+  2761501402
+ ],
+ "legalfuzz|113": [
+  "rule",
+  "zardy",
+  "zardy-rev5c",
+  41,
+  2028808393
  ],
  "legalfuzz|114": [
   "random",
-  "maruru",
-  "zardy",
-  100,
-  1951550023
- ],
- "legalfuzz|115": [
-  "rule",
-  "maruru",
-  "lost-maruru",
-  74,
-  1487832679
- ],
- "legalfuzz|116": [
-  "random",
-  "interstellar-maruru",
-  "maruru",
-  117,
-  4221614422
- ],
- "legalfuzz|117": [
-  "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  55,
-  4275015225
- ],
- "legalfuzz|118": [
-  "random",
-  "interstellar-maruru",
-  "zardy",
-  101,
-  1921446072
- ],
- "legalfuzz|119": [
-  "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  48,
-  2145271321
- ],
- "legalfuzz|120": [
-  "random",
-  "zardy",
-  "maruru",
-  81,
-  1341908743
- ],
- "legalfuzz|121": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  50,
-  3985747472
- ],
- "legalfuzz|122": [
-  "random",
-  "zardy",
-  "zardy",
-  111,
-  2006698266
- ],
- "legalfuzz|123": [
-  "rule",
   "zardy",
   "lost-maruru",
   58,
-  1816701902
+  1488294723
+ ],
+ "legalfuzz|115": [
+  "rule",
+  "zardy-rev5c",
+  "maruru",
+  69,
+  3529266773
+ ],
+ "legalfuzz|116": [
+  "random",
+  "zardy-rev5c",
+  "interstellar-maruru",
+  99,
+  3405185603
+ ],
+ "legalfuzz|117": [
+  "rule",
+  "zardy-rev5c",
+  "zardy",
+  54,
+  1346367088
+ ],
+ "legalfuzz|118": [
+  "random",
+  "zardy-rev5c",
+  "zardy-rev5c",
+  90,
+  2263979735
+ ],
+ "legalfuzz|119": [
+  "rule",
+  "zardy-rev5c",
+  "lost-maruru",
+  57,
+  3880333011
+ ],
+ "legalfuzz|120": [
+  "random",
+  "lost-maruru",
+  "maruru",
+  104,
+  1983803397
+ ],
+ "legalfuzz|121": [
+  "rule",
+  "lost-maruru",
+  "interstellar-maruru",
+  49,
+  3370584419
+ ],
+ "legalfuzz|122": [
+  "random",
+  "lost-maruru",
+  "zardy",
+  109,
+  751510951
+ ],
+ "legalfuzz|123": [
+  "rule",
+  "lost-maruru",
+  "zardy-rev5c",
+  27,
+  1169803984
  ],
  "legalfuzz|124": [
   "random",
   "lost-maruru",
-  "maruru",
-  84,
-  1333650974
+  "lost-maruru",
+  75,
+  1533788259
  ],
  "legalfuzz|125": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  61,
-  2012507223
+  "maruru",
+  "maruru",
+  35,
+  19654257
  ],
  "legalfuzz|126": [
   "random",
-  "lost-maruru",
-  "zardy",
-  121,
-  2062959590
+  "maruru",
+  "interstellar-maruru",
+  101,
+  2132157512
  ],
  "legalfuzz|127": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  67,
-  2304970648
+  "maruru",
+  "zardy",
+  74,
+  801236839
  ],
  "legalfuzz|128": [
   "random",
   "maruru",
-  "maruru",
-  120,
-  3913751507
+  "zardy-rev5c",
+  114,
+  2702432758
  ],
  "legalfuzz|129": [
   "rule",
   "maruru",
-  "interstellar-maruru",
-  86,
-  1400713448
+  "lost-maruru",
+  59,
+  824978330
  ],
  "legalfuzz|130": [
   "random",
+  "interstellar-maruru",
   "maruru",
-  "zardy",
-  100,
-  331698972
+  117,
+  4122987376
  ],
  "legalfuzz|131": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  88,
-  1362364377
+  "interstellar-maruru",
+  "interstellar-maruru",
+  77,
+  580307420
  ],
  "legalfuzz|132": [
   "random",
   "interstellar-maruru",
-  "maruru",
-  54,
-  3258595009
+  "zardy",
+  103,
+  248285337
  ],
  "legalfuzz|133": [
   "rule",
   "interstellar-maruru",
-  "interstellar-maruru",
-  66,
-  2640206016
+  "zardy-rev5c",
+  78,
+  3698948398
  ],
  "legalfuzz|134": [
   "random",
   "interstellar-maruru",
-  "zardy",
-  104,
-  2414498139
+  "lost-maruru",
+  74,
+  3189124973
  ],
  "legalfuzz|135": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  53,
-  38967816
+  "zardy",
+  "maruru",
+  74,
+  3026144307
  ],
  "legalfuzz|136": [
   "random",
   "zardy",
-  "maruru",
-  84,
-  2925300417
+  "interstellar-maruru",
+  75,
+  2035143750
  ],
  "legalfuzz|137": [
   "rule",
   "zardy",
-  "interstellar-maruru",
-  102,
-  3003821504
+  "zardy",
+  83,
+  1750712202
  ],
  "legalfuzz|138": [
   "random",
   "zardy",
-  "zardy",
-  76,
-  2833807700
+  "zardy-rev5c",
+  65,
+  1513960317
  ],
  "legalfuzz|139": [
   "rule",
@@ -3021,276 +3885,276 @@
  ],
  "legalfuzz|140": [
   "random",
-  "lost-maruru",
+  "zardy-rev5c",
   "maruru",
-  66,
-  466114397
+  78,
+  1499860035
  ],
  "legalfuzz|141": [
   "rule",
-  "lost-maruru",
+  "zardy-rev5c",
   "interstellar-maruru",
-  47,
-  2723166422
+  48,
+  1695831519
  ],
  "legalfuzz|142": [
   "random",
-  "lost-maruru",
+  "zardy-rev5c",
   "zardy",
-  97,
-  1447726940
+  98,
+  4208482316
  ],
  "legalfuzz|143": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  86,
-  3982230623
+  "zardy-rev5c",
+  "zardy-rev5c",
+  39,
+  161091840
  ],
  "legalfuzz|144": [
   "random",
-  "maruru",
-  "maruru",
-  87,
-  3887721949
+  "zardy-rev5c",
+  "lost-maruru",
+  147,
+  3486024053
  ],
  "legalfuzz|145": [
   "rule",
+  "lost-maruru",
   "maruru",
-  "interstellar-maruru",
-  46,
-  1081640023
+  82,
+  2991476098
  ],
  "legalfuzz|146": [
   "random",
-  "maruru",
-  "zardy",
-  72,
-  451462311
+  "lost-maruru",
+  "interstellar-maruru",
+  102,
+  1551637762
  ],
  "legalfuzz|147": [
   "rule",
-  "maruru",
   "lost-maruru",
-  56,
-  3456974449
+  "zardy",
+  48,
+  1403269150
  ],
  "legalfuzz|148": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  153,
-  3028871264
+  "lost-maruru",
+  "zardy-rev5c",
+  106,
+  3029641205
  ],
  "legalfuzz|149": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  64,
-  889221721
+  "lost-maruru",
+  "lost-maruru",
+  89,
+  91452137
  ],
  "legalfuzz|150": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  75,
-  1012254210
+  "maruru",
+  "maruru",
+  65,
+  2800555969
  ],
  "legalfuzz|151": [
   "rule",
+  "maruru",
   "interstellar-maruru",
-  "lost-maruru",
-  92,
-  1559886105
+  80,
+  3585617383
  ],
  "legalfuzz|152": [
   "random",
-  "zardy",
   "maruru",
-  145,
-  344900480
+  "zardy",
+  90,
+  867736443
  ],
  "legalfuzz|153": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  54,
-  801880670
+  "maruru",
+  "zardy-rev5c",
+  59,
+  3771625795
  ],
  "legalfuzz|154": [
   "random",
-  "zardy",
-  "zardy",
-  67,
-  1903520621
+  "maruru",
+  "lost-maruru",
+  95,
+  3984992870
  ],
  "legalfuzz|155": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  59,
-  1366239609
+  "interstellar-maruru",
+  "maruru",
+  39,
+  1927261310
  ],
  "legalfuzz|156": [
   "random",
-  "lost-maruru",
-  "maruru",
-  74,
-  375157582
+  "interstellar-maruru",
+  "interstellar-maruru",
+  116,
+  4186145067
  ],
  "legalfuzz|157": [
   "rule",
-  "lost-maruru",
   "interstellar-maruru",
-  63,
-  1017914922
+  "zardy",
+  43,
+  1576508098
  ],
  "legalfuzz|158": [
   "random",
-  "lost-maruru",
-  "zardy",
-  95,
-  1024522438
+  "interstellar-maruru",
+  "zardy-rev5c",
+  102,
+  1299193016
  ],
  "legalfuzz|159": [
   "rule",
+  "interstellar-maruru",
   "lost-maruru",
-  "lost-maruru",
-  136,
-  4234371739
+  38,
+  3685062517
  ],
  "legalfuzz|160": [
   "random",
+  "zardy",
   "maruru",
-  "maruru",
-  67,
-  1359126315
+  65,
+  2730938583
  ],
  "legalfuzz|161": [
   "rule",
-  "maruru",
+  "zardy",
   "interstellar-maruru",
-  62,
-  718331731
+  46,
+  3885607471
  ],
  "legalfuzz|162": [
   "random",
-  "maruru",
   "zardy",
-  89,
-  2920395312
+  "zardy",
+  79,
+  2880084251
  ],
  "legalfuzz|163": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  51,
-  1571154779
+  "zardy",
+  "zardy-rev5c",
+  57,
+  3422661621
  ],
  "legalfuzz|164": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  71,
-  261821275
+  "zardy",
+  "lost-maruru",
+  48,
+  767736274
  ],
  "legalfuzz|165": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  73,
-  2766764054
+  "zardy-rev5c",
+  "maruru",
+  50,
+  44371304
  ],
  "legalfuzz|166": [
   "random",
+  "zardy-rev5c",
   "interstellar-maruru",
-  "zardy",
-  122,
-  2832734896
+  93,
+  226096410
  ],
  "legalfuzz|167": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  102,
-  204511231
+  "zardy-rev5c",
+  "zardy",
+  81,
+  730329358
  ],
  "legalfuzz|168": [
   "random",
-  "zardy",
-  "maruru",
-  86,
-  1203234175
+  "zardy-rev5c",
+  "zardy-rev5c",
+  60,
+  1674790316
  ],
  "legalfuzz|169": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  51,
-  463480914
+  "zardy-rev5c",
+  "lost-maruru",
+  62,
+  3861045321
  ],
  "legalfuzz|170": [
   "random",
-  "zardy",
-  "zardy",
-  107,
-  3650672484
+  "lost-maruru",
+  "maruru",
+  125,
+  485637656
  ],
  "legalfuzz|171": [
   "rule",
-  "zardy",
   "lost-maruru",
-  39,
-  1937264473
+  "interstellar-maruru",
+  94,
+  2689655667
  ],
  "legalfuzz|172": [
   "random",
   "lost-maruru",
-  "maruru",
-  126,
-  772727211
+  "zardy",
+  101,
+  3577038409
  ],
  "legalfuzz|173": [
   "rule",
   "lost-maruru",
-  "interstellar-maruru",
-  72,
-  2834548572
+  "zardy-rev5c",
+  63,
+  3245150225
  ],
  "legalfuzz|174": [
   "random",
   "lost-maruru",
-  "zardy",
-  100,
-  628321420
+  "lost-maruru",
+  70,
+  2724072345
  ],
  "legalfuzz|175": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  62,
-  1086812873
+  "maruru",
+  "maruru",
+  86,
+  2961207314
  ],
  "legalfuzz|176": [
   "random",
   "maruru",
-  "maruru",
-  98,
-  4168073795
+  "interstellar-maruru",
+  93,
+  1683804429
  ],
  "legalfuzz|177": [
   "rule",
   "maruru",
-  "interstellar-maruru",
-  66,
-  879265974
+  "zardy",
+  55,
+  2021360195
  ],
  "legalfuzz|178": [
   "random",
   "maruru",
-  "zardy",
-  97,
-  3796019297
+  "zardy-rev5c",
+  112,
+  855588774
  ],
  "legalfuzz|179": [
   "rule",
@@ -3323,261 +4187,261 @@
  "legalfuzz|183": [
   "rule",
   "interstellar-maruru",
-  "lost-maruru",
-  123,
-  3563906653
+  "zardy-rev5c",
+  96,
+  3602429403
  ],
  "legalfuzz|184": [
   "random",
-  "zardy",
-  "maruru",
-  99,
-  4030044350
+  "interstellar-maruru",
+  "lost-maruru",
+  126,
+  893062239
  ],
  "legalfuzz|185": [
   "rule",
   "zardy",
-  "interstellar-maruru",
-  66,
-  1170871758
+  "maruru",
+  41,
+  4051122025
  ],
  "legalfuzz|186": [
   "random",
   "zardy",
-  "zardy",
-  69,
-  2802630457
+  "interstellar-maruru",
+  94,
+  3831626656
  ],
  "legalfuzz|187": [
   "rule",
   "zardy",
-  "lost-maruru",
-  48,
-  2631492496
+  "zardy",
+  65,
+  455422452
  ],
  "legalfuzz|188": [
   "random",
-  "lost-maruru",
-  "maruru",
-  154,
-  1397145108
+  "zardy",
+  "zardy-rev5c",
+  133,
+  441811221
  ],
  "legalfuzz|189": [
   "rule",
+  "zardy",
   "lost-maruru",
-  "interstellar-maruru",
-  124,
-  1105487274
+  49,
+  2514767280
  ],
  "legalfuzz|190": [
   "random",
-  "lost-maruru",
-  "zardy",
-  122,
-  1423953731
+  "zardy-rev5c",
+  "maruru",
+  123,
+  2968223461
  ],
  "legalfuzz|191": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  64,
-  790567421
+  "zardy-rev5c",
+  "interstellar-maruru",
+  72,
+  1519320070
  ],
  "legalfuzz|192": [
   "random",
-  "maruru",
-  "maruru",
-  84,
-  461401662
+  "zardy-rev5c",
+  "zardy",
+  125,
+  1418699415
  ],
  "legalfuzz|193": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  92,
-  1506528530
+  "zardy-rev5c",
+  "zardy-rev5c",
+  66,
+  4042633729
  ],
  "legalfuzz|194": [
   "random",
-  "maruru",
-  "zardy",
-  126,
-  4215437044
+  "zardy-rev5c",
+  "lost-maruru",
+  102,
+  2631653515
  ],
  "legalfuzz|195": [
   "rule",
-  "maruru",
   "lost-maruru",
-  56,
-  4008184630
+  "maruru",
+  61,
+  3405605535
  ],
  "legalfuzz|196": [
   "random",
+  "lost-maruru",
   "interstellar-maruru",
-  "maruru",
-  74,
-  428774073
+  142,
+  185872632
  ],
  "legalfuzz|197": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  47,
-  3248809111
+  "lost-maruru",
+  "zardy",
+  33,
+  2176710025
  ],
  "legalfuzz|198": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  103,
-  1418489615
+  "lost-maruru",
+  "zardy-rev5c",
+  73,
+  1781512273
  ],
  "legalfuzz|199": [
   "rule",
-  "interstellar-maruru",
   "lost-maruru",
-  55,
-  2235726802
+  "lost-maruru",
+  153,
+  3784493709
  ],
  "legalfuzz|200": [
   "random",
-  "zardy",
   "maruru",
-  88,
-  3052895550
+  "maruru",
+  85,
+  175386700
  ],
  "legalfuzz|201": [
   "rule",
-  "zardy",
+  "maruru",
   "interstellar-maruru",
-  53,
-  2494542590
+  47,
+  3296695796
  ],
  "legalfuzz|202": [
   "random",
+  "maruru",
   "zardy",
-  "zardy",
-  97,
-  3703707013
+  100,
+  1254410606
  ],
  "legalfuzz|203": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  48,
-  3862800941
+  "maruru",
+  "zardy-rev5c",
+  45,
+  3051868105
  ],
  "legalfuzz|204": [
   "random",
-  "lost-maruru",
   "maruru",
-  112,
-  3204501937
+  "lost-maruru",
+  79,
+  1043496071
  ],
  "legalfuzz|205": [
   "rule",
-  "lost-maruru",
   "interstellar-maruru",
-  40,
-  3558505545
+  "maruru",
+  64,
+  560035132
  ],
  "legalfuzz|206": [
   "random",
-  "lost-maruru",
-  "zardy",
-  82,
-  1853178202
+  "interstellar-maruru",
+  "interstellar-maruru",
+  85,
+  1158923492
  ],
  "legalfuzz|207": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  66,
-  2160061184
+  "interstellar-maruru",
+  "zardy",
+  80,
+  2717527227
  ],
  "legalfuzz|208": [
   "random",
-  "maruru",
-  "maruru",
-  66,
-  2426297290
+  "interstellar-maruru",
+  "zardy-rev5c",
+  114,
+  4143804581
  ],
  "legalfuzz|209": [
   "rule",
-  "maruru",
   "interstellar-maruru",
-  37,
-  957357445
+  "lost-maruru",
+  60,
+  3509324664
  ],
  "legalfuzz|210": [
   "random",
-  "maruru",
   "zardy",
-  103,
-  314256946
+  "maruru",
+  101,
+  4048318144
  ],
  "legalfuzz|211": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  94,
-  766768762
+  "zardy",
+  "interstellar-maruru",
+  49,
+  2511697637
  ],
  "legalfuzz|212": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  70,
-  143181386
+  "zardy",
+  "zardy",
+  101,
+  1975880121
  ],
  "legalfuzz|213": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  39,
-  1563561823
+  "zardy",
+  "zardy-rev5c",
+  40,
+  4217539023
  ],
  "legalfuzz|214": [
   "random",
-  "interstellar-maruru",
   "zardy",
-  71,
-  1725121278
+  "lost-maruru",
+  127,
+  3714386
  ],
  "legalfuzz|215": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  51,
-  1181152934
+  "zardy-rev5c",
+  "maruru",
+  35,
+  41508801
  ],
  "legalfuzz|216": [
   "random",
-  "zardy",
-  "maruru",
-  135,
-  3834042223
+  "zardy-rev5c",
+  "interstellar-maruru",
+  57,
+  1461412404
  ],
  "legalfuzz|217": [
   "rule",
+  "zardy-rev5c",
   "zardy",
-  "interstellar-maruru",
-  37,
-  3592693903
+  89,
+  2863299620
  ],
  "legalfuzz|218": [
   "random",
-  "zardy",
-  "zardy",
-  45,
-  924924862
+  "zardy-rev5c",
+  "zardy-rev5c",
+  145,
+  2055326169
  ],
  "legalfuzz|219": [
   "rule",
-  "zardy",
+  "zardy-rev5c",
   "lost-maruru",
-  70,
-  1349918610
+  91,
+  1109376414
  ],
  "legalfuzz|220": [
   "random",
@@ -3603,954 +4467,954 @@
  "legalfuzz|223": [
   "rule",
   "lost-maruru",
-  "lost-maruru",
-  42,
-  3315395169
+  "zardy-rev5c",
+  78,
+  379544318
  ],
  "legalfuzz|224": [
   "random",
-  "maruru",
-  "maruru",
-  98,
-  2282824514
+  "lost-maruru",
+  "lost-maruru",
+  80,
+  3825164689
  ],
  "legalfuzz|225": [
   "rule",
   "maruru",
-  "interstellar-maruru",
-  55,
-  3441633369
+  "maruru",
+  88,
+  2311145052
  ],
  "legalfuzz|226": [
   "random",
   "maruru",
-  "zardy",
-  116,
-  740546860
+  "interstellar-maruru",
+  118,
+  866624782
  ],
  "legalfuzz|227": [
   "rule",
   "maruru",
-  "lost-maruru",
-  81,
-  2431395968
+  "zardy",
+  65,
+  3962260899
  ],
  "legalfuzz|228": [
   "random",
-  "interstellar-maruru",
   "maruru",
-  121,
-  1921282396
+  "zardy-rev5c",
+  137,
+  3834730227
  ],
  "legalfuzz|229": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  77,
-  2108341260
+  "maruru",
+  "lost-maruru",
+  55,
+  4212739137
  ],
  "legalfuzz|230": [
   "random",
   "interstellar-maruru",
-  "zardy",
-  114,
-  3785070190
+  "maruru",
+  82,
+  1068353244
  ],
  "legalfuzz|231": [
   "rule",
   "interstellar-maruru",
-  "lost-maruru",
-  37,
-  4099294186
+  "interstellar-maruru",
+  42,
+  267422710
  ],
  "legalfuzz|232": [
   "random",
+  "interstellar-maruru",
   "zardy",
-  "maruru",
-  137,
-  3402233066
+  127,
+  2985148136
  ],
  "legalfuzz|233": [
   "rule",
-  "zardy",
   "interstellar-maruru",
-  44,
-  160898797
+  "zardy-rev5c",
+  51,
+  659870324
  ],
  "legalfuzz|234": [
   "random",
-  "zardy",
-  "zardy",
-  87,
-  2220664382
+  "interstellar-maruru",
+  "lost-maruru",
+  117,
+  1237128683
  ],
  "legalfuzz|235": [
   "rule",
   "zardy",
-  "lost-maruru",
-  48,
-  412816025
+  "maruru",
+  69,
+  1218166812
  ],
  "legalfuzz|236": [
   "random",
-  "lost-maruru",
-  "maruru",
-  100,
-  3373612636
+  "zardy",
+  "interstellar-maruru",
+  115,
+  3059003612
  ],
  "legalfuzz|237": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  48,
-  3891587484
+  "zardy",
+  "zardy",
+  53,
+  4113380065
  ],
  "legalfuzz|238": [
   "random",
-  "lost-maruru",
   "zardy",
-  70,
-  291016883
+  "zardy-rev5c",
+  84,
+  3409734060
  ],
  "legalfuzz|239": [
   "rule",
+  "zardy",
   "lost-maruru",
-  "lost-maruru",
-  56,
-  2910931794
+  75,
+  4144290310
  ],
  "legalfuzz|240": [
   "random",
-  "maruru",
+  "zardy-rev5c",
   "maruru",
   111,
-  712879282
+  1732029361
  ],
  "legalfuzz|241": [
   "rule",
-  "maruru",
+  "zardy-rev5c",
   "interstellar-maruru",
-  43,
-  3065244733
+  48,
+  4026504049
  ],
  "legalfuzz|242": [
   "random",
-  "maruru",
+  "zardy-rev5c",
   "zardy",
-  108,
-  3177197744
+  114,
+  2981972441
  ],
  "legalfuzz|243": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  70,
-  61948072
+  "zardy-rev5c",
+  "zardy-rev5c",
+  41,
+  3711186405
  ],
  "legalfuzz|244": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  70,
-  2368081904
+  "zardy-rev5c",
+  "lost-maruru",
+  127,
+  1681663755
  ],
  "legalfuzz|245": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  56,
-  2549027798
+  "lost-maruru",
+  "maruru",
+  55,
+  2433680999
  ],
  "legalfuzz|246": [
   "random",
+  "lost-maruru",
   "interstellar-maruru",
-  "zardy",
-  102,
-  723260818
+  83,
+  1720252840
  ],
  "legalfuzz|247": [
   "rule",
-  "interstellar-maruru",
   "lost-maruru",
-  114,
-  2424999094
+  "zardy",
+  52,
+  2989397329
  ],
  "legalfuzz|248": [
   "random",
-  "zardy",
-  "maruru",
-  109,
-  2351256715
+  "lost-maruru",
+  "zardy-rev5c",
+  128,
+  2926697276
  ],
  "legalfuzz|249": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  57,
-  3342778168
+  "lost-maruru",
+  "lost-maruru",
+  56,
+  1538915720
  ],
  "legalfuzz|250": [
-  "random",
-  "zardy",
-  "zardy",
-  63,
-  527608552
- ],
- "legalfuzz|251": [
-  "rule",
-  "zardy",
-  "lost-maruru",
-  54,
-  2105243194
- ],
- "legalfuzz|252": [
-  "random",
-  "lost-maruru",
-  "maruru",
-  43,
-  2899862871
- ],
- "legalfuzz|253": [
-  "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  59,
-  2735420334
- ],
- "legalfuzz|254": [
-  "random",
-  "lost-maruru",
-  "zardy",
-  97,
-  840552
- ],
- "legalfuzz|255": [
-  "rule",
-  "lost-maruru",
-  "lost-maruru",
-  63,
-  638440110
- ],
- "legalfuzz|256": [
-  "random",
-  "maruru",
-  "maruru",
-  41,
-  3531867456
- ],
- "legalfuzz|257": [
-  "rule",
-  "maruru",
-  "interstellar-maruru",
-  56,
-  3738240772
- ],
- "legalfuzz|258": [
-  "random",
-  "maruru",
-  "zardy",
-  70,
-  1621002916
- ],
- "legalfuzz|259": [
-  "rule",
-  "maruru",
-  "lost-maruru",
-  60,
-  1788036829
- ],
- "legalfuzz|260": [
-  "random",
-  "interstellar-maruru",
-  "maruru",
-  66,
-  808421958
- ],
- "legalfuzz|261": [
-  "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  69,
-  3398694744
- ],
- "legalfuzz|262": [
-  "random",
-  "interstellar-maruru",
-  "zardy",
-  129,
-  2834944017
- ],
- "legalfuzz|263": [
-  "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  77,
-  1973196144
- ],
- "legalfuzz|264": [
-  "random",
-  "zardy",
-  "maruru",
-  124,
-  770460679
- ],
- "legalfuzz|265": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  41,
-  130698791
- ],
- "legalfuzz|266": [
-  "random",
-  "zardy",
-  "zardy",
-  72,
-  3840537859
- ],
- "legalfuzz|267": [
-  "rule",
-  "zardy",
-  "lost-maruru",
-  67,
-  1592279870
- ],
- "legalfuzz|268": [
-  "random",
-  "lost-maruru",
-  "maruru",
-  80,
-  1476263831
- ],
- "legalfuzz|269": [
-  "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  49,
-  2968677116
- ],
- "legalfuzz|270": [
-  "random",
-  "lost-maruru",
-  "zardy",
-  52,
-  2343928229
- ],
- "legalfuzz|271": [
-  "rule",
-  "lost-maruru",
-  "lost-maruru",
-  80,
-  611472912
- ],
- "legalfuzz|272": [
-  "random",
-  "maruru",
-  "maruru",
-  84,
-  2499834316
- ],
- "legalfuzz|273": [
-  "rule",
-  "maruru",
-  "interstellar-maruru",
-  54,
-  3919857857
- ],
- "legalfuzz|274": [
-  "random",
-  "maruru",
-  "zardy",
-  67,
-  2241080993
- ],
- "legalfuzz|275": [
-  "rule",
-  "maruru",
-  "lost-maruru",
-  57,
-  487451247
- ],
- "legalfuzz|276": [
-  "random",
-  "interstellar-maruru",
-  "maruru",
-  82,
-  1599960468
- ],
- "legalfuzz|277": [
-  "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  52,
-  1482787330
- ],
- "legalfuzz|278": [
-  "random",
-  "interstellar-maruru",
-  "zardy",
-  93,
-  4276843670
- ],
- "legalfuzz|279": [
-  "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  45,
-  3321010758
- ],
- "legalfuzz|280": [
-  "random",
-  "zardy",
-  "maruru",
-  108,
-  1207907340
- ],
- "legalfuzz|281": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  44,
-  3540651052
- ],
- "legalfuzz|282": [
-  "random",
-  "zardy",
-  "zardy",
-  105,
-  906826892
- ],
- "legalfuzz|283": [
-  "rule",
-  "zardy",
-  "lost-maruru",
-  51,
-  189667889
- ],
- "legalfuzz|284": [
-  "random",
-  "lost-maruru",
-  "maruru",
-  84,
-  112742789
- ],
- "legalfuzz|285": [
-  "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  54,
-  3974135834
- ],
- "legalfuzz|286": [
-  "random",
-  "lost-maruru",
-  "zardy",
-  56,
-  1376066901
- ],
- "legalfuzz|287": [
-  "rule",
-  "lost-maruru",
-  "lost-maruru",
-  47,
-  3773108509
- ],
- "legalfuzz|288": [
-  "random",
-  "maruru",
-  "maruru",
-  91,
-  3129933647
- ],
- "legalfuzz|289": [
-  "rule",
-  "maruru",
-  "interstellar-maruru",
-  53,
-  2768901484
- ],
- "legalfuzz|290": [
-  "random",
-  "maruru",
-  "zardy",
-  85,
-  1995581668
- ],
- "legalfuzz|291": [
-  "rule",
-  "maruru",
-  "lost-maruru",
-  51,
-  846251779
- ],
- "legalfuzz|292": [
-  "random",
-  "interstellar-maruru",
-  "maruru",
-  116,
-  3054910433
- ],
- "legalfuzz|293": [
-  "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  57,
-  1415227792
- ],
- "legalfuzz|294": [
-  "random",
-  "interstellar-maruru",
-  "zardy",
-  84,
-  1112143327
- ],
- "legalfuzz|295": [
-  "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  59,
-  2249369898
- ],
- "legalfuzz|296": [
-  "random",
-  "zardy",
-  "maruru",
-  93,
-  1825047146
- ],
- "legalfuzz|297": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  55,
-  974877480
- ],
- "legalfuzz|298": [
-  "random",
-  "zardy",
-  "zardy",
-  76,
-  241911014
- ],
- "legalfuzz|299": [
-  "rule",
-  "zardy",
-  "lost-maruru",
-  49,
-  2827471233
- ],
- "legalfuzz|300": [
-  "random",
-  "lost-maruru",
-  "maruru",
-  143,
-  3058979898
- ],
- "legalfuzz|301": [
-  "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  68,
-  3240704242
- ],
- "legalfuzz|302": [
-  "random",
-  "lost-maruru",
-  "zardy",
-  104,
-  3781312603
- ],
- "legalfuzz|303": [
-  "rule",
-  "lost-maruru",
-  "lost-maruru",
-  106,
-  2075523850
- ],
- "legalfuzz|304": [
-  "random",
-  "maruru",
-  "maruru",
-  83,
-  2592149220
- ],
- "legalfuzz|305": [
-  "rule",
-  "maruru",
-  "interstellar-maruru",
-  65,
-  276244061
- ],
- "legalfuzz|306": [
-  "random",
-  "maruru",
-  "zardy",
-  74,
-  3111602197
- ],
- "legalfuzz|307": [
-  "rule",
-  "maruru",
-  "lost-maruru",
-  54,
-  3228932585
- ],
- "legalfuzz|308": [
-  "random",
-  "interstellar-maruru",
-  "maruru",
-  102,
-  2251014090
- ],
- "legalfuzz|309": [
-  "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  55,
-  3287965185
- ],
- "legalfuzz|310": [
-  "random",
-  "interstellar-maruru",
-  "zardy",
-  128,
-  12493419
- ],
- "legalfuzz|311": [
-  "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  58,
-  1265073348
- ],
- "legalfuzz|312": [
-  "random",
-  "zardy",
-  "maruru",
-  63,
-  3000531894
- ],
- "legalfuzz|313": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  52,
-  31810173
- ],
- "legalfuzz|314": [
-  "random",
-  "zardy",
-  "zardy",
-  92,
-  704331573
- ],
- "legalfuzz|315": [
-  "rule",
-  "zardy",
-  "lost-maruru",
-  59,
-  3445023858
- ],
- "legalfuzz|316": [
-  "random",
-  "lost-maruru",
-  "maruru",
-  134,
-  1396055092
- ],
- "legalfuzz|317": [
-  "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  57,
-  1088105146
- ],
- "legalfuzz|318": [
-  "random",
-  "lost-maruru",
-  "zardy",
-  92,
-  1070141824
- ],
- "legalfuzz|319": [
-  "rule",
-  "lost-maruru",
-  "lost-maruru",
-  57,
-  929602826
- ],
- "legalfuzz|320": [
-  "random",
-  "maruru",
-  "maruru",
-  68,
-  3939156031
- ],
- "legalfuzz|321": [
-  "rule",
-  "maruru",
-  "interstellar-maruru",
-  75,
-  227717095
- ],
- "legalfuzz|322": [
-  "random",
-  "maruru",
-  "zardy",
-  79,
-  550443089
- ],
- "legalfuzz|323": [
-  "rule",
-  "maruru",
-  "lost-maruru",
-  38,
-  3616432980
- ],
- "legalfuzz|324": [
-  "random",
-  "interstellar-maruru",
-  "maruru",
-  102,
-  3222799053
- ],
- "legalfuzz|325": [
-  "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  57,
-  2395308311
- ],
- "legalfuzz|326": [
-  "random",
-  "interstellar-maruru",
-  "zardy",
-  75,
-  610399845
- ],
- "legalfuzz|327": [
-  "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  81,
-  1905046323
- ],
- "legalfuzz|328": [
-  "random",
-  "zardy",
-  "maruru",
-  62,
-  161342039
- ],
- "legalfuzz|329": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  50,
-  1370995826
- ],
- "legalfuzz|330": [
-  "random",
-  "zardy",
-  "zardy",
-  102,
-  723385500
- ],
- "legalfuzz|331": [
-  "rule",
-  "zardy",
-  "lost-maruru",
-  44,
-  3962194646
- ],
- "legalfuzz|332": [
-  "random",
-  "lost-maruru",
-  "maruru",
-  102,
-  3685672218
- ],
- "legalfuzz|333": [
-  "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  72,
-  2926721466
- ],
- "legalfuzz|334": [
-  "random",
-  "lost-maruru",
-  "zardy",
-  137,
-  461319901
- ],
- "legalfuzz|335": [
-  "rule",
-  "lost-maruru",
-  "lost-maruru",
-  73,
-  2479789597
- ],
- "legalfuzz|336": [
-  "random",
-  "maruru",
-  "maruru",
-  129,
-  677724775
- ],
- "legalfuzz|337": [
-  "rule",
-  "maruru",
-  "interstellar-maruru",
-  39,
-  3488319943
- ],
- "legalfuzz|338": [
-  "random",
-  "maruru",
-  "zardy",
-  116,
-  3116485661
- ],
- "legalfuzz|339": [
-  "rule",
-  "maruru",
-  "lost-maruru",
-  43,
-  3831436292
- ],
- "legalfuzz|340": [
-  "random",
-  "interstellar-maruru",
-  "maruru",
-  103,
-  2407154854
- ],
- "legalfuzz|341": [
-  "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  84,
-  1244831725
- ],
- "legalfuzz|342": [
-  "random",
-  "interstellar-maruru",
-  "zardy",
-  93,
-  2839279744
- ],
- "legalfuzz|343": [
-  "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  68,
-  3090224765
- ],
- "legalfuzz|344": [
-  "random",
-  "zardy",
-  "maruru",
-  66,
-  1445062697
- ],
- "legalfuzz|345": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  63,
-  3813381518
- ],
- "legalfuzz|346": [
-  "random",
-  "zardy",
-  "zardy",
-  128,
-  545506510
- ],
- "legalfuzz|347": [
-  "rule",
-  "zardy",
-  "lost-maruru",
-  68,
-  3845076673
- ],
- "legalfuzz|348": [
-  "random",
-  "lost-maruru",
-  "maruru",
-  78,
-  3538727243
- ],
- "legalfuzz|349": [
-  "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  48,
-  3362420025
- ],
- "legalfuzz|350": [
-  "random",
-  "lost-maruru",
-  "zardy",
-  93,
-  3016347909
- ],
- "legalfuzz|351": [
-  "rule",
-  "lost-maruru",
-  "lost-maruru",
-  42,
-  2210334715
- ],
- "legalfuzz|352": [
   "random",
   "maruru",
   "maruru",
   110,
-  2667783675
+  47706963
+ ],
+ "legalfuzz|251": [
+  "rule",
+  "maruru",
+  "interstellar-maruru",
+  57,
+  4015361671
+ ],
+ "legalfuzz|252": [
+  "random",
+  "maruru",
+  "zardy",
+  140,
+  3342219073
+ ],
+ "legalfuzz|253": [
+  "rule",
+  "maruru",
+  "zardy-rev5c",
+  46,
+  1799891508
+ ],
+ "legalfuzz|254": [
+  "random",
+  "maruru",
+  "lost-maruru",
+  141,
+  1003215175
+ ],
+ "legalfuzz|255": [
+  "rule",
+  "interstellar-maruru",
+  "maruru",
+  53,
+  3461674931
+ ],
+ "legalfuzz|256": [
+  "random",
+  "interstellar-maruru",
+  "interstellar-maruru",
+  84,
+  3796933699
+ ],
+ "legalfuzz|257": [
+  "rule",
+  "interstellar-maruru",
+  "zardy",
+  39,
+  4195313588
+ ],
+ "legalfuzz|258": [
+  "random",
+  "interstellar-maruru",
+  "zardy-rev5c",
+  62,
+  2477668695
+ ],
+ "legalfuzz|259": [
+  "rule",
+  "interstellar-maruru",
+  "lost-maruru",
+  61,
+  2882438859
+ ],
+ "legalfuzz|260": [
+  "random",
+  "zardy",
+  "maruru",
+  116,
+  208446061
+ ],
+ "legalfuzz|261": [
+  "rule",
+  "zardy",
+  "interstellar-maruru",
+  95,
+  823514566
+ ],
+ "legalfuzz|262": [
+  "random",
+  "zardy",
+  "zardy",
+  109,
+  3760632705
+ ],
+ "legalfuzz|263": [
+  "rule",
+  "zardy",
+  "zardy-rev5c",
+  73,
+  1340012962
+ ],
+ "legalfuzz|264": [
+  "random",
+  "zardy",
+  "lost-maruru",
+  135,
+  3255227550
+ ],
+ "legalfuzz|265": [
+  "rule",
+  "zardy-rev5c",
+  "maruru",
+  58,
+  594640136
+ ],
+ "legalfuzz|266": [
+  "random",
+  "zardy-rev5c",
+  "interstellar-maruru",
+  79,
+  2596846714
+ ],
+ "legalfuzz|267": [
+  "rule",
+  "zardy-rev5c",
+  "zardy",
+  79,
+  2720643043
+ ],
+ "legalfuzz|268": [
+  "random",
+  "zardy-rev5c",
+  "zardy-rev5c",
+  50,
+  4236219814
+ ],
+ "legalfuzz|269": [
+  "rule",
+  "zardy-rev5c",
+  "lost-maruru",
+  67,
+  2674699385
+ ],
+ "legalfuzz|270": [
+  "random",
+  "lost-maruru",
+  "maruru",
+  140,
+  1446128166
+ ],
+ "legalfuzz|271": [
+  "rule",
+  "lost-maruru",
+  "interstellar-maruru",
+  33,
+  106761106
+ ],
+ "legalfuzz|272": [
+  "random",
+  "lost-maruru",
+  "zardy",
+  96,
+  2142180016
+ ],
+ "legalfuzz|273": [
+  "rule",
+  "lost-maruru",
+  "zardy-rev5c",
+  53,
+  188891523
+ ],
+ "legalfuzz|274": [
+  "random",
+  "lost-maruru",
+  "lost-maruru",
+  56,
+  2958769606
+ ],
+ "legalfuzz|275": [
+  "rule",
+  "maruru",
+  "maruru",
+  74,
+  2038370842
+ ],
+ "legalfuzz|276": [
+  "random",
+  "maruru",
+  "interstellar-maruru",
+  110,
+  4242620476
+ ],
+ "legalfuzz|277": [
+  "rule",
+  "maruru",
+  "zardy",
+  51,
+  2579692504
+ ],
+ "legalfuzz|278": [
+  "random",
+  "maruru",
+  "zardy-rev5c",
+  68,
+  1603663763
+ ],
+ "legalfuzz|279": [
+  "rule",
+  "maruru",
+  "lost-maruru",
+  85,
+  1432130529
+ ],
+ "legalfuzz|280": [
+  "random",
+  "interstellar-maruru",
+  "maruru",
+  107,
+  1002518856
+ ],
+ "legalfuzz|281": [
+  "rule",
+  "interstellar-maruru",
+  "interstellar-maruru",
+  67,
+  1856133183
+ ],
+ "legalfuzz|282": [
+  "random",
+  "interstellar-maruru",
+  "zardy",
+  84,
+  508544191
+ ],
+ "legalfuzz|283": [
+  "rule",
+  "interstellar-maruru",
+  "zardy-rev5c",
+  62,
+  851037086
+ ],
+ "legalfuzz|284": [
+  "random",
+  "interstellar-maruru",
+  "lost-maruru",
+  82,
+  1968396779
+ ],
+ "legalfuzz|285": [
+  "rule",
+  "zardy",
+  "maruru",
+  33,
+  3620935853
+ ],
+ "legalfuzz|286": [
+  "random",
+  "zardy",
+  "interstellar-maruru",
+  73,
+  841794672
+ ],
+ "legalfuzz|287": [
+  "rule",
+  "zardy",
+  "zardy",
+  40,
+  3151413239
+ ],
+ "legalfuzz|288": [
+  "random",
+  "zardy",
+  "zardy-rev5c",
+  71,
+  2992370956
+ ],
+ "legalfuzz|289": [
+  "rule",
+  "zardy",
+  "lost-maruru",
+  59,
+  1517783142
+ ],
+ "legalfuzz|290": [
+  "random",
+  "zardy-rev5c",
+  "maruru",
+  114,
+  1446657568
+ ],
+ "legalfuzz|291": [
+  "rule",
+  "zardy-rev5c",
+  "interstellar-maruru",
+  37,
+  2646164161
+ ],
+ "legalfuzz|292": [
+  "random",
+  "zardy-rev5c",
+  "zardy",
+  92,
+  2736002221
+ ],
+ "legalfuzz|293": [
+  "rule",
+  "zardy-rev5c",
+  "zardy-rev5c",
+  53,
+  1757421159
+ ],
+ "legalfuzz|294": [
+  "random",
+  "zardy-rev5c",
+  "lost-maruru",
+  71,
+  3804912210
+ ],
+ "legalfuzz|295": [
+  "rule",
+  "lost-maruru",
+  "maruru",
+  74,
+  3640297555
+ ],
+ "legalfuzz|296": [
+  "random",
+  "lost-maruru",
+  "interstellar-maruru",
+  150,
+  1835611256
+ ],
+ "legalfuzz|297": [
+  "rule",
+  "lost-maruru",
+  "zardy",
+  43,
+  3983564780
+ ],
+ "legalfuzz|298": [
+  "random",
+  "lost-maruru",
+  "zardy-rev5c",
+  118,
+  429075056
+ ],
+ "legalfuzz|299": [
+  "rule",
+  "lost-maruru",
+  "lost-maruru",
+  107,
+  884069541
+ ],
+ "legalfuzz|300": [
+  "random",
+  "maruru",
+  "maruru",
+  50,
+  3936258842
+ ],
+ "legalfuzz|301": [
+  "rule",
+  "maruru",
+  "interstellar-maruru",
+  34,
+  1384466326
+ ],
+ "legalfuzz|302": [
+  "random",
+  "maruru",
+  "zardy",
+  136,
+  2548991699
+ ],
+ "legalfuzz|303": [
+  "rule",
+  "maruru",
+  "zardy-rev5c",
+  42,
+  3903933110
+ ],
+ "legalfuzz|304": [
+  "random",
+  "maruru",
+  "lost-maruru",
+  54,
+  3401045131
+ ],
+ "legalfuzz|305": [
+  "rule",
+  "interstellar-maruru",
+  "maruru",
+  50,
+  3122029272
+ ],
+ "legalfuzz|306": [
+  "random",
+  "interstellar-maruru",
+  "interstellar-maruru",
+  119,
+  3329395866
+ ],
+ "legalfuzz|307": [
+  "rule",
+  "interstellar-maruru",
+  "zardy",
+  38,
+  12492242
+ ],
+ "legalfuzz|308": [
+  "random",
+  "interstellar-maruru",
+  "zardy-rev5c",
+  70,
+  3582616914
+ ],
+ "legalfuzz|309": [
+  "rule",
+  "interstellar-maruru",
+  "lost-maruru",
+  48,
+  2982070407
+ ],
+ "legalfuzz|310": [
+  "random",
+  "zardy",
+  "maruru",
+  104,
+  3227067445
+ ],
+ "legalfuzz|311": [
+  "rule",
+  "zardy",
+  "interstellar-maruru",
+  56,
+  1444039639
+ ],
+ "legalfuzz|312": [
+  "random",
+  "zardy",
+  "zardy",
+  101,
+  494415937
+ ],
+ "legalfuzz|313": [
+  "rule",
+  "zardy",
+  "zardy-rev5c",
+  48,
+  2638580305
+ ],
+ "legalfuzz|314": [
+  "random",
+  "zardy",
+  "lost-maruru",
+  94,
+  1623735873
+ ],
+ "legalfuzz|315": [
+  "rule",
+  "zardy-rev5c",
+  "maruru",
+  48,
+  2967592153
+ ],
+ "legalfuzz|316": [
+  "random",
+  "zardy-rev5c",
+  "interstellar-maruru",
+  66,
+  2885253257
+ ],
+ "legalfuzz|317": [
+  "rule",
+  "zardy-rev5c",
+  "zardy",
+  35,
+  1223787567
+ ],
+ "legalfuzz|318": [
+  "random",
+  "zardy-rev5c",
+  "zardy-rev5c",
+  86,
+  795132305
+ ],
+ "legalfuzz|319": [
+  "rule",
+  "zardy-rev5c",
+  "lost-maruru",
+  61,
+  4277994369
+ ],
+ "legalfuzz|320": [
+  "random",
+  "lost-maruru",
+  "maruru",
+  76,
+  844514791
+ ],
+ "legalfuzz|321": [
+  "rule",
+  "lost-maruru",
+  "interstellar-maruru",
+  46,
+  739680653
+ ],
+ "legalfuzz|322": [
+  "random",
+  "lost-maruru",
+  "zardy",
+  101,
+  2263220596
+ ],
+ "legalfuzz|323": [
+  "rule",
+  "lost-maruru",
+  "zardy-rev5c",
+  39,
+  1248373642
+ ],
+ "legalfuzz|324": [
+  "random",
+  "lost-maruru",
+  "lost-maruru",
+  67,
+  1178703418
+ ],
+ "legalfuzz|325": [
+  "rule",
+  "maruru",
+  "maruru",
+  80,
+  1187069225
+ ],
+ "legalfuzz|326": [
+  "random",
+  "maruru",
+  "interstellar-maruru",
+  104,
+  663569544
+ ],
+ "legalfuzz|327": [
+  "rule",
+  "maruru",
+  "zardy",
+  37,
+  3581028062
+ ],
+ "legalfuzz|328": [
+  "random",
+  "maruru",
+  "zardy-rev5c",
+  56,
+  63350189
+ ],
+ "legalfuzz|329": [
+  "rule",
+  "maruru",
+  "lost-maruru",
+  61,
+  18391854
+ ],
+ "legalfuzz|330": [
+  "random",
+  "interstellar-maruru",
+  "maruru",
+  67,
+  3484507214
+ ],
+ "legalfuzz|331": [
+  "rule",
+  "interstellar-maruru",
+  "interstellar-maruru",
+  67,
+  847292771
+ ],
+ "legalfuzz|332": [
+  "random",
+  "interstellar-maruru",
+  "zardy",
+  125,
+  1843503334
+ ],
+ "legalfuzz|333": [
+  "rule",
+  "interstellar-maruru",
+  "zardy-rev5c",
+  53,
+  3404654610
+ ],
+ "legalfuzz|334": [
+  "random",
+  "interstellar-maruru",
+  "lost-maruru",
+  68,
+  110794590
+ ],
+ "legalfuzz|335": [
+  "rule",
+  "zardy",
+  "maruru",
+  57,
+  3400734200
+ ],
+ "legalfuzz|336": [
+  "random",
+  "zardy",
+  "interstellar-maruru",
+  80,
+  1220098516
+ ],
+ "legalfuzz|337": [
+  "rule",
+  "zardy",
+  "zardy",
+  55,
+  3565120343
+ ],
+ "legalfuzz|338": [
+  "random",
+  "zardy",
+  "zardy-rev5c",
+  68,
+  873994514
+ ],
+ "legalfuzz|339": [
+  "rule",
+  "zardy",
+  "lost-maruru",
+  27,
+  2983476542
+ ],
+ "legalfuzz|340": [
+  "random",
+  "zardy-rev5c",
+  "maruru",
+  88,
+  1807236175
+ ],
+ "legalfuzz|341": [
+  "rule",
+  "zardy-rev5c",
+  "interstellar-maruru",
+  51,
+  2800364934
+ ],
+ "legalfuzz|342": [
+  "random",
+  "zardy-rev5c",
+  "zardy",
+  101,
+  3217832821
+ ],
+ "legalfuzz|343": [
+  "rule",
+  "zardy-rev5c",
+  "zardy-rev5c",
+  59,
+  2942478929
+ ],
+ "legalfuzz|344": [
+  "random",
+  "zardy-rev5c",
+  "lost-maruru",
+  120,
+  3960456979
+ ],
+ "legalfuzz|345": [
+  "rule",
+  "lost-maruru",
+  "maruru",
+  75,
+  1704266875
+ ],
+ "legalfuzz|346": [
+  "random",
+  "lost-maruru",
+  "interstellar-maruru",
+  106,
+  3859912883
+ ],
+ "legalfuzz|347": [
+  "rule",
+  "lost-maruru",
+  "zardy",
+  63,
+  407936844
+ ],
+ "legalfuzz|348": [
+  "random",
+  "lost-maruru",
+  "zardy-rev5c",
+  95,
+  2080154252
+ ],
+ "legalfuzz|349": [
+  "rule",
+  "lost-maruru",
+  "lost-maruru",
+  51,
+  3647965619
+ ],
+ "legalfuzz|350": [
+  "random",
+  "maruru",
+  "maruru",
+  61,
+  545831816
+ ],
+ "legalfuzz|351": [
+  "rule",
+  "maruru",
+  "interstellar-maruru",
+  76,
+  2993326815
+ ],
+ "legalfuzz|352": [
+  "random",
+  "maruru",
+  "zardy",
+  51,
+  2215466260
  ],
  "legalfuzz|353": [
   "rule",
   "maruru",
-  "interstellar-maruru",
-  62,
-  3553523170
+  "zardy-rev5c",
+  63,
+  4039778016
  ],
  "legalfuzz|354": [
   "random",
   "maruru",
-  "zardy",
-  132,
-  3204489833
+  "lost-maruru",
+  80,
+  345804007
  ],
  "legalfuzz|355": [
   "rule",
+  "interstellar-maruru",
   "maruru",
-  "lost-maruru",
-  48,
-  504603113
+  67,
+  451841195
  ],
  "legalfuzz|356": [
   "random",
   "interstellar-maruru",
-  "maruru",
-  92,
-  3867399269
+  "interstellar-maruru",
+  115,
+  2653153519
  ],
  "legalfuzz|357": [
   "rule",
   "interstellar-maruru",
-  "interstellar-maruru",
-  47,
-  2643449376
+  "zardy",
+  50,
+  2595384633
  ],
  "legalfuzz|358": [
   "random",
   "interstellar-maruru",
-  "zardy",
-  78,
-  4199392686
+  "zardy-rev5c",
+  93,
+  2056305605
  ],
  "legalfuzz|359": [
   "rule",
@@ -4583,254 +5447,254 @@
  "legalfuzz|363": [
   "rule",
   "zardy",
-  "lost-maruru",
-  98,
-  2186455031
+  "zardy-rev5c",
+  51,
+  137033777
  ],
  "legalfuzz|364": [
   "random",
+  "zardy",
   "lost-maruru",
-  "maruru",
-  90,
-  3211700649
+  100,
+  3139302429
  ],
  "legalfuzz|365": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  65,
-  3402845314
+  "zardy-rev5c",
+  "maruru",
+  24,
+  3472162920
  ],
  "legalfuzz|366": [
   "random",
-  "lost-maruru",
-  "zardy",
-  92,
-  1385350517
+  "zardy-rev5c",
+  "interstellar-maruru",
+  112,
+  2523341288
  ],
  "legalfuzz|367": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  73,
-  1493220239
+  "zardy-rev5c",
+  "zardy",
+  28,
+  272565115
  ],
  "legalfuzz|368": [
   "random",
-  "maruru",
-  "maruru",
-  81,
-  581442758
+  "zardy-rev5c",
+  "zardy-rev5c",
+  118,
+  2726894680
  ],
  "legalfuzz|369": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  57,
-  1236068752
+  "zardy-rev5c",
+  "lost-maruru",
+  65,
+  2206393331
  ],
  "legalfuzz|370": [
   "random",
+  "lost-maruru",
   "maruru",
-  "zardy",
-  73,
-  4227729443
+  75,
+  1712819388
  ],
  "legalfuzz|371": [
+  "rule",
+  "lost-maruru",
+  "interstellar-maruru",
+  40,
+  2092412825
+ ],
+ "legalfuzz|372": [
+  "random",
+  "lost-maruru",
+  "zardy",
+  82,
+  3055653890
+ ],
+ "legalfuzz|373": [
+  "rule",
+  "lost-maruru",
+  "zardy-rev5c",
+  74,
+  4234671326
+ ],
+ "legalfuzz|374": [
+  "random",
+  "lost-maruru",
+  "lost-maruru",
+  91,
+  2893549947
+ ],
+ "legalfuzz|375": [
+  "rule",
+  "maruru",
+  "maruru",
+  69,
+  2723942320
+ ],
+ "legalfuzz|376": [
+  "random",
+  "maruru",
+  "interstellar-maruru",
+  82,
+  3408114007
+ ],
+ "legalfuzz|377": [
+  "rule",
+  "maruru",
+  "zardy",
+  41,
+  181152949
+ ],
+ "legalfuzz|378": [
+  "random",
+  "maruru",
+  "zardy-rev5c",
+  143,
+  3050139369
+ ],
+ "legalfuzz|379": [
   "rule",
   "maruru",
   "lost-maruru",
   58,
-  634059524
- ],
- "legalfuzz|372": [
-  "random",
-  "interstellar-maruru",
-  "maruru",
-  49,
-  741196313
- ],
- "legalfuzz|373": [
-  "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  34,
-  740501499
- ],
- "legalfuzz|374": [
-  "random",
-  "interstellar-maruru",
-  "zardy",
-  117,
-  1639205112
- ],
- "legalfuzz|375": [
-  "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  52,
-  816261293
- ],
- "legalfuzz|376": [
-  "random",
-  "zardy",
-  "maruru",
-  93,
-  2364111783
- ],
- "legalfuzz|377": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  42,
-  3222218175
- ],
- "legalfuzz|378": [
-  "random",
-  "zardy",
-  "zardy",
-  120,
-  1521307959
- ],
- "legalfuzz|379": [
-  "rule",
-  "zardy",
-  "lost-maruru",
-  52,
-  58878720
+  2774790069
  ],
  "legalfuzz|380": [
   "random",
-  "lost-maruru",
+  "interstellar-maruru",
   "maruru",
-  72,
-  4228297120
+  101,
+  2157206774
  ],
  "legalfuzz|381": [
   "rule",
-  "lost-maruru",
   "interstellar-maruru",
-  37,
-  2842666614
+  "interstellar-maruru",
+  30,
+  2200316099
  ],
  "legalfuzz|382": [
   "random",
-  "lost-maruru",
+  "interstellar-maruru",
   "zardy",
-  107,
-  3137475818
+  124,
+  2132409235
  ],
  "legalfuzz|383": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  89,
-  4114844267
+  "interstellar-maruru",
+  "zardy-rev5c",
+  96,
+  2341702983
  ],
  "legalfuzz|384": [
   "random",
-  "maruru",
-  "maruru",
-  113,
-  1113613234
+  "interstellar-maruru",
+  "lost-maruru",
+  53,
+  4077167240
  ],
  "legalfuzz|385": [
   "rule",
+  "zardy",
   "maruru",
-  "interstellar-maruru",
-  43,
-  3014793669
+  65,
+  1765318080
  ],
  "legalfuzz|386": [
   "random",
-  "maruru",
   "zardy",
-  106,
-  4119181625
+  "interstellar-maruru",
+  97,
+  3552526020
  ],
  "legalfuzz|387": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  57,
-  3540501743
+  "zardy",
+  "zardy",
+  97,
+  2493264888
  ],
  "legalfuzz|388": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  128,
-  29287647
+  "zardy",
+  "zardy-rev5c",
+  78,
+  1364313232
  ],
  "legalfuzz|389": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  82,
-  14236291
+  "zardy",
+  "lost-maruru",
+  38,
+  1865100855
  ],
  "legalfuzz|390": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  128,
-  9750448
+  "zardy-rev5c",
+  "maruru",
+  111,
+  1707836350
  ],
  "legalfuzz|391": [
   "rule",
+  "zardy-rev5c",
   "interstellar-maruru",
-  "lost-maruru",
-  55,
-  883653360
+  48,
+  593747861
  ],
  "legalfuzz|392": [
   "random",
+  "zardy-rev5c",
   "zardy",
-  "maruru",
-  97,
-  3297238741
+  112,
+  221438795
  ],
  "legalfuzz|393": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  25,
-  2354675142
+  "zardy-rev5c",
+  "zardy-rev5c",
+  48,
+  1957033676
  ],
  "legalfuzz|394": [
   "random",
-  "zardy",
-  "zardy",
-  109,
-  1641836765
+  "zardy-rev5c",
+  "lost-maruru",
+  63,
+  3711967919
  ],
  "legalfuzz|395": [
   "rule",
-  "zardy",
   "lost-maruru",
-  99,
-  3457036022
+  "maruru",
+  83,
+  420562333
  ],
  "legalfuzz|396": [
   "random",
   "lost-maruru",
-  "maruru",
-  70,
-  2637783127
+  "interstellar-maruru",
+  78,
+  1117656964
  ],
  "legalfuzz|397": [
   "rule",
   "lost-maruru",
-  "interstellar-maruru",
-  45,
-  441012460
+  "zardy",
+  61,
+  3975099973
  ],
  "legalfuzz|398": [
   "random",
   "lost-maruru",
-  "zardy",
-  95,
-  275576985
+  "zardy-rev5c",
+  74,
+  1863999170
  ],
  "legalfuzz|399": [
   "rule",
@@ -4863,954 +5727,954 @@
  "legalfuzz|403": [
   "rule",
   "maruru",
-  "lost-maruru",
-  51,
-  3367735865
+  "zardy-rev5c",
+  54,
+  2967578694
  ],
  "legalfuzz|404": [
   "random",
-  "interstellar-maruru",
   "maruru",
-  75,
-  732769749
+  "lost-maruru",
+  68,
+  4122982476
  ],
  "legalfuzz|405": [
   "rule",
   "interstellar-maruru",
-  "interstellar-maruru",
-  53,
-  3212705884
+  "maruru",
+  86,
+  3857366008
  ],
  "legalfuzz|406": [
   "random",
   "interstellar-maruru",
-  "zardy",
-  104,
-  1033774819
+  "interstellar-maruru",
+  60,
+  1465654984
  ],
  "legalfuzz|407": [
   "rule",
   "interstellar-maruru",
-  "lost-maruru",
-  73,
-  3498621358
+  "zardy",
+  78,
+  1670637555
  ],
  "legalfuzz|408": [
   "random",
-  "zardy",
-  "maruru",
-  119,
-  3996563663
+  "interstellar-maruru",
+  "zardy-rev5c",
+  137,
+  1073192328
  ],
  "legalfuzz|409": [
   "rule",
-  "zardy",
   "interstellar-maruru",
-  57,
-  2695308323
+  "lost-maruru",
+  46,
+  1448633362
  ],
  "legalfuzz|410": [
   "random",
   "zardy",
-  "zardy",
-  104,
-  252326708
+  "maruru",
+  84,
+  2709463457
  ],
  "legalfuzz|411": [
   "rule",
   "zardy",
-  "lost-maruru",
-  64,
-  3523126914
+  "interstellar-maruru",
+  53,
+  143743511
  ],
  "legalfuzz|412": [
   "random",
-  "lost-maruru",
-  "maruru",
-  93,
-  473495573
+  "zardy",
+  "zardy",
+  116,
+  3932409202
  ],
  "legalfuzz|413": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  60,
-  3899975636
+  "zardy",
+  "zardy-rev5c",
+  68,
+  4293564985
  ],
  "legalfuzz|414": [
   "random",
-  "lost-maruru",
   "zardy",
-  83,
-  2831405473
+  "lost-maruru",
+  74,
+  1167901828
  ],
  "legalfuzz|415": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  51,
-  1367993744
+  "zardy-rev5c",
+  "maruru",
+  44,
+  532534624
  ],
  "legalfuzz|416": [
   "random",
-  "maruru",
-  "maruru",
+  "zardy-rev5c",
+  "interstellar-maruru",
   102,
-  85811461
+  3718676904
  ],
  "legalfuzz|417": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  111,
-  2374676638
+  "zardy-rev5c",
+  "zardy",
+  68,
+  3881132388
  ],
  "legalfuzz|418": [
   "random",
-  "maruru",
-  "zardy",
-  79,
-  995699329
+  "zardy-rev5c",
+  "zardy-rev5c",
+  86,
+  2284284099
  ],
  "legalfuzz|419": [
   "rule",
-  "maruru",
+  "zardy-rev5c",
   "lost-maruru",
-  59,
-  2029068831
+  46,
+  489242492
  ],
  "legalfuzz|420": [
   "random",
-  "interstellar-maruru",
+  "lost-maruru",
   "maruru",
-  104,
-  2936905291
+  124,
+  3549105247
  ],
  "legalfuzz|421": [
   "rule",
+  "lost-maruru",
   "interstellar-maruru",
-  "interstellar-maruru",
-  61,
-  739513113
+  64,
+  2214779010
  ],
  "legalfuzz|422": [
   "random",
-  "interstellar-maruru",
+  "lost-maruru",
   "zardy",
-  104,
-  3507516754
+  108,
+  2771614091
  ],
  "legalfuzz|423": [
   "rule",
-  "interstellar-maruru",
   "lost-maruru",
-  66,
-  4204226331
+  "zardy-rev5c",
+  61,
+  1331707487
  ],
  "legalfuzz|424": [
   "random",
-  "zardy",
-  "maruru",
-  114,
-  3621180887
+  "lost-maruru",
+  "lost-maruru",
+  118,
+  1376253282
  ],
  "legalfuzz|425": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  46,
-  2902581845
+  "maruru",
+  "maruru",
+  76,
+  3630908414
  ],
  "legalfuzz|426": [
   "random",
-  "zardy",
-  "zardy",
-  94,
-  3771801496
+  "maruru",
+  "interstellar-maruru",
+  99,
+  2629810061
  ],
  "legalfuzz|427": [
   "rule",
+  "maruru",
   "zardy",
-  "lost-maruru",
-  39,
-  492096004
+  94,
+  1119173065
  ],
  "legalfuzz|428": [
   "random",
-  "lost-maruru",
   "maruru",
-  93,
-  4289466201
+  "zardy-rev5c",
+  108,
+  3384924353
  ],
  "legalfuzz|429": [
   "rule",
+  "maruru",
   "lost-maruru",
-  "interstellar-maruru",
-  70,
-  1067710976
+  55,
+  3461536409
  ],
  "legalfuzz|430": [
   "random",
-  "lost-maruru",
-  "zardy",
-  111,
-  2251811717
+  "interstellar-maruru",
+  "maruru",
+  102,
+  4018631668
  ],
  "legalfuzz|431": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  94,
-  210379322
+  "interstellar-maruru",
+  "interstellar-maruru",
+  63,
+  2290482028
  ],
  "legalfuzz|432": [
   "random",
-  "maruru",
-  "maruru",
-  149,
-  3059687775
+  "interstellar-maruru",
+  "zardy",
+  138,
+  2629570620
  ],
  "legalfuzz|433": [
   "rule",
-  "maruru",
   "interstellar-maruru",
-  64,
-  2989538494
+  "zardy-rev5c",
+  66,
+  4283745410
  ],
  "legalfuzz|434": [
   "random",
-  "maruru",
-  "zardy",
-  96,
-  2695676586
+  "interstellar-maruru",
+  "lost-maruru",
+  133,
+  1959025107
  ],
  "legalfuzz|435": [
   "rule",
+  "zardy",
   "maruru",
-  "lost-maruru",
-  50,
-  293414016
+  85,
+  1512430698
  ],
  "legalfuzz|436": [
   "random",
+  "zardy",
   "interstellar-maruru",
-  "maruru",
-  80,
-  2903776497
+  76,
+  3475788949
  ],
  "legalfuzz|437": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  48,
-  3482224581
+  "zardy",
+  "zardy",
+  49,
+  3598611308
  ],
  "legalfuzz|438": [
   "random",
-  "interstellar-maruru",
   "zardy",
-  73,
-  3831502214
+  "zardy-rev5c",
+  100,
+  1134128441
  ],
  "legalfuzz|439": [
   "rule",
-  "interstellar-maruru",
+  "zardy",
   "lost-maruru",
-  38,
-  4137897216
+  51,
+  1394613511
  ],
  "legalfuzz|440": [
   "random",
-  "zardy",
+  "zardy-rev5c",
   "maruru",
-  91,
-  1385691674
+  115,
+  2075601897
  ],
  "legalfuzz|441": [
   "rule",
-  "zardy",
+  "zardy-rev5c",
   "interstellar-maruru",
-  46,
-  2459950427
+  44,
+  97204730
  ],
  "legalfuzz|442": [
   "random",
+  "zardy-rev5c",
   "zardy",
-  "zardy",
-  101,
-  2298495523
+  77,
+  524874145
  ],
  "legalfuzz|443": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  38,
-  3398043765
+  "zardy-rev5c",
+  "zardy-rev5c",
+  49,
+  836463235
  ],
  "legalfuzz|444": [
   "random",
+  "zardy-rev5c",
   "lost-maruru",
-  "maruru",
   81,
-  3470531053
+  2652717328
  ],
  "legalfuzz|445": [
   "rule",
   "lost-maruru",
-  "interstellar-maruru",
-  44,
-  1865162767
+  "maruru",
+  42,
+  2623828016
  ],
  "legalfuzz|446": [
   "random",
   "lost-maruru",
-  "zardy",
-  90,
-  2580328572
+  "interstellar-maruru",
+  114,
+  3622685053
  ],
  "legalfuzz|447": [
   "rule",
   "lost-maruru",
-  "lost-maruru",
-  84,
-  4149372331
+  "zardy",
+  40,
+  3762397238
  ],
  "legalfuzz|448": [
   "random",
-  "maruru",
-  "maruru",
-  103,
-  3173839993
+  "lost-maruru",
+  "zardy-rev5c",
+  55,
+  1640382555
  ],
  "legalfuzz|449": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  59,
-  407610528
+  "lost-maruru",
+  "lost-maruru",
+  108,
+  2320887233
  ],
  "legalfuzz|450": [
   "random",
   "maruru",
-  "zardy",
-  51,
-  975525030
+  "maruru",
+  81,
+  1115051930
  ],
  "legalfuzz|451": [
   "rule",
   "maruru",
-  "lost-maruru",
-  93,
-  1582000844
+  "interstellar-maruru",
+  70,
+  1388449703
  ],
  "legalfuzz|452": [
   "random",
-  "interstellar-maruru",
   "maruru",
-  127,
-  343036122
+  "zardy",
+  103,
+  226868090
  ],
  "legalfuzz|453": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  84,
-  3518298743
+  "maruru",
+  "zardy-rev5c",
+  49,
+  4002545379
  ],
  "legalfuzz|454": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  56,
-  634273463
+  "maruru",
+  "lost-maruru",
+  74,
+  3966081041
  ],
  "legalfuzz|455": [
   "rule",
   "interstellar-maruru",
-  "lost-maruru",
-  32,
-  439089817
+  "maruru",
+  26,
+  3081391331
  ],
  "legalfuzz|456": [
   "random",
-  "zardy",
-  "maruru",
-  95,
-  3471221751
+  "interstellar-maruru",
+  "interstellar-maruru",
+  117,
+  3884513932
  ],
  "legalfuzz|457": [
   "rule",
-  "zardy",
   "interstellar-maruru",
-  36,
-  2847311624
+  "zardy",
+  69,
+  4235131760
  ],
  "legalfuzz|458": [
   "random",
-  "zardy",
-  "zardy",
-  88,
-  497900821
+  "interstellar-maruru",
+  "zardy-rev5c",
+  110,
+  515193981
  ],
  "legalfuzz|459": [
   "rule",
-  "zardy",
+  "interstellar-maruru",
   "lost-maruru",
-  72,
-  2662821576
+  50,
+  2652755757
  ],
  "legalfuzz|460": [
   "random",
-  "lost-maruru",
+  "zardy",
   "maruru",
-  116,
-  2204625513
+  94,
+  95484091
  ],
  "legalfuzz|461": [
   "rule",
-  "lost-maruru",
+  "zardy",
   "interstellar-maruru",
-  37,
-  1703950122
+  61,
+  3551583185
  ],
  "legalfuzz|462": [
   "random",
-  "lost-maruru",
   "zardy",
-  110,
-  1320013624
+  "zardy",
+  149,
+  790064888
  ],
  "legalfuzz|463": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  65,
-  3289449930
+  "zardy",
+  "zardy-rev5c",
+  55,
+  1310460224
  ],
  "legalfuzz|464": [
   "random",
-  "maruru",
-  "maruru",
-  124,
-  1528657525
+  "zardy",
+  "lost-maruru",
+  132,
+  608276347
  ],
  "legalfuzz|465": [
   "rule",
+  "zardy-rev5c",
   "maruru",
-  "interstellar-maruru",
-  76,
-  3435217922
+  51,
+  447736802
  ],
  "legalfuzz|466": [
   "random",
-  "maruru",
-  "zardy",
-  71,
-  1249810142
+  "zardy-rev5c",
+  "interstellar-maruru",
+  92,
+  1777477729
  ],
  "legalfuzz|467": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  39,
-  496144134
+  "zardy-rev5c",
+  "zardy",
+  60,
+  2184408794
  ],
  "legalfuzz|468": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  108,
-  1919825402
+  "zardy-rev5c",
+  "zardy-rev5c",
+  65,
+  717345985
  ],
  "legalfuzz|469": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  62,
-  775233648
+  "zardy-rev5c",
+  "lost-maruru",
+  80,
+  302740315
  ],
  "legalfuzz|470": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  121,
-  2707126571
+  "lost-maruru",
+  "maruru",
+  156,
+  1573405792
  ],
  "legalfuzz|471": [
   "rule",
-  "interstellar-maruru",
   "lost-maruru",
+  "interstellar-maruru",
   55,
-  1014946970
+  2552786528
  ],
  "legalfuzz|472": [
   "random",
+  "lost-maruru",
   "zardy",
-  "maruru",
-  68,
-  3434867940
+  79,
+  3337836887
  ],
  "legalfuzz|473": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  82,
-  4095269234
+  "lost-maruru",
+  "zardy-rev5c",
+  80,
+  3703637406
  ],
  "legalfuzz|474": [
   "random",
-  "zardy",
-  "zardy",
-  89,
-  657998388
+  "lost-maruru",
+  "lost-maruru",
+  74,
+  1237660983
  ],
  "legalfuzz|475": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  59,
-  2012022979
+  "maruru",
+  "maruru",
+  143,
+  1970107166
  ],
  "legalfuzz|476": [
   "random",
-  "lost-maruru",
   "maruru",
-  114,
-  136228454
+  "interstellar-maruru",
+  123,
+  1615264240
  ],
  "legalfuzz|477": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  57,
-  519654367
+  "maruru",
+  "zardy",
+  37,
+  3586631403
  ],
  "legalfuzz|478": [
   "random",
-  "lost-maruru",
-  "zardy",
-  131,
-  1043254231
+  "maruru",
+  "zardy-rev5c",
+  114,
+  1427207343
  ],
  "legalfuzz|479": [
   "rule",
+  "maruru",
   "lost-maruru",
-  "lost-maruru",
-  60,
-  1874033982
+  49,
+  326287039
  ],
  "legalfuzz|480": [
   "random",
+  "interstellar-maruru",
   "maruru",
-  "maruru",
-  68,
-  2191779136
+  116,
+  704557202
  ],
  "legalfuzz|481": [
   "rule",
-  "maruru",
   "interstellar-maruru",
-  41,
-  1185737861
+  "interstellar-maruru",
+  67,
+  887432457
  ],
  "legalfuzz|482": [
   "random",
-  "maruru",
+  "interstellar-maruru",
   "zardy",
-  100,
-  3473263536
+  116,
+  2859118671
  ],
  "legalfuzz|483": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  59,
-  4192601664
+  "interstellar-maruru",
+  "zardy-rev5c",
+  56,
+  603396432
  ],
  "legalfuzz|484": [
   "random",
   "interstellar-maruru",
-  "maruru",
-  80,
-  1571361307
+  "lost-maruru",
+  134,
+  1690060049
  ],
  "legalfuzz|485": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  57,
-  21534246
+  "zardy",
+  "maruru",
+  48,
+  4279907414
  ],
  "legalfuzz|486": [
   "random",
-  "interstellar-maruru",
   "zardy",
-  105,
-  3681202743
+  "interstellar-maruru",
+  89,
+  1197239101
  ],
  "legalfuzz|487": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
+  "zardy",
+  "zardy",
   61,
-  3986491281
+  4138977547
  ],
  "legalfuzz|488": [
   "random",
   "zardy",
-  "maruru",
-  112,
-  49073132
+  "zardy-rev5c",
+  102,
+  2783067842
  ],
  "legalfuzz|489": [
   "rule",
   "zardy",
-  "interstellar-maruru",
-  50,
-  109278925
+  "lost-maruru",
+  98,
+  1285622855
  ],
  "legalfuzz|490": [
   "random",
-  "zardy",
-  "zardy",
-  88,
-  3631568663
+  "zardy-rev5c",
+  "maruru",
+  130,
+  3945338301
  ],
  "legalfuzz|491": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  80,
-  3357270251
+  "zardy-rev5c",
+  "interstellar-maruru",
+  40,
+  4083780256
  ],
  "legalfuzz|492": [
   "random",
-  "lost-maruru",
-  "maruru",
-  91,
-  1143208796
+  "zardy-rev5c",
+  "zardy",
+  114,
+  2221619794
  ],
  "legalfuzz|493": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  54,
-  1728698870
+  "zardy-rev5c",
+  "zardy-rev5c",
+  61,
+  1377672407
  ],
  "legalfuzz|494": [
   "random",
+  "zardy-rev5c",
   "lost-maruru",
-  "zardy",
-  106,
-  2612704138
+  102,
+  3376512531
  ],
  "legalfuzz|495": [
   "rule",
   "lost-maruru",
-  "lost-maruru",
-  87,
-  1150632153
+  "maruru",
+  37,
+  2212286014
  ],
  "legalfuzz|496": [
   "random",
-  "maruru",
-  "maruru",
-  77,
-  4107934523
+  "lost-maruru",
+  "interstellar-maruru",
+  128,
+  4159256310
  ],
  "legalfuzz|497": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  26,
-  3029286599
+  "lost-maruru",
+  "zardy",
+  25,
+  1534426338
  ],
  "legalfuzz|498": [
   "random",
-  "maruru",
-  "zardy",
-  82,
-  457448763
+  "lost-maruru",
+  "zardy-rev5c",
+  103,
+  142228530
  ],
  "legalfuzz|499": [
   "rule",
-  "maruru",
   "lost-maruru",
-  63,
-  2578209991
+  "lost-maruru",
+  71,
+  1141349685
  ],
  "legalfuzz|500": [
   "random",
-  "interstellar-maruru",
   "maruru",
-  104,
-  3252652793
+  "maruru",
+  105,
+  644194032
  ],
  "legalfuzz|501": [
   "rule",
+  "maruru",
   "interstellar-maruru",
-  "interstellar-maruru",
-  99,
-  1421292943
+  58,
+  1260357161
  ],
  "legalfuzz|502": [
   "random",
-  "interstellar-maruru",
+  "maruru",
   "zardy",
-  95,
-  101598599
+  90,
+  4006496566
  ],
  "legalfuzz|503": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  50,
-  1502386920
+  "maruru",
+  "zardy-rev5c",
+  38,
+  3529497514
  ],
  "legalfuzz|504": [
   "random",
-  "zardy",
   "maruru",
-  41,
-  3605027187
+  "lost-maruru",
+  105,
+  493723210
  ],
  "legalfuzz|505": [
   "rule",
-  "zardy",
   "interstellar-maruru",
-  69,
-  2420039095
+  "maruru",
+  48,
+  4052313391
  ],
  "legalfuzz|506": [
   "random",
-  "zardy",
-  "zardy",
-  113,
-  603249401
+  "interstellar-maruru",
+  "interstellar-maruru",
+  75,
+  3224217331
  ],
  "legalfuzz|507": [
   "rule",
+  "interstellar-maruru",
   "zardy",
-  "lost-maruru",
-  79,
-  3505395518
+  61,
+  3810299744
  ],
  "legalfuzz|508": [
   "random",
-  "lost-maruru",
-  "maruru",
-  104,
-  428790764
+  "interstellar-maruru",
+  "zardy-rev5c",
+  94,
+  1350029900
  ],
  "legalfuzz|509": [
   "rule",
-  "lost-maruru",
   "interstellar-maruru",
-  89,
-  1841963769
+  "lost-maruru",
+  108,
+  75822768
  ],
  "legalfuzz|510": [
   "random",
-  "lost-maruru",
   "zardy",
-  125,
-  1377114846
+  "maruru",
+  94,
+  1163362376
  ],
  "legalfuzz|511": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  64,
-  1759849996
+  "zardy",
+  "interstellar-maruru",
+  43,
+  1332460902
  ],
  "legalfuzz|512": [
   "random",
-  "maruru",
-  "maruru",
-  128,
-  2251946190
+  "zardy",
+  "zardy",
+  88,
+  3107230707
  ],
  "legalfuzz|513": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  53,
-  2617329046
+  "zardy",
+  "zardy-rev5c",
+  64,
+  123978393
  ],
  "legalfuzz|514": [
   "random",
-  "maruru",
   "zardy",
-  99,
-  1558775958
+  "lost-maruru",
+  108,
+  2152991435
  ],
  "legalfuzz|515": [
   "rule",
+  "zardy-rev5c",
   "maruru",
-  "lost-maruru",
-  65,
-  2954792437
+  46,
+  1356177242
  ],
  "legalfuzz|516": [
   "random",
+  "zardy-rev5c",
   "interstellar-maruru",
-  "maruru",
-  106,
-  2526484447
+  100,
+  2961891330
  ],
  "legalfuzz|517": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  46,
-  2338341240
+  "zardy-rev5c",
+  "zardy",
+  63,
+  53203146
  ],
  "legalfuzz|518": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  123,
-  2388556309
+  "zardy-rev5c",
+  "zardy-rev5c",
+  86,
+  1167633773
  ],
  "legalfuzz|519": [
   "rule",
-  "interstellar-maruru",
+  "zardy-rev5c",
   "lost-maruru",
-  50,
-  416347144
+  72,
+  1221244396
  ],
  "legalfuzz|520": [
   "random",
-  "zardy",
+  "lost-maruru",
   "maruru",
-  80,
-  1927673486
+  74,
+  642983625
  ],
  "legalfuzz|521": [
   "rule",
-  "zardy",
+  "lost-maruru",
   "interstellar-maruru",
-  56,
-  1767936134
+  52,
+  4251941964
  ],
  "legalfuzz|522": [
   "random",
+  "lost-maruru",
   "zardy",
-  "zardy",
-  124,
-  911086821
+  97,
+  2400297286
  ],
  "legalfuzz|523": [
   "rule",
-  "zardy",
   "lost-maruru",
-  46,
-  2860678693
+  "zardy-rev5c",
+  47,
+  532462323
  ],
  "legalfuzz|524": [
   "random",
   "lost-maruru",
-  "maruru",
-  96,
-  1701569650
+  "lost-maruru",
+  138,
+  1943544976
  ],
  "legalfuzz|525": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  72,
-  3972582881
+  "maruru",
+  "maruru",
+  58,
+  2705742519
  ],
  "legalfuzz|526": [
   "random",
-  "lost-maruru",
-  "zardy",
-  95,
-  1288917948
+  "maruru",
+  "interstellar-maruru",
+  130,
+  2974668970
  ],
  "legalfuzz|527": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  49,
-  2715965600
+  "maruru",
+  "zardy",
+  68,
+  3904200403
  ],
  "legalfuzz|528": [
   "random",
   "maruru",
-  "maruru",
-  136,
-  2923120384
+  "zardy-rev5c",
+  61,
+  2982359605
  ],
  "legalfuzz|529": [
   "rule",
   "maruru",
-  "interstellar-maruru",
-  67,
-  1570641733
+  "lost-maruru",
+  54,
+  51729261
  ],
  "legalfuzz|530": [
   "random",
+  "interstellar-maruru",
   "maruru",
-  "zardy",
-  69,
-  2504522874
+  75,
+  3703228222
  ],
  "legalfuzz|531": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  52,
-  4185791259
+  "interstellar-maruru",
+  "interstellar-maruru",
+  82,
+  1231290990
  ],
  "legalfuzz|532": [
   "random",
   "interstellar-maruru",
-  "maruru",
-  69,
-  3685690392
+  "zardy",
+  110,
+  1016025237
  ],
  "legalfuzz|533": [
   "rule",
   "interstellar-maruru",
-  "interstellar-maruru",
-  52,
-  2590027247
+  "zardy-rev5c",
+  57,
+  4155915821
  ],
  "legalfuzz|534": [
   "random",
   "interstellar-maruru",
-  "zardy",
-  86,
-  1764977651
+  "lost-maruru",
+  124,
+  449477653
  ],
  "legalfuzz|535": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  61,
-  402478265
+  "zardy",
+  "maruru",
+  43,
+  2166780931
  ],
  "legalfuzz|536": [
   "random",
   "zardy",
-  "maruru",
-  99,
-  3319735302
+  "interstellar-maruru",
+  103,
+  3039011440
  ],
  "legalfuzz|537": [
   "rule",
   "zardy",
-  "interstellar-maruru",
-  50,
-  3661583120
+  "zardy",
+  89,
+  2496797178
  ],
  "legalfuzz|538": [
   "random",
   "zardy",
-  "zardy",
-  85,
-  4272034909
+  "zardy-rev5c",
+  108,
+  3947699721
  ],
  "legalfuzz|539": [
   "rule",
@@ -5821,276 +6685,276 @@
  ],
  "legalfuzz|540": [
   "random",
-  "lost-maruru",
+  "zardy-rev5c",
   "maruru",
-  71,
-  999393730
+  61,
+  1102952543
  ],
  "legalfuzz|541": [
   "rule",
-  "lost-maruru",
+  "zardy-rev5c",
   "interstellar-maruru",
-  121,
-  1317195585
+  100,
+  3668067626
  ],
  "legalfuzz|542": [
   "random",
-  "lost-maruru",
+  "zardy-rev5c",
   "zardy",
-  103,
-  3766147363
+  61,
+  2307688014
  ],
  "legalfuzz|543": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  44,
-  2233438125
+  "zardy-rev5c",
+  "zardy-rev5c",
+  41,
+  2774059363
  ],
  "legalfuzz|544": [
   "random",
-  "maruru",
-  "maruru",
-  105,
-  4006009698
+  "zardy-rev5c",
+  "lost-maruru",
+  80,
+  2298666537
  ],
  "legalfuzz|545": [
   "rule",
+  "lost-maruru",
   "maruru",
-  "interstellar-maruru",
-  40,
-  215050475
+  68,
+  3084846907
  ],
  "legalfuzz|546": [
   "random",
-  "maruru",
-  "zardy",
-  142,
-  1062010897
+  "lost-maruru",
+  "interstellar-maruru",
+  70,
+  2085836912
  ],
  "legalfuzz|547": [
   "rule",
-  "maruru",
   "lost-maruru",
-  68,
-  2454146912
+  "zardy",
+  57,
+  590010192
  ],
  "legalfuzz|548": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  88,
-  3791437120
+  "lost-maruru",
+  "zardy-rev5c",
+  89,
+  3924185572
  ],
  "legalfuzz|549": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  58,
-  850558068
+  "lost-maruru",
+  "lost-maruru",
+  88,
+  1132510815
  ],
  "legalfuzz|550": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  108,
-  1495372051
+  "maruru",
+  "maruru",
+  107,
+  2968943075
  ],
  "legalfuzz|551": [
-  "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  53,
-  164434171
- ],
- "legalfuzz|552": [
-  "random",
-  "zardy",
-  "maruru",
-  82,
-  3455049596
- ],
- "legalfuzz|553": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  49,
-  871928703
- ],
- "legalfuzz|554": [
-  "random",
-  "zardy",
-  "zardy",
-  120,
-  857043749
- ],
- "legalfuzz|555": [
-  "rule",
-  "zardy",
-  "lost-maruru",
-  58,
-  2520099909
- ],
- "legalfuzz|556": [
-  "random",
-  "lost-maruru",
-  "maruru",
-  81,
-  1508547511
- ],
- "legalfuzz|557": [
-  "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  72,
-  1720371837
- ],
- "legalfuzz|558": [
-  "random",
-  "lost-maruru",
-  "zardy",
-  94,
-  93106065
- ],
- "legalfuzz|559": [
-  "rule",
-  "lost-maruru",
-  "lost-maruru",
-  108,
-  3982932432
- ],
- "legalfuzz|560": [
-  "random",
-  "maruru",
-  "maruru",
-  66,
-  1727458367
- ],
- "legalfuzz|561": [
   "rule",
   "maruru",
   "interstellar-maruru",
   69,
-  99640894
+  3674400
+ ],
+ "legalfuzz|552": [
+  "random",
+  "maruru",
+  "zardy",
+  54,
+  554644650
+ ],
+ "legalfuzz|553": [
+  "rule",
+  "maruru",
+  "zardy-rev5c",
+  40,
+  18413658
+ ],
+ "legalfuzz|554": [
+  "random",
+  "maruru",
+  "lost-maruru",
+  128,
+  1498821754
+ ],
+ "legalfuzz|555": [
+  "rule",
+  "interstellar-maruru",
+  "maruru",
+  51,
+  2956861469
+ ],
+ "legalfuzz|556": [
+  "random",
+  "interstellar-maruru",
+  "interstellar-maruru",
+  140,
+  4110231581
+ ],
+ "legalfuzz|557": [
+  "rule",
+  "interstellar-maruru",
+  "zardy",
+  77,
+  4122062760
+ ],
+ "legalfuzz|558": [
+  "random",
+  "interstellar-maruru",
+  "zardy-rev5c",
+  114,
+  471400900
+ ],
+ "legalfuzz|559": [
+  "rule",
+  "interstellar-maruru",
+  "lost-maruru",
+  78,
+  1782107942
+ ],
+ "legalfuzz|560": [
+  "random",
+  "zardy",
+  "maruru",
+  81,
+  1554529933
+ ],
+ "legalfuzz|561": [
+  "rule",
+  "zardy",
+  "interstellar-maruru",
+  50,
+  896700301
  ],
  "legalfuzz|562": [
   "random",
-  "maruru",
   "zardy",
-  140,
-  2382710035
+  "zardy",
+  98,
+  4008558916
  ],
  "legalfuzz|563": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  53,
-  1365078697
+  "zardy",
+  "zardy-rev5c",
+  68,
+  896755273
  ],
  "legalfuzz|564": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  96,
-  2287949628
+  "zardy",
+  "lost-maruru",
+  113,
+  1815632192
  ],
  "legalfuzz|565": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  50,
-  2524131657
+  "zardy-rev5c",
+  "maruru",
+  39,
+  2788790890
  ],
  "legalfuzz|566": [
   "random",
+  "zardy-rev5c",
   "interstellar-maruru",
-  "zardy",
-  72,
-  3171045234
+  162,
+  3564038193
  ],
  "legalfuzz|567": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  65,
-  857344533
+  "zardy-rev5c",
+  "zardy",
+  37,
+  590921274
  ],
  "legalfuzz|568": [
   "random",
-  "zardy",
-  "maruru",
-  104,
-  2778920916
+  "zardy-rev5c",
+  "zardy-rev5c",
+  96,
+  1716319284
  ],
  "legalfuzz|569": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  68,
-  3279893871
+  "zardy-rev5c",
+  "lost-maruru",
+  52,
+  2778873084
  ],
  "legalfuzz|570": [
   "random",
-  "zardy",
-  "zardy",
-  79,
-  2001571289
+  "lost-maruru",
+  "maruru",
+  65,
+  787489027
  ],
  "legalfuzz|571": [
   "rule",
-  "zardy",
   "lost-maruru",
-  65,
-  1835211629
+  "interstellar-maruru",
+  54,
+  3811850764
  ],
  "legalfuzz|572": [
   "random",
   "lost-maruru",
-  "maruru",
-  81,
-  2525827974
+  "zardy",
+  136,
+  4011608843
  ],
  "legalfuzz|573": [
   "rule",
   "lost-maruru",
-  "interstellar-maruru",
-  79,
-  2872503558
+  "zardy-rev5c",
+  89,
+  1621964676
  ],
  "legalfuzz|574": [
   "random",
   "lost-maruru",
-  "zardy",
-  87,
-  1461148970
+  "lost-maruru",
+  137,
+  1502597388
  ],
  "legalfuzz|575": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  51,
-  1556989329
+  "maruru",
+  "maruru",
+  62,
+  3520541451
  ],
  "legalfuzz|576": [
   "random",
   "maruru",
-  "maruru",
-  114,
-  4247118903
+  "interstellar-maruru",
+  82,
+  2324920771
  ],
  "legalfuzz|577": [
   "rule",
   "maruru",
-  "interstellar-maruru",
-  55,
-  2628549918
+  "zardy",
+  59,
+  7577921
  ],
  "legalfuzz|578": [
   "random",
   "maruru",
-  "zardy",
+  "zardy-rev5c",
   102,
-  2236996164
+  2559927809
  ],
  "legalfuzz|579": [
   "rule",
@@ -6123,261 +6987,261 @@
  "legalfuzz|583": [
   "rule",
   "interstellar-maruru",
-  "lost-maruru",
-  55,
-  1213923355
+  "zardy-rev5c",
+  72,
+  2221449821
  ],
  "legalfuzz|584": [
   "random",
-  "zardy",
-  "maruru",
-  56,
-  1626119191
+  "interstellar-maruru",
+  "lost-maruru",
+  72,
+  1822801774
  ],
  "legalfuzz|585": [
   "rule",
   "zardy",
-  "interstellar-maruru",
-  75,
-  4201481832
+  "maruru",
+  59,
+  680773730
  ],
  "legalfuzz|586": [
   "random",
   "zardy",
-  "zardy",
-  101,
-  1283850430
+  "interstellar-maruru",
+  125,
+  2208269346
  ],
  "legalfuzz|587": [
   "rule",
   "zardy",
-  "lost-maruru",
-  58,
-  2279913121
+  "zardy",
+  30,
+  665376495
  ],
  "legalfuzz|588": [
   "random",
-  "lost-maruru",
-  "maruru",
-  83,
-  4011030540
+  "zardy",
+  "zardy-rev5c",
+  97,
+  2917667657
  ],
  "legalfuzz|589": [
   "rule",
+  "zardy",
   "lost-maruru",
-  "interstellar-maruru",
-  51,
-  1666683110
+  71,
+  2226170007
  ],
  "legalfuzz|590": [
   "random",
-  "lost-maruru",
-  "zardy",
-  111,
-  2986330339
+  "zardy-rev5c",
+  "maruru",
+  145,
+  4140363649
  ],
  "legalfuzz|591": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  55,
-  2704113199
+  "zardy-rev5c",
+  "interstellar-maruru",
+  79,
+  4158661007
  ],
  "legalfuzz|592": [
   "random",
-  "maruru",
-  "maruru",
-  117,
-  1898338170
+  "zardy-rev5c",
+  "zardy",
+  89,
+  1151480542
  ],
  "legalfuzz|593": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  48,
-  1715564444
+  "zardy-rev5c",
+  "zardy-rev5c",
+  56,
+  2345951960
  ],
  "legalfuzz|594": [
   "random",
-  "maruru",
-  "zardy",
-  84,
-  4000313750
+  "zardy-rev5c",
+  "lost-maruru",
+  109,
+  3294841094
  ],
  "legalfuzz|595": [
   "rule",
-  "maruru",
   "lost-maruru",
-  37,
-  2437584361
+  "maruru",
+  73,
+  1991298938
  ],
  "legalfuzz|596": [
   "random",
+  "lost-maruru",
   "interstellar-maruru",
-  "maruru",
-  128,
-  2761843806
+  137,
+  1481614024
  ],
  "legalfuzz|597": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  75,
-  2056162637
+  "lost-maruru",
+  "zardy",
+  42,
+  3591308004
  ],
  "legalfuzz|598": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  81,
-  2047209628
+  "lost-maruru",
+  "zardy-rev5c",
+  141,
+  931885631
  ],
  "legalfuzz|599": [
   "rule",
-  "interstellar-maruru",
   "lost-maruru",
-  70,
-  3027704126
+  "lost-maruru",
+  49,
+  1638986505
  ],
  "legalfuzz|600": [
   "random",
-  "zardy",
   "maruru",
-  71,
-  1923520734
+  "maruru",
+  128,
+  2210548261
  ],
  "legalfuzz|601": [
   "rule",
-  "zardy",
+  "maruru",
   "interstellar-maruru",
-  85,
-  2707419274
+  61,
+  1673763691
  ],
  "legalfuzz|602": [
   "random",
+  "maruru",
   "zardy",
-  "zardy",
-  99,
-  2663772292
+  90,
+  704481552
  ],
  "legalfuzz|603": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  82,
-  1927044158
+  "maruru",
+  "zardy-rev5c",
+  76,
+  3539357349
  ],
  "legalfuzz|604": [
   "random",
-  "lost-maruru",
   "maruru",
-  137,
-  109189096
+  "lost-maruru",
+  84,
+  3789313252
  ],
  "legalfuzz|605": [
   "rule",
-  "lost-maruru",
   "interstellar-maruru",
-  67,
-  3348956597
+  "maruru",
+  52,
+  137808396
  ],
  "legalfuzz|606": [
   "random",
-  "lost-maruru",
-  "zardy",
-  71,
-  1340964688
+  "interstellar-maruru",
+  "interstellar-maruru",
+  68,
+  1950483117
  ],
  "legalfuzz|607": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  58,
-  256492779
+  "interstellar-maruru",
+  "zardy",
+  79,
+  1622644107
  ],
  "legalfuzz|608": [
   "random",
-  "maruru",
-  "maruru",
-  113,
-  3535184282
+  "interstellar-maruru",
+  "zardy-rev5c",
+  106,
+  3466635510
  ],
  "legalfuzz|609": [
   "rule",
-  "maruru",
   "interstellar-maruru",
-  45,
-  145727032
+  "lost-maruru",
+  61,
+  1207274653
  ],
  "legalfuzz|610": [
   "random",
-  "maruru",
   "zardy",
-  94,
-  3710963982
+  "maruru",
+  79,
+  3816151683
  ],
  "legalfuzz|611": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  58,
-  657773283
+  "zardy",
+  "interstellar-maruru",
+  51,
+  2664670360
  ],
  "legalfuzz|612": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  90,
-  604993673
+  "zardy",
+  "zardy",
+  69,
+  4139284470
  ],
  "legalfuzz|613": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  82,
-  107350436
+  "zardy",
+  "zardy-rev5c",
+  57,
+  3855695239
  ],
  "legalfuzz|614": [
   "random",
-  "interstellar-maruru",
   "zardy",
-  94,
-  3219738583
+  "lost-maruru",
+  71,
+  26236736
  ],
  "legalfuzz|615": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  40,
-  3756000724
+  "zardy-rev5c",
+  "maruru",
+  54,
+  1987364204
  ],
  "legalfuzz|616": [
   "random",
-  "zardy",
-  "maruru",
-  96,
-  2251247954
+  "zardy-rev5c",
+  "interstellar-maruru",
+  88,
+  953711409
  ],
  "legalfuzz|617": [
   "rule",
+  "zardy-rev5c",
   "zardy",
-  "interstellar-maruru",
-  45,
-  132717990
+  63,
+  2919368898
  ],
  "legalfuzz|618": [
   "random",
-  "zardy",
-  "zardy",
-  98,
-  430951912
+  "zardy-rev5c",
+  "zardy-rev5c",
+  91,
+  3338112041
  ],
  "legalfuzz|619": [
   "rule",
-  "zardy",
+  "zardy-rev5c",
   "lost-maruru",
-  74,
-  1774788625
+  49,
+  4113886402
  ],
  "legalfuzz|620": [
   "random",
@@ -6403,954 +7267,954 @@
  "legalfuzz|623": [
   "rule",
   "lost-maruru",
-  "lost-maruru",
-  65,
-  4221415849
+  "zardy-rev5c",
+  54,
+  3021316372
  ],
  "legalfuzz|624": [
   "random",
-  "maruru",
-  "maruru",
-  98,
-  2103618879
+  "lost-maruru",
+  "lost-maruru",
+  78,
+  8931897
  ],
  "legalfuzz|625": [
   "rule",
   "maruru",
-  "interstellar-maruru",
-  62,
-  967327523
+  "maruru",
+  72,
+  1135098589
  ],
  "legalfuzz|626": [
   "random",
   "maruru",
-  "zardy",
-  92,
-  1234476135
+  "interstellar-maruru",
+  62,
+  2026603831
  ],
  "legalfuzz|627": [
   "rule",
   "maruru",
-  "lost-maruru",
-  43,
-  179133691
+  "zardy",
+  51,
+  3484222869
  ],
  "legalfuzz|628": [
   "random",
-  "interstellar-maruru",
   "maruru",
-  88,
-  3846885185
+  "zardy-rev5c",
+  114,
+  3709941572
  ],
  "legalfuzz|629": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  59,
-  2652723612
+  "maruru",
+  "lost-maruru",
+  50,
+  2389882441
  ],
  "legalfuzz|630": [
   "random",
   "interstellar-maruru",
-  "zardy",
-  75,
-  1127314945
+  "maruru",
+  102,
+  4270892463
  ],
  "legalfuzz|631": [
   "rule",
   "interstellar-maruru",
-  "lost-maruru",
-  63,
-  3863632266
+  "interstellar-maruru",
+  30,
+  1283853698
  ],
  "legalfuzz|632": [
   "random",
+  "interstellar-maruru",
   "zardy",
-  "maruru",
-  101,
-  2093111404
+  98,
+  504305236
  ],
  "legalfuzz|633": [
   "rule",
-  "zardy",
   "interstellar-maruru",
-  85,
-  3080261675
+  "zardy-rev5c",
+  44,
+  2643457905
  ],
  "legalfuzz|634": [
   "random",
-  "zardy",
-  "zardy",
-  133,
-  3241901643
+  "interstellar-maruru",
+  "lost-maruru",
+  86,
+  791329385
  ],
  "legalfuzz|635": [
   "rule",
   "zardy",
-  "lost-maruru",
-  65,
-  3994956428
+  "maruru",
+  54,
+  723355013
  ],
  "legalfuzz|636": [
   "random",
-  "lost-maruru",
-  "maruru",
-  73,
-  490534635
+  "zardy",
+  "interstellar-maruru",
+  124,
+  328542864
  ],
  "legalfuzz|637": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  26,
-  1371008879
+  "zardy",
+  "zardy",
+  25,
+  2311354061
  ],
  "legalfuzz|638": [
   "random",
-  "lost-maruru",
   "zardy",
-  91,
-  3091310843
+  "zardy-rev5c",
+  86,
+  56422686
  ],
  "legalfuzz|639": [
   "rule",
+  "zardy",
   "lost-maruru",
-  "lost-maruru",
-  56,
-  3233021268
+  25,
+  2638893301
  ],
  "legalfuzz|640": [
   "random",
+  "zardy-rev5c",
   "maruru",
-  "maruru",
-  104,
-  3363557614
+  136,
+  3980791244
  ],
  "legalfuzz|641": [
   "rule",
-  "maruru",
+  "zardy-rev5c",
   "interstellar-maruru",
-  116,
-  2928088198
+  59,
+  1077511706
  ],
  "legalfuzz|642": [
   "random",
-  "maruru",
+  "zardy-rev5c",
   "zardy",
-  112,
-  2817029757
+  74,
+  1615902821
  ],
  "legalfuzz|643": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  50,
-  917029679
+  "zardy-rev5c",
+  "zardy-rev5c",
+  85,
+  369766520
  ],
  "legalfuzz|644": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  73,
-  2775007932
+  "zardy-rev5c",
+  "lost-maruru",
+  95,
+  560683239
  ],
  "legalfuzz|645": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  54,
-  3808712853
+  "lost-maruru",
+  "maruru",
+  100,
+  1301274492
  ],
  "legalfuzz|646": [
   "random",
+  "lost-maruru",
   "interstellar-maruru",
-  "zardy",
-  121,
-  2647096290
+  76,
+  3449429746
  ],
  "legalfuzz|647": [
   "rule",
-  "interstellar-maruru",
   "lost-maruru",
-  80,
-  4015448761
+  "zardy",
+  66,
+  2350707165
  ],
  "legalfuzz|648": [
+  "random",
+  "lost-maruru",
+  "zardy-rev5c",
+  122,
+  3358953228
+ ],
+ "legalfuzz|649": [
+  "rule",
+  "lost-maruru",
+  "lost-maruru",
+  108,
+  2946224856
+ ],
+ "legalfuzz|650": [
+  "random",
+  "maruru",
+  "maruru",
+  69,
+  409771331
+ ],
+ "legalfuzz|651": [
+  "rule",
+  "maruru",
+  "interstellar-maruru",
+  41,
+  1006335533
+ ],
+ "legalfuzz|652": [
+  "random",
+  "maruru",
+  "zardy",
+  126,
+  3739479199
+ ],
+ "legalfuzz|653": [
+  "rule",
+  "maruru",
+  "zardy-rev5c",
+  35,
+  116639649
+ ],
+ "legalfuzz|654": [
+  "random",
+  "maruru",
+  "lost-maruru",
+  129,
+  2911561326
+ ],
+ "legalfuzz|655": [
+  "rule",
+  "interstellar-maruru",
+  "maruru",
+  94,
+  3067783111
+ ],
+ "legalfuzz|656": [
+  "random",
+  "interstellar-maruru",
+  "interstellar-maruru",
+  90,
+  4015456349
+ ],
+ "legalfuzz|657": [
+  "rule",
+  "interstellar-maruru",
+  "zardy",
+  41,
+  110501346
+ ],
+ "legalfuzz|658": [
+  "random",
+  "interstellar-maruru",
+  "zardy-rev5c",
+  132,
+  411059783
+ ],
+ "legalfuzz|659": [
+  "rule",
+  "interstellar-maruru",
+  "lost-maruru",
+  27,
+  2075001643
+ ],
+ "legalfuzz|660": [
   "random",
   "zardy",
   "maruru",
   77,
-  1607744582
- ],
- "legalfuzz|649": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  56,
-  410707963
- ],
- "legalfuzz|650": [
-  "random",
-  "zardy",
-  "zardy",
-  110,
-  1422418896
- ],
- "legalfuzz|651": [
-  "rule",
-  "zardy",
-  "lost-maruru",
-  41,
-  2594922635
- ],
- "legalfuzz|652": [
-  "random",
-  "lost-maruru",
-  "maruru",
-  78,
-  1976293799
- ],
- "legalfuzz|653": [
-  "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  85,
-  1134099508
- ],
- "legalfuzz|654": [
-  "random",
-  "lost-maruru",
-  "zardy",
-  107,
-  3021130298
- ],
- "legalfuzz|655": [
-  "rule",
-  "lost-maruru",
-  "lost-maruru",
-  72,
-  2463616517
- ],
- "legalfuzz|656": [
-  "random",
-  "maruru",
-  "maruru",
-  108,
-  2966217753
- ],
- "legalfuzz|657": [
-  "rule",
-  "maruru",
-  "interstellar-maruru",
-  62,
-  4006360777
- ],
- "legalfuzz|658": [
-  "random",
-  "maruru",
-  "zardy",
-  124,
-  1575061237
- ],
- "legalfuzz|659": [
-  "rule",
-  "maruru",
-  "lost-maruru",
-  110,
-  4053985766
- ],
- "legalfuzz|660": [
-  "random",
-  "interstellar-maruru",
-  "maruru",
-  95,
-  2842175366
+  2276418745
  ],
  "legalfuzz|661": [
   "rule",
+  "zardy",
   "interstellar-maruru",
-  "interstellar-maruru",
-  55,
-  4164289815
+  49,
+  2618698097
  ],
  "legalfuzz|662": [
   "random",
-  "interstellar-maruru",
   "zardy",
-  79,
-  4141143711
+  "zardy",
+  112,
+  2339948710
  ],
  "legalfuzz|663": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  74,
-  822183051
+  "zardy",
+  "zardy-rev5c",
+  92,
+  3624511573
  ],
  "legalfuzz|664": [
   "random",
   "zardy",
-  "maruru",
-  126,
-  3566427911
+  "lost-maruru",
+  68,
+  680153284
  ],
  "legalfuzz|665": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  31,
-  3627496975
+  "zardy-rev5c",
+  "maruru",
+  38,
+  1072582099
  ],
  "legalfuzz|666": [
   "random",
-  "zardy",
-  "zardy",
-  87,
-  1900538277
+  "zardy-rev5c",
+  "interstellar-maruru",
+  82,
+  3228021819
  ],
  "legalfuzz|667": [
   "rule",
+  "zardy-rev5c",
   "zardy",
-  "lost-maruru",
-  61,
-  1591121357
+  59,
+  2486230740
  ],
  "legalfuzz|668": [
   "random",
-  "lost-maruru",
-  "maruru",
-  107,
-  119147486
+  "zardy-rev5c",
+  "zardy-rev5c",
+  127,
+  3207286552
  ],
  "legalfuzz|669": [
   "rule",
+  "zardy-rev5c",
   "lost-maruru",
-  "interstellar-maruru",
-  57,
-  2804437634
+  54,
+  3241522090
  ],
  "legalfuzz|670": [
   "random",
   "lost-maruru",
-  "zardy",
-  62,
-  1398409678
+  "maruru",
+  81,
+  45978089
  ],
  "legalfuzz|671": [
   "rule",
   "lost-maruru",
-  "lost-maruru",
-  52,
-  284643617
+  "interstellar-maruru",
+  54,
+  1865155540
  ],
  "legalfuzz|672": [
   "random",
-  "maruru",
-  "maruru",
-  62,
-  3386995100
+  "lost-maruru",
+  "zardy",
+  93,
+  919976594
  ],
  "legalfuzz|673": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  55,
-  2764726925
+  "lost-maruru",
+  "zardy-rev5c",
+  25,
+  1316299694
  ],
  "legalfuzz|674": [
   "random",
-  "maruru",
-  "zardy",
-  103,
-  943917338
+  "lost-maruru",
+  "lost-maruru",
+  98,
+  2331430772
  ],
  "legalfuzz|675": [
   "rule",
   "maruru",
-  "lost-maruru",
-  46,
-  3374677162
+  "maruru",
+  106,
+  4127349435
  ],
  "legalfuzz|676": [
   "random",
-  "interstellar-maruru",
   "maruru",
-  91,
-  845743198
+  "interstellar-maruru",
+  112,
+  2831286285
  ],
  "legalfuzz|677": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  58,
-  3331139989
+  "maruru",
+  "zardy",
+  50,
+  1866747859
  ],
  "legalfuzz|678": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  98,
-  2173618005
+  "maruru",
+  "zardy-rev5c",
+  70,
+  3783214720
  ],
  "legalfuzz|679": [
   "rule",
-  "interstellar-maruru",
+  "maruru",
   "lost-maruru",
-  45,
-  2602479061
+  81,
+  2267826134
  ],
  "legalfuzz|680": [
   "random",
-  "zardy",
+  "interstellar-maruru",
   "maruru",
-  133,
-  2788141189
+  63,
+  1824666204
  ],
  "legalfuzz|681": [
   "rule",
-  "zardy",
   "interstellar-maruru",
-  61,
-  420617130
+  "interstellar-maruru",
+  62,
+  1580636580
  ],
  "legalfuzz|682": [
   "random",
+  "interstellar-maruru",
   "zardy",
-  "zardy",
-  98,
-  1772492183
+  87,
+  3599131297
  ],
  "legalfuzz|683": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  44,
-  1492854770
+  "interstellar-maruru",
+  "zardy-rev5c",
+  70,
+  4150427249
  ],
  "legalfuzz|684": [
   "random",
+  "interstellar-maruru",
   "lost-maruru",
-  "maruru",
-  140,
-  1876052988
+  60,
+  3290230820
  ],
  "legalfuzz|685": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  46,
-  3584275226
+  "zardy",
+  "maruru",
+  60,
+  2044416231
  ],
  "legalfuzz|686": [
   "random",
-  "lost-maruru",
   "zardy",
-  111,
-  1216379480
+  "interstellar-maruru",
+  67,
+  4234294017
  ],
  "legalfuzz|687": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  53,
-  2848102415
+  "zardy",
+  "zardy",
+  33,
+  3484586682
  ],
  "legalfuzz|688": [
   "random",
-  "maruru",
-  "maruru",
-  100,
-  2469685933
+  "zardy",
+  "zardy-rev5c",
+  71,
+  2195439711
  ],
  "legalfuzz|689": [
   "rule",
-  "maruru",
-  "interstellar-maruru",
-  48,
-  2969442609
+  "zardy",
+  "lost-maruru",
+  46,
+  3613374670
  ],
  "legalfuzz|690": [
   "random",
+  "zardy-rev5c",
   "maruru",
-  "zardy",
-  109,
-  3443986474
+  68,
+  3115033060
  ],
  "legalfuzz|691": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  51,
-  1491829413
+  "zardy-rev5c",
+  "interstellar-maruru",
+  57,
+  362830666
  ],
  "legalfuzz|692": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  81,
-  2999506350
+  "zardy-rev5c",
+  "zardy",
+  114,
+  98310571
  ],
  "legalfuzz|693": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  66,
-  215975565
+  "zardy-rev5c",
+  "zardy-rev5c",
+  64,
+  8339476
  ],
  "legalfuzz|694": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  106,
-  2749589627
+  "zardy-rev5c",
+  "lost-maruru",
+  96,
+  3605592637
  ],
  "legalfuzz|695": [
   "rule",
-  "interstellar-maruru",
   "lost-maruru",
-  59,
-  3336650723
+  "maruru",
+  204,
+  3364527847
  ],
  "legalfuzz|696": [
   "random",
-  "zardy",
-  "maruru",
-  131,
-  3227824683
+  "lost-maruru",
+  "interstellar-maruru",
+  113,
+  636440392
  ],
  "legalfuzz|697": [
   "rule",
+  "lost-maruru",
   "zardy",
-  "interstellar-maruru",
-  56,
-  2631043321
+  67,
+  1466928199
  ],
  "legalfuzz|698": [
   "random",
-  "zardy",
-  "zardy",
-  88,
-  4293553378
+  "lost-maruru",
+  "zardy-rev5c",
+  109,
+  3669497991
  ],
  "legalfuzz|699": [
   "rule",
-  "zardy",
   "lost-maruru",
-  70,
-  3278093368
+  "lost-maruru",
+  64,
+  2870379884
  ],
  "legalfuzz|700": [
   "random",
-  "lost-maruru",
   "maruru",
-  146,
-  3557450337
+  "maruru",
+  67,
+  804997541
  ],
  "legalfuzz|701": [
   "rule",
-  "lost-maruru",
+  "maruru",
   "interstellar-maruru",
-  78,
-  2353163681
+  41,
+  3178151748
  ],
  "legalfuzz|702": [
   "random",
-  "lost-maruru",
+  "maruru",
   "zardy",
-  112,
-  2522103314
+  111,
+  2221307810
  ],
  "legalfuzz|703": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  44,
-  1879282756
+  "maruru",
+  "zardy-rev5c",
+  71,
+  3609255883
  ],
  "legalfuzz|704": [
   "random",
   "maruru",
-  "maruru",
-  96,
-  2206982530
+  "lost-maruru",
+  54,
+  3625443484
  ],
  "legalfuzz|705": [
   "rule",
-  "maruru",
   "interstellar-maruru",
-  98,
-  524462999
+  "maruru",
+  29,
+  2142797917
  ],
  "legalfuzz|706": [
   "random",
-  "maruru",
-  "zardy",
-  113,
-  3419678165
+  "interstellar-maruru",
+  "interstellar-maruru",
+  100,
+  1807840932
  ],
  "legalfuzz|707": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  67,
-  2793574044
+  "interstellar-maruru",
+  "zardy",
+  53,
+  3565455129
  ],
  "legalfuzz|708": [
   "random",
   "interstellar-maruru",
-  "maruru",
-  104,
-  1613030739
+  "zardy-rev5c",
+  75,
+  3725504657
  ],
  "legalfuzz|709": [
   "rule",
   "interstellar-maruru",
-  "interstellar-maruru",
-  65,
-  3387330023
+  "lost-maruru",
+  106,
+  1450277914
  ],
  "legalfuzz|710": [
   "random",
-  "interstellar-maruru",
   "zardy",
-  90,
-  3321199775
+  "maruru",
+  95,
+  1302349408
  ],
  "legalfuzz|711": [
   "rule",
+  "zardy",
   "interstellar-maruru",
-  "lost-maruru",
-  37,
-  4206147609
+  49,
+  3270644172
  ],
  "legalfuzz|712": [
   "random",
   "zardy",
-  "maruru",
-  107,
-  2307002595
+  "zardy",
+  94,
+  2127522987
  ],
  "legalfuzz|713": [
   "rule",
   "zardy",
-  "interstellar-maruru",
-  41,
-  3826869483
+  "zardy-rev5c",
+  63,
+  3065310817
  ],
  "legalfuzz|714": [
   "random",
   "zardy",
-  "zardy",
-  121,
-  3202803104
+  "lost-maruru",
+  112,
+  2839058741
  ],
  "legalfuzz|715": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  57,
-  2752609573
+  "zardy-rev5c",
+  "maruru",
+  30,
+  892816194
  ],
  "legalfuzz|716": [
   "random",
-  "lost-maruru",
-  "maruru",
-  98,
-  3281009853
+  "zardy-rev5c",
+  "interstellar-maruru",
+  137,
+  3619147672
  ],
  "legalfuzz|717": [
   "rule",
-  "lost-maruru",
-  "interstellar-maruru",
-  86,
-  1555016548
+  "zardy-rev5c",
+  "zardy",
+  50,
+  1120140048
  ],
  "legalfuzz|718": [
   "random",
-  "lost-maruru",
-  "zardy",
-  84,
-  3426562812
+  "zardy-rev5c",
+  "zardy-rev5c",
+  138,
+  2323124396
  ],
  "legalfuzz|719": [
   "rule",
+  "zardy-rev5c",
   "lost-maruru",
-  "lost-maruru",
-  62,
-  3002727962
+  77,
+  2022714069
  ],
  "legalfuzz|720": [
   "random",
+  "lost-maruru",
   "maruru",
-  "maruru",
-  92,
-  2080031827
+  96,
+  2577312255
  ],
  "legalfuzz|721": [
   "rule",
-  "maruru",
+  "lost-maruru",
   "interstellar-maruru",
-  41,
-  330204150
+  63,
+  2509524239
  ],
  "legalfuzz|722": [
   "random",
-  "maruru",
+  "lost-maruru",
   "zardy",
-  117,
-  1115500303
+  85,
+  397573008
  ],
  "legalfuzz|723": [
   "rule",
-  "maruru",
   "lost-maruru",
-  47,
-  469348115
+  "zardy-rev5c",
+  49,
+  2348026919
  ],
  "legalfuzz|724": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  139,
-  3179723437
+  "lost-maruru",
+  "lost-maruru",
+  70,
+  2761496247
  ],
  "legalfuzz|725": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  48,
-  1915594921
+  "maruru",
+  "maruru",
+  38,
+  676509356
  ],
  "legalfuzz|726": [
   "random",
+  "maruru",
   "interstellar-maruru",
-  "zardy",
-  92,
-  1637246436
+  97,
+  376951084
  ],
  "legalfuzz|727": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  48,
-  3123680917
+  "maruru",
+  "zardy",
+  77,
+  446151194
  ],
  "legalfuzz|728": [
   "random",
-  "zardy",
   "maruru",
-  115,
-  3255006065
+  "zardy-rev5c",
+  59,
+  2547027733
  ],
  "legalfuzz|729": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  52,
-  4099067023
+  "maruru",
+  "lost-maruru",
+  58,
+  1128488691
  ],
  "legalfuzz|730": [
   "random",
-  "zardy",
-  "zardy",
-  81,
-  2019526275
+  "interstellar-maruru",
+  "maruru",
+  120,
+  1937639172
  ],
  "legalfuzz|731": [
   "rule",
-  "zardy",
-  "lost-maruru",
-  69,
-  2458940699
+  "interstellar-maruru",
+  "interstellar-maruru",
+  56,
+  2243555758
  ],
  "legalfuzz|732": [
   "random",
-  "lost-maruru",
-  "maruru",
-  97,
-  227171087
+  "interstellar-maruru",
+  "zardy",
+  116,
+  105981061
  ],
  "legalfuzz|733": [
   "rule",
-  "lost-maruru",
   "interstellar-maruru",
-  61,
-  2003978753
+  "zardy-rev5c",
+  50,
+  4214706019
  ],
  "legalfuzz|734": [
   "random",
+  "interstellar-maruru",
   "lost-maruru",
-  "zardy",
-  112,
-  2583961559
+  65,
+  311323602
  ],
  "legalfuzz|735": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  87,
-  3456047545
- ],
- "legalfuzz|736": [
-  "random",
-  "maruru",
-  "maruru",
-  100,
-  2481921060
- ],
- "legalfuzz|737": [
-  "rule",
-  "maruru",
-  "interstellar-maruru",
-  90,
-  2731797624
- ],
- "legalfuzz|738": [
-  "random",
-  "maruru",
-  "zardy",
-  82,
-  1070672182
- ],
- "legalfuzz|739": [
-  "rule",
-  "maruru",
-  "lost-maruru",
-  53,
-  2180979512
- ],
- "legalfuzz|740": [
-  "random",
-  "interstellar-maruru",
-  "maruru",
-  72,
-  1213865956
- ],
- "legalfuzz|741": [
-  "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  44,
-  4115967906
- ],
- "legalfuzz|742": [
-  "random",
-  "interstellar-maruru",
-  "zardy",
-  85,
-  3465704672
- ],
- "legalfuzz|743": [
-  "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  90,
-  4204231196
- ],
- "legalfuzz|744": [
-  "random",
   "zardy",
   "maruru",
   86,
-  3251745247
+  3978117906
  ],
- "legalfuzz|745": [
-  "rule",
-  "zardy",
-  "interstellar-maruru",
-  72,
-  88241968
- ],
- "legalfuzz|746": [
+ "legalfuzz|736": [
   "random",
   "zardy",
-  "zardy",
-  93,
-  1244692563
+  "interstellar-maruru",
+  79,
+  125964970
  ],
- "legalfuzz|747": [
+ "legalfuzz|737": [
+  "rule",
+  "zardy",
+  "zardy",
+  90,
+  1964111059
+ ],
+ "legalfuzz|738": [
+  "random",
+  "zardy",
+  "zardy-rev5c",
+  113,
+  1742424497
+ ],
+ "legalfuzz|739": [
   "rule",
   "zardy",
   "lost-maruru",
-  76,
-  1511602732
+  83,
+  4164399498
+ ],
+ "legalfuzz|740": [
+  "random",
+  "zardy-rev5c",
+  "maruru",
+  95,
+  3748777311
+ ],
+ "legalfuzz|741": [
+  "rule",
+  "zardy-rev5c",
+  "interstellar-maruru",
+  60,
+  614275925
+ ],
+ "legalfuzz|742": [
+  "random",
+  "zardy-rev5c",
+  "zardy",
+  85,
+  2034363028
+ ],
+ "legalfuzz|743": [
+  "rule",
+  "zardy-rev5c",
+  "zardy-rev5c",
+  46,
+  2425429781
+ ],
+ "legalfuzz|744": [
+  "random",
+  "zardy-rev5c",
+  "lost-maruru",
+  71,
+  3651972709
+ ],
+ "legalfuzz|745": [
+  "rule",
+  "lost-maruru",
+  "maruru",
+  51,
+  2450286948
+ ],
+ "legalfuzz|746": [
+  "random",
+  "lost-maruru",
+  "interstellar-maruru",
+  112,
+  287303628
+ ],
+ "legalfuzz|747": [
+  "rule",
+  "lost-maruru",
+  "zardy",
+  27,
+  1009109763
  ],
  "legalfuzz|748": [
   "random",
   "lost-maruru",
-  "maruru",
-  124,
-  225280398
+  "zardy-rev5c",
+  71,
+  1221671666
  ],
  "legalfuzz|749": [
   "rule",
   "lost-maruru",
-  "interstellar-maruru",
-  56,
-  2698714369
+  "lost-maruru",
+  96,
+  2533964633
  ],
  "legalfuzz|750": [
   "random",
-  "lost-maruru",
-  "zardy",
-  91,
-  1889411410
+  "maruru",
+  "maruru",
+  100,
+  2745410683
  ],
  "legalfuzz|751": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  104,
-  3613370437
+  "maruru",
+  "interstellar-maruru",
+  60,
+  32713644
  ],
  "legalfuzz|752": [
   "random",
   "maruru",
-  "maruru",
-  96,
-  2518566653
+  "zardy",
+  123,
+  3724815443
  ],
  "legalfuzz|753": [
   "rule",
   "maruru",
-  "interstellar-maruru",
-  49,
-  511952647
+  "zardy-rev5c",
+  53,
+  3215019
  ],
  "legalfuzz|754": [
   "random",
   "maruru",
-  "zardy",
-  62,
-  568599104
+  "lost-maruru",
+  106,
+  3680538979
  ],
  "legalfuzz|755": [
   "rule",
+  "interstellar-maruru",
   "maruru",
-  "lost-maruru",
-  57,
-  1053017020
+  34,
+  401296897
  ],
  "legalfuzz|756": [
   "random",
   "interstellar-maruru",
-  "maruru",
-  94,
-  3464601082
+  "interstellar-maruru",
+  67,
+  2710945210
  ],
  "legalfuzz|757": [
   "rule",
   "interstellar-maruru",
-  "interstellar-maruru",
-  50,
-  2576096164
+  "zardy",
+  56,
+  2377464057
  ],
  "legalfuzz|758": [
   "random",
   "interstellar-maruru",
-  "zardy",
-  56,
-  3405842690
+  "zardy-rev5c",
+  73,
+  615877441
  ],
  "legalfuzz|759": [
   "rule",
@@ -7383,254 +8247,254 @@
  "legalfuzz|763": [
   "rule",
   "zardy",
-  "lost-maruru",
-  52,
-  3920655921
+  "zardy-rev5c",
+  51,
+  4176126501
  ],
  "legalfuzz|764": [
   "random",
+  "zardy",
   "lost-maruru",
-  "maruru",
-  65,
-  3164301602
+  114,
+  1543090499
  ],
  "legalfuzz|765": [
+  "rule",
+  "zardy-rev5c",
+  "maruru",
+  56,
+  2268460096
+ ],
+ "legalfuzz|766": [
+  "random",
+  "zardy-rev5c",
+  "interstellar-maruru",
+  87,
+  2532462309
+ ],
+ "legalfuzz|767": [
+  "rule",
+  "zardy-rev5c",
+  "zardy",
+  65,
+  3256640849
+ ],
+ "legalfuzz|768": [
+  "random",
+  "zardy-rev5c",
+  "zardy-rev5c",
+  100,
+  995019248
+ ],
+ "legalfuzz|769": [
+  "rule",
+  "zardy-rev5c",
+  "lost-maruru",
+  24,
+  1217147048
+ ],
+ "legalfuzz|770": [
+  "random",
+  "lost-maruru",
+  "maruru",
+  66,
+  1735252158
+ ],
+ "legalfuzz|771": [
   "rule",
   "lost-maruru",
   "interstellar-maruru",
   45,
-  2935571407
- ],
- "legalfuzz|766": [
-  "random",
-  "lost-maruru",
-  "zardy",
-  121,
-  2011942897
- ],
- "legalfuzz|767": [
-  "rule",
-  "lost-maruru",
-  "lost-maruru",
-  42,
-  3321775732
- ],
- "legalfuzz|768": [
-  "random",
-  "maruru",
-  "maruru",
-  101,
-  378767345
- ],
- "legalfuzz|769": [
-  "rule",
-  "maruru",
-  "interstellar-maruru",
-  46,
-  2423009947
- ],
- "legalfuzz|770": [
-  "random",
-  "maruru",
-  "zardy",
-  84,
-  707370943
- ],
- "legalfuzz|771": [
-  "rule",
-  "maruru",
-  "lost-maruru",
-  46,
-  2455155624
+  3319698610
  ],
  "legalfuzz|772": [
   "random",
-  "interstellar-maruru",
-  "maruru",
-  79,
-  2016993092
+  "lost-maruru",
+  "zardy",
+  61,
+  4287676596
  ],
  "legalfuzz|773": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  81,
-  2386479989
+  "lost-maruru",
+  "zardy-rev5c",
+  51,
+  2003887296
  ],
  "legalfuzz|774": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  78,
-  378108786
+  "lost-maruru",
+  "lost-maruru",
+  69,
+  1639302920
  ],
  "legalfuzz|775": [
   "rule",
-  "interstellar-maruru",
-  "lost-maruru",
-  55,
-  3978921038
+  "maruru",
+  "maruru",
+  67,
+  2701791693
  ],
  "legalfuzz|776": [
   "random",
-  "zardy",
   "maruru",
-  133,
-  2780123690
+  "interstellar-maruru",
+  74,
+  2171772384
  ],
  "legalfuzz|777": [
   "rule",
+  "maruru",
   "zardy",
-  "interstellar-maruru",
-  42,
-  21636472
+  86,
+  2355041787
  ],
  "legalfuzz|778": [
   "random",
-  "zardy",
-  "zardy",
+  "maruru",
+  "zardy-rev5c",
   100,
-  4178938378
+  3512317177
  ],
  "legalfuzz|779": [
   "rule",
-  "zardy",
+  "maruru",
   "lost-maruru",
-  88,
-  1822932223
+  43,
+  3111065701
  ],
  "legalfuzz|780": [
   "random",
-  "lost-maruru",
+  "interstellar-maruru",
   "maruru",
-  92,
-  356463718
+  118,
+  1237336817
  ],
  "legalfuzz|781": [
   "rule",
-  "lost-maruru",
   "interstellar-maruru",
-  49,
-  2660969960
+  "interstellar-maruru",
+  39,
+  2981619232
  ],
  "legalfuzz|782": [
   "random",
-  "lost-maruru",
+  "interstellar-maruru",
   "zardy",
-  100,
-  3700063131
+  133,
+  447123308
  ],
  "legalfuzz|783": [
   "rule",
-  "lost-maruru",
-  "lost-maruru",
-  86,
-  3580383733
+  "interstellar-maruru",
+  "zardy-rev5c",
+  36,
+  931943769
  ],
  "legalfuzz|784": [
   "random",
-  "maruru",
-  "maruru",
-  125,
-  2043080151
+  "interstellar-maruru",
+  "lost-maruru",
+  101,
+  1438191029
  ],
  "legalfuzz|785": [
   "rule",
+  "zardy",
   "maruru",
-  "interstellar-maruru",
-  68,
-  1705530188
+  41,
+  388070030
  ],
  "legalfuzz|786": [
   "random",
-  "maruru",
   "zardy",
-  76,
-  1721843952
+  "interstellar-maruru",
+  127,
+  3178857674
  ],
  "legalfuzz|787": [
   "rule",
-  "maruru",
-  "lost-maruru",
-  75,
-  3540346044
+  "zardy",
+  "zardy",
+  41,
+  415095006
  ],
  "legalfuzz|788": [
   "random",
-  "interstellar-maruru",
-  "maruru",
+  "zardy",
+  "zardy-rev5c",
   115,
-  2894726407
+  3313313754
  ],
  "legalfuzz|789": [
   "rule",
-  "interstellar-maruru",
-  "interstellar-maruru",
-  64,
-  3146780687
+  "zardy",
+  "lost-maruru",
+  86,
+  15244125
  ],
  "legalfuzz|790": [
   "random",
-  "interstellar-maruru",
-  "zardy",
-  80,
-  631364192
+  "zardy-rev5c",
+  "maruru",
+  97,
+  947097208
  ],
  "legalfuzz|791": [
   "rule",
+  "zardy-rev5c",
   "interstellar-maruru",
-  "lost-maruru",
-  69,
-  382997968
+  55,
+  264122134
  ],
  "legalfuzz|792": [
   "random",
+  "zardy-rev5c",
   "zardy",
-  "maruru",
-  99,
-  1032927947
+  74,
+  1967421719
  ],
  "legalfuzz|793": [
   "rule",
-  "zardy",
-  "interstellar-maruru",
-  55,
-  1143957876
+  "zardy-rev5c",
+  "zardy-rev5c",
+  64,
+  3909826172
  ],
  "legalfuzz|794": [
   "random",
-  "zardy",
-  "zardy",
-  75,
-  2467256428
+  "zardy-rev5c",
+  "lost-maruru",
+  95,
+  3284292738
  ],
  "legalfuzz|795": [
   "rule",
-  "zardy",
   "lost-maruru",
-  71,
-  54465786
+  "maruru",
+  62,
+  1495567146
  ],
  "legalfuzz|796": [
   "random",
   "lost-maruru",
-  "maruru",
-  72,
-  3566896649
+  "interstellar-maruru",
+  67,
+  1394546552
  ],
  "legalfuzz|797": [
   "rule",
   "lost-maruru",
-  "interstellar-maruru",
-  75,
-  2162065710
+  "zardy",
+  83,
+  3568550818
  ],
  "legalfuzz|798": [
   "random",
   "lost-maruru",
-  "zardy",
-  86,
-  1542542576
+  "zardy-rev5c",
+  95,
+  1820130126
  ],
  "legalfuzz|799": [
   "rule",
@@ -7700,6 +8564,28 @@
   null
  ],
  "pattern|zardy": [
+  0,
+  0,
+  0,
+  1947613349
+ ],
+ "prob|zardy-rev5c": [
+  0,
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  0,
+  0,
+  1,
+  null
+ ],
+ "pattern|zardy-rev5c": [
   0,
   0,
   0,

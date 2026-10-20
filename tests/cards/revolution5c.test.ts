@@ -1,7 +1,9 @@
 // 革命5cザーディで追加したカード(神秘の石柱 / ハッスル・キャッスル / サインサイクリカ・ザーディアン・サイン / ホーリーエンド・ナウ・オア・ネバー /
 // ミラダンテXII / プチョヘンザ / カツムゲン / ドギラゴン悪)と、そのための仕組み(G城・革命チェンジ・ファイナル革命・効果バトル)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
+import { CARD_DB, deckCards } from '../../src/cards';
 import { canSummon } from '../../src/engine/derive';
+import { checkDeck } from '../../src/engine/engine';
 import { mkCtx } from '../../src/engine/state';
 import { reg, Sim, mana } from '../scenario';
 
@@ -36,6 +38,14 @@ function settle(sim: Sim, o: { yes?: boolean } = {}): Sim {
   }
   return sim;
 }
+
+describe('デッキ: 革命5cザーディ', () => {
+  it('40枚で、同名4枚以内(構築制限)を満たし、全カードが読み込める', () => {
+    const d = deckCards('zardy-rev5c');
+    expect(d).toHaveLength(40);
+    expect(checkDeck(CARD_DB, d, true).ok).toBe(true);
+  });
+});
 
 describe('神秘の石柱', () => {
   it('山札の上2枚をタップしてマナゾーンに置き、その後、マナゾーンから1枚を墓地に置く(マナは1枚増える)', () => {
