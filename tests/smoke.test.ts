@@ -11,8 +11,8 @@ describe('スモーク', () => {
       expect(d.length).toBe(40);
       expect(checkDeck(CARD_DB, d, true).ok).toBe(true);
     }
-    // 33種+ダミー(CARD_LIST)。レジストリはこれに、無能力カード(カード単体の強さの差し替え先)と不明カード('?')が加わる
-    expect(CARD_LIST.length).toBe(34);
+    // 41種+ダミー(CARD_LIST)。レジストリはこれに、無能力カード(カード単体の強さの差し替え先)と不明カード('?')が加わる
+    expect(CARD_LIST.length).toBe(42);
     expect(Object.keys(loadRegistryFor().defs).length).toBe(Object.keys(CARD_DB).length + 1);
   });
 
@@ -37,7 +37,7 @@ describe('カードデータの検証(spec 4.3)', () => {
   const base = (): CardDB => JSON.parse(JSON.stringify(CARD_DB));
   it('正しいデータはエラーなし', () => {
     expect(validateCardDb(CARD_DB)).toEqual([]);
-    expect(CARD_LIST.length).toBe(34);
+    expect(CARD_LIST.length).toBe(42);
   });
   it('未知の原始操作・未知のキーワード・必須項目の不足はエラーになる', () => {
     const a = base();

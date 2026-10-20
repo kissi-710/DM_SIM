@@ -992,5 +992,982 @@
         ]
       }
     ]
+  },
+  {
+    "id": "dmrp14-084",
+    "name": "神秘の石柱",
+    "text": "山札の上から2枚を、タップしてマナゾーンに置く。その後、カードを1枚、自分のマナゾーンから墓地に置く。",
+    "faces": [
+      {
+        "name": "神秘の石柱",
+        "type": "spell",
+        "cost": 3,
+        "civs": [
+          "nature"
+        ],
+        "abilities": [
+          {
+            "kind": "spell",
+            "steps": [
+              {
+                "op": "act",
+                "act": {
+                  "moveTop": {
+                    "n": 2,
+                    "to": "mana",
+                    "cause": "boost",
+                    "tapped": true
+                  }
+                }
+              },
+              {
+                "op": "select",
+                "as": "$m",
+                "from": {
+                  "zone": "mana",
+                  "owner": "self"
+                },
+                "min": 1,
+                "max": 1,
+                "prompt": "墓地に置くマナを選んでください"
+              },
+              {
+                "op": "act",
+                "act": {
+                  "move": {
+                    "sel": "$m",
+                    "to": "grave",
+                    "cause": "effect"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm26rp1-026",
+    "name": "我竜塔第七層 ハッスル・キャッスル",
+    "text": "G城は実行したら、表向きでシールド化される。このカードが表向きで自分のシールドゾーンを離れる時、かわりに墓地に置く。このG城が表向きで自分のシールドゾーンに置かれた時、自分の山札の上から1枚をタップしてマナゾーンに置く。相手のクリーチャーが召喚以外の方法で出る時、かわりにマナゾーンに置く。",
+    "faces": [
+      {
+        "name": "我竜塔第七層 ハッスル・キャッスル",
+        "type": "castle",
+        "cost": 3,
+        "civs": [
+          "nature"
+        ],
+        "abilities": [
+          {
+            "kind": "trigger",
+            "label": "表向きでシールドゾーンに置かれた時: マナを増やす",
+            "spec": {
+              "on": {
+                "type": "moved",
+                "to": "shield",
+                "up": true
+              },
+              "subject": "self",
+              "watch": [
+                "shield"
+              ]
+            },
+            "steps": [
+              {
+                "op": "act",
+                "act": {
+                  "moveTop": {
+                    "n": 1,
+                    "to": "mana",
+                    "cause": "boost",
+                    "tapped": true
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "kind": "static",
+            "mod": {
+              "type": "nonSummonEntryToMana"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm26ex1-N09",
+    "name": "龍素記号Si サインサイクリカ / ザーディアン・サイン",
+    "text": "【クリーチャー面】ブロッカー。スレイヤー。W・ブレイカー。このクリーチャーが破壊された時、コスト5以下のクリーチャーを1体、自分の墓地から出してもよい。【呪文面】S・トリガー。コスト7以下の多色コマンド・クリーチャーを1体、自分の手札から出す。",
+    "faces": [
+      {
+        "name": "龍素記号Si サインサイクリカ",
+        "type": "creature",
+        "cost": 6,
+        "civs": [
+          "light",
+          "darkness"
+        ],
+        "power": 6500,
+        "races": [
+          "クリスタル・コマンド・ドラゴン"
+        ],
+        "abilities": [
+          {
+            "kind": "keyword",
+            "name": "blocker"
+          },
+          {
+            "kind": "keyword",
+            "name": "slayer"
+          },
+          {
+            "kind": "keyword",
+            "name": "breaker",
+            "n": 2
+          },
+          {
+            "kind": "trigger",
+            "optional": true,
+            "label": "破壊された時: 墓地からコスト5以下のクリーチャーを出す",
+            "spec": {
+              "on": {
+                "type": "moved",
+                "from": "battle",
+                "to": "grave",
+                "cause": "destroy"
+              },
+              "subject": "self",
+              "watch": [
+                "grave"
+              ]
+            },
+            "steps": [
+              {
+                "op": "select",
+                "as": "$r",
+                "from": {
+                  "zone": "grave",
+                  "owner": "self",
+                  "type": "creature",
+                  "where": {
+                    "cost": {
+                      "lte": 5
+                    }
+                  }
+                },
+                "min": 1,
+                "max": 1,
+                "prompt": "墓地から出すクリーチャーを選んでください"
+              },
+              {
+                "op": "act",
+                "act": {
+                  "put": {
+                    "sel": "$r"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ザーディアン・サイン",
+        "type": "spell",
+        "cost": 5,
+        "civs": [
+          "light",
+          "water"
+        ],
+        "abilities": [
+          {
+            "kind": "keyword",
+            "name": "shieldTrigger"
+          },
+          {
+            "kind": "spell",
+            "steps": [
+              {
+                "op": "select",
+                "as": "$c",
+                "from": {
+                  "zone": "hand",
+                  "owner": "self",
+                  "type": "creature",
+                  "where": {
+                    "all": [
+                      {
+                        "multicolor": true
+                      },
+                      {
+                        "race": "コマンド"
+                      },
+                      {
+                        "cost": {
+                          "lte": 7
+                        }
+                      }
+                    ]
+                  }
+                },
+                "min": 1,
+                "max": 1,
+                "prompt": "手札から出す多色コマンドを選んでください"
+              },
+              {
+                "op": "act",
+                "act": {
+                  "put": {
+                    "sel": "$c"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm24rp2-TR09",
+    "name": "天命龍装 ホーリーエンド / ナウ・オア・ネバー",
+    "text": "【クリーチャー面】ブロッカー。W・ブレイカー。このクリーチャーが出た時、相手のクリーチャーをすべてタップする。その後、カードを1枚引く。【呪文面】S・トリガー。コスト7以下の進化ではないクリーチャーを1体、自分の手札から出してもよい。その後、そのクリーチャーを手札に戻す。",
+    "faces": [
+      {
+        "name": "天命龍装 ホーリーエンド",
+        "type": "creature",
+        "cost": 7,
+        "civs": [
+          "light"
+        ],
+        "power": 9500,
+        "races": [
+          "ドラゴンギルド",
+          "メタリカ"
+        ],
+        "abilities": [
+          {
+            "kind": "keyword",
+            "name": "blocker"
+          },
+          {
+            "kind": "keyword",
+            "name": "breaker",
+            "n": 2
+          },
+          {
+            "kind": "trigger",
+            "spec": {
+              "on": {
+                "type": "entered"
+              },
+              "subject": "self"
+            },
+            "steps": [
+              {
+                "op": "act",
+                "act": {
+                  "tap": {
+                    "sel": {
+                      "zone": "battle",
+                      "owner": "opponent",
+                      "type": "creature"
+                    }
+                  }
+                }
+              },
+              {
+                "op": "act",
+                "act": {
+                  "draw": 1
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ナウ・オア・ネバー",
+        "type": "spell",
+        "cost": 5,
+        "civs": [
+          "water"
+        ],
+        "abilities": [
+          {
+            "kind": "keyword",
+            "name": "shieldTrigger"
+          },
+          {
+            "kind": "spell",
+            "steps": [
+              {
+                "op": "may",
+                "prompt": "手札からクリーチャーを出して、手札に戻しますか?",
+                "then": [
+                  {
+                    "op": "select",
+                    "as": "$c",
+                    "from": {
+                      "zone": "hand",
+                      "owner": "self",
+                      "type": "creature",
+                      "where": {
+                        "all": [
+                          {
+                            "evolution": false
+                          },
+                          {
+                            "cost": {
+                              "lte": 7
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    "min": 1,
+                    "max": 1,
+                    "prompt": "手札から出すクリーチャーを選んでください"
+                  },
+                  {
+                    "op": "act",
+                    "act": {
+                      "put": {
+                        "sel": "$c",
+                        "as": "$e"
+                      }
+                    }
+                  },
+                  {
+                    "op": "act",
+                    "act": {
+                      "move": {
+                        "sel": "$e",
+                        "to": "hand",
+                        "cause": "bounce"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dmr22-L03",
+    "name": "時の法皇 ミラダンテXII",
+    "text": "革命チェンジ[光または水のコスト5以上のドラゴン]。T・ブレイカー。出た時、光のコスト5以下の呪文を1枚、自分の手札からコストを支払わずに唱えてもよい。そうしなければ、カードを1枚引く。ファイナル革命: このクリーチャーが革命チェンジによって出た時、そのターン中に他のファイナル革命を使っていなければ、次の、相手のターンの終わりまで、相手はコスト7以下のクリーチャーを召喚できない。",
+    "faces": [
+      {
+        "name": "時の法皇 ミラダンテXII",
+        "type": "creature",
+        "cost": 8,
+        "civs": [
+          "light",
+          "water"
+        ],
+        "power": 12000,
+        "races": [
+          "エンジェル・コマンド・ドラゴン",
+          "革命軍",
+          "ドレミ団"
+        ],
+        "abilities": [
+          {
+            "kind": "keyword",
+            "name": "revolutionChange",
+            "label": "革命チェンジ[光または水のコスト5以上のドラゴン]",
+            "attacker": {
+              "all": [
+                {
+                  "any": [
+                    {
+                      "civ": "light"
+                    },
+                    {
+                      "civ": "water"
+                    }
+                  ]
+                },
+                {
+                  "cost": {
+                    "gte": 5
+                  }
+                },
+                {
+                  "race": "ドラゴン"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "keyword",
+            "name": "breaker",
+            "n": 3
+          },
+          {
+            "kind": "trigger",
+            "label": "出た時: 光の呪文を無料で唱える。そうしなければ1枚引く",
+            "spec": {
+              "on": {
+                "type": "entered"
+              },
+              "subject": "self"
+            },
+            "steps": [
+              {
+                "op": "may",
+                "prompt": "光のコスト5以下の呪文を、コストを支払わずに唱えますか?(唱えなければ1枚引く)",
+                "then": [
+                  {
+                    "op": "select",
+                    "as": "$s",
+                    "from": {
+                      "zone": "hand",
+                      "owner": "self",
+                      "type": "spell",
+                      "where": {
+                        "all": [
+                          {
+                            "civ": "light"
+                          },
+                          {
+                            "cost": {
+                              "lte": 5
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    "min": 1,
+                    "max": 1,
+                    "prompt": "コストを支払わずに唱える呪文を選んでください"
+                  },
+                  {
+                    "op": "act",
+                    "act": {
+                      "castFree": {
+                        "sel": "$s"
+                      }
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "op": "act",
+                    "act": {
+                      "draw": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "trigger",
+            "label": "ファイナル革命: 次の相手のターンの終わりまで、相手はコスト7以下のクリーチャーを召喚できない",
+            "spec": {
+              "on": {
+                "type": "entered",
+                "via": "revolutionChange"
+              },
+              "subject": "self",
+              "ifAtResolve": {
+                "not": {
+                  "logged": {
+                    "pattern": {
+                      "type": "finalRevolution"
+                    }
+                  }
+                }
+              }
+            },
+            "steps": [
+              {
+                "op": "act",
+                "act": {
+                  "log": "finalRevolution"
+                }
+              },
+              {
+                "op": "act",
+                "act": {
+                  "playerEffect": {
+                    "mod": {
+                      "kind": "cannotSummon",
+                      "maxCost": 7
+                    },
+                    "until": "nextOpponentTurnEnd"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dmr21-L01",
+    "name": "百族の長 プチョヘンザ",
+    "text": "革命チェンジ[光または自然のコスト5以上のドラゴン]。T・ブレイカー。自分のマナゾーンにあるカードの枚数よりコストが小さい相手のクリーチャーは、タップして出る。ファイナル革命: このクリーチャーが革命チェンジによって出た時、そのターン中に他のファイナル革命を使っていなければ、このクリーチャーよりパワーが小さいクリーチャーをすべて持ち主のマナゾーンに置く。",
+    "faces": [
+      {
+        "name": "百族の長 プチョヘンザ",
+        "type": "creature",
+        "cost": 8,
+        "civs": [
+          "light",
+          "nature"
+        ],
+        "power": 12500,
+        "races": [
+          "ジュラシック・コマンド・ドラゴン",
+          "革命軍",
+          "ダママ団"
+        ],
+        "abilities": [
+          {
+            "kind": "keyword",
+            "name": "revolutionChange",
+            "label": "革命チェンジ[光または自然のコスト5以上のドラゴン]",
+            "attacker": {
+              "all": [
+                {
+                  "any": [
+                    {
+                      "civ": "light"
+                    },
+                    {
+                      "civ": "nature"
+                    }
+                  ]
+                },
+                {
+                  "cost": {
+                    "gte": 5
+                  }
+                },
+                {
+                  "race": "ドラゴン"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "keyword",
+            "name": "breaker",
+            "n": 3
+          },
+          {
+            "kind": "static",
+            "mod": {
+              "type": "entersTapped",
+              "cond": {
+                "cost": {
+                  "lt": {
+                    "count": {
+                      "zone": "mana",
+                      "owner": "self"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "kind": "trigger",
+            "label": "ファイナル革命: このクリーチャーよりパワーが小さいクリーチャーをすべてマナゾーンに置く",
+            "spec": {
+              "on": {
+                "type": "entered",
+                "via": "revolutionChange"
+              },
+              "subject": "self",
+              "ifAtResolve": {
+                "not": {
+                  "logged": {
+                    "pattern": {
+                      "type": "finalRevolution"
+                    }
+                  }
+                }
+              }
+            },
+            "steps": [
+              {
+                "op": "act",
+                "act": {
+                  "log": "finalRevolution"
+                }
+              },
+              {
+                "op": "act",
+                "act": {
+                  "move": {
+                    "sel": {
+                      "zone": "battle",
+                      "owner": "any",
+                      "type": "creature",
+                      "where": {
+                        "powerLtSelf": true
+                      }
+                    },
+                    "to": "mana",
+                    "cause": "manaPlace"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm26rp2-S10",
+    "name": "V頂神話 カツムゲン",
+    "text": "革命チェンジ[火または自然のパワー8000以上のクリーチャー]。スピードアタッカー。T・ブレイカー。バトル中、このクリーチャーのパワーは無限になる。相手のクリーチャーがコストを支払わずに出た時、このクリーチャーをそのクリーチャーとバトルさせてもよい。このクリーチャーがバトルに勝った時、自分の手札を1枚捨ててもよい。そうしたら、カードを2枚引く。この時、捨てたカードがパワー6000以上のクリーチャーなら、このクリーチャーをアンタップする。",
+    "faces": [
+      {
+        "name": "V頂神話 カツムゲン",
+        "type": "creature",
+        "cost": 8,
+        "civs": [
+          "fire",
+          "nature"
+        ],
+        "power": 13000,
+        "races": [
+          "アウトレイジ・コマンドMAX",
+          "革命軍",
+          "ハムカツ団"
+        ],
+        "abilities": [
+          {
+            "kind": "keyword",
+            "name": "revolutionChange",
+            "label": "革命チェンジ[火または自然のパワー8000以上のクリーチャー]",
+            "attacker": {
+              "all": [
+                {
+                  "any": [
+                    {
+                      "civ": "fire"
+                    },
+                    {
+                      "civ": "nature"
+                    }
+                  ]
+                },
+                {
+                  "power": {
+                    "gte": 8000
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "kind": "keyword",
+            "name": "speedAttacker"
+          },
+          {
+            "kind": "keyword",
+            "name": "breaker",
+            "n": 3
+          },
+          {
+            "kind": "static",
+            "mod": {
+              "type": "infinitePowerInBattle"
+            }
+          },
+          {
+            "kind": "trigger",
+            "optional": true,
+            "label": "相手がコストを支払わずに出した時: そのクリーチャーとバトルする",
+            "spec": {
+              "on": {
+                "type": "entered",
+                "owner": "opponent",
+                "paid": 0
+              },
+              "subject": "any"
+            },
+            "steps": [
+              {
+                "op": "act",
+                "act": {
+                  "battle": {
+                    "a": "$self",
+                    "b": "$eventCard"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "kind": "trigger",
+            "label": "バトルに勝った時: 手札を捨てて2枚引く",
+            "spec": {
+              "on": {
+                "type": "battleEnded",
+                "winner": "self"
+              },
+              "subject": "self"
+            },
+            "steps": [
+              {
+                "op": "may",
+                "prompt": "手札を1枚捨てて、カードを2枚引きますか?",
+                "then": [
+                  {
+                    "op": "select",
+                    "as": "$d",
+                    "from": {
+                      "zone": "hand",
+                      "owner": "self"
+                    },
+                    "min": 1,
+                    "max": 1,
+                    "prompt": "捨てる手札を選んでください"
+                  },
+                  {
+                    "op": "act",
+                    "act": {
+                      "move": {
+                        "sel": "$d",
+                        "to": "grave",
+                        "cause": "discard",
+                        "as": "$dd"
+                      }
+                    }
+                  },
+                  {
+                    "op": "act",
+                    "act": {
+                      "draw": 2
+                    }
+                  },
+                  {
+                    "op": "select",
+                    "as": "$big",
+                    "from": {
+                      "zone": "grave",
+                      "owner": "self",
+                      "of": "$dd",
+                      "type": "creature",
+                      "where": {
+                        "power": {
+                          "gte": 6000
+                        }
+                      }
+                    },
+                    "min": 1,
+                    "max": 1
+                  },
+                  {
+                    "op": "if",
+                    "cond": {
+                      "nonEmpty": "$big"
+                    },
+                    "then": [
+                      {
+                        "op": "act",
+                        "act": {
+                          "untap": {
+                            "sel": "$self"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dm25ex2-016",
+    "name": "紅き団長 ドギラゴン悪",
+    "text": "革命チェンジ[闇または火のコスト5以上のドラゴン]。スピードアタッカー。T・ブレイカー。各ターン1回、自分の多色クリーチャーが出た時、相手のクリーチャーを1体選び、このクリーチャーとバトルさせてもよい。ファイナル革命: このクリーチャーが革命チェンジによって出た時、そのターン中に他のファイナル革命を使っていなければ、自分の山札の上から2枚を墓地に置く。その後、コスト7以下の多色クリーチャーを1体、自分の墓地から出す。",
+    "faces": [
+      {
+        "name": "紅き団長 ドギラゴン悪",
+        "type": "creature",
+        "cost": 8,
+        "civs": [
+          "darkness",
+          "fire"
+        ],
+        "power": 13000,
+        "races": [
+          "メガ・コマンド・ドラゴン",
+          "革命軍",
+          "ハムカツ団"
+        ],
+        "abilities": [
+          {
+            "kind": "keyword",
+            "name": "revolutionChange",
+            "label": "革命チェンジ[闇または火のコスト5以上のドラゴン]",
+            "attacker": {
+              "all": [
+                {
+                  "any": [
+                    {
+                      "civ": "darkness"
+                    },
+                    {
+                      "civ": "fire"
+                    }
+                  ]
+                },
+                {
+                  "cost": {
+                    "gte": 5
+                  }
+                },
+                {
+                  "race": "ドラゴン"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "keyword",
+            "name": "speedAttacker"
+          },
+          {
+            "kind": "keyword",
+            "name": "breaker",
+            "n": 3
+          },
+          {
+            "kind": "trigger",
+            "optional": true,
+            "label": "多色クリーチャーが出た時: 相手のクリーチャーとバトルする",
+            "spec": {
+              "on": {
+                "type": "entered",
+                "owner": "self",
+                "attackerCond": {
+                  "multicolor": true
+                }
+              },
+              "subject": "any",
+              "limit": {
+                "perTurn": 1
+              }
+            },
+            "steps": [
+              {
+                "op": "select",
+                "as": "$t",
+                "from": {
+                  "zone": "battle",
+                  "owner": "opponent",
+                  "type": "creature",
+                  "chooseable": true
+                },
+                "min": 1,
+                "max": 1,
+                "prompt": "バトルさせる相手のクリーチャーを選んでください"
+              },
+              {
+                "op": "act",
+                "act": {
+                  "battle": {
+                    "a": "$self",
+                    "b": "$t"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "kind": "trigger",
+            "label": "ファイナル革命: 山札の上から2枚を墓地に置き、コスト7以下の多色クリーチャーを墓地から出す",
+            "spec": {
+              "on": {
+                "type": "entered",
+                "via": "revolutionChange"
+              },
+              "subject": "self",
+              "ifAtResolve": {
+                "not": {
+                  "logged": {
+                    "pattern": {
+                      "type": "finalRevolution"
+                    }
+                  }
+                }
+              }
+            },
+            "steps": [
+              {
+                "op": "act",
+                "act": {
+                  "log": "finalRevolution"
+                }
+              },
+              {
+                "op": "act",
+                "act": {
+                  "moveTop": {
+                    "n": 2,
+                    "to": "grave",
+                    "cause": "effect"
+                  }
+                }
+              },
+              {
+                "op": "select",
+                "as": "$r",
+                "from": {
+                  "zone": "grave",
+                  "owner": "self",
+                  "type": "creature",
+                  "where": {
+                    "all": [
+                      {
+                        "multicolor": true
+                      },
+                      {
+                        "cost": {
+                          "lte": 7
+                        }
+                      }
+                    ]
+                  }
+                },
+                "min": 1,
+                "max": 1,
+                "prompt": "墓地から出す多色クリーチャーを選んでください"
+              },
+              {
+                "op": "act",
+                "act": {
+                  "put": {
+                    "sel": "$r"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 ]
