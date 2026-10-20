@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Cond, Selector } from '../../src/engine/ast';
-import { evalCond, evalExpr, getVar, matchPattern, mkCC, selectCards, varUids, type CC } from '../../src/engine/cond';
+import { evalCond, evalExpr, getVar, matchPattern, mkCC, raceMatches, selectCards, varUids, type CC } from '../../src/engine/cond';
 import { mkCtx } from '../../src/engine/state';
 import type { Ev, GameState, PlayerId } from '../../src/engine/types';
 import { buildState, mana, reg } from '../scenario';
@@ -383,5 +383,18 @@ describe('matchPattern', () => {
   it('使用していない変数: 能力の発生源がなくても評価できる', () => {
     expect(matchPattern(cc(s), { type: 'entered' }, ev({ type: 'entered' }))).toBe(true);
     void c;
+  });
+});
+
+describe('raceMatches(種族の一致)', () => {
+  it('種族名に含まれれば一致する(複合名の一部にも当たる)', () => {
+    expect(raceMatches('メガ・コマンド・ドラゴン', 'ドラゴン')).toBe(true);
+    expect(raceMatches('アウトレイジ・コマンドMAX', 'コマンド')).toBe(true);
+    expect(raceMatches('ドラゴン・ゾンビ', 'ドラゴン')).toBe(true);
+    expect(raceMatches('サイバーロード', 'ドラゴン')).toBe(false);
+  });
+  it('ドラゴンギルドは、ドラゴンとは別の種族(「ドラゴン」には当たらない。「ドラゴンギルド」には当たる)', () => {
+    expect(raceMatches('ドラゴンギルド', 'ドラゴン')).toBe(false);
+    expect(raceMatches('ドラゴンギルド', 'ドラゴンギルド')).toBe(true);
   });
 });

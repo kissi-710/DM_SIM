@@ -187,7 +187,7 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     const isEvo = ch.type === 'evolution' || ch.type === 'smaxEvolution';
     return isEvo === o.evolution;
   }
-  if ('race' in o) return ch.races.some((r) => r.includes(o.race));
+  if ('race' in o) return ch.races.some((r) => raceMatches(r, o.race));
   if ('tapped' in o) {
     const card = s.cards[it];
     if (card.zone === 'battle') return (permByPid(s, card.pid)?.perm.tapped ?? false) === o.tapped;
@@ -203,6 +203,15 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
 }
 
 // ───────────────────────── セレクタ ─────────────────────────
+
+/**
+ * 種族の一致。種族名に want を含めば一致とする(「コマンド」は「アーマード・ドラゴン」などの複合名の一部にも当たる)。
+ * ただし「ドラゴンギルド」は、ドラゴンとは別の種族なので、「ドラゴン」には当たらない。
+ */
+export function raceMatches(race: string, want: string): boolean {
+  const GUILD = 'ドラゴンギルド';
+  return (want.includes(GUILD) ? race : race.split(GUILD).join('')).includes(want);
+}
 
 function ownersOf(cc: CC, owner: Selector['owner']): PlayerId[] {
   switch (owner ?? 'self') {

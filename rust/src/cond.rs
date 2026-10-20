@@ -315,7 +315,7 @@ pub fn eval_cond(cc: &CC, cond: &Cond) -> bool {
                     }
                 }
                 Cond::Evolution(e) => ch.ty.is_evo() == *e,
-                Cond::Race(r) => ch.races.iter().any(|x| x.contains(r.as_str())),
+                Cond::Race(r) => ch.races.iter().any(|x| race_matches(x, r)),
                 Cond::Tapped(t) => {
                     let card = &s.cards[it as usize];
                     if card.zone == Zone::Battle {
@@ -339,6 +339,17 @@ pub fn eval_cond(cc: &CC, cond: &Cond) -> bool {
 }
 
 // ───────────────────────── セレクタ ─────────────────────────
+
+/// 種族の一致。種族名に want を含めば一致とする(「コマンド」は「アーマード・ドラゴン」などの複合名の一部にも当たる)。
+/// ただし「ドラゴンギルド」は、ドラゴンとは別の種族なので、「ドラゴン」には当たらない。
+fn race_matches(race: &str, want: &str) -> bool {
+    const GUILD: &str = "ドラゴンギルド";
+    if want.contains(GUILD) {
+        race.contains(want)
+    } else {
+        race.replace(GUILD, "").contains(want)
+    }
+}
 
 fn owners_of(cc: &CC, owner: SelOwner) -> Vec<PlayerId> {
     match owner {
