@@ -139,6 +139,17 @@ export function powerOf(c: Ctx, perm: Permanent): number {
   return p;
 }
 
+/** バトルの時のパワー(カツムゲン: 無限)。無限は Infinity で表す(比べるだけで、状態には入れない) */
+export function battlePower(c: Ctx, perm: Permanent): number {
+  const uid = perm.cards[0];
+  for (const st of infoOf(c, uid).statics) {
+    if (st.ability.mod.type !== 'infinitePowerInBattle') continue;
+    if (st.ability.while && !evalCond(mkCC(c, c.s.cards[uid].owner, { self: uid }), st.ability.while)) continue;
+    return Infinity;
+  }
+  return powerOf(c, perm);
+}
+
 export type KwName = 'blocker' | 'speedAttacker' | 'machFighter' | 'shieldTrigger' | 'justDiver' | 'exLife' | 'slayer' | 'unblockable';
 
 export function hasKeyword(c: Ctx, perm: Permanent, kw: KwName): boolean {
@@ -387,6 +398,14 @@ export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number):
     if (mod.type !== 'cannotCast') continue;
     const cc = mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx });
     if (evalCond(cc, mod.cond as Cond)) return false;
+  }
+  return true;
+}
+
+/** 「相手はコストが maxCost 以下のクリーチャーを召喚できない」(ミラダンテXII のファイナル革命)に当たらないか */
+export function canSummon(c: Ctx, player: PlayerId, cost: number): boolean {
+  for (const e of c.s.effects) {
+    if (e.mod.kind === 'cannotSummon' && e.controller !== player && cost <= e.mod.maxCost) return false;
   }
   return true;
 }

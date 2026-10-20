@@ -7,6 +7,7 @@ import {
   canAttack,
   canBlock,
   canCast,
+  canSummon,
   canUseCost,
   costBase,
   costOf,
@@ -27,6 +28,7 @@ import {
   emit,
   enterBattle,
   moveCards,
+  resolveBattle,
   setTapped,
   smaxVictims,
 } from './ops';
@@ -105,6 +107,7 @@ export function planPlay(
   }
   if (kind === 'cast' && !canCast(c, player, uid, faceIdx)) return fail('この呪文は唱えられません');
   if (!canUseCost(c, player, face.cost)) return fail('そのコストのカードは実行できません');
+  if (kind === 'summon' && !canSummon(c, player, face.cost)) return fail('そのクリーチャーは召喚できません');
 
   let onto: number | undefined;
   if (face.type === 'evolution') {
@@ -577,44 +580,9 @@ function runAttack(c: Ctx, f: ProcFrame): void {
         popFrame(c, f);
         return;
       }
-      const pa = powerOf(c, pm.perm);
-      const pd = powerOf(c, dm.perm);
-      const aTop = pm.perm.cards[0];
-      const dTop = dm.perm.cards[0];
-      const losers: number[] = [];
-      let winner: number | null = null;
-      if (pa > pd) {
-        losers.push(dTop);
-        winner = aTop;
-      } else if (pa < pd) {
-        losers.push(aTop);
-        winner = dTop;
-      } else losers.push(aTop, dTop);
-      // スレイヤー: バトルの後、バトルした相手を破壊する(勝敗にかかわらず)
-      if (hasKeyword(c, pm.perm, 'slayer') && !losers.includes(dTop)) losers.push(dTop);
-      if (hasKeyword(c, dm.perm, 'slayer') && !losers.includes(aTop)) losers.push(aTop);
-      const aOwner = pm.owner;
-      const dOwner = dm.owner;
-      const aPid = pm.perm.pid;
-      const dPid = dm.perm.pid;
-      moveCards(c, losers, { to: 'grave', cause: 'destroy' });
-      const winPid = winner === null ? null : winner === aTop ? aPid : dPid;
-      emit(c, 'battleEnded', {
-        attacker: aPid,
-        defender: dPid,
-        winner: winPid,
-        card: winner,
-        winnerCard: winner,
-        loserCard: winner === null ? null : winner === aTop ? dTop : aTop,
-        loserOwner: winner === null ? undefined : winner === aTop ? dOwner : aOwner,
-        winnerOwner: winner === null ? undefined : winner === aTop ? aOwner : dOwner,
-        draw: winner === null,
-      });
-      const ev = c.out[c.out.length - 1];
-      s.batchNo++;
-      collectBatch(c, [ev]);
+      const br = resolveBattle(c, pm.perm.pid, dm.perm.pid)!;
       // 「バトルの後」の誘発のために、バトルの当事者を残す(聞き手がいる時だけ)
-      if (c.reg.trigByDef.has('afterBattle')) v.battle = { attacker: aPid, defender: dPid, attackerCard: aTop, defenderCard: dTop, owner: aOwner };
+      if (c.reg.trigByDef.has('afterBattle')) v.battle = { attacker: br.aPid, defender: br.dPid, attackerCard: br.aTop, defenderCard: br.dTop, owner: br.aOwner };
       f.stage = 5;
       pushProc(c, 'settle');
       return;

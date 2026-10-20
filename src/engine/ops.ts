@@ -2,7 +2,7 @@
 // 規約: 入力待ち(ask)は、状態を変更する前に行う。再実行しても二重に変更されない。
 import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
-import { charsLite, infoOf, manaCivs, payNeed } from './derive';
+import { activeStatics, battlePower, charsLite, hasKeyword, infoOf, manaCivs, payNeed } from './derive';
 import type { Ctx } from './state';
 import { nextId, opponentOf, permByPid, shuffleInPlace, snapOf } from './state';
 import {
@@ -397,6 +397,8 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   card.tapped = false;
   let perm: Permanent;
   let base: number[] = [];
+  // 「タップして出る」(プチョヘンザ)。進化で重なる時は、すでにいる山なので対象外
+  const entersTapped = !!opts.tapped || (opts.onto === undefined && entersTappedByStatic(c, uid, owner, faceIdx));
   if (opts.onto !== undefined) {
     const pm = permByPid(s, opts.onto);
     if (!pm) throw new Error('重ねる山がありません');
@@ -411,7 +413,7 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
     perm = {
       pid: s.nextPid++,
       cards: [uid],
-      tapped: !!opts.tapped,
+      tapped: entersTapped,
       sick: true,
       enteredTurn: s.turn,
     };
@@ -444,6 +446,73 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
     }
   }
   return { uid, moved: true, to: 'battle', ep: card.ep };
+}
+
+/** 相手の常在型能力(entersTapped)で、このクリーチャーがタップして出るか */
+function entersTappedByStatic(c: Ctx, uid: number, owner: PlayerId, faceIdx: number): boolean {
+  for (const st of activeStatics(c, 'entersTapped')) {
+    if (st.controller === owner) continue;
+    const mod = st.ability.mod;
+    if (mod.type !== 'entersTapped') continue;
+    if (evalCond(mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx }), mod.cond)) return true;
+  }
+  return false;
+}
+
+// ───────────────────────── バトル ─────────────────────────
+
+export interface BattleResult {
+  aPid: number;
+  dPid: number;
+  aTop: number;
+  dTop: number;
+  aOwner: PlayerId;
+}
+
+/**
+ * 2体のクリーチャーをバトルさせる(攻撃によるバトルと、効果によるバトルで共通)。
+ * パワーの大きい方が勝ち、同じなら両方破壊される。スレイヤーは、勝敗にかかわらず相手を破壊する。
+ * 破壊と battleEnded の誘発の収集まで行う。解決(settle)は呼び出し側。
+ */
+export function resolveBattle(c: Ctx, aPid: number, dPid: number): BattleResult | null {
+  const s = c.s;
+  const pm = permByPid(s, aPid);
+  const dm = permByPid(s, dPid);
+  if (!pm || !dm) return null;
+  const pa = battlePower(c, pm.perm);
+  const pd = battlePower(c, dm.perm);
+  const aTop = pm.perm.cards[0];
+  const dTop = dm.perm.cards[0];
+  const losers: number[] = [];
+  let winner: number | null = null;
+  if (pa > pd) {
+    losers.push(dTop);
+    winner = aTop;
+  } else if (pa < pd) {
+    losers.push(aTop);
+    winner = dTop;
+  } else losers.push(aTop, dTop);
+  // スレイヤー: バトルの後、バトルした相手を破壊する(勝敗にかかわらず)
+  if (hasKeyword(c, pm.perm, 'slayer') && !losers.includes(dTop)) losers.push(dTop);
+  if (hasKeyword(c, dm.perm, 'slayer') && !losers.includes(aTop)) losers.push(aTop);
+  const aOwner = pm.owner;
+  const dOwner = dm.owner;
+  moveCards(c, losers, { to: 'grave', cause: 'destroy' });
+  const winPid = winner === null ? null : winner === aTop ? aPid : dPid;
+  const ev = emit(c, 'battleEnded', {
+    attacker: aPid,
+    defender: dPid,
+    winner: winPid,
+    card: winner,
+    winnerCard: winner,
+    loserCard: winner === null ? null : winner === aTop ? dTop : aTop,
+    loserOwner: winner === null ? undefined : winner === aTop ? dOwner : aOwner,
+    winnerOwner: winner === null ? undefined : winner === aTop ? aOwner : dOwner,
+    draw: winner === null,
+  });
+  s.batchNo++;
+  collectBatch(c, [ev]);
+  return { aPid, dPid, aTop, dTop, aOwner };
 }
 
 // ───────────────────────── 置換パイプライン(effects 8) ─────────────────────────

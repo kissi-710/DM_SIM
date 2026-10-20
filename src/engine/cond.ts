@@ -29,6 +29,14 @@ export function getVar(cc: CC, name: string): any {
   if (name === '$self') {
     return cc.self == null ? null : { uid: cc.self, ep: cc.c.s.cards[cc.self].ep };
   }
+  if (name === '$eventCard') {
+    // 誘発の原因になったイベントのカード(出たクリーチャーなど)。出た後に別の山になっていれば無効
+    const ev = cc.event;
+    if (!ev || typeof ev.card !== 'number') return null;
+    const card = cc.c.s.cards[ev.card];
+    if (ev.pid !== undefined && card.pid !== ev.pid) return null;
+    return { uid: ev.card, ep: card.ep };
+  }
   const parts = name.split('.');
   let v: any = cc.vars[parts[0]];
   for (let i = 1; i < parts.length && v != null; i++) v = v[parts[i]];
@@ -151,7 +159,7 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   // ここから先は「判定対象のカード $it」を使う条件
   if (cc.it == null) throw new Error('$it が無い条件: ' + JSON.stringify(cond));
   const it = cc.it;
-  const ch = 'power' in o ? charsOf(cc.c, it, cc.itFace ?? -1) : charsLite(cc.c, it, cc.itFace ?? -1);
+  const ch = 'power' in o || 'powerLtSelf' in o ? charsOf(cc.c, it, cc.itFace ?? -1) : charsLite(cc.c, it, cc.itFace ?? -1);
   if ('civ' in o) return ch.civs.includes(o.civ);
   if ('civsAll' in o) return (o.civsAll as Civ[]).every((x) => ch.civs.includes(x));
   if ('multicolor' in o) return (ch.civs.length > 1) === o.multicolor;
@@ -170,6 +178,7 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     if (o.power.gte !== undefined && p < o.power.gte) return false;
     return true;
   }
+  if ('powerLtSelf' in o) return cc.self != null && ch.power < charsOf(cc.c, cc.self).power;
   if ('type' in o) {
     if (o.type === 'creature') return ch.type === 'creature' || ch.type === 'evolution' || ch.type === 'smaxEvolution';
     return ch.type === 'spell';

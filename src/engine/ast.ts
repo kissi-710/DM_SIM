@@ -37,6 +37,8 @@ export type Cond =
   | { multicolor: boolean }
   | { cost: { eq?: Expr; lt?: Expr; lte?: Expr; gt?: Expr; gte?: Expr } }
   | { power: { lte?: number; gte?: number } }
+  /** $it のパワーが、能力の発生源(self)のパワーより小さい(プチョヘンザのファイナル革命) */
+  | { powerLtSelf: true }
   | { type: 'creature' | 'spell' }
   | { evolution: boolean }
   | { race: string }
@@ -121,6 +123,10 @@ export type StaticMod =
   | { type: 'cannotAttackPlayerWhenEntered' }
   | { type: 'cannotCast'; cond: Cond }
   | { type: 'powerAdd'; n: number }
+  /** バトルする時、パワーは無限として扱う(カツムゲン) */
+  | { type: 'infinitePowerInBattle' }
+  /** 相手の、cond に合うクリーチャーは、タップして出る(プチョヘンザ)。cond の $it = 出るクリーチャー */
+  | { type: 'entersTapped'; cond: Cond }
   /** 自分のクリーチャー(cond に合うもの)すべてにキーワードを与える。unblockable = ブロックされない */
   | { type: 'grantKeyword'; keyword: 'speedAttacker' | 'machFighter' | 'slayer' | 'unblockable'; cond: Cond };
 

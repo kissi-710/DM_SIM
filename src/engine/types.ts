@@ -204,7 +204,9 @@ export type EffectMod =
   /** プレイヤー単位(ContEffect.pid = -1): 発生源の持ち主の相手は呪文を唱えられない */
   | { kind: 'cannotCast' }
   /** プレイヤー単位: 発生源の持ち主の相手は、コストが n のカードを実行できない */
-  | { kind: 'cannotUseCost'; n: number };
+  | { kind: 'cannotUseCost'; n: number }
+  /** プレイヤー単位: 発生源の持ち主の相手は、コストが maxCost 以下のクリーチャーを召喚できない */
+  | { kind: 'cannotSummon'; maxCost: number };
 
 export interface ContEffect {
   id: number;

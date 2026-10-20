@@ -1,7 +1,7 @@
 // 効果のインタプリタ(effects 6.5)。フレームは pc と vars(JSON)だけを持ち、再開できる。
 import type { ActDef, Cond, Expr, Selector, StepDef } from './ast';
 import { type CC, evalCond, evalExpr, selectCards, varUids } from './cond';
-import { charsOf, infoOf } from './derive';
+import { canSummon, charsOf, infoOf } from './derive';
 import type { Instr } from './registry';
 import {
   addShieldFromDeck,
@@ -11,6 +11,7 @@ import {
   emit,
   enterBattle,
   moveCards,
+  resolveBattle,
   setTapped,
   shuffleDeck,
 } from './ops';
@@ -414,6 +415,8 @@ function durationOf(c: Ctx, f: EffectFrame, until: string): ContEffect['until'] 
   if (until === 'endOfTurn') return { kind: 'endOfTurn', turn: s.turn };
   if (until === 'nextTurnStart') return { kind: 'untilTurnStart', player: f.controller, afterTurn: s.turn };
   if (until === 'source') return { kind: 'source', uid: f.source.uid, ep: f.source.ep };
+  // 「次の、相手のターンの終わりまで」: 自分のターン中なら次のターン、相手のターン中ならそのターン
+  if (until === 'nextOpponentTurnEnd') return { kind: 'endOfTurn', turn: s.active === f.controller ? s.turn + 1 : s.turn };
   throw new Error('未知の期限: ' + until);
 }
 
@@ -587,6 +590,7 @@ function actPut(c: Ctx, f: EffectFrame, cc: CC, a: any, key: string): void {
     if (fi < 0) continue;
     const face = c.reg.getFace(s.cards[u].defId, fi);
     if (face.type === 'evolution') continue; // 進化元がないので出せない
+    if (key === 'summon' && !canSummon(c, s.cards[u].owner, face.cost)) continue; // 召喚できない効果を受けている
     const r = enterBattle(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0 }, evs);
     entered.push({ uid: u, ep: r.ep });
   }
@@ -693,8 +697,34 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
   const s = c.s;
   // プレイヤー単位の継続効果(pid = -1)。「相手は〜できない」
   const m = a.mod;
-  const mod: EffectMod = m.kind === 'cannotUseCost' ? { kind: 'cannotUseCost', n: evalExpr(cc, m.n) } : { kind: 'cannotCast' };
+  const mod: EffectMod =
+    m.kind === 'cannotUseCost'
+      ? { kind: 'cannotUseCost', n: evalExpr(cc, m.n) }
+      : m.kind === 'cannotSummon'
+        ? { kind: 'cannotSummon', maxCost: evalExpr(cc, m.maxCost) }
+        : { kind: 'cannotCast' };
   s.effects.push({ id: nextId(s), pid: -1, mod, until: durationOf(c, f, a.until), controller: f.controller });
+}
+
+/**
+ * 効果によるバトル: a と b(どちらも変数の参照)のクリーチャーをバトルさせる。
+ * どちらかがバトルゾーンにいなければ、何も起きない(バトルは行われない)。
+ */
+function actBattle(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const pidOf = (name: string): number | null => {
+    const u = varUids(cc, name)[0];
+    if (u === undefined) return null;
+    const card = s.cards[u];
+    if (card.zone !== 'battle') return null;
+    const pm = permByPid(s, card.pid);
+    return pm && pm.perm.cards[0] === u ? pm.perm.pid : null;
+  };
+  const pa = pidOf(a.a);
+  const pb = pidOf(a.b);
+  if (pa === null || pb === null || pa === pb) return;
+  resolveBattle(c, pa, pb);
+  s.dirtySba = true;
 }
 
 function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
@@ -729,6 +759,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['invade', actInvade],
   ['revolutionChange', actRevolutionChange],
   ['playerEffect', actPlayerEffect],
+  ['battle', actBattle],
   ['log', actLog],
   ['setVar', actSetVar],
 ]);
