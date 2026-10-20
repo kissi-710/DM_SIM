@@ -23,11 +23,13 @@ pub struct CC<'a> {
     /// 判定に使う面。-1 = 面0 / 文明は和集合
     pub it_face: i32,
     pub iter: Option<PlayerId>,
+    /// 誘発の原因になったイベント($eventCard 用)
+    pub event: Option<&'a Ev>,
 }
 
 impl<'a> CC<'a> {
     pub fn new(e: Env<'a>, controller: PlayerId) -> CC<'a> {
-        CC { e, controller, self_: None, self_snap: None, vars: None, it: None, it_face: -1, iter: None }
+        CC { e, controller, self_: None, self_snap: None, vars: None, it: None, it_face: -1, iter: None, event: None }
     }
     pub fn with_self(mut self, uid: i32) -> Self {
         self.self_ = Some(uid);
@@ -40,7 +42,7 @@ impl<'a> CC<'a> {
     }
     /// $it を差し替えた複製
     pub fn sub(&self, it: i32, face: i32) -> CC<'a> {
-        CC { e: self.e, controller: self.controller, self_: self.self_, self_snap: self.self_snap, vars: self.vars, it: Some(it), it_face: face, iter: self.iter }
+        CC { e: self.e, controller: self.controller, self_: self.self_, self_snap: self.self_snap, vars: self.vars, it: Some(it), it_face: face, iter: self.iter, event: self.event }
     }
 }
 
@@ -52,6 +54,18 @@ pub fn get_var(cc: &CC, name: &str) -> Option<Val> {
             None => Val::Null,
             Some(u) => Val::from_ref(ObjRef { uid: u, ep: cc.e.s.cards[u as usize].ep }),
         });
+    }
+    if name == "$eventCard" {
+        // 誘発の原因になったイベントのカード(出たクリーチャーなど)。出た後に別の山になっていれば無効
+        let ev = cc.event?;
+        let uid = ev.int(s::CARD)? as i32;
+        let card = cc.e.s.cards.get(uid as usize)?;
+        if let Some(pid) = ev.int(s::PID) {
+            if card.pid as i64 != pid {
+                return Some(Val::Null);
+            }
+        }
+        return Some(Val::from_ref(ObjRef { uid, ep: card.ep }));
     }
     let mut parts = name.split('.');
     let first = parts.next().unwrap();
@@ -292,9 +306,10 @@ pub fn eval_cond(cc: &CC, cond: &Cond) -> bool {
                     }
                     true
                 }
+                Cond::PowerLtSelf => cc.self_.map_or(false, |me| ch.power < chars_of(cc.e, me, -1).power),
                 Cond::Type(t) => {
                     if *t == SelType::Creature {
-                        ch.ty != FaceType::Spell
+                        ch.ty.is_creature()
                     } else {
                         ch.ty == FaceType::Spell
                     }
@@ -399,14 +414,14 @@ fn face_hint(cc: &CC, uid: i32, ty: Option<SelType>) -> Option<i32> {
         let f = def.faces.get(card.face as usize).unwrap_or(&def.faces[0]);
         return match ty {
             Some(SelType::Spell) => (f.ty == FaceType::Spell).then_some(card.face),
-            Some(SelType::Creature) => (f.ty != FaceType::Spell).then_some(card.face),
+            Some(SelType::Creature) => f.ty.is_creature().then_some(card.face),
             _ => Some(card.face),
         };
     }
     match ty {
         None | Some(SelType::Card) => Some(-1),
         Some(t) => {
-            let idx = def.faces.iter().position(|f| if t == SelType::Spell { f.ty == FaceType::Spell } else { f.ty != FaceType::Spell });
+            let idx = def.faces.iter().position(|f| if t == SelType::Spell { f.ty == FaceType::Spell } else { f.ty.is_creature() });
             idx.map(|i| i as i32)
         }
     }
@@ -518,6 +533,12 @@ pub fn match_pattern(cc: &CC, pat: &Pattern, ev: &Ev) -> bool {
     }
     if let Some(v) = pat.free {
         let actual = ev.get(s::FREE).map_or(false, |x| x.as_bool() == Some(true));
+        if actual != v {
+            return false;
+        }
+    }
+    if let Some(v) = pat.up {
+        let actual = ev.get(s::UP).map_or(false, |x| x.as_bool() == Some(true));
         if actual != v {
             return false;
         }

@@ -240,6 +240,7 @@ fn mod_from_json(j: &Json) -> R<EffectMod> {
         "mustBlock" => EffectMod::MustBlock,
         "cannotCast" => EffectMod::CannotCast,
         "cannotUseCost" => EffectMod::CannotUseCost(gi(j, "n")? as i32),
+        "cannotSummon" => EffectMod::CannotSummon(gi(j, "maxCost")? as i32),
         k => return Err(format!("未知の効果: {}", k)),
     })
 }
@@ -254,6 +255,7 @@ fn mod_to_json(m: &EffectMod) -> Json {
         EffectMod::MustBlock => Json::obj(vec![("kind", Json::str("mustBlock"))]),
         EffectMod::CannotCast => Json::obj(vec![("kind", Json::str("cannotCast"))]),
         EffectMod::CannotUseCost(n) => Json::obj(vec![("kind", Json::str("cannotUseCost")), ("n", Json::int(*n as i64))]),
+        EffectMod::CannotSummon(n) => Json::obj(vec![("kind", Json::str("cannotSummon")), ("maxCost", Json::int(*n as i64))]),
     }
 }
 
@@ -305,6 +307,7 @@ pub fn state_from_json(reg: &Registry, j: &Json) -> R<State> {
             ex_pid: gi(c, "exPid")? as i32,
             pid: gi(c, "pid")? as i32,
             face: gi(c, "face")? as i32,
+            up: c.get("up").and_then(|x| x.as_bool()).unwrap_or(false),
         });
     }
     let pj = get(j, "players")?.as_arr().ok_or("players")?;
@@ -498,7 +501,7 @@ pub fn state_to_json(reg: &Registry, s: &State) -> Json {
         s.cards
             .iter()
             .map(|c| {
-                Json::obj(vec![
+                let mut v = vec![
                     ("defId", Json::str(&reg.ids[c.def as usize])),
                     ("owner", Json::int(c.owner as i64)),
                     ("zone", Json::str(c.zone.name())),
@@ -508,7 +511,11 @@ pub fn state_to_json(reg: &Registry, s: &State) -> Json {
                     ("exPid", Json::int(c.ex_pid as i64)),
                     ("pid", Json::int(c.pid as i64)),
                     ("face", Json::int(c.face as i64)),
-                ])
+                ];
+                if c.up {
+                    v.push(("up", Json::Bool(true)));
+                }
+                Json::obj(v)
             })
             .collect(),
     );

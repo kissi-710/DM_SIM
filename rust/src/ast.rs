@@ -81,6 +81,8 @@ pub struct Pattern {
     pub step: Option<Sym>,
     pub paid: Option<i64>,
     pub free: Option<bool>,
+    /// 表向きのシールドに置かれたか(G城)
+    pub up: Option<bool>,
     pub cause_type: Option<Sym>,
     /// abilityTriggered: 能力の持ち主が、原因のイベントのカード自身か
     pub cause_self: bool,
@@ -130,6 +132,8 @@ pub enum Cond {
     Multicolor(bool),
     Cost(CostQ),
     Power { lte: Option<i32>, gte: Option<i32> },
+    /// $it のパワーが、能力の発生源のパワーより小さい
+    PowerLtSelf,
     Type(SelType),
     Evolution(bool),
     Race(String),
@@ -164,6 +168,8 @@ pub enum UntilKind {
     EndOfTurn,
     NextTurnStart,
     Source,
+    /// 次の、相手のターンの終わりまで
+    NextOpponentTurnEnd,
 }
 
 #[derive(Clone, Debug)]
@@ -191,6 +197,8 @@ pub enum Act {
     PlayerEffect { m: PlayerMod, until: UntilKind },
     /// イベントを1つ残す(ファイナル革命の「使った」印)
     Log { ty: Sym },
+    /// 効果によるバトル(a と b は変数の参照)
+    Battle { a: String, b: String },
     SetVar { as_: Sym, value: Val },
 }
 
@@ -198,6 +206,7 @@ pub enum Act {
 pub enum PlayerMod {
     CannotCast,
     CannotUseCost(Expr),
+    CannotSummon(Expr),
 }
 
 #[derive(Clone, Debug)]
@@ -284,6 +293,12 @@ pub enum StaticMod {
     CannotAttackPlayerWhenEntered,
     CannotCast { cond: Cond },
     PowerAdd { n: i32 },
+    /// バトルする時、パワーは無限として扱う
+    InfinitePowerInBattle,
+    /// 相手の、cond に合うクリーチャーは、タップして出る
+    EntersTapped { cond: Cond },
+    /// シールドゾーンに表向きである間(G城)、相手のクリーチャーが召喚以外の方法で出る時、かわりにマナゾーンに置く
+    NonSummonEntryToMana,
     /// 自分のクリーチャー(cond に合うもの)すべてにキーワードを与える
     GrantKeyword { keyword: Sym, cond: Cond },
 }
@@ -427,6 +442,7 @@ pub fn parse_pattern(j: &Json) -> R<Pattern> {
         step: symf("step"),
         paid: j.get("paid").and_then(|x| x.as_i64()),
         free: boolf("free"),
+        up: boolf("up"),
         cause_type: symf("causeType"),
         cause_self: boolf("causeSelf").unwrap_or(false),
         owner: j.get("owner").and_then(rel_of),
@@ -517,6 +533,9 @@ pub fn parse_cond(j: &Json) -> R<Cond> {
             }
         };
         return Ok(Cond::Cost(CostQ { eq: e("eq")?, lt: e("lt")?, lte: e("lte")?, gt: e("gt")?, gte: e("gte")? }));
+    }
+    if o.get("powerLtSelf").is_some() {
+        return Ok(Cond::PowerLtSelf);
     }
     if let Some(v) = o.get("power") {
         return Ok(Cond::Power {
@@ -637,6 +656,7 @@ fn parse_act(j: &Json) -> R<Act> {
                 Some("endOfTurn") => UntilKind::EndOfTurn,
                 Some("nextTurnStart") => UntilKind::NextTurnStart,
                 Some("source") => UntilKind::Source,
+                Some("nextOpponentTurnEnd") => UntilKind::NextOpponentTurnEnd,
                 u => return err(format!("未知の期限: {:?}", u)),
             };
             Act::AddEffect { mods, sel: sel_or_var(a.get("sel").ok_or("addEffect.sel")?)?, until }
@@ -649,17 +669,20 @@ fn parse_act(j: &Json) -> R<Act> {
         "invade" => Act::Invade,
         "revolutionChange" => Act::RevolutionChange,
         "log" => Act::Log { ty: sym(a.as_str().ok_or("log")?) },
+        "battle" => Act::Battle { a: s_of(a, "a").ok_or("battle.a")?.to_string(), b: s_of(a, "b").ok_or("battle.b")?.to_string() },
         "playerEffect" => {
             let m = a.get("mod").ok_or("playerEffect.mod")?;
             let pm = match s_of(m, "kind") {
                 Some("cannotCast") => PlayerMod::CannotCast,
                 Some("cannotUseCost") => PlayerMod::CannotUseCost(parse_expr(m.get("n").ok_or("cannotUseCost.n")?)?),
+                Some("cannotSummon") => PlayerMod::CannotSummon(parse_expr(m.get("maxCost").ok_or("cannotSummon.maxCost")?)?),
                 k => return err(format!("未知のプレイヤー効果: {:?}", k)),
             };
             let until = match s_of(a, "until") {
                 Some("endOfTurn") => UntilKind::EndOfTurn,
                 Some("nextTurnStart") => UntilKind::NextTurnStart,
                 Some("source") => UntilKind::Source,
+                Some("nextOpponentTurnEnd") => UntilKind::NextOpponentTurnEnd,
                 u => return err(format!("未知の期限: {:?}", u)),
             };
             Act::PlayerEffect { m: pm, until }
@@ -818,6 +841,9 @@ pub fn parse_ability(j: &Json) -> R<Ability> {
                 Some("cannotAttackPlayerWhenEntered") => StaticMod::CannotAttackPlayerWhenEntered,
                 Some("cannotCast") => StaticMod::CannotCast { cond: parse_cond(m.get("cond").ok_or("cannotCast.cond")?)? },
                 Some("powerAdd") => StaticMod::PowerAdd { n: m.get("n").and_then(|x| x.as_i64()).unwrap_or(0) as i32 },
+                Some("infinitePowerInBattle") => StaticMod::InfinitePowerInBattle,
+                Some("entersTapped") => StaticMod::EntersTapped { cond: parse_cond(m.get("cond").ok_or("entersTapped.cond")?)? },
+                Some("nonSummonEntryToMana") => StaticMod::NonSummonEntryToMana,
                 Some("grantKeyword") => StaticMod::GrantKeyword {
                     keyword: sym(s_of(m, "keyword").ok_or("grantKeyword.keyword")?),
                     cond: parse_cond(m.get("cond").ok_or("grantKeyword.cond")?)?,

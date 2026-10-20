@@ -962,7 +962,11 @@ pub fn kinds_of(reg: &Registry, def: u16) -> Vec<&'static str> {
     let d = &reg.defs[def as usize];
     let mut out: Vec<&'static str> = Vec::new();
     for (fi, f) in d.faces.iter().enumerate() {
-        let k = if f.ty == FaceType::Spell { "spell" } else { "creature" };
+        let k = match f.ty {
+            FaceType::Spell => "spell",
+            FaceType::Castle => "castle",
+            _ => "creature",
+        };
         if !out.contains(&k) {
             out.push(k);
         }

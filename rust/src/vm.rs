@@ -19,6 +19,7 @@ fn cc_of<'a>(e: Env<'a>, f: &'a EffectFrame) -> CC<'a> {
         it: None,
         it_face: -1,
         iter,
+        event: f.trigger.as_deref(),
     }
 }
 
@@ -48,7 +49,7 @@ fn player_of(f: &EffectFrame, who: Who) -> PlayerId {
 /// 創造面(クリーチャー面)のインデックス。呪文のみなら -1
 fn creature_face(c: &Ctx, uid: i32) -> i32 {
     let def = &c.reg.defs[c.s.cards[uid as usize].def as usize];
-    def.faces.iter().position(|x| x.ty != FaceType::Spell).map_or(-1, |i| i as i32)
+    def.faces.iter().position(|x| x.ty.is_creature()).map_or(-1, |i| i as i32)
 }
 
 fn spell_face(c: &Ctx, uid: i32) -> i32 {
@@ -406,7 +407,7 @@ pub fn interchangeable(c: &Ctx, f: &EffectFrame, cand: &[i32]) -> bool {
         if x.def != a.def || x.zone != a.zone || x.owner != a.owner || x.face != a.face {
             return false;
         }
-        if x.tapped != a.tapped || x.ex != a.ex || (x.ex && x.ex_pid != a.ex_pid) {
+        if x.tapped != a.tapped || x.ex != a.ex || (x.ex && x.ex_pid != a.ex_pid) || x.up != a.up {
             return false;
         }
     }
@@ -577,6 +578,8 @@ fn duration_of(c: &Ctx, f: &EffectFrame, until: UntilKind) -> Duration {
         UntilKind::EndOfTurn => Duration::EndOfTurn { turn: c.s.turn },
         UntilKind::NextTurnStart => Duration::UntilTurnStart { player: f.controller, after_turn: c.s.turn },
         UntilKind::Source => Duration::Source { uid: f.source.uid, ep: f.source.ep },
+        // 「次の、相手のターンの終わりまで」: 自分のターン中なら次のターン、相手のターン中ならそのターン
+        UntilKind::NextOpponentTurnEnd => Duration::EndOfTurn { turn: if c.s.active == f.controller { c.s.turn + 1 } else { c.s.turn } },
     }
 }
 
@@ -810,16 +813,24 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
                 if fi < 0 {
                     continue;
                 }
-                let face_ty = c.reg.face(c.s.cards[u as usize].def, fi).ty;
+                let (face_ty, face_cost) = {
+                    let fc = c.reg.face(c.s.cards[u as usize].def, fi);
+                    (fc.ty, fc.cost)
+                };
                 if face_ty == FaceType::Evolution {
                     continue; // 進化元がないので出せない
+                }
+                if matches!(act, Act::Summon { .. }) && !crate::derive::can_summon(c.env(), c.s.cards[u as usize].owner, face_cost) {
+                    continue; // 召喚できない効果を受けている
                 }
                 let mut o = MoveOpts::new(Zone::Battle, via);
                 o.via = Some(via);
                 o.face = Some(fi);
                 o.paid = Some(0);
                 let r = enter_battle(c, u, &o, &mut evs)?;
-                entered.push(ObjRef { uid: u, ep: r.ep });
+                if r.to == Zone::Battle {
+                    entered.push(ObjRef { uid: u, ep: r.ep }); // G城の置換でマナゾーンに置かれたものは、出ていない
+                }
             }
             if let Some(a) = as_ {
                 var_set(&mut f.vars, *a, Val::refs(&entered));
@@ -981,9 +992,12 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             o.tapped = true;
             o.paid = Some(0);
             enter_battle(c, uid, &o, &mut evs)?;
-            let new_pid = c.s.cards[uid as usize].pid;
-            if let Frame::Proc(p) = &mut c.s.cont[fr_idx] {
-                var_set(&mut p.vars, s::PID, Val::Int(new_pid as i64));
+            // G城の置換でマナゾーンに置かれた時は、入れ替わらない(攻撃していたクリーチャーは手札に戻った後で、攻撃は終わる)
+            if c.s.cards[uid as usize].zone == Zone::Battle {
+                let new_pid = c.s.cards[uid as usize].pid;
+                if let Frame::Proc(p) = &mut c.s.cont[fr_idx] {
+                    var_set(&mut p.vars, s::PID, Val::Int(new_pid as i64));
+                }
             }
             c.s.batch_no += 1;
             collect_batch(c, &evs);
@@ -998,10 +1012,41 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
                     let cc = cc_of(c.env(), f);
                     EffectMod::CannotUseCost(eval_expr(&cc, x) as i32)
                 }
+                PlayerMod::CannotSummon(x) => {
+                    let cc = cc_of(c.env(), f);
+                    EffectMod::CannotSummon(eval_expr(&cc, x) as i32)
+                }
             };
             let id = c.s.next_id();
             let until = duration_of(c, f, *until);
             c.s.effects.push(ContEffect { id, pid: -1, m: em, until, controller: f.controller });
+            Ok(())
+        }
+        Act::Battle { a, b } => {
+            // 効果によるバトル: a と b(どちらも変数の参照)のクリーチャーをバトルさせる。どちらかがバトルゾーンにいなければ何も起きない
+            let (pa, pb) = {
+                let cc = cc_of(c.env(), f);
+                let pid_of = |name: &str| -> Option<i32> {
+                    let u = *var_uids(&cc, name, false).first()?;
+                    let card = &c.s.cards[u as usize];
+                    if card.zone != Zone::Battle {
+                        return None;
+                    }
+                    let pm = c.s.perm(card.pid)?;
+                    if pm.cards[0] == u {
+                        Some(pm.pid)
+                    } else {
+                        None
+                    }
+                };
+                (pid_of(a), pid_of(b))
+            };
+            if let (Some(x), Some(y)) = (pa, pb) {
+                if x != y {
+                    resolve_battle(c, x, y)?;
+                    c.s.dirty_sba = true;
+                }
+            }
             Ok(())
         }
         Act::Log { ty } => {

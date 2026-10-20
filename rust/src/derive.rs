@@ -180,6 +180,69 @@ pub fn power_of(e: Env, perm: &Perm) -> i32 {
     p
 }
 
+/// バトルの時のパワー(カツムゲン: 無限)。無限は i64::MAX で表す(比べるだけ)
+pub fn battle_power(e: Env, perm: &Perm) -> i64 {
+    let uid = perm.cards[0];
+    let card = &e.s.cards[uid as usize];
+    let info = info_of(e, uid);
+    if !info.statics.is_empty() {
+        let face = e.reg.face(card.def, chars_lite(e, uid, -1).face_idx);
+        for &si in &info.statics {
+            if let Ability::Static { m: StaticMod::InfinitePowerInBattle, while_ } = &face.abilities[si as usize] {
+                if let Some(w) = while_ {
+                    if !eval_cond(&CC::new(e, card.owner).with_self(uid), w) {
+                        continue;
+                    }
+                }
+                return i64::MAX;
+            }
+        }
+    }
+    power_of(e, perm) as i64
+}
+
+/// プレイヤーの表向きのシールド(G城)が持つ常在型能力のうち、pred に合うものがあるか
+pub fn shield_static(e: Env, controller: PlayerId, pred: impl Fn(&StaticMod) -> bool) -> bool {
+    for &uid in &e.s.players[controller as usize].shield {
+        let card = &e.s.cards[uid as usize];
+        if !card.up {
+            continue;
+        }
+        let info = e.reg.info(card.def, 0);
+        if info.statics.is_empty() {
+            continue;
+        }
+        let face = e.reg.face(card.def, 0);
+        for &si in &info.statics {
+            if let Ability::Static { m, while_ } = &face.abilities[si as usize] {
+                if !pred(m) {
+                    continue;
+                }
+                if let Some(w) = while_ {
+                    if !eval_cond(&CC::new(e, controller).with_self(uid), w) {
+                        continue;
+                    }
+                }
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// 相手の常在型能力(entersTapped)で、このクリーチャー(出る面 face_idx)がタップして出るか
+pub fn enters_tapped_by_static(e: Env, uid: i32, owner: PlayerId, face_idx: i32) -> bool {
+    any_static(e, |st| {
+        if let StaticMod::EntersTapped { cond } = st.m {
+            if st.controller != owner {
+                let cc = CC::new(e, st.controller).with_self(st.src).with_it(uid, face_idx);
+                return eval_cond(&cc, cond);
+            }
+        }
+        false
+    })
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kw {
     Blocker,
@@ -617,6 +680,11 @@ pub fn can_cast(e: Env, player: PlayerId, uid: i32, face_idx: i32) -> bool {
         }
         false
     })
+}
+
+/// 「相手はコストが cost 以下のクリーチャーを召喚できない」(ミラダンテXII のファイナル革命)に当たらないか
+pub fn can_summon(e: Env, player: PlayerId, cost: i32) -> bool {
+    !e.s.effects.iter().any(|ef| matches!(ef.m, EffectMod::CannotSummon(n) if cost <= n) && ef.controller != player)
 }
 
 /// 「相手はそのコストのカードを実行できない」(オーパーツ銃のファイナル革命)に当たらないか
