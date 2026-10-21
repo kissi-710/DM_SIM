@@ -161,7 +161,7 @@ export interface EffectFrame {
   label?: string;
 }
 
-export type ProcName = 'turn' | 'play' | 'attack' | 'break' | 'settle' | 'sba';
+export type ProcName = 'turn' | 'play' | 'attack' | 'break' | 'settle' | 'sba' | 'battle';
 export interface ProcFrame {
   kind: 'proc';
   id: number;
@@ -201,8 +201,14 @@ export type EffectMod =
   | { kind: 'cannotBeAttacked' }
   /** ブロックを強制する(攻撃された時、ブロッカーとして選ばなければならない。総合ルール 507.1b) */
   | { kind: 'mustBlock' }
-  /** プレイヤー単位(ContEffect.pid = -1): 発生源の持ち主の相手は呪文を唱えられない */
-  | { kind: 'cannotCast' }
+  /** プレイヤー単位(ContEffect.pid = -1): 発生源の持ち主の相手は呪文を唱えられない(n があれば、そのコストの呪文だけ) */
+  | { kind: 'cannotCast'; n?: number }
+  /** プレイヤー単位: 発生源の持ち主の相手は、コストが costLte 以下のクリーチャーを召喚できない */
+  | { kind: 'cannotSummon'; costLte: number }
+  /** プレイヤー単位: 発生源の持ち主の相手の、コストが n のバトルゾーンのカードの能力を無視する */
+  | { kind: 'ignoreCost'; n: number }
+  /** プレイヤー単位: 発生源の持ち主は、次の自分のターンのはじめに civ を含む n 枚のマナを支払う。払えなければゲームに負ける(逆転撃) */
+  | { kind: 'owe'; civ: Civ; n: number }
   /** プレイヤー単位: 発生源の持ち主の相手は、コストが n のカードを実行できない */
   | { kind: 'cannotUseCost'; n: number };
 
@@ -297,7 +303,7 @@ export type Action =
 export type AnswerValue = number[] | Record<string, number[]> | boolean | number | true;
 
 export type InputSpec =
-  | { shape: 'pick'; candidates: number[]; min: number; max: number }
+  | { shape: 'pick'; candidates: number[]; min: number; max: number; /** コストの合計の上限(costs は candidates と同じ並び) */ sum?: { max: number; costs: number[] } }
   | { shape: 'assign'; items: number[]; slots: { id: string; to: ZoneName; count: number; label: string }[] }
   | { shape: 'option'; options: string[]; pick: number; repeat: boolean; allIf: boolean; /** 選ぶ前に見たカード(山札の上など)。選ぶ人には中身が見える */ seen?: number[] }
   | { shape: 'yesno' }

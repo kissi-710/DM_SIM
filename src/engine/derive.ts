@@ -1,7 +1,7 @@
 // 派生ビュー: コスト・パワー・文明・能力・攻撃可否など(effects 7)。状態を書き換えない。
 import type { Ability, Cond, StaticMod } from './ast';
 import { evalCond, mkCC } from './cond';
-import type { FaceInfo } from './registry';
+import { EMPTY_FACE_INFO, type FaceInfo } from './registry';
 import type { Ctx } from './state';
 import { opponentOf, permByPid } from './state';
 import type { Card, CardDef, Civ, ContEffect, Face, FaceType, PlayerId, Permanent } from './types';
@@ -83,7 +83,21 @@ export function faceTypeOf(c: Ctx, uid: number): FaceType {
 
 export function infoOf(c: Ctx, uid: number): FaceInfo {
   const card = c.s.cards[uid];
+  if (card.zone === 'battle' && c.s.effects.length > 0 && isIgnored(c, uid)) return EMPTY_FACE_INFO;
   return c.reg.getInfo(card.defId, faceIdxOf(card, c.reg.defs[card.defId]));
+}
+
+/**
+ * バトルゾーンのカードが、能力を無視されているか(「そのコストの相手のエレメントの能力を無視する」)。
+ * 継続効果(プレイヤー単位の ignoreCost)の発生源の持ち主の相手のカードで、表記コストが一致するものが対象。
+ */
+export function isIgnored(c: Ctx, uid: number): boolean {
+  const card = c.s.cards[uid];
+  for (const e of c.s.effects) {
+    if (e.mod.kind !== 'ignoreCost' || e.controller === card.owner) continue;
+    if (costBase(c, uid) === e.mod.n) return true;
+  }
+  return false;
 }
 
 // ───────────────────────── 継続効果 ─────────────────────────
@@ -129,7 +143,7 @@ export function powerOf(c: Ctx, perm: Permanent): number {
   const def = c.reg.defs[card.defId];
   const face = def.faces[card.face] ?? def.faces[0];
   let p = face.power ?? 0;
-  const info = c.reg.getInfo(card.defId, card.face);
+  const info = infoOf(c, uid);
   for (const st of info.statics) {
     if (st.ability.mod.type !== 'powerAdd') continue;
     if (st.ability.while && !evalCond(mkCC(c, card.owner, { self: uid }), st.ability.while)) continue;
@@ -379,8 +393,11 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
 
 /** プレイヤーがこの呪文(面)を唱えられるか(ドルファディロムの制限など) */
 export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
-  // 「次の自分のターンのはじめまで、相手は呪文を唱えられない」(XXDDZ)
-  for (const e of c.s.effects) if (e.mod.kind === 'cannotCast' && e.controller !== player) return false;
+  // 「次の自分のターンのはじめまで、相手は呪文を唱えられない」(XXDDZ)。n があれば、そのコストの呪文だけ
+  if (c.s.effects.length > 0) {
+    const cost = c.reg.defs[c.s.cards[uid].defId].faces[faceIdx]?.cost ?? 0;
+    for (const e of c.s.effects) if (e.mod.kind === 'cannotCast' && e.controller !== player && (e.mod.n === undefined || e.mod.n === cost)) return false;
+  }
   for (const st of activeStatics(c, 'cannotCast')) {
     if (st.controller === player) continue; // 「相手は〜できない」
     const mod = st.ability.mod;
@@ -388,6 +405,14 @@ export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number):
     const cc = mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx });
     if (evalCond(cc, mod.cond as Cond)) return false;
   }
+  return true;
+}
+
+/** 「相手はコストが n 以下のクリーチャーを召喚できない」(ミラダンテXII のファイナル革命)に当たらないか */
+export function canSummon(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
+  if (c.s.effects.length === 0) return true;
+  const cost = c.reg.defs[c.s.cards[uid].defId].faces[faceIdx]?.cost ?? 0;
+  for (const e of c.s.effects) if (e.mod.kind === 'cannotSummon' && e.controller !== player && cost <= e.mod.costLte) return false;
   return true;
 }
 

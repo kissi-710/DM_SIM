@@ -49,6 +49,13 @@ export interface FaceInfo {
   hasTriggerOrStatic: boolean;
 }
 
+/** 能力を無視されているカードの FaceInfo(何の能力も持たない) */
+export const EMPTY_FACE_INFO: FaceInfo = {
+  blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false, slayer: false,
+  sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], statics: [],
+  replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
+};
+
 export interface Registry {
   db: CardDB;
   defs: CardDB;
@@ -138,12 +145,12 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true',
+  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
@@ -236,8 +243,10 @@ export function validateCardDb(db: CardDB): string[] {
           case 'spell':
             checkSteps(a.steps, wa, errs);
             break;
-          case 'static':
           case 'replace':
+            if (a.apply.type === 'steps') checkSteps(a.apply.steps, wa, errs);
+            break;
+          case 'static':
           case 'permission':
             break;
           default:
@@ -353,6 +362,8 @@ function abilitySteps(a: Ability): StepDef[] {
       return a.steps;
     case 'keyword':
       return a.steps ?? [];
+    case 'replace':
+      return a.apply.type === 'steps' ? a.apply.steps : [];
     default:
       return [];
   }

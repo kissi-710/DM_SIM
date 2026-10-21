@@ -1,7 +1,7 @@
 // 効果のインタプリタ(effects 6.5)。フレームは pc と vars(JSON)だけを持ち、再開できる。
 import type { ActDef, Cond, Expr, Selector, StepDef } from './ast';
 import { type CC, evalCond, evalExpr, selectCards, varUids } from './cond';
-import { charsOf, infoOf } from './derive';
+import { charsOf, costBase, infoOf } from './derive';
 import type { Instr } from './registry';
 import {
   addShieldFromDeck,
@@ -181,11 +181,15 @@ export function runEffect(c: Ctx, f: EffectFrame): boolean {
 type SelectStep = Extract<StepDef, { op: 'select' }>;
 
 /** select の候補・選ぶ枚数(上限・下限は候補の数に丸めた後)・選ぶ人 */
-function selectInfo(cc: CC, f: EffectFrame, st: SelectStep): { cand: number[]; min: number; max: number; chooser: PlayerId } {
+function selectInfo(cc: CC, f: EffectFrame, st: SelectStep): { cand: number[]; min: number; max: number; chooser: PlayerId; sumMax?: number } {
   const from = st.from;
   const cand = from && 'var' in from && !('zone' in from) ? varUids(cc, from.var) : selectCards(cc, from as Selector);
   const chooser: PlayerId =
     st.who === 'opponent' ? opponentOf(f.controller) : st.who === 'iter' ? (f.vars.$iter ?? f.controller) : f.controller;
+  if (st.sumLte !== undefined) {
+    // コストの合計の上限つきで、好きな数を選ぶ
+    return { cand, min: 0, max: cand.length, chooser, sumMax: evalExpr(cc, st.sumLte) };
+  }
   const min0 = st.min === undefined ? 1 : evalExpr(cc, st.min);
   const max0 = st.max === undefined ? 1 : evalExpr(cc, st.max);
   const max = Math.min(max0, cand.length);
@@ -277,10 +281,22 @@ export function interchangeable(c: Ctx, f: EffectFrame, cand: number[]): boolean
 }
 
 function execSelect(c: Ctx, f: EffectFrame, cc: CC, st: SelectStep): void {
-  const { cand, min, max, chooser } = selectInfo(cc, f, st);
+  const { cand, min, max, chooser, sumMax } = selectInfo(cc, f, st);
   const n = cand.length;
   let picked: number[];
-  if (max === 0) picked = [];
+  if (sumMax !== undefined) {
+    // 合計に収まる組み合わせが1通り(何も選ばない)しかなければ、聞かない
+    const costs = cand.map((u) => costBase(c, u));
+    if (costs.every((x) => x > sumMax)) picked = [];
+    else
+      picked = ask<number[]>(c, {
+        player: chooser,
+        why: 'select',
+        input: { shape: 'pick', candidates: cand, min: 0, max: n, sum: { max: sumMax, costs } },
+        source: f.source,
+        prompt: st.prompt ?? `${sourceName(c, f)}: コストの合計が ${sumMax} 以下になるように選んでください`,
+      });
+  } else if (max === 0) picked = [];
   else if (st.random) {
     const pool = cand.slice();
     picked = [];
@@ -414,6 +430,8 @@ function durationOf(c: Ctx, f: EffectFrame, until: string): ContEffect['until'] 
   if (until === 'endOfTurn') return { kind: 'endOfTurn', turn: s.turn };
   if (until === 'nextTurnStart') return { kind: 'untilTurnStart', player: f.controller, afterTurn: s.turn };
   if (until === 'source') return { kind: 'source', uid: f.source.uid, ep: f.source.ep };
+  // 次の、相手のターンの終わりまで(いまが自分のターンなら次のターン、相手のターン中ならその次の相手のターン)
+  if (until === 'oppTurnEnd') return { kind: 'endOfTurn', turn: s.active === f.controller ? s.turn + 1 : s.turn + 2 };
   throw new Error('未知の期限: ' + until);
 }
 
@@ -437,6 +455,16 @@ function actMoveTop(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void 
   const n = evalExpr(cc, a.n);
   const top = s.players[who].deck.slice(0, n);
   const res = moveCards(c, top, { to: a.to, cause: a.cause ?? 'effect', tapped: a.tapped });
+  if (a.as) f.vars[a.as] = res.filter((r) => r.moved).map((r) => ({ uid: r.uid, ep: r.ep }));
+}
+
+function actMoveBottom(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const who = playerOf(f, a.who);
+  const n = evalExpr(cc, a.n);
+  const deck = s.players[who].deck;
+  const bottom = deck.slice(Math.max(0, deck.length - n));
+  const res = moveCards(c, bottom, { to: a.to, cause: a.cause ?? 'effect', tapped: a.tapped });
   if (a.as) f.vars[a.as] = res.filter((r) => r.moved).map((r) => ({ uid: r.uid, ep: r.ep }));
 }
 
@@ -693,8 +721,64 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
   const s = c.s;
   // プレイヤー単位の継続効果(pid = -1)。「相手は〜できない」
   const m = a.mod;
-  const mod: EffectMod = m.kind === 'cannotUseCost' ? { kind: 'cannotUseCost', n: evalExpr(cc, m.n) } : { kind: 'cannotCast' };
+  let mod: EffectMod;
+  switch (m.kind) {
+    case 'cannotUseCost':
+      mod = { kind: 'cannotUseCost', n: evalExpr(cc, m.n) };
+      break;
+    case 'cannotSummon':
+      mod = { kind: 'cannotSummon', costLte: evalExpr(cc, m.costLte) };
+      break;
+    case 'ignoreCost':
+      mod = { kind: 'ignoreCost', n: evalExpr(cc, m.n) };
+      break;
+    case 'owe':
+      mod = { kind: 'owe', civ: m.civ, n: m.n };
+      break;
+    default:
+      mod = m.n === undefined ? { kind: 'cannotCast' } : { kind: 'cannotCast', n: evalExpr(cc, m.n) };
+  }
   s.effects.push({ id: nextId(s), pid: -1, mod, until: durationOf(c, f, a.until), controller: f.controller });
+}
+
+/** 効果によるバトル。a, b は選んだクリーチャー(a が攻撃側扱い) */
+function actBattle(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const as = resolveSel(cc, a.a).filter((u) => s.cards[u].zone === 'battle');
+  const bs = resolveSel(cc, a.b).filter((u) => s.cards[u].zone === 'battle');
+  if (as.length === 0 || bs.length === 0) return;
+  s.cont.push({
+    kind: 'proc',
+    id: nextId(s),
+    causedBy: c.cause,
+    name: 'battle',
+    stage: 0,
+    vars: { a: s.cards[as[0]].pid, d: s.cards[bs[0]].pid },
+  });
+}
+
+/** 山札に加えてシャッフルする(それぞれの持ち主の山札に) */
+function actShuffleIn(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const uids = resolveSel(cc, a.sel);
+  if (uids.length === 0) return;
+  const owners = new Set<PlayerId>(uids.map((u) => s.cards[u].owner));
+  moveCards(c, uids, { to: 'deck', cause: 'effect', pos: 'top' });
+  for (const p of owners) shuffleDeck(c, p);
+}
+
+/** 山札の下に、いまの並びのまま置く(「好きな順序で山札の下に置く」。並びは変えない) */
+function actBottom(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const uids = varUids(cc, a.of, { ignoreEp: true }).filter((u) => s.cards[u].zone === 'deck');
+  if (uids.length === 0) return;
+  const owner = s.cards[uids[0]].owner;
+  const deck = s.players[owner].deck;
+  for (const u of uids) deck.splice(deck.indexOf(u), 1);
+  for (const u of uids) {
+    deck.push(u);
+    s.cards[u].ep++;
+  }
 }
 
 function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
@@ -711,6 +795,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['draw', actDraw],
   ['move', actMove],
   ['moveTop', actMoveTop],
+  ['moveBottom', actMoveBottom],
   ['lookTop', actLookTop],
   ['revealUntil', actRevealUntil],
   ['reveal', actReveal],
@@ -729,6 +814,9 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['invade', actInvade],
   ['revolutionChange', actRevolutionChange],
   ['playerEffect', actPlayerEffect],
+  ['battle', actBattle],
+  ['shuffleIn', actShuffleIn],
+  ['bottom', actBottom],
   ['log', actLog],
   ['setVar', actSetVar],
 ]);

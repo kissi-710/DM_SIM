@@ -2,7 +2,7 @@
 // 規約: 入力待ち(ask)は、状態を変更する前に行う。再実行しても二重に変更されない。
 import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
-import { charsLite, infoOf, manaCivs, payNeed } from './derive';
+import { charsLite, infoOf, isIgnored, manaCivs, payNeed } from './derive';
 import type { Ctx } from './state';
 import { nextId, opponentOf, permByPid, shuffleInPlace, snapOf } from './state';
 import {
@@ -61,6 +61,7 @@ export function collect(c: Ctx, ev: Ev): void {
     if (card.zone === 'battle') {
       const pm = permByPid(s, card.pid);
       if (!pm || pm.perm.cards[0] !== uid) continue;
+      if (s.effects.length > 0 && isIgnored(c, uid)) continue; // 能力を無視されている
     }
     for (const r of refs) {
       const spec = r.ability.spec;

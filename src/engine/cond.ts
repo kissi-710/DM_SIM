@@ -29,6 +29,11 @@ export function getVar(cc: CC, name: string): any {
   if (name === '$self') {
     return cc.self == null ? null : { uid: cc.self, ep: cc.c.s.cards[cc.self].ep };
   }
+  // 誘発したイベントのカード(いまのゾーンで参照する。呪文を唱えた後に墓地にある、など)
+  if (name === '$ev.card') {
+    const u = cc.event?.card;
+    return typeof u === 'number' ? { uid: u, ep: cc.c.s.cards[u].ep } : null;
+  }
   const parts = name.split('.');
   let v: any = cc.vars[parts[0]];
   for (let i = 1; i < parts.length && v != null; i++) v = v[parts[i]];
@@ -92,8 +97,9 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   }
   if ('shields' in o) {
     const broken = s.breaking;
-    const n = s.players[cc.controller].shield.filter((u) => !broken.includes(u)).length;
     const q = o.shields;
+    const who = q.who === 'opponent' ? opponentOf(cc.controller) : cc.controller;
+    const n = s.players[who].shield.filter((u) => !broken.includes(u)).length;
     if (q.lte !== undefined && n > q.lte) return false;
     if (q.gte !== undefined && n < q.gte) return false;
     if (q.eq !== undefined && n !== q.eq) return false;
@@ -129,6 +135,8 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     return (o.civsPresent.civs as Civ[]).every((x) => set.has(x));
   }
   if ('nonEmpty' in o) return varUids(cc, o.nonEmpty, { ignoreEp: true }).length > 0;
+  if ('some' in o) return varUids(cc, o.some.var, { ignoreEp: true }).some((u) => evalCond({ ...cc, it: u, itFace: -1 }, o.some.where));
+  if ('isSelf' in o) return cc.it != null && cc.it === cc.self;
   if ('notInBattle' in o) {
     if (cc.self == null) return true;
     const def = s.cards[cc.self].defId;
@@ -137,7 +145,16 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('logged' in o) {
     const min = o.logged.min ?? 1;
     let n = 0;
-    for (const ev of s.turnLog) if (matchPattern(cc, o.logged.pattern, ev)) n++;
+    let from = 0;
+    if (o.logged.since) {
+      for (let i = s.turnLog.length - 1; i >= 0; i--) {
+        if (s.turnLog[i].type === o.logged.since) {
+          from = i + 1;
+          break;
+        }
+      }
+    }
+    for (let i = from; i < s.turnLog.length; i++) if (matchPattern(cc, o.logged.pattern, s.turnLog[i])) n++;
     return n >= min;
   }
   if ('zoneIs' in o) {
@@ -288,6 +305,7 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
   if (pat.from !== undefined && ev.from !== pat.from) return false;
   if (pat.to !== undefined && ev.to !== pat.to) return false;
   if (pat.kind !== undefined && ev.kind !== pat.kind) return false;
+  if (pat.targetKind !== undefined && ev.target?.kind !== pat.targetKind) return false;
   if (pat.ex !== undefined && !!ev.ex !== pat.ex) return false;
   if (pat.step !== undefined && ev.step !== pat.step) return false;
   if (pat.paid !== undefined && ev.paid !== pat.paid) return false;

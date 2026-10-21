@@ -1,12 +1,14 @@
 // 手続きフレーム: ターン進行・プレイ・攻撃・シールドブレイク・チェックポイント・状況起因処理
 // (effects 5, 9, 10)。各ステージは「質問 → 変更」の順で書き、再実行しても二重に変更されない。
-import type { Pattern } from './ast';
+import type { Ability, Pattern } from './ast';
 import { evalCond, mkCC } from './cond';
 import {
+  activeStatics,
   breakerCount,
   canAttack,
   canBlock,
   canCast,
+  canSummon,
   canUseCost,
   costBase,
   costOf,
@@ -104,6 +106,7 @@ export function planPlay(
     after = perm?.after ?? null;
   }
   if (kind === 'cast' && !canCast(c, player, uid, faceIdx)) return fail('この呪文は唱えられません');
+  if (kind === 'summon' && !canSummon(c, player, uid, faceIdx)) return fail('このクリーチャーは召喚できません');
   if (!canUseCost(c, player, face.cost)) return fail('そのコストのカードは実行できません');
 
   let onto: number | undefined;
@@ -247,13 +250,38 @@ function runTurn(c: Ctx, f: ProcFrame): void {
         perm.tapped = false;
         perm.sick = false;
       }
-      // 「次の自分のターンのはじめまで」の期限切れ
-      s.effects = s.effects.filter((e) => !(e.until.kind === 'untilTurnStart' && e.until.player === P && s.turn > e.until.afterTurn));
+      // 「次の自分のターンのはじめまで」の期限切れ(逆転撃の支払い(owe)は、支払いの段階で消す)
+      s.effects = s.effects.filter((e) => !(e.until.kind === 'untilTurnStart' && e.until.player === P && s.turn > e.until.afterTurn && e.mod.kind !== 'owe'));
       emit(c, 'stepStart', { step: 'start', player: P });
       s.batchNo++;
       collectBatch(c, [c.out[c.out.length - 1]]);
-      f.stage = 1;
+      f.stage = s.effects.some((e) => e.mod.kind === 'owe' && e.controller === P) ? 5 : 1;
       pushProc(c, 'settle');
+      return;
+    }
+    case 5: {
+      // 逆転撃: 次の自分のターンのはじめに、マナを支払う。払えなければ、ゲームに負ける。1回に1つずつ処理する
+      const e = s.effects.find((x) => x.mod.kind === 'owe' && x.controller === P);
+      if (!e || e.mod.kind !== 'owe') {
+        f.stage = 1;
+        return;
+      }
+      const plan = planPayment(c, P, [e.mod.civ], e.mod.n);
+      if (!plan) {
+        // 払えない: 負ける(「ゲームに負ける時」の置換があれば使える)。質問は、状態を変更する前に行う
+        if (lossReplacement(c, P, false)) {
+          s.effects = s.effects.filter((x) => x.id !== e.id);
+          return;
+        }
+        s.effects = s.effects.filter((x) => x.id !== e.id);
+        s.winner = opponentOf(P);
+        s.loseReason = '逆転撃の支払い不能';
+        emit(c, 'gameOver', { winner: s.winner, reason: '逆転撃の支払い不能' });
+        return;
+      }
+      for (const u of plan) setTapped(c, u, true);
+      s.effects = s.effects.filter((x) => x.id !== e.id);
+      emit(c, 'paidDebt', { owner: P, n: plan.length });
       return;
     }
     case 1: {
@@ -389,7 +417,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         if (v.after === 'hyper') {
           // インターステラ: 墓地(や山札の下)のかわりに超次元ゾーンに置く。呪文自身の置換と重なる時は超次元ゾーンを選ぶ
           moveCards(c, [uid], { to: 'hyper', cause: 'castHyper', noReplace: true });
-        } else if (p.after === 'deckBottom' || v.after === 'deckBottom') {
+        } else if (p.after === 'deckBottom' || v.after === 'deckBottom' || (v.fromZone === 'grave' && graveCastGoesBottom(c, card.owner))) {
           moveCards(c, [uid], { to: 'deck', cause: 'castBottom', pos: 'bottom', noReplace: true });
         } else {
           // 呪文自身の効果が、自身の移動を置換する(チャージャーなど)。他の置換効果より優先する(総合ルール 409.2b / 609.8a)。
@@ -426,6 +454,11 @@ function runPlay(c: Ctx, f: ProcFrame): void {
   }
 }
 
+/** 自分の墓地から呪文を唱えた後、墓地のかわりに山札の下に置くか(サイクルペディア) */
+function graveCastGoesBottom(c: Ctx, owner: PlayerId): boolean {
+  return activeStatics(c, 'graveCastToBottom').some((st) => st.controller === owner);
+}
+
 function removeFrom(c: Ctx, uid: number): void {
   const s = c.s;
   const card = s.cards[uid];
@@ -437,6 +470,113 @@ function removeFrom(c: Ctx, uid: number): void {
     const arr = own[card.zone];
     const i = arr.indexOf(uid);
     if (i >= 0) arr.splice(i, 1);
+  }
+}
+
+// ───────────────────────── バトル ─────────────────────────
+
+type PermRef = NonNullable<ReturnType<typeof permByPid>>;
+
+/** 「バトルする時」の誘発を発行する(聞き手のいるカードがある時だけ。段階を増やさず、既存の対戦の記録を変えない) */
+function emitBattleStarted(c: Ctx, pm: PermRef, dm: PermRef): void {
+  if (!c.reg.trigByDef.has('battleStarted')) return;
+  const evb = emit(c, 'battleStarted', {
+    attacker: pm.perm.pid,
+    defender: dm.perm.pid,
+    attackerCard: pm.perm.cards[0],
+    defenderCard: dm.perm.cards[0],
+    owner: pm.owner,
+  });
+  c.s.batchNo++;
+  collectBatch(c, [evb]);
+  pushProc(c, 'settle');
+}
+
+/** パワーを比べて、負けた方(同じなら両方)を破壊する。スレイヤーも処理する。「バトルの後」に使う当事者の情報を返す */
+function resolveBattleCore(c: Ctx, pm: PermRef, dm: PermRef) {
+  const s = c.s;
+  const pa = powerOf(c, pm.perm);
+  const pd = powerOf(c, dm.perm);
+  const aTop = pm.perm.cards[0];
+  const dTop = dm.perm.cards[0];
+  const losers: number[] = [];
+  let winner: number | null = null;
+  if (pa > pd) {
+    losers.push(dTop);
+    winner = aTop;
+  } else if (pa < pd) {
+    losers.push(aTop);
+    winner = dTop;
+  } else losers.push(aTop, dTop);
+  // スレイヤー: バトルの後、バトルした相手を破壊する(勝敗にかかわらず)
+  if (hasKeyword(c, pm.perm, 'slayer') && !losers.includes(dTop)) losers.push(dTop);
+  if (hasKeyword(c, dm.perm, 'slayer') && !losers.includes(aTop)) losers.push(aTop);
+  const aOwner = pm.owner;
+  const dOwner = dm.owner;
+  const aPid = pm.perm.pid;
+  const dPid = dm.perm.pid;
+  moveCards(c, losers, { to: 'grave', cause: 'destroy' });
+  const winPid = winner === null ? null : winner === aTop ? aPid : dPid;
+  emit(c, 'battleEnded', {
+    attacker: aPid,
+    defender: dPid,
+    winner: winPid,
+    card: winner,
+    winnerCard: winner,
+    loserCard: winner === null ? null : winner === aTop ? dTop : aTop,
+    loserOwner: winner === null ? undefined : winner === aTop ? dOwner : aOwner,
+    winnerOwner: winner === null ? undefined : winner === aTop ? aOwner : dOwner,
+    draw: winner === null,
+  });
+  const ev = c.out[c.out.length - 1];
+  s.batchNo++;
+  collectBatch(c, [ev]);
+  return { attacker: aPid, defender: dPid, attackerCard: aTop, defenderCard: dTop, owner: aOwner };
+}
+
+/** 効果によるバトル(「その2体をバトルさせる」)。vars: a, d = 山の pid(a が攻撃側扱い) */
+function runBattle(c: Ctx, f: ProcFrame): void {
+  const s = c.s;
+  const v = f.vars;
+  const pma = permByPid(s, v.a);
+  const pmd = permByPid(s, v.d);
+  switch (f.stage) {
+    case 0: {
+      if (!pma || !pmd || pma.owner === pmd.owner) {
+        popFrame(c, f);
+        return;
+      }
+      f.stage = 1;
+      emitBattleStarted(c, pma, pmd);
+      return;
+    }
+    case 1: {
+      // 「バトルする時」の効果の解決で、どちらかが場を離れていれば、バトルは行われない(115.3a)
+      if (!pma || !pmd || s.winner !== null) {
+        popFrame(c, f);
+        return;
+      }
+      const bi = resolveBattleCore(c, pma, pmd);
+      if (c.reg.trigByDef.has('afterBattle')) v.battle = bi;
+      f.stage = 2;
+      pushProc(c, 'settle');
+      return;
+    }
+    case 2: {
+      if (c.reg.trigByDef.has('afterBattle') && v.battle && s.winner === null && !s.skipTurn) {
+        const eva = emit(c, 'afterBattle', { ...v.battle });
+        s.batchNo++;
+        collectBatch(c, [eva]);
+        f.stage = 3;
+        pushProc(c, 'settle');
+        return;
+      }
+      popFrame(c, f);
+      return;
+    }
+    case 3:
+      popFrame(c, f);
+      return;
   }
 }
 
@@ -550,18 +690,7 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       // 「バトルする時」の誘発は、パワーを比べる前に解決する(総合ルール 115.2 / 701.13a)。
       // 聞き手のいるカードがある時だけ、イベントを発行する(段階を増やさず、既存の対戦の記録を変えない)
       f.stage = 4;
-      if (c.reg.trigByDef.has('battleStarted')) {
-        const evb = emit(c, 'battleStarted', {
-          attacker: pm.perm.pid,
-          defender: dm0.perm.pid,
-          attackerCard: pm.perm.cards[0],
-          defenderCard: dm0.perm.cards[0],
-          owner: pm.owner,
-        });
-        s.batchNo++;
-        collectBatch(c, [evb]);
-        pushProc(c, 'settle');
-      }
+      emitBattleStarted(c, pm, dm0);
       return;
     }
     case 4: {
@@ -577,44 +706,9 @@ function runAttack(c: Ctx, f: ProcFrame): void {
         popFrame(c, f);
         return;
       }
-      const pa = powerOf(c, pm.perm);
-      const pd = powerOf(c, dm.perm);
-      const aTop = pm.perm.cards[0];
-      const dTop = dm.perm.cards[0];
-      const losers: number[] = [];
-      let winner: number | null = null;
-      if (pa > pd) {
-        losers.push(dTop);
-        winner = aTop;
-      } else if (pa < pd) {
-        losers.push(aTop);
-        winner = dTop;
-      } else losers.push(aTop, dTop);
-      // スレイヤー: バトルの後、バトルした相手を破壊する(勝敗にかかわらず)
-      if (hasKeyword(c, pm.perm, 'slayer') && !losers.includes(dTop)) losers.push(dTop);
-      if (hasKeyword(c, dm.perm, 'slayer') && !losers.includes(aTop)) losers.push(aTop);
-      const aOwner = pm.owner;
-      const dOwner = dm.owner;
-      const aPid = pm.perm.pid;
-      const dPid = dm.perm.pid;
-      moveCards(c, losers, { to: 'grave', cause: 'destroy' });
-      const winPid = winner === null ? null : winner === aTop ? aPid : dPid;
-      emit(c, 'battleEnded', {
-        attacker: aPid,
-        defender: dPid,
-        winner: winPid,
-        card: winner,
-        winnerCard: winner,
-        loserCard: winner === null ? null : winner === aTop ? dTop : aTop,
-        loserOwner: winner === null ? undefined : winner === aTop ? dOwner : aOwner,
-        winnerOwner: winner === null ? undefined : winner === aTop ? aOwner : dOwner,
-        draw: winner === null,
-      });
-      const ev = c.out[c.out.length - 1];
-      s.batchNo++;
-      collectBatch(c, [ev]);
+      const bi = resolveBattleCore(c, pm, dm);
       // 「バトルの後」の誘発のために、バトルの当事者を残す(聞き手がいる時だけ)
-      if (c.reg.trigByDef.has('afterBattle')) v.battle = { attacker: aPid, defender: dPid, attackerCard: aTop, defenderCard: dTop, owner: aOwner };
+      if (c.reg.trigByDef.has('afterBattle')) v.battle = bi;
       f.stage = 5;
       pushProc(c, 'settle');
       return;
@@ -1067,7 +1161,52 @@ function lossReplacement(c: Ctx, p: PlayerId, deckOut: boolean): boolean {
       return true;
     }
   }
-  return false;
+  // 「ゲームに負ける時、かわりに〜してもよい」(手順を行う置換): バトルゾーンと手札のカードが持つ
+  const cands: { uid: number; idx: number; ab: Extract<Ability, { kind: 'replace' }> }[] = [];
+  const holders = [...s.players[p].battle.map((x) => x.cards[0]), ...s.players[p].hand];
+  for (const uid of holders) {
+    const card = s.cards[uid];
+    const info = card.zone === 'battle' ? infoOf(c, uid) : c.reg.getInfo(card.defId, 0);
+    for (const r of info.replaces) {
+      const a = r.ability;
+      if (a.apply.type !== 'steps' || a.match.type !== 'gameLoss') continue;
+      if (a.match.turn === 'opponent' && s.active === p) continue;
+      if (a.match.turn === 'own' && s.active !== p) continue;
+      if (a.while && !evalCond(mkCC(c, p, { self: uid }), a.while)) continue;
+      cands.push({ uid, idx: r.idx, ab: a });
+    }
+  }
+  if (cands.length === 0) return false;
+  let pickIdx = 0;
+  if (cands.length > 1 || cands[0].ab.optional) {
+    const labels = cands.map((x) => x.ab.label ?? 'かわりの処理を行う');
+    const ans = ask<number[]>(c, {
+      player: p,
+      why: 'replaceChoice',
+      input: { shape: 'option', options: [...labels, '置換しない'], pick: 1, repeat: false, allIf: false },
+      source: { uid: cands[0].uid, ep: s.cards[cands[0].uid].ep },
+      prompt: 'ゲームに負ける時、かわりの処理を行えます',
+    });
+    pickIdx = ans[0];
+    if (pickIdx >= cands.length) return false;
+  }
+  const chosen = cands[pickIdx];
+  const card = s.cards[chosen.uid];
+  if (deckOut) s.usage[key] = 1;
+  s.cont.push({
+    kind: 'effect',
+    id: nextId(s),
+    causedBy: c.cause,
+    ability: { defId: card.defId, face: card.zone === 'battle' ? card.face : 0, idx: chosen.idx },
+    source: { uid: chosen.uid, ep: card.ep },
+    lki: snapOf(c, chosen.uid),
+    controller: p,
+    pc: 0,
+    vars: {},
+    trigger: null,
+    noOptional: true,
+  });
+  return true;
 }
 
 // ───────────────────────── ディスパッチ ─────────────────────────
@@ -1084,6 +1223,8 @@ export function runProc(c: Ctx, f: ProcFrame): void {
       return runBreak(c, f);
     case 'settle':
       return runSettle(c, f);
+    case 'battle':
+      return runBattle(c, f);
     default:
       throw new Error('未知の手続き: ' + f.name);
   }

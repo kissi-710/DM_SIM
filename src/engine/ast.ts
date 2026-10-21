@@ -46,10 +46,14 @@ export type Cond =
   | { count: Selector; gte?: number; lte?: number; eq?: number }
   | { fiveCivs: Selector }
   | { civsPresent: { sel: Selector; civs: Civ[] } }
-  | { logged: { pattern: { [k: string]: any }; min?: number } }
-  | { shields: { lte?: number; eq?: number; gte?: number } }
+  | { logged: { pattern: { [k: string]: any }; min?: number; /** 指定の種類のイベントのうち、最後のものより後だけを数える(攻撃ごと、など) */ since?: string } }
+  | { shields: { lte?: number; eq?: number; gte?: number; who?: 'self' | 'opponent' } }
   | { notInBattle: boolean }
   | { nonEmpty: string }
+  /** 変数のカード(いまのゾーンの特性で見る)のどれかが where を満たす */
+  | { some: { var: string; where: Cond } }
+  /** $it が、能力の発生源自身 */
+  | { isSelf: true }
   | { turnOf: 'self' | 'opponent' }
   | { zoneIs: ZoneName }
   /** $it が、能力の発生源(EXライフを持つクリーチャー)のEXライフのシールドか */
@@ -70,6 +74,8 @@ export type StepDef =
       random?: boolean;
       /** 変数に、選んだものを追記する(既にあれば、その後ろに足す)。両者が選んでから一括で処理する時に使う */
       append?: boolean;
+      /** 選んだカードの表記コストの合計がこの値以下になるように、好きな数を選ぶ(min は 0 になる) */
+      sumLte?: Expr;
       prompt?: string;
     }
   | { op: 'may'; then: StepDef[]; else?: StepDef[]; prompt?: string }
@@ -121,13 +127,17 @@ export type StaticMod =
   | { type: 'cannotAttackPlayerWhenEntered' }
   | { type: 'cannotCast'; cond: Cond }
   | { type: 'powerAdd'; n: number }
+  /** 自分の墓地から呪文を唱えた後、墓地のかわりに山札の下に置く */
+  | { type: 'graveCastToBottom' }
   /** 自分のクリーチャー(cond に合うもの)すべてにキーワードを与える。unblockable = ブロックされない */
   | { type: 'grantKeyword'; keyword: 'speedAttacker' | 'machFighter' | 'slayer' | 'unblockable'; cond: Cond };
 
 export type ReplaceApply =
   | { type: 'changeDest'; to: ZoneName }
   | { type: 'cancelTrigger' }
-  | { type: 'smaxSacrifice' };
+  | { type: 'smaxSacrifice' }
+  /** かわりに、この手順を行う(出来事は起きない)。ゲームに負ける時の置換などで使う */
+  | { type: 'steps'; steps: StepDef[] };
 
 export type Ability =
   | { kind: 'keyword'; name: KeywordName; n?: number; while?: Cond; steps?: StepDef[]; attacker?: Cond; label?: string }

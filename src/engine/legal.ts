@@ -178,20 +178,22 @@ function extraVariants(c: Ctx, player: PlayerId, uid: number, fi: number): (Play
 
 // ───────────────────────── 回答の列挙・検証 ─────────────────────────
 
-function combos(items: number[], min: number, max: number, limit: number): number[][] {
+function combos(items: number[], min: number, max: number, limit: number, sum?: { max: number; costs: number[] }): number[][] {
   const res: number[][] = [];
-  const go = (start: number, cur: number[]) => {
+  const go = (start: number, cur: number[], total: number) => {
     if (res.length >= limit) return;
     if (cur.length >= min && cur.length <= max) res.push(cur.slice());
     if (cur.length >= max) return;
     for (let i = start; i < items.length; i++) {
+      const t = total + (sum ? sum.costs[i] : 0);
+      if (sum && t > sum.max) continue;
       cur.push(items[i]);
-      go(i + 1, cur);
+      go(i + 1, cur, t);
       cur.pop();
       if (res.length >= limit) return;
     }
   };
-  go(0, []);
+  go(0, [], 0);
   return res;
 }
 
@@ -223,7 +225,7 @@ function enumerateRaw(p: Pending, limit: number): AnswerValue[] {
   if (!inp) return [];
   switch (inp.shape) {
     case 'pick':
-      return combos(inp.candidates, inp.min, inp.max, limit);
+      return combos(inp.candidates, inp.min, inp.max, limit, inp.sum);
     case 'yesno':
       return [true, false];
     case 'order':
@@ -294,6 +296,7 @@ export function validateAnswer(p: Pending, v: AnswerValue): string | null {
       if (a.length < inp.min || a.length > inp.max) return `${inp.min}〜${inp.max}個選んでください`;
       if (new Set(a).size !== a.length) return '重複しています';
       if (!a.every((x) => inp.candidates.includes(x))) return '候補にないものを選んでいます';
+      if (inp.sum && a.reduce((t, x) => t + inp.sum!.costs[inp.candidates.indexOf(x)], 0) > inp.sum.max) return `コストの合計は ${inp.sum.max} 以下にしてください`;
       return null;
     }
     case 'yesno':
