@@ -26,6 +26,11 @@ describe('無能力カード(カード単体の強さの差し替え先)', () =>
     for (const c of CARD_LIST) {
       if (c.id === 'dummy') continue;
       const to = blankFor(CARD_DB, c.id);
+      // コスト99以上のカード(他の効果で、コストを支払わずに使う前提のもの)は、差し替え先がなく、dummy になる
+      if (c.faces[0].cost >= 99) {
+        expect(to).toBe('dummy');
+        continue;
+      }
       expect(to).toBe(blankId(c));
       const f = CARD_DB[to].faces[0];
       expect(f.cost).toBe(c.faces[0].cost);

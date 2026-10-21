@@ -31,8 +31,18 @@ export function evolution(name: string, cost: number, civs: string, power: numbe
 }
 
 /** 呪文面。steps は呪文の効果。abilities は S・トリガーなどのキーワード */
-export function spell(name: string, cost: number, civs: string, abilities: Ability[], steps: StepDef[]): Face {
-  return { name, type: 'spell', cost, civs: civsOf(civs), abilities: [...abilities, { kind: 'spell', steps }] };
+export function spell(name: string, cost: number, civs: string, abilities: Ability[], steps: StepDef[], races?: string[]): Face {
+  return { name, type: 'spell', cost, civs: civsOf(civs), ...(races ? { races } : {}), abilities: [...abilities, { kind: 'spell', steps }] };
+}
+
+/** フィールド面 */
+export function field(name: string, cost: number, civs: string, abilities: Ability[], races?: string[]): Face {
+  return { name, type: 'field', cost, civs: civsOf(civs), ...(races ? { races } : {}), abilities };
+}
+
+/** タマシード面(power はクリーチャーとして扱う時のパワー。通常は 0) */
+export function tamaseed(name: string, cost: number, civs: string, races: string[], abilities: Ability[], power = 0): Face {
+  return { name, type: 'tamaseed', cost, civs: civsOf(civs), power, races, abilities };
 }
 
 /** カード定義。名前は面の名前を ' / ' でつなぐ(ツインパクト) */
@@ -128,6 +138,7 @@ export const costLte = (n: Expr): Cond => ({ cost: { lte: n } });
 export const costGte = (n: Expr): Cond => ({ cost: { gte: n } });
 export const and = (...cs: Cond[]): Cond => ({ all: cs });
 export const or = (...cs: Cond[]): Cond => ({ any: cs });
+export const not = (c: Cond): Cond => ({ not: c });
 export const isCreature: Cond = { type: 'creature' };
 export const notEvolution: Cond = { evolution: false };
 
