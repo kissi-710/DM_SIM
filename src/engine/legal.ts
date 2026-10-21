@@ -4,7 +4,7 @@ import { evalCond, mkCC } from './cond';
 import { planPlay } from './procs';
 import type { Registry } from './registry';
 import type { Ctx } from './state';
-import { mkCtx, opponentOf } from './state';
+import { gameHas, mkCtx, opponentOf } from './state';
 import { type Action, type AnswerValue, type GameState, type InputSpec, isCreatureType, type Pending, type PlayerId, type PlayExtra } from './types';
 
 export const ENUM_LIMIT = 200;
@@ -126,9 +126,10 @@ export function playActionKey(s: GameState, a: Extract<Action, { type: 'PLAY_CAR
 export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extract<Action, { type: 'PLAY_CARD' }>[] {
   const s = c.s;
   const out: Extract<Action, { type: 'PLAY_CARD' }>[] = [];
-  const zones = ['hand', 'mana', 'grave'] as const;
+  const zones = gameHas(c, 'allowPlayFrom') ? (['hand', 'mana', 'grave', 'deck'] as const) : (['hand', 'mana', 'grave'] as const);
   for (const z of zones) {
-    const list: number[] = s.players[player][z];
+    // 山札から使えるのは、一番上のカードだけ(「山札の上から召喚してもよい」)
+    const list: number[] = z === 'deck' ? s.players[player].deck.slice(0, 1) : s.players[player][z];
     const seenDefs = skipCopies && z === 'hand' ? new Set<string>() : null;
     for (const uid of list) {
       if (seenDefs) {
@@ -143,7 +144,8 @@ export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extra
         if (
           z !== 'hand' &&
           !info.permissions.some((p) => p.from === z && p.play === (face.type === 'spell' ? 'cast' : isCreatureType(face.type) ? 'summon' : 'put')) &&
-          !(isCreatureType(face.type) && grantedPlayFrom(c, player, uid, fi, z) !== null)
+          !(isCreatureType(face.type) && grantedPlayFrom(c, player, uid, fi, z) !== null) &&
+          !info.altCosts.some((ab) => ab.cost.from?.includes(z))
         )
           continue;
         for (const extra of extraVariants(c, player, uid, fi)) {

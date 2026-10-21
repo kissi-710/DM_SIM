@@ -4,7 +4,7 @@ import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
 import { activeStatics, charsLite, infoOf, isIgnored, manaCivs, payNeed } from './derive';
 import type { Ctx } from './state';
-import { nextId, opponentOf, permByPid, shuffleInPlace, snapOf } from './state';
+import { gameHas, nextId, opponentOf, permByPid, shuffleInPlace, snapOf } from './state';
 import {
   type AbilityRef,
   type Ev,
@@ -522,7 +522,7 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   const faceIdx = opts.face ?? card.face ?? 0;
   const via = opts.via ?? 'effect';
   // 出る時の置換(「相手のクリーチャーが出る時、かわりに〜に置く」)。状態を変更する前に判定する
-  if (c.reg.hasEntryReplace && !opts.noReplace) {
+  if (gameHas(c, 'entryReplace') && !opts.noReplace) {
     const dest = entryReplacement(c, uid, opts, faceIdx, via);
     if (dest) {
       moveCards(c, [uid], { to: dest, cause: 'replaced', noReplace: true });
@@ -579,8 +579,9 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   } else {
     // 各ターン、はじめて出る相手のクリーチャーは、タップして出る
     let tappedIn = !!opts.tapped;
-    if (!tappedIn && c.reg.hasEnterTapped && !s.turnLog.some((e) => e.type === 'entered' && e.owner === owner)) {
-      tappedIn = activeStatics(c, 'enterTappedFirst').some((st) => st.controller !== owner);
+    if (!tappedIn && gameHas(c, 'enterTapped')) {
+      if (!s.turnLog.some((e) => e.type === 'entered' && e.owner === owner)) tappedIn = activeStatics(c, 'enterTappedFirst').some((st) => st.controller !== owner);
+      if (!tappedIn) tappedIn = activeStatics(c, 'enterTapped').some((st) => st.controller !== owner);
     }
     perm = {
       pid: s.nextPid++,
@@ -705,12 +706,12 @@ function entryReplacement(c: Ctx, uid: number, opts: MoveOpts, faceIdx: number, 
  */
 function applyReplacements(c: Ctx, p: Proposal): void {
   // どのカードの、どの移動にも当てはまる置換(「山札から手札以外のゾーンに置かれる時、かわりに墓地に置く」など)
-  if (c.reg.hasMoveReplace) {
+  if (gameHas(c, 'moveReplace')) {
     applyMoveReplacements(c, p);
     if (p.replaced) return;
   }
   // 手札から捨てられる時の置換(自身の能力)
-  if (c.reg.hasHandReplace && p.from === 'hand' && p.to === 'grave' && p.cause === 'discard') {
+  if (gameHas(c, 'handReplace') && p.from === 'hand' && p.to === 'grave' && p.cause === 'discard') {
     applyHandReplacement(c, p);
     return;
   }
@@ -867,7 +868,7 @@ function applyLeaveReplacements(c: Ctx, p: Proposal): void {
     }
   }
   // 他のクリーチャーが離れる時の置換(match.type = 'leave'。ウルトラ・セイバー・表向きのシールドの身代わりなど)
-  if (c.reg.hasLeaveReplace) {
+  if (gameHas(c, 'leaveReplace')) {
     for (const pl of [0, 1] as PlayerId[]) {
       for (const perm of s.players[pl].battle) {
         const src = perm.cards[0];
@@ -952,12 +953,43 @@ export function drawCards(c: Ctx, player: PlayerId, n: number): number {
   let drawn = 0;
   for (let i = 0; i < n; i++) {
     const deck = s.players[player].deck;
-    if (deck.length === 0) break; // 山札が0枚の時にドローしても何も起こらない(114.6)
+    if (deck.length === 0) {
+      // 山札が0枚の時にドローしても何も起こらない(114.6)。「引く時、山札がなければ、かわりに〜」の置換があれば、その手順を行う
+      if (gameHas(c, 'drawEmpty')) drawEmptyReplacement(c, player);
+      break;
+    }
     const uid = deck[0];
     moveCards(c, [uid], { to: 'hand', cause: 'draw' });
     drawn++;
   }
   return drawn;
+}
+
+/** 山札がない時に引く時の置換(不死鳥縫合 ブラック・ビッグバン): あれば、その手順を行う効果を積む */
+function drawEmptyReplacement(c: Ctx, player: PlayerId): void {
+  const s = c.s;
+  for (const perm of s.players[player].battle) {
+    const src = perm.cards[0];
+    const sc = s.cards[src];
+    for (const r of infoOf(c, src).replaces) {
+      const a = r.ability;
+      if (a.match.type !== 'drawEmpty' || a.apply.type !== 'steps') continue;
+      if (a.while && !evalCond(mkCC(c, player, { self: src }), a.while)) continue;
+      s.cont.push({
+        kind: 'effect',
+        id: nextId(s),
+        causedBy: c.cause,
+        ability: { defId: sc.defId, face: sc.face, idx: r.idx },
+        source: { uid: src, ep: sc.ep },
+        lki: snapOf(c, src),
+        controller: player,
+        pc: 0,
+        vars: {},
+        trigger: null,
+      });
+      return;
+    }
+  }
 }
 
 export function shuffleDeck(c: Ctx, player: PlayerId): void {

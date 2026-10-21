@@ -62,6 +62,18 @@ export const EMPTY_FACE_INFO: FaceInfo = {
   replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
 };
 
+export type FeatureName =
+  | 'entryReplace'
+  | 'afterCast'
+  | 'moveReplace'
+  | 'leaveReplace'
+  | 'handReplace'
+  | 'drawEmpty'
+  | 'mustBeChosen'
+  | 'firstBattleWins'
+  | 'enterTapped'
+  | 'allowPlayFrom';
+
 export interface Registry {
   db: CardDB;
   defs: CardDB;
@@ -70,22 +82,11 @@ export interface Registry {
   /** イベント種類 → 定義ID → その定義の誘発能力(trigIndex の定義別の索引。collect が全カードを走査する時に使う) */
   trigByDef: Map<string, Map<string, TrigRef[]>>;
   progs: Map<string, Program>;
-  /** 出る時の置換(match.type = 'enter')を持つカードがあるか(なければ、出る処理で探さない) */
-  hasEntryReplace: boolean;
-  /** 呪文の解決後の置換(match.type = 'afterCast')を持つカードがあるか */
-  hasAfterCastReplace: boolean;
-  /** どのカードの移動にも当てはまる置換(match.type = 'move')を持つカードがあるか */
-  hasMoveReplace: boolean;
-  /** 手札から捨てられる時の自身の置換(match: moved, from: hand)を持つカードがあるか */
-  hasHandReplace: boolean;
-  /** 出る時にタップさせる静的能力(enterTappedFirst)を持つカードがあるか */
-  hasEnterTapped: boolean;
-  /** バトルゾーンを離れる時の置換(match.type = 'leave')を持つカードがあるか */
-  hasLeaveReplace: boolean;
-  /** 「相手がクリーチャーを選ぶなら、可能ならこのクリーチャーを選ぶ」(mustBeChosen)を持つカードがあるか */
-  hasMustBeChosen: boolean;
-  /** 各ターンはじめてバトルする自分のクリーチャーが勝つ静的能力を持つカードがあるか */
-  hasFirstBattleWins: boolean;
+  /**
+   * 機能ごとの「その機能を持つカードの定義ID」。置換・静的能力などを探すかどうかの判定(gameHas)に使う。
+   * 持つカードが1枚もなければ、探さない
+   */
+  features: Record<FeatureName, Set<string>>;
   getFace(defId: string, face: number): Face;
   getInfo(defId: string, face: number): FaceInfo;
   program(ref: AbilityRef, noOptional?: boolean): Program;
@@ -176,7 +177,7 @@ const KNOWN_ACTS = new Set([
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'altUsed', 'nameHas', 'hasCip', 'eventIs',
+  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
@@ -501,15 +502,22 @@ export function loadRegistry(origDb: CardDB): Registry {
   }
 
   const progs = new Map<string, Program>();
-  const hasReplace = (type: string) => Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'replace' && a.match.type === type)));
-  const hasEntryReplace = hasReplace('enter');
-  const hasAfterCastReplace = hasReplace('afterCast');
-  const hasMoveReplace = hasReplace('move');
-  const hasLeaveReplace = hasReplace('leave');
-  const hasMustBeChosen = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'static' && a.mod.type === 'mustBeChosen')));
-  const hasFirstBattleWins = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'static' && a.mod.type === 'firstBattleWins')));
-  const hasEnterTapped = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'static' && a.mod.type === 'enterTappedFirst')));
-  const hasHandReplace = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'replace' && a.match.type === 'moved' && a.match.from === 'hand')));
+  const featureDefs = (pred: (ab: Ability) => boolean): Set<string> =>
+    new Set(Object.values(defs).filter((d) => d.faces.some((f) => f.abilities.some(pred))).map((d) => d.id));
+  const replaceOf = (type: string) => featureDefs((ab) => ab.kind === 'replace' && ab.match.type === type);
+  const staticOf = (...types: string[]) => featureDefs((ab) => ab.kind === 'static' && types.includes(ab.mod.type));
+  const features: Record<FeatureName, Set<string>> = {
+    entryReplace: replaceOf('enter'),
+    afterCast: replaceOf('afterCast'),
+    moveReplace: replaceOf('move'),
+    leaveReplace: replaceOf('leave'),
+    handReplace: featureDefs((ab) => ab.kind === 'replace' && ab.match.type === 'moved' && ab.match.from === 'hand'),
+    drawEmpty: replaceOf('drawEmpty'),
+    mustBeChosen: staticOf('mustBeChosen'),
+    firstBattleWins: staticOf('firstBattleWins'),
+    enterTapped: staticOf('enterTappedFirst', 'enterTapped'),
+    allowPlayFrom: staticOf('allowPlayFrom'),
+  };
   // program() の高速な引き当て: 定義ID → (面・能力・任意なし) の配列。文字列キーを毎回作らない
   const progFast = new Map<string, (Program | undefined)[]>();
   const reg: Registry = {
@@ -519,14 +527,7 @@ export function loadRegistry(origDb: CardDB): Registry {
     trigIndex,
     trigByDef,
     progs,
-    hasEntryReplace,
-    hasAfterCastReplace,
-    hasMoveReplace,
-    hasHandReplace,
-    hasEnterTapped,
-    hasLeaveReplace,
-    hasMustBeChosen,
-    hasFirstBattleWins,
+    features,
     getFace(defId, face) {
       const d = defs[defId];
       if (!d) throw new Error(`未知のカード: ${defId}`);

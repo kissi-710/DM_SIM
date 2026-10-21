@@ -1,5 +1,5 @@
 // 状態の複製・乱数・ゾーン操作の下請け。
-import type { Registry } from './registry';
+import type { FeatureName, Registry } from './registry';
 import type { Card, Civ, Ev, Frame, GameState, Permanent, PlayerId, PlayerZones, Snap } from './types';
 
 // ───────────────────────── 実行コンテキスト ─────────────────────────
@@ -16,6 +16,30 @@ export interface Ctx {
   seq0: number;
   /** 現在の因果の元(イベントID or フレームID) */
   cause: number | null;
+}
+
+const featureCache = new WeakMap<object, Map<string, boolean>>();
+
+/**
+ * この対局のデッキに、その機能(置換・静的能力など)を持つカードがあるか。なければ、その機能を探す処理を省く。
+ * カードDB全体ではなく、対局のデッキで調べる(デッキが分からない状態では、カードDBに1枚でもあれば true)。
+ */
+export function gameHas(c: Ctx, feature: FeatureName): boolean {
+  const set = c.reg.features[feature];
+  if (set.size === 0) return false;
+  const ids = c.s.deckIds;
+  if (ids[0].length === 0 || ids[1].length === 0) return true;
+  let m = featureCache.get(ids);
+  if (!m) {
+    m = new Map();
+    featureCache.set(ids, m);
+  }
+  let hit = m.get(feature);
+  if (hit === undefined) {
+    hit = ids.some((list) => list.some((d) => set.has(d)));
+    m.set(feature, hit);
+  }
+  return hit;
 }
 
 export function mkCtx(s: GameState, reg: Registry, out: Ev[] = []): Ctx {

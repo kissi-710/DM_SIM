@@ -37,7 +37,7 @@ import {
   smaxVictims,
 } from './ops';
 import type { Ctx } from './state';
-import { nextId, opponentOf, permByPid, rngInt, snapOf } from './state';
+import { gameHas, nextId, opponentOf, permByPid, rngInt, snapOf } from './state';
 import type {
   AbilityRef,
   Civ,
@@ -87,6 +87,8 @@ export interface PlayPlan {
   once?: number[];
   /** 他のカードの許可(allowPlayFrom)で使う時の、その発生源 */
   grant?: number;
+  /** 別のコストでタップする自分のクリーチャーの山 */
+  tapAlt?: number[];
 }
 
 export function planPlay(
@@ -110,9 +112,13 @@ export function planPlay(
   const kind = face.type === 'spell' ? 'cast' : isCreatureType(face.type) ? 'summon' : 'put';
   let after: 'deckBottom' | null = null;
   let grantSrc: number | null = null;
+  const altAb = extra?.alt !== undefined ? info.altCosts.find((a) => a.id === extra.alt) : undefined;
   if (from !== 'hand' && !free) {
     const perm = info.permissions.find((p) => p.from === from && p.play === kind);
-    if (!perm) {
+    // 別のコストで、そのゾーンから使える(ムゲンクライムなど)
+    if (!perm && altAb?.cost.from?.includes(from)) {
+      after = null;
+    } else if (!perm) {
       // 他のカードの「自分のターン中、〜を from から召喚してもよい」
       grantSrc = kind === 'summon' ? grantedPlayFrom(c, player, uid, faceIdx, from) : null;
       if (grantSrc === null) return fail('そのゾーンからはプレイできません');
@@ -138,14 +144,28 @@ export function planPlay(
   // 別のコスト(マナを払うかわりに、手札を捨てる・マナを払わない)
   let freeAlt = false;
   let reduceAlt = 0;
+  let tapAlt: number[] | undefined;
+  let payAlt: number | undefined;
   let discard: number[] | undefined;
   if (extra?.alt !== undefined) {
     const ab = info.altCosts.find((a) => a.id === extra.alt);
     if (!ab) return fail('その別のコストはありません');
-    if (from !== 'hand') return fail('手札から使う別のコストです');
+    if (from !== (ab.cost.from?.[0] ?? 'hand') && !(ab.cost.from ?? ['hand']).includes(from)) return fail('そのゾーンから使う別のコストではありません');
     if (ab.when && !evalCond(mkCC(c, player, { self: uid }), ab.when)) return fail('別のコストを使える条件を満たしていません');
-    freeAlt = ab.cost.reduce === undefined; // 別のコストは、マナを払うかわりのコスト(reduce は、マナを払う軽減)
+    freeAlt = ab.cost.reduce === undefined && ab.cost.pay === undefined; // 別のコストは、マナを払うかわりのコスト(reduce は軽減、pay はコストのかわりに払う)
     reduceAlt = ab.cost.reduce ?? 0;
+    if (ab.cost.tapCreatures) {
+      const n = ab.cost.tapCreatures;
+      const cands = s.players[player].battle.filter((p) => !p.tapped && isCreatureType(faceTypeOf(c, p.cards[0]))).map((p) => p.pid);
+      if (extra.tapAlt?.length) {
+        if (extra.tapAlt.length !== n || new Set(extra.tapAlt).size !== n || !extra.tapAlt.every((p) => cands.includes(p))) return fail('タップするクリーチャーが条件に合いません');
+        tapAlt = extra.tapAlt.slice();
+      } else {
+        if (cands.length < n) return fail('タップできるクリーチャーが足りません');
+        tapAlt = cands.slice(0, n);
+      }
+    }
+    if (ab.cost.pay !== undefined) payAlt = ab.cost.pay;
     if (ab.cost.discard) {
       const d = ab.cost.discard;
       const ccd = mkCC(c, player, { self: uid });
@@ -174,7 +194,7 @@ export function planPlay(
     }
   }
   const once: number[] = [];
-  const cost = Math.max(0, costOf(c, uid, faceIdx, { taps, free, once }) - reduceAlt);
+  const cost = payAlt !== undefined ? payAlt : Math.max(0, costOf(c, uid, faceIdx, { taps, free, once }) - reduceAlt);
   const civs = face.civs;
   const need = free ? 0 : payNeed(cost, civs.length);
   let pay: number[] = [];
@@ -196,7 +216,7 @@ export function planPlay(
       pay = plan;
     }
   }
-  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}), ...(once.length ? { once } : {}), ...(grantSrc !== null ? { grant: grantSrc } : {}) };
+  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}), ...(once.length ? { once } : {}), ...(grantSrc !== null ? { grant: grantSrc } : {}), ...(tapAlt ? { tapAlt } : {}) };
 }
 
 /** 支払いの選択肢(UI が「聞くか、自動で払うか」を決めるための情報) */
@@ -435,7 +455,11 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         setTapped(c, pm.perm.cards[0], true);
       }
       for (const u of plan.pay) setTapped(c, u, true);
-      // 別のコスト: 手札を捨てる
+      // 別のコスト: 手札を捨てる・クリーチャーをタップする
+      for (const pid of plan.tapAlt ?? []) {
+        const pm = permByPid(s, pid);
+        if (pm) setTapped(c, pm.perm.cards[0], true);
+      }
       if (plan.discard?.length) moveCards(c, plan.discard, { to: 'grave', cause: 'discard' });
       // プレイ中として処理する(場所は limbo)
       const prevZone = card.zone;
@@ -501,7 +525,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       // 呪文の解決後。墓地(または山札の下)に置く
       const p = v.plan;
       const card = s.cards[uid];
-      if (card.zone === 'limbo' && c.reg.hasAfterCastReplace && v.after !== 'hyper' && afterCastReplacement(c, uid, p.face)) {
+      if (card.zone === 'limbo' && gameHas(c, 'afterCast') && v.after !== 'hyper' && afterCastReplacement(c, uid, p.face)) {
         // 唱え終わった呪文を、墓地のかわりに別の手順で動かす(フィールドの下に置く、など)
         f.stage = 3;
         return;
@@ -633,7 +657,7 @@ function resolveBattleCore(c: Ctx, pm: PermRef, dm: PermRef) {
   const aTop = pm.perm.cards[0];
   const dTop = dm.perm.cards[0];
   // 各ターン、はじめて自分のクリーチャーがバトルする時、そのクリーチャーはそのバトルに勝つ(輝く革命 ボルシャック・フレア)
-  if (c.reg.hasFirstBattleWins) {
+  if (gameHas(c, 'firstBattleWins')) {
     const aw = firstBattleWinsFor(c, pm.owner);
     const dw = firstBattleWinsFor(c, dm.owner);
     if (aw && !dw) pa = Infinity;
@@ -1280,7 +1304,7 @@ export function runSba(c: Ctx): boolean {
   // 山札が0枚の敗北は、0枚になった出来事に対して1回(置換された後は、山札が増えるまで再度は起きない)
   for (const p of [0, 1] as PlayerId[]) if (s.players[p].deck.length > 0) delete s.usage['deckOutHandled' + p];
   const losers = ([0, 1] as PlayerId[]).filter(
-    (p) => s.players[p].deck.length === 0 && s.turn >= 1 && !(s.cfg.solitaire && p === 1) && !s.usage['deckOutHandled' + p] && !playerCannotLose(c, p),
+    (p) => s.players[p].deck.length === 0 && s.turn >= 1 && !(s.cfg.solitaire && p === 1) && !s.usage['deckOutHandled' + p] && !playerCannotLose(c, p) && !activeStatics(c, 'noDeckOutLoss').some((st) => st.controller === p),
   );
   if (losers.length) {
     for (const p of losers) {

@@ -3,7 +3,7 @@ import type { Ability, Cond, StaticMod } from './ast';
 import { evalCond, evalExpr, mkCC } from './cond';
 import { EMPTY_FACE_INFO, type FaceInfo } from './registry';
 import type { Ctx } from './state';
-import { opponentOf, permByPid } from './state';
+import { gameHas, opponentOf, permByPid } from './state';
 import { type Card, type CardDef, type Civ, type ContEffect, type Face, type FaceType, isCreatureType, type PlayerId, type Permanent, type ZoneName } from './types';
 
 export interface Chars {
@@ -172,7 +172,7 @@ export function playerCannotLose(c: Ctx, p: PlayerId): boolean {
   return c.s.effects.some((e) => e.mod.kind === 'cannotLose' && e.controller === p);
 }
 
-export type KwName = 'blocker' | 'speedAttacker' | 'machFighter' | 'shieldTrigger' | 'justDiver' | 'exLife' | 'slayer' | 'unblockable';
+export type KwName = 'blocker' | 'speedAttacker' | 'machFighter' | 'shieldTrigger' | 'justDiver' | 'exLife' | 'slayer' | 'unblockable' | 'cannotBeAttacked';
 
 export function hasKeyword(c: Ctx, perm: Permanent, kw: KwName): boolean {
   const uid = perm.cards[0];
@@ -229,6 +229,8 @@ export function canBeChosen(c: Ctx, perm: Permanent, by: PlayerId, source?: numb
 
 export function canBeAttacked(c: Ctx, perm: Permanent): boolean {
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'cannotBeAttacked') return false;
+  // 場の常在型能力で、攻撃されなくなっている(ガチャンコ ガチロボ)
+  if (grantedByStatic(c, perm, 'cannotBeAttacked')) return false;
   return true;
 }
 
@@ -486,7 +488,8 @@ export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number):
  * 発生源ごとに「1体」(oncePerTurn)なら、そのターンに使っていないものだけ。
  */
 export function grantedPlayFrom(c: Ctx, player: PlayerId, uid: number, faceIdx: number, from: ZoneName): number | null {
-  if (c.s.active !== player) return null;
+  if (c.s.active !== player || !gameHas(c, 'allowPlayFrom')) return null;
+  if (from === 'deck' && c.s.players[player].deck[0] !== uid) return null; // 山札から召喚できるのは、一番上のカードだけ
   for (const st of activeStatics(c, 'allowPlayFrom')) {
     const mod = st.ability.mod;
     if (st.controller !== player || mod.type !== 'allowPlayFrom' || mod.from !== from) continue;

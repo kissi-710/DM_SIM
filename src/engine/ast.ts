@@ -72,6 +72,8 @@ export type Cond =
   | { hasCip: true }
   /** 誘発したイベントの項目が、指定の値と等しい(例: paid: 0 = マナを支払わずに出た) */
   | { eventIs: { [k: string]: string | number | boolean } }
+  /** 変数のカードがすべて where を満たし、コストがすべて同じ(1枚以上) */
+  | { allSame: { var: string; where?: Cond } }
   /** ゲーム中に1度の能力(key)を、まだ使っていない */
   | { unused: string }
   | { turnOf: 'self' | 'opponent' }
@@ -177,7 +179,11 @@ export type StaticMod =
   /** 自分の墓地から呪文を唱えた後、墓地のかわりに山札の下に置く */
   | { type: 'graveCastToBottom' }
   /** 自分のクリーチャー(cond に合うもの)すべてにキーワードを与える。unblockable = ブロックされない */
-  | { type: 'grantKeyword'; keyword: 'speedAttacker' | 'machFighter' | 'slayer' | 'unblockable' | 'blocker'; cond: Cond };
+  | { type: 'grantKeyword'; keyword: 'speedAttacker' | 'machFighter' | 'slayer' | 'unblockable' | 'blocker' | 'cannotBeAttacked'; cond: Cond }
+  /** 自分は、山札が0枚でもゲームに負けない */
+  | { type: 'noDeckOutLoss' }
+  /** 相手のクリーチャーは、タップして出る */
+  | { type: 'enterTapped' };
 
 export type ReplaceApply =
   | { type: 'changeDest'; to: ZoneName }
@@ -204,6 +210,12 @@ export type Ability =
 
 /** 別のコスト(マナを払うかわりに行う)。discard を持たなければ、何も払わない */
 export interface AltCostSpec {
+  /** この別のコストで使えるゾーン(省略 = 手札) */
+  from?: ZoneName[];
+  /** 自分のクリーチャーを n 体タップする(ムゲンクライム) */
+  tapCreatures?: number;
+  /** マナを、コストのかわりに n 払う(このカードの文明を満たす。ムゲンクライム) */
+  pay?: number;
   /** 手札から(このカード以外の)where に合うカードを n 枚捨てる */
   discard?: { n: number; where?: Cond };
   /** マナは払うが、コストを n 少なくする(指定すると、マナを払うかわりにはならない) */

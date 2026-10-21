@@ -159,7 +159,7 @@ export class Sim {
     return this.s.cards[this.uid(p, 'battle', name, nth)].pid;
   }
 
-  play(name: string, o: { from?: 'hand' | 'mana' | 'grave'; face?: number; extra?: any; p?: PlayerId; nth?: number } = {}): this {
+  play(name: string, o: { from?: 'hand' | 'mana' | 'grave' | 'deck'; face?: number; extra?: any; p?: PlayerId; nth?: number } = {}): this {
     const p = o.p ?? this.s.active;
     const from = o.from ?? 'hand';
     return this.do({ type: 'PLAY_CARD', uid: this.uid(p, from, name, o.nth ?? 0), from, face: o.face, extra: o.extra });

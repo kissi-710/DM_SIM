@@ -340,6 +340,8 @@ export interface PlayExtra {
   alt?: string;
   /** 別のコストで捨てる手札(uid)。省略すると、候補の先頭から */
   discard?: number[];
+  /** 別のコストでタップする自分のクリーチャーの山(pid)。省略すると、アンタップしているものの先頭から */
+  tapAlt?: number[];
 }
 
 export type Action =

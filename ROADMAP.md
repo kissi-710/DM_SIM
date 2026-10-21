@@ -333,7 +333,7 @@
 - [x] M10-5 デッキ G 赤白アーマード(全カードの実装・テスト・デッキ定義。新規11種。`src/cards/defs/deckG.ts`、`tests/cards/sd1-deckG.test.ts`)
 - [x] M10-6 デッキ H 5cドラゴン娘(全カードの実装・テスト・デッキ定義。新規14種。`src/cards/defs/deckH.ts`、`tests/cards/sd1-deckH.test.ts`)
 - [x] M10-7 デッキ I 赤青マジック(全カードの実装・テスト・デッキ定義。新規11種。`src/cards/defs/deckI.ts`、`tests/cards/sd1-deckI.test.ts`)
-- [ ] M10-8 デッキ J 8軸ガチロボ(全カードの実装・テスト・デッキ定義)
+- [x] M10-8 デッキ J 8軸ガチロボ(全カードの実装・テスト・デッキ定義。新規11種。`src/cards/defs/deckJ.ts`、`tests/cards/sd1-deckJ.test.ts`)
 - [ ] M10-9 デッキ K 赤緑ハチ公(全カードの実装・テスト・デッキ定義)
 - [ ] M10-10 デッキ L シータ刃鬼(全カードの実装・テスト・デッキ定義)
 - [ ] M10-11 デッキ M 黒緑アビス(全カードの実装・テスト・デッキ定義)

@@ -2,7 +2,7 @@
 import type { Cond, Expr, Pattern, Selector } from './ast';
 import { canBeChosen, charsLite, charsOf, costBase, infoOf, manaCivs } from './derive';
 import type { Ctx } from './state';
-import { opponentOf, permByPid } from './state';
+import { gameHas, opponentOf, permByPid } from './state';
 import { type Civ, type Ev, type FaceType, isCreatureType, type PlayerId, type Snap } from './types';
 
 export interface CC {
@@ -154,6 +154,12 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('faceUp' in o) return cc.it != null && !!s.cards[cc.it].up;
   if ('altUsed' in o) return cc.self != null && s.usage['alt:' + cc.self + ':' + o.altUsed] === s.turn;
   if ('nameHas' in o) return cc.it != null && cc.c.reg.defs[s.cards[cc.it].defId].name.includes(o.nameHas);
+  if ('allSame' in o) {
+    const uids = varUids(cc, o.allSame.var, { ignoreEp: true });
+    if (uids.length === 0) return false;
+    const cost0 = costBase(cc.c, uids[0]);
+    return uids.every((u) => costBase(cc.c, u) === cost0 && (!o.allSame.where || evalCond({ ...cc, it: u, itFace: -1 }, o.allSame.where)));
+  }
   if ('eventIs' in o) return !!cc.event && Object.entries(o.eventIs).every(([k, v]) => cc.event![k] === v);
   if ('hasCip' in o) {
     if (cc.it == null) return false;
@@ -299,7 +305,7 @@ export function selectCards(cc: CC, sel: Selector): number[] {
     }
   }
   // 「相手がクリーチャーを選ぶなら、可能ならこのクリーチャーを選ぶ」(同期の妖精)
-  if (sel.chooseable && out.length > 1 && cc.c.reg.hasMustBeChosen) {
+  if (sel.chooseable && out.length > 1 && gameHas(cc.c, 'mustBeChosen')) {
     const taunt = out.filter((u) => {
       const cd = s.cards[u];
       return cd.zone === 'battle' && cd.owner !== cc.controller && infoOf(cc.c, u).statics.some((st) => st.ability.mod.type === 'mustBeChosen');
