@@ -2,10 +2,10 @@
 // 裏向きのシールドは見分けがつかないので、従来どおり無作為に割る(質問しない)。
 // 見分けのつくシールド(EXライフ)がある時だけ、攻撃側がどれを割るかを選ぶ。
 import { describe, expect, it } from 'vitest';
-import { chooseShieldPick } from '../../src/ai/rulebased';
+import { chooseShieldPick } from '../../src/ai/shieldPick';
 import { shieldClasses, shieldPickChoices } from '../../src/engine/procs';
 import { validateAnswer } from '../../src/engine/legal';
-import { Sim } from '../scenario';
+import { Sim, reg } from '../scenario';
 
 const KEENARI = '終末縫合王 ザ=キラー・キーナリー'; // T・ブレイカー・EXライフ
 const ZARDI = '龍風混成 ザーディクリカ'; // W・ブレイカー・EXライフ
@@ -90,12 +90,12 @@ describe('ブレイクするシールドの選択', () => {
     expect(sim.legal().length).toBe(3);
   });
 
-  it('ルールベースAIは、EXライフを残して通常のシールドから割る', () => {
+  it('ルールベースAIは、EXライフのシールドを割って、身代わりを奪う', () => {
     const sim = new Sim({ p0: { battle: [KEENARI] }, p1: { battle: [{ c: ZARDI, ex: true }], shield: 4 } });
     sim.attack(KEENARI, 'player');
     const ex = exOf(sim, 1)[0];
-    const a = chooseShieldPick(sim.s, sim.legal());
-    expect(a.type === 'ANSWER' && (a.value as number[]).includes(ex)).toBe(false);
+    const a = chooseShieldPick(sim.s, sim.legal(), reg);
+    expect(a.type === 'ANSWER' && (a.value as number[]).includes(ex)).toBe(true);
   });
 
   it('シールドの組分け: 裏向きは1組、EXライフは紐づくクリーチャーごと', () => {

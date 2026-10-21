@@ -650,7 +650,7 @@ function runBreak(c: Ctx, f: ProcFrame): void {
           why: 'pickShield',
           input: { shape: 'pick', candidates: shields.slice(), min: n, max: n },
           source: null,
-          prompt: `ブレイクするシールドを${n}枚選んでください(EXライフのシールドは目印があります。ほかは裏向きで見分けがつきません)`,
+          prompt: `ブレイクするシールドを${n}枚選んでください(表向きのシールドとEXライフのシールドは見分けがつきます。ほかは裏向きで見分けがつきません)`,
         });
       } else {
         // 見分けがつかない(全部が裏向きで同じ扱い)ので、無作為に扱う(spec 3.7)
@@ -737,14 +737,14 @@ function runBreak(c: Ctx, f: ProcFrame): void {
 
 /**
  * シールドを「攻撃側から見て見分けがつくか」で分けた組(シールドゾーンの並びの順)。
- * 裏向きのシールドは中身が見えず、どれも同じ扱い(組 -1)。見分けがつくのは、EXライフのシールド(どのクリーチャーに紐づくかで組が分かれる)。
- * 表向きのシールドを足す時は、その札ごとに組を分けるキーをここに加える(ブレイクの選択の判定と合法手の列挙は、この関数だけを見る)。
+ * 裏向きのシールドは中身が見えず、どれも同じ扱い(組 -1)。見分けがつくのは、EXライフのシールド(どのクリーチャーに紐づくかで組が分かれる)と、
+ * 表向きのシールド(G城。同じ札ごとに組が分かれる)。ブレイクの選択の判定と合法手の列挙は、この関数だけを見る。
  */
 export function shieldClasses(s: GameState, shields: number[]): number[][] {
-  const groups = new Map<number, number[]>();
+  const groups = new Map<number | string, number[]>();
   for (const u of shields) {
     const card = s.cards[u];
-    const key = card.ex ? card.exPid : -1;
+    const key = card.up ? `up:${card.defId}` : card.ex ? card.exPid : -1;
     const g = groups.get(key);
     if (g) g.push(u);
     else groups.set(key, [u]);

@@ -927,12 +927,19 @@ fn run_break(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
 }
 
 /// シールドを「攻撃側から見て見分けがつくか」で分けた組(シールドゾーンの並びの順。procs.ts の shieldClasses)。
-/// 裏向きのシールドはどれも同じ扱い(組 -1)。見分けがつくのは、EXライフのシールド(紐づくクリーチャーごとに組が分かれる)。
+/// 裏向きのシールドはどれも同じ扱い(組 -1)。見分けがつくのは、EXライフのシールド(紐づくクリーチャーごとに組が分かれる)と、
+/// 表向きのシールド(G城。同じ札ごとに組が分かれる。キーは -2 - 定義番号)。
 pub fn shield_classes(s: &State, shields: &[i32]) -> Vec<Vec<i32>> {
     let mut groups: Vec<(i32, Vec<i32>)> = Vec::new();
     for &u in shields {
         let card = &s.cards[u as usize];
-        let key = if card.ex { card.ex_pid } else { -1 };
+        let key = if card.up {
+            -2 - card.def as i32
+        } else if card.ex {
+            card.ex_pid
+        } else {
+            -1
+        };
         match groups.iter_mut().find(|g| g.0 == key) {
             Some(g) => g.1.push(u),
             None => groups.push((key, vec![u])),
