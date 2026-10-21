@@ -445,7 +445,7 @@ function actDraw(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
 
 function actMove(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
   const uids = resolveSel(cc, a.sel);
-  const res = moveCards(c, uids, { to: a.to, cause: a.cause ?? 'effect', pos: a.pos, tapped: a.tapped });
+  const res = moveCards(c, uids, { to: a.to, cause: a.cause ?? 'effect', pos: a.pos, tapped: a.tapped, by: f.controller });
   if (a.as) {
     f.vars[a.as] = res.filter((r) => r.moved && r.to === a.to).map((r) => ({ uid: r.uid, ep: r.ep }));
   }
@@ -743,6 +743,9 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
       break;
     case 'nextSummon':
       mod = { kind: 'nextSummon', delta: evalExpr(cc, m.delta), sa: !!m.sa };
+      break;
+    case 'cannotAttackAny':
+      mod = { kind: 'cannotAttackAny' };
       break;
     default:
       mod = m.n === undefined ? { kind: 'cannotCast' } : { kind: 'cannotCast', n: evalExpr(cc, m.n) };

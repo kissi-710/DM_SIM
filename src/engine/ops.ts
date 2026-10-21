@@ -73,6 +73,18 @@ export function collect(c: Ctx, ev: Ev): void {
       tryTrigger(c, ev, uid, r.face, r.idx, r.ability.spec, batch);
     }
   }
+  // バトルゾーンを離れたカード自身の、離れた時の能力(lookBack)。離れる直前の面の能力を使う
+  if (ev.type === 'moved' && ev.from === 'battle' && !ev.underneath && ev.lki) {
+    const uid: number = ev.card;
+    const card = s.cards[uid];
+    const refs = card && card.zone !== 'battle' ? byDef.get(card.defId) : undefined;
+    if (refs) {
+      for (const r of refs) {
+        if (!r.ability.spec.lookBack || r.face !== ev.lki.face) continue;
+        tryTrigger(c, ev, uid, r.face, r.idx, r.ability.spec, batch);
+      }
+    }
+  }
 }
 
 /** 回数制限(limit)の記録のキー。誘発の判定と、使った回数の更新で同じキーを使う */
@@ -99,6 +111,14 @@ function tryTrigger(c: Ctx, ev: Ev, uid: number, face: number, idx: number, spec
       if (e.id === ev.id) break;
     }
     if (n !== spec.nthThisTurn) return;
+  }
+  if (spec.nthMin !== undefined) {
+    let n = 0;
+    for (const e of s.turnLog) {
+      if (e.type === ev.type && e.owner === ev.owner && (ev.cause === undefined || e.cause === ev.cause)) n++;
+      if (e.id === ev.id) break;
+    }
+    if (n < spec.nthMin) return;
   }
   if (spec.limit) {
     const key = limitKey(uid, card.ep, face, idx);
@@ -200,6 +220,8 @@ export interface MoveOpts {
   under?: number[];
   /** 出す前にいたゾーン(プレイ中は limbo にいるので、元のゾーンを伝える。置換の判定に使う) */
   from?: ZoneName;
+  /** この移動を起こした効果の使い手(置換の判定に使う。イベントには載せない) */
+  by?: PlayerId;
 }
 
 export interface MoveResult {
@@ -300,8 +322,9 @@ interface Proposal {
   /** 実行しない(置換でキャンセルされた) */
   cancelled?: boolean;
   /** 代わりに行う操作 */
-  also?: { kind: 'exShieldToGrave'; shield: number } | { kind: 'smaxSacrifice'; picks: number[] };
+  also?: { kind: 'exShieldToGrave'; shield: number } | { kind: 'smaxSacrifice'; picks: number[] } | { kind: 'steps'; ref: AbilityRef };
   replaced?: boolean;
+  by?: PlayerId;
 }
 
 /**
@@ -313,7 +336,7 @@ export function moveCards(c: Ctx, uids: number[], opts: MoveOpts): MoveResult[] 
   const proposals: Proposal[] = [];
   for (const uid of uids) {
     const card = s.cards[uid];
-    proposals.push({ uid, from: card.zone, to: opts.to, cause: opts.cause, pos: opts.pos });
+    proposals.push({ uid, from: card.zone, to: opts.to, cause: opts.cause, pos: opts.pos, by: opts.by });
   }
   // フェーズA: 置換の判定(状態を変更しない)
   if (!opts.noReplace) {
@@ -337,6 +360,25 @@ export function moveCards(c: Ctx, uids: number[], opts: MoveOpts): MoveResult[] 
     if (p.also?.kind === 'smaxSacrifice') {
       for (const u of p.also.picks) doMove(c, u, 'grave', 'destroy', undefined, evs, { ...opts, noReplace: true });
       results.push({ uid: p.uid, moved: false, to: p.from, ep: s.cards[p.uid].ep });
+      continue;
+    }
+    if (p.also?.kind === 'steps') {
+      // かわりに、そのカードの手順を行う(手札から捨てられる時に出す、など)。手順は、いまの処理の後に行う
+      const card = s.cards[p.uid];
+      s.cont.push({
+        kind: 'effect',
+        id: nextId(s),
+        causedBy: c.cause,
+        ability: p.also.ref,
+        source: { uid: p.uid, ep: card.ep },
+        lki: snapOf(c, p.uid),
+        controller: card.owner,
+        pc: 0,
+        vars: {},
+        trigger: null,
+        noOptional: true,
+      });
+      results.push({ uid: p.uid, moved: false, to: p.from, ep: card.ep });
       continue;
     }
     const r = doMove(c, p.uid, p.to, p.cause, p.pos, evs, opts);
@@ -530,6 +572,25 @@ function entryReplacement(c: Ctx, uid: number, opts: MoveOpts, faceIdx: number, 
   const card = s.cards[uid];
   const origin = opts.from ?? card.zone;
   const cands: { label: string; to: ZoneName; optional: boolean }[] = [];
+  // 「山札から手札以外のゾーンに置かれる時」の置換(move)も、バトルゾーンへ出る時に当てはまる
+  if (origin === 'deck') {
+    for (const pl of [0, 1] as PlayerId[]) {
+      for (const perm of s.players[pl].battle) {
+        const src = perm.cards[0];
+        if (src === uid) continue;
+        for (const r of infoOf(c, src).replaces) {
+          const a = r.ability;
+          if (a.match.type !== 'move' || a.apply.type !== 'changeDest' || a.match.from !== 'deck') continue;
+          const m = a.match;
+          if (m.notTo === 'battle') continue;
+          const rel = (want: string | undefined, actual: PlayerId): boolean => want === undefined || want === 'any' || (want === 'self' ? actual === pl : actual !== pl);
+          if (!rel(m.owner, card.owner)) continue;
+          if (a.while && !evalCond(mkCC(c, pl, { self: src }), a.while)) continue;
+          cands.push({ label: a.label ?? 'かわりに置く', to: a.apply.to, optional: !!a.optional });
+        }
+      }
+    }
+  }
   for (const p of [0, 1] as PlayerId[]) {
     for (const perm of s.players[p].battle) {
       const src = perm.cards[0];
@@ -556,7 +617,9 @@ function entryReplacement(c: Ctx, uid: number, opts: MoveOpts, faceIdx: number, 
   }
   if (cands.length === 0) return null;
   let chosen = 0;
-  if (cands.length > 1 || cands[0].optional) {
+  // 同じ行き先に置く強制の置換が重なっているだけなら、どれを使っても同じ(聞かない)
+  const sameDest = cands.every((x) => !x.optional && x.to === cands[0].to);
+  if (!sameDest && (cands.length > 1 || cands[0].optional)) {
     const options = [...cands.map((x) => x.label), '置換しない'];
     const ans = ask<number[]>(c, {
       player: card.owner,
@@ -578,6 +641,99 @@ function entryReplacement(c: Ctx, uid: number, opts: MoveOpts, faceIdx: number, 
  * 複数あるか任意の場合は、持ち主に選ばせる(ask)。
  */
 function applyReplacements(c: Ctx, p: Proposal): void {
+  // どのカードの、どの移動にも当てはまる置換(「山札から手札以外のゾーンに置かれる時、かわりに墓地に置く」など)
+  if (c.reg.hasMoveReplace) {
+    applyMoveReplacements(c, p);
+    if (p.replaced) return;
+  }
+  // 手札から捨てられる時の置換(自身の能力)
+  if (c.reg.hasHandReplace && p.from === 'hand' && p.to === 'grave' && p.cause === 'discard') {
+    applyHandReplacement(c, p);
+    return;
+  }
+  applyLeaveReplacements(c, p);
+}
+
+/** match.type = 'move': バトルゾーンのカードが持つ、他のカードの移動の置換(changeDest) */
+function applyMoveReplacements(c: Ctx, p: Proposal): void {
+  const s = c.s;
+  const card = s.cards[p.uid];
+  const cands: { label: string; to: ZoneName; optional: boolean }[] = [];
+  for (const pl of [0, 1] as PlayerId[]) {
+    for (const perm of s.players[pl].battle) {
+      const src = perm.cards[0];
+      const info = infoOf(c, src);
+      for (const r of info.replaces) {
+        const a = r.ability;
+        if (a.match.type !== 'move' || a.apply.type !== 'changeDest') continue;
+        const m = a.match;
+        const rel = (want: string | undefined, actual: PlayerId): boolean => want === undefined || want === 'any' || (want === 'self' ? actual === pl : actual !== pl);
+        if (!rel(m.owner, card.owner)) continue;
+        if (m.from !== undefined && p.from !== m.from) continue;
+        if (m.notFrom !== undefined && p.from === m.notFrom) continue;
+        if (m.to !== undefined && p.to !== m.to) continue;
+        if (m.notTo !== undefined && p.to === m.notTo) continue;
+        if (m.cause !== undefined && p.cause !== m.cause) continue;
+        if (a.apply.to === p.to) continue; // 行き先が変わらない置換は、起こらない
+        if (a.while && !evalCond(mkCC(c, pl, { self: src }), a.while)) continue;
+        if (m.cond && !evalCond(mkCC(c, pl, { self: src, it: p.uid, itFace: -1 }), m.cond)) continue;
+        cands.push({ label: a.label ?? 'かわりに置く', to: a.apply.to, optional: !!a.optional });
+      }
+    }
+  }
+  if (cands.length === 0) return;
+  let chosen = 0;
+  // 同じ行き先に置く強制の置換が重なっているだけなら、どれを使っても同じ(聞かない)
+  const sameDest = cands.every((x) => !x.optional && x.to === cands[0].to);
+  if (!sameDest && (cands.length > 1 || cands[0].optional)) {
+    const ans = ask<number[]>(c, {
+      player: card.owner,
+      why: 'replaceChoice',
+      input: { shape: 'option', options: [...cands.map((x) => x.label), '置換しない'], pick: 1, repeat: false, allIf: false },
+      source: { uid: p.uid, ep: card.ep },
+      prompt: `${c.reg.defs[card.defId].name}: 置換効果を選んでください`,
+    });
+    chosen = ans[0];
+    if (chosen >= cands.length) return;
+  }
+  p.to = cands[chosen].to;
+  p.cause = 'replaced';
+  p.replaced = true;
+}
+
+/** 手札から捨てられるカード自身の置換(「捨てられる時、墓地に置くかわりに出してもよい」など) */
+function applyHandReplacement(c: Ctx, p: Proposal): void {
+  const s = c.s;
+  const card = s.cards[p.uid];
+  const info = c.reg.getInfo(card.defId, 0);
+  for (const r of info.replaces) {
+    const a = r.ability;
+    if (a.match.type !== 'moved' || a.match.from !== 'hand' || a.apply.type !== 'steps') continue;
+    const m = a.match;
+    if (m.cause !== undefined && m.cause !== p.cause) continue;
+    if (m.turn === 'opponent' && s.active === card.owner) continue;
+    if (m.turn === 'own' && s.active !== card.owner) continue;
+    // 相手の効果で捨てられる時だけ
+    if (m.byOpponent && (p.by === undefined || p.by === card.owner)) continue;
+    if (a.while && !evalCond(mkCC(c, card.owner, { self: p.uid }), a.while)) continue;
+    if (a.optional) {
+      const ans = ask<number[]>(c, {
+        player: card.owner,
+        why: 'replaceChoice',
+        input: { shape: 'option', options: [a.label ?? 'かわりの処理を行う', '置換しない'], pick: 1, repeat: false, allIf: false },
+        source: { uid: p.uid, ep: card.ep },
+        prompt: `${c.reg.defs[card.defId].name}: ${a.label ?? '手札から捨てられる時の置換'}`,
+      });
+      if (ans[0] !== 0) return;
+    }
+    p.cancelled = true;
+    p.also = { kind: 'steps', ref: { defId: card.defId, face: 0, idx: r.idx } };
+    p.replaced = true;
+    return;
+  }
+}
+
+function applyLeaveReplacements(c: Ctx, p: Proposal): void {
   const s = c.s;
   const card = s.cards[p.uid];
   if (p.from !== 'battle') return;

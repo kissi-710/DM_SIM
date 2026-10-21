@@ -199,10 +199,11 @@ export function canBeChosen(c: Ctx, perm: Permanent, by: PlayerId, source?: numb
   const owner = c.s.cards[perm.cards[0]].owner;
   if (owner === by) return true;
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'cannotBeChosen') return false;
-  // 「呪文によって相手に選ばれない」: 選ぶ効果の発生源が呪文の時
-  if (source != null && faceTypeOf(c, source) === 'spell') {
-    const info = infoOf(c, perm.cards[0]);
-    if (info.statics.some((st) => st.ability.mod.type === 'protectFromSpells')) return false;
+  const info = infoOf(c, perm.cards[0]);
+  if (info.statics.length > 0) {
+    if (info.statics.some((st) => st.ability.mod.type === 'cannotBeChosen')) return false;
+    // 「呪文によって相手に選ばれない」: 選ぶ効果の発生源が呪文の時
+    if (source != null && faceTypeOf(c, source) === 'spell' && info.statics.some((st) => st.ability.mod.type === 'protectFromSpells')) return false;
   }
   return true;
 }
@@ -242,6 +243,7 @@ export function canAttack(c: Ctx, perm: Permanent, target: { kind: 'player' } | 
   if (!isCreatureType(faceTypeOf(c, uid))) return false; // タマシード・フィールド・クロスギアは攻撃できない
   const owner = s.cards[uid].owner;
   if (actsLimited(c, owner)) return false;
+  if (s.effects.length > 0 && s.effects.some((e) => e.mod.kind === 'cannotAttackAny' && e.controller !== owner)) return false;
   if (perm.tapped) return false;
   if (hasEffect(c, perm.pid, 'cannotAttack')) return false;
   const speed = hasKeyword(c, perm, 'speedAttacker');

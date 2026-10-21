@@ -1,5 +1,5 @@
 // 合法手の列挙と検証(design 5 / effects 12)。
-import { canAttack, charsOf, costBase, costOf, defaultPlayFace, isSick } from './derive';
+import { canAttack, charsOf, costBase, costOf, defaultPlayFace, faceTypeOf, infoOf, isSick } from './derive';
 import { evalCond, mkCC } from './cond';
 import { planPlay } from './procs';
 import type { Registry } from './registry';
@@ -66,11 +66,32 @@ function turnActions(c: Ctx, player: PlayerId): Action[] {
   }
   if (s.step === 'main') {
     for (const a of playActions(c, player, true)) add(a, playActionKey(s, a));
+    for (const a of hyperizeActions(c, player)) add(a);
     add({ type: 'END_MAIN' });
   }
   if (s.step === 'main' || s.step === 'attack') {
     for (const a of attackActions(c, player)) add(a);
     add({ type: 'END_TURN' });
+  }
+  return out;
+}
+
+/** ハイパー化できるクリーチャーと、タップする他のクリーチャーの組(ハイパーモード中でないもの) */
+export function hyperizeActions(c: Ctx, player: PlayerId): Extract<Action, { type: 'HYPERIZE' }>[] {
+  const out: Extract<Action, { type: 'HYPERIZE' }>[] = [];
+  const mine = c.s.players[player].battle;
+  for (const perm of mine) {
+    if (perm.hyper) continue;
+    const need = infoOf(c, perm.cards[0]).hyperize;
+    if (need === null || need < 0) continue;
+    const others = mine.filter((p) => p !== perm && !p.tapped && isCreatureType(faceTypeOf(c, p.cards[0])));
+    if (need === 0) {
+      out.push({ type: 'HYPERIZE', pid: perm.pid, tap: [] });
+      continue;
+    }
+    // need = 1 が通常。2体以上なら、組み合わせの先頭だけ(まれ)
+    if (need === 1) for (const o of others) out.push({ type: 'HYPERIZE', pid: perm.pid, tap: [o.pid] });
+    else if (others.length >= need) out.push({ type: 'HYPERIZE', pid: perm.pid, tap: others.slice(0, need).map((p) => p.pid) });
   }
   return out;
 }
@@ -149,7 +170,7 @@ function extraVariantsBase(c: Ctx, player: PlayerId, uid: number, fi: number): (
   if (face.type === 'evolution') {
     for (const perm of s.players[player].battle) {
       const top = perm.cards[0];
-      const cc = mkCC(c, player, { self: uid, it: top, itFace: s.cards[top].face });
+      const cc = mkCC(c, player, { self: uid, it: top, itFace: s.cards[top].face, evo: true });
       if (face.evolveFrom && evalCond(cc, face.evolveFrom)) bases.push(perm.pid);
     }
   } else bases.push(undefined);
@@ -389,6 +410,21 @@ export function validateAction(s: GameState, reg: Registry, a: Action): string |
       const pm = s.players[player].battle.find((x) => x.pid === a.attacker);
       if (!pm) return '攻撃できるクリーチャーではありません';
       return canAttack(c, pm, a.target) ? null : 'その対象は攻撃できません';
+    }
+    case 'HYPERIZE': {
+      if (s.step !== 'main') return '今はハイパー化できません';
+      const ok = hyperizeActions(c, player).some((x) => x.pid === a.pid && x.tap.length === a.tap.length && x.tap.every((t) => a.tap.includes(t)));
+      if (ok) return null;
+      // 組み合わせは、先頭だけを列挙している。タップする他のクリーチャーが条件に合えば通す
+      const pm = s.players[player].battle.find((x) => x.pid === a.pid);
+      if (!pm || pm.hyper) return 'ハイパー化できません';
+      const need = infoOf(c, pm.cards[0]).hyperize;
+      if (need === null || a.tap.length !== need || new Set(a.tap).size !== a.tap.length) return 'ハイパー化できません';
+      for (const t of a.tap) {
+        const tp = s.players[player].battle.find((x) => x.pid === t);
+        if (!tp || tp === pm || tp.tapped || !isCreatureType(faceTypeOf(c, tp.cards[0]))) return 'タップできないクリーチャーです';
+      }
+      return null;
     }
   }
 }

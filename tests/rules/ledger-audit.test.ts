@@ -93,14 +93,16 @@ describe('D-5/L10 同時に離れたクリーチャーの誘発(R 603.5d)', () =
         const spec = o.spec as { on?: Json | Json[] } | undefined;
         const ons = Array.isArray(spec?.on) ? spec!.on : spec?.on ? [spec.on] : [];
         for (const on of ons) {
-          if (on.type === 'moved' && on.from !== 'hand' && on.from !== 'shield') found.add(card.id);
+          // 引いた時(cause: draw)は、離れる出来事ではない
+          if (on.type === 'moved' && on.from !== 'hand' && on.from !== 'shield' && on.cause !== 'draw') found.add(card.id);
         }
       });
     }
     // 完璧団長 オーパーツ銃: 「相手の墓地に置かれた時」。能力を持つ側は離れておらず(同時に離れる自身は、相手の墓地に置かれない)、
     // 相手のカードごとに誘発する(tests/cards/interstellar.test.ts)ので、603.5d の「自身のみ過去の状態を見る」の差は出ない
     // 「無月」の頂 ＄スザーク＄(dm26sd1-D09)も同じ形(「相手の墓地にどこからでもカードが置かれた時」)で、同じ扱い
-    expect([...found].sort()).toEqual(['dm26rp2-S09', 'dm26sd1-D09']);
+    // 龍后人形メアリー・ジェニー(dm26sd1-F09)は「自分のデスパペットが離れた時」。自身も同時に離れる場合は、自身の分だけ誘発する(lookBack。603.5d)
+    expect([...found].sort()).toEqual(['dm26rp2-S09', 'dm26sd1-D09', 'dm26sd1-F09']);
   });
 });
 
@@ -144,7 +146,8 @@ describe('D-6/L9 山札切れの判定時点(R 104.2b)', () => {
     // 25の王道で足したカードのうち、山札の外のカード(手札など)を山札へ移すだけで、山札を離れて戻るものではないもの(確認済み):
     //  dm26sd1-C11 一王二命三眼槍(ゲームに負ける時、かわりに手札のこのカードを山札の下に置く)
     //  dm26sd1-E01 オリオティス・ジャッジ(バトルゾーンのクリーチャーを山札の下に置く)
-    const SAFE = new Set(['dm26sd1-C11', 'dm26sd1-E01']);
+    //  dm26sd1-F01 Vチャロン(手札・シールドを山札の下に置き、その後、山札から引く・シールド化する)
+    const SAFE = new Set(['dm26sd1-C11', 'dm26sd1-E01', 'dm26sd1-F01']);
     expect(toDeck.filter((id) => !SAFE.has(id))).toEqual([]);
   });
 });

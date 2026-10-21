@@ -2,9 +2,9 @@
 import { loadRegistry, type Registry } from './registry';
 import { defaultPlayFace } from './derive';
 import { runSba, pushProc, runProc } from './procs';
-import { collectBatch, emit, moveCards } from './ops';
+import { collectBatch, emit, moveCards, setTapped } from './ops';
 import { legalActions, validateAction } from './legal';
-import { cloneState, hashSeed, mkCtx, nextId, rngNext, shuffleInPlace, type Ctx } from './state';
+import { cloneState, hashSeed, mkCtx, nextId, permByPid, rngNext, shuffleInPlace, type Ctx } from './state';
 import { runEffect } from './vm';
 import {
   type Action,
@@ -191,6 +191,20 @@ function applyTurnAction(c: Ctx, a: Exclude<Action, { type: 'ANSWER' }>): void {
       s.step = 'attack';
       pushProc(c, 'settle');
       pushProc(c, 'attack', { pid: a.attacker, target: a.target });
+      return;
+    }
+    case 'HYPERIZE': {
+      // ハイパー化: 他のクリーチャーをタップして、ハイパーモードを解放する
+      pushProc(c, 'settle');
+      const pm = permByPid(s, a.pid);
+      if (!pm) return;
+      for (const t of a.tap) {
+        const tp = permByPid(s, t);
+        if (tp) setTapped(c, tp.perm.cards[0], true);
+      }
+      pm.perm.hyper = true;
+      emit(c, 'hyperized', { card: pm.perm.cards[0], owner: pm.owner, pid: pm.perm.pid });
+      collectBatch(c, [c.out[c.out.length - 1]]);
       return;
     }
   }

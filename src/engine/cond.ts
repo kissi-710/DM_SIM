@@ -17,6 +17,8 @@ export interface CC {
   itFace?: number;
   iter?: PlayerId;
   event?: Ev | null;
+  /** 進化元を調べている(シンカライズのタマシードを、クリーチャーとして扱う) */
+  evo?: boolean;
 }
 
 export function mkCC(c: Ctx, controller: PlayerId, extra: Partial<CC> = {}): CC {
@@ -146,6 +148,10 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('some' in o) return varUids(cc, o.some.var, { ignoreEp: true }).some((u) => evalCond({ ...cc, it: u, itFace: -1 }, o.some.where));
   if ('isSelf' in o) return cc.it != null && cc.it === cc.self;
   if ('faceUp' in o) return cc.it != null && !!s.cards[cc.it].up;
+  if ('hyper' in o) {
+    if (cc.self == null || s.cards[cc.self].zone !== 'battle') return false;
+    return !!permByPid(s, s.cards[cc.self].pid)?.perm.hyper;
+  }
   // S・トリガーとして使って、出た/唱えた(S・トリガー・プラスのP能力の条件)
   if ('stUsed' in o) return !!(cc.event && (cc.event.type === 'cast' || cc.event.type === 'entered') && s.usage['st:' + cc.event.card] === cc.event.id);
   // ゲーム中に1度の能力を、まだ使っていない(markUsed で記録する)
@@ -200,7 +206,13 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     if (o.power.gte !== undefined && p < o.power.gte) return false;
     return true;
   }
-  if ('type' in o) return matchesType(ch.type, o.type);
+  if ('type' in o) {
+    if (cc.evo && o.type === 'creature' && ch.type === 'tamaseed') {
+      const cd = s.cards[it];
+      if (cd.zone === 'battle' && cc.c.reg.getInfo(cd.defId, cd.face).shinkalize) return true;
+    }
+    return matchesType(ch.type, o.type);
+  }
   if ('evolution' in o) {
     const isEvo = ch.type === 'evolution' || ch.type === 'smaxEvolution';
     return isEvo === o.evolution;
@@ -332,6 +344,7 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
   if (pat.from !== undefined && ev.from !== pat.from) return false;
   if (pat.to !== undefined && ev.to !== pat.to) return false;
   if (pat.kind !== undefined && ev.kind !== pat.kind) return false;
+  if (pat.notVia !== undefined && ev.via === pat.notVia) return false;
   if (pat.targetKind !== undefined && ev.target?.kind !== pat.targetKind) return false;
   if (pat.ex !== undefined && !!ev.ex !== pat.ex) return false;
   if (pat.step !== undefined && ev.step !== pat.step) return false;

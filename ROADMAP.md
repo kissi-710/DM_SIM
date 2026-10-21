@@ -329,7 +329,7 @@
 - [x] M10-1 デッキ C 4c邪王門(全カードの実装・テスト・デッキ定義。新規13種。`src/cards/defs/deckC.ts`、`tests/cards/sd1-deckC.test.ts`)
 - [x] M10-2 デッキ D 青魔導具(全カードの実装・テスト・デッキ定義。新規13種。`src/cards/defs/deckD.ts`、`tests/cards/sd1-deckD.test.ts`)
 - [x] M10-3 デッキ E ラッカゴスペル(全カードの実装・テスト・デッキ定義。新規11種。`src/cards/defs/deckE.ts`、`tests/cards/sd1-deckE.test.ts`)
-- [ ] M10-4 デッキ F 青黒ハンデス(全カードの実装・テスト・デッキ定義)
+- [x] M10-4 デッキ F 青黒ハンデス(全カードの実装・テスト・デッキ定義。新規9種。`src/cards/defs/deckF.ts`、`tests/cards/sd1-deckF.test.ts`)
 - [ ] M10-5 デッキ G 赤白アーマード(全カードの実装・テスト・デッキ定義)
 - [ ] M10-6 デッキ H 5cドラゴン娘(全カードの実装・テスト・デッキ定義)
 - [ ] M10-7 デッキ I 赤青マジック(全カードの実装・テスト・デッキ定義)

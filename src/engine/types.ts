@@ -89,6 +89,8 @@ export interface Permanent {
   tapped: boolean;
   sick: boolean;
   enteredTurn: number;
+  /** ハイパーモード中か(次の持ち主のターンのはじめまで) */
+  hyper?: boolean;
 }
 
 export interface PlayerZones {
@@ -221,6 +223,8 @@ export type EffectMod =
   | { kind: 'cannotBeChosen' }
   | { kind: 'cannotBeAttacked' }
   | { kind: 'cannotBlock' }
+  /** プレイヤー単位: 発生源の持ち主の相手は、クリーチャーで攻撃できない */
+  | { kind: 'cannotAttackAny' }
   /** プレイヤー単位: 指定のクリーチャーの山(pids)・マナのカード(uids)は、次の持ち主のターンのはじめにアンタップしない */
   | { kind: 'noUntap'; pids: number[]; uids: number[] }
   /** プレイヤー単位: 発生源の持ち主が次に召喚するクリーチャーのコストを delta 増減する(次に召喚すると消える)。sa ならスピードアタッカーを与える */
@@ -334,6 +338,8 @@ export type Action =
   | { type: 'ATTACK'; attacker: number; target: AttackTarget }
   | { type: 'END_MAIN' }
   | { type: 'END_TURN' }
+  /** ハイパー化(自分のメインステップ中。pid = ハイパー化するクリーチャーの山、tap = タップする他のクリーチャーの山) */
+  | { type: 'HYPERIZE'; pid: number; tap: number[] }
   | { type: 'ANSWER'; id: number; value: AnswerValue };
 
 export type AnswerValue = number[] | Record<string, number[]> | boolean | number | true;

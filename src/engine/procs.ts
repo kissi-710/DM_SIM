@@ -119,7 +119,7 @@ export function planPlay(
     const pm = extra?.onto !== undefined ? permByPid(s, extra.onto) : null;
     if (!pm || pm.owner !== player) return fail('進化元を選んでください');
     const topUid = pm.perm.cards[0];
-    const cc = mkCC(c, player, { self: uid, it: topUid, itFace: s.cards[topUid].face });
+    const cc = mkCC(c, player, { self: uid, it: topUid, itFace: s.cards[topUid].face, evo: true });
     if (!face.evolveFrom || !evalCond(cc, face.evolveFrom)) return fail('進化元の条件を満たしていません');
     onto = pm.perm.pid;
   } else if (extra?.onto !== undefined) return fail('進化クリーチャーではありません');
@@ -295,6 +295,7 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       for (const perm of s.players[P].battle) {
         if (!noUntapPids.has(perm.pid)) perm.tapped = false;
         perm.sick = false;
+        delete perm.hyper; // ハイパーモードは、次の自分のターンのはじめまで
       }
       // 「次の自分のターンのはじめまで」の期限切れ(逆転撃の支払い(owe)は、支払いの段階で消す)
       s.effects = s.effects.filter((e) => !(e.until.kind === 'untilTurnStart' && e.until.player === P && s.turn > e.until.afterTurn && e.mod.kind !== 'owe'));

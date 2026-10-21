@@ -3,5 +3,6 @@ import type { CardDef } from '../../engine/types';
 import { DECK_C } from './deckC';
 import { DECK_D } from './deckD';
 import { DECK_E } from './deckE';
+import { DECK_F } from './deckF';
 
-export const SD1_CARDS: CardDef[] = [...DECK_C, ...DECK_D, ...DECK_E];
+export const SD1_CARDS: CardDef[] = [...DECK_C, ...DECK_D, ...DECK_E, ...DECK_F];

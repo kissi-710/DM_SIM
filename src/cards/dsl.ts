@@ -167,3 +167,10 @@ export const finalRevolution = (steps: StepDef[]): Ability =>
 export const noShieldPlayer: Cond = { any: [{ shields: { eq: 0 } }, { shields: { eq: 0, who: 'opponent' } }] };
 /** 自分のマナゾーンに、指定の文明('DF' など)がそろっている */
 export const manaHas = (cs: string): Cond => ({ civsPresent: { sel: { zone: 'mana', owner: 'self' }, civs: civsOf(cs) } });
+
+/** ハイパー化(他のクリーチャーを n 体タップして、ハイパーモードを解放する) */
+export const hyperize = (tapOther = 1): Ability => ({ kind: 'hyperize', tapOther });
+/** ハイパーモード中だけ有効にする条件 */
+export const hyperMode: Cond = { hyper: true };
+/** シンカライズ */
+export const shinkalize = (): Ability => ({ kind: 'shinkalize' });

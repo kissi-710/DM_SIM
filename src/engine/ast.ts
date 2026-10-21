@@ -60,6 +60,8 @@ export type Cond =
   | { stUsed: true }
   /** $it が、シールドゾーンで表向き */
   | { faceUp: true }
+  /** 発生源が、ハイパーモード中 */
+  | { hyper: true }
   /** ゲーム中に1度の能力(key)を、まだ使っていない */
   | { unused: string }
   | { turnOf: 'self' | 'opponent' }
@@ -109,6 +111,13 @@ export interface TriggerSpec {
   subject?: 'self' | 'other' | 'any';
   turn?: 'own' | 'opponent' | 'any';
   nthThisTurn?: number;
+  /**
+   * 自身がバトルゾーンを離れた時にも、その出来事で誘発する(離れる直前の状態を見る。総合ルール 603.5c・603.5d)。
+   * 過去の状態を見られるのは、その能力を持つカード自身だけ。他のクリーチャーが同時に離れても、誘発は自身の分の1回
+   */
+  lookBack?: boolean;
+  /** 同じ種類・持ち主(・理由)のイベントの、そのターンの n 回目以降 */
+  nthMin?: number;
   limit?: { perTurn: number };
   if?: Cond;
   ifAtResolve?: Cond;
@@ -134,6 +143,8 @@ export type StaticMod =
   | { type: 'costDelta'; delta: number; cond: Cond }
   /** 相手のターンのはじめに、相手は自身のマナゾーンのカードを n 枚までしかアンタップできない */
   | { type: 'untapLimit'; n: number }
+  /** このクリーチャーは、相手に選ばれない(攻撃・ブロックはされる) */
+  | { type: 'cannotBeChosen' }
   /** このクリーチャーは、呪文によって相手に選ばれない */
   | { type: 'protectFromSpells' }
   /** 自分は、呪文を唱えられなくする効果を無視して、cond に合う呪文を唱えてもよい */
@@ -144,7 +155,7 @@ export type StaticMod =
   /** 自分の墓地から呪文を唱えた後、墓地のかわりに山札の下に置く */
   | { type: 'graveCastToBottom' }
   /** 自分のクリーチャー(cond に合うもの)すべてにキーワードを与える。unblockable = ブロックされない */
-  | { type: 'grantKeyword'; keyword: 'speedAttacker' | 'machFighter' | 'slayer' | 'unblockable'; cond: Cond };
+  | { type: 'grantKeyword'; keyword: 'speedAttacker' | 'machFighter' | 'slayer' | 'unblockable' | 'blocker'; cond: Cond };
 
 export type ReplaceApply =
   | { type: 'changeDest'; to: ZoneName }
@@ -162,6 +173,10 @@ export type Ability =
   | { kind: 'permission'; play: 'summon' | 'cast' | 'put'; from: ZoneName; after?: 'deckBottom' }
   /** このカード自身を使うコストの増減(delta は負で軽減。cond を満たす時だけ。評価は、このカードを使う人から見る。floor: これを下回らない) */
   | { kind: 'selfCost'; delta: Expr; cond?: Cond; floor?: number }
+  /** ハイパー化: 自分のメインステップ中に、自分の他のクリーチャーを tapOther 体タップして、ハイパーモードを解放できる(次の自分のターンのはじめまで) */
+  | { kind: 'hyperize'; tapOther: number }
+  /** シンカライズ: このタマシードがクリーチャーであるかのように、この上に進化クリーチャーを置ける */
+  | { kind: 'shinkalize' }
   /** マナを払うかわりの、別のコスト(PlayExtra.alt で選ぶ)。手札から使う時 */
   | { kind: 'altCost'; id: string; label: string; when?: Cond; cost: AltCostSpec };
 
