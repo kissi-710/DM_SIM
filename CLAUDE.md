@@ -66,7 +66,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 | `npx tsx src/cli/trainValue.ts --games 12000 --out <path>` | 価値関数(ロジスティック回帰)の学習。評価は `value=<path>` で使う |
 | `npx tsx scripts/bench-batch.ts [rule|random|mcts] [試合数]` | バッチ対戦の速度の測定(1スレッド。試合/秒と勝敗の要約。最適化の前後で勝敗が変わらないことの確認用) |
 | `npx tsx scripts/bench-accuracy.ts [試合数] [繰り返し]` | バッチ対戦の精度の測定(別シードで繰り返し、推定の SD・区間の半幅・被覆率) |
-| `npm run build:wasm` | Rust 版エンジンを WASM にビルドして `src/wasm/dmsim.wasm` に置く(要 Rust。あれば AI の探索が自動で使う。無ければ TS 版) |
+| `npm run build:wasm` | Rust 版エンジンを WASM にビルドして `src/wasm/dmsim.wasm` に置く(要 Rust。あれば AI の探索が自動で使う。無ければ TS 版)。**wasm は git の管理外なので、pull / merge で `rust/` やカードが変わったら必ず作り直す**。古いままだと新しいカードを読めず、黙って TS 版(約 10 倍遅く、Worker ごとに約 240MB)に落ちて CPU・メモリを使い切る。dev / batch / prob / aibench の前に `scripts/check-wasm.mjs` が古さを警告し、バッチ画面も TS 版に落ちた時に警告を出す |
 | `npx tsx scripts/diff-fuzz.ts [試合数] [シード]` | TS 版と Rust 版(WASM)のラウンド評価の一致を、ランダムなデッキ・局面で広く確かめる(要 `build:wasm`)。ずれた局面は `scratch/survey/` に書き出す。まれなずれは、固定フィクスチャの `test:rust` では見つからない |
 | `npx tsx scripts/behavior-snapshot.ts --check tests/fixtures/behavior-snapshot.json` | 挙動スナップショットの確認(全デッキ・全 AI の固定シードの対局と調査を hash にした 978 件。**リファクタリング・高速化など、挙動を変えない変更の後に必ず回す**。ルール・カード・AI を意図して変えた時だけ、`behavior-snapshot.ts <出力先>` で取り直す。docs/refactoring.md) |
 | `npm run test:rust` | Rust 版と TS 版の差分テスト。正解データ(`rust/fixtures/games.json`)を TS 版で作り直してから `cargo test --release` を実行する。ルール・カード・プレイアウトを変えたら必ず回す(フィクスチャが無いとテストはスキップされる) |
