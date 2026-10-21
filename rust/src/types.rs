@@ -713,6 +713,7 @@ pub enum Why {
     ReplaceChoice,
     Ack,
     KeepOne,
+    PickShield,
 }
 
 impl Why {
@@ -729,6 +730,7 @@ impl Why {
             Why::ReplaceChoice => "replaceChoice",
             Why::Ack => "ack",
             Why::KeepOne => "keepOne",
+            Why::PickShield => "pickShield",
         }
     }
     pub fn parse(s: &str) -> Option<Why> {
@@ -744,6 +746,7 @@ impl Why {
             "replaceChoice" => Why::ReplaceChoice,
             "ack" => Why::Ack,
             "keepOne" => Why::KeepOne,
+            "pickShield" => Why::PickShield,
             _ => return None,
         })
     }

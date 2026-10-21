@@ -324,7 +324,9 @@ export type PendingReason =
   | 'assign'
   | 'replaceChoice'
   | 'ack'
-  | 'keepOne';
+  | 'keepOne'
+  /** 攻撃側が、ブレイクするシールドを選ぶ(見分けのつくシールドがある時だけ。procs の shieldClasses) */
+  | 'pickShield';
 
 export interface Pending {
   id: number;
