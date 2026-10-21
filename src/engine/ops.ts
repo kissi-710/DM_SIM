@@ -16,6 +16,7 @@ import {
   type PoolEntry,
   type ZoneName,
 } from './types';
+import { kindOfType } from './types';
 
 // ───────────────────────── 質問(ask) ─────────────────────────
 
@@ -192,6 +193,13 @@ export interface MoveOpts {
   face?: number;
   /** 進化・侵略などで下に入るカードを一緒に動かさない */
   alone?: boolean;
+  /**
+   * このカードの下に重ねるカード(無月の門・超無限墓地進化など)。どのゾーンのカードでもよい。
+   * バトルゾーンのカードは、その山ごと下に入る。
+   */
+  under?: number[];
+  /** 出す前にいたゾーン(プレイ中は limbo にいるので、元のゾーンを伝える。置換の判定に使う) */
+  from?: ZoneName;
 }
 
 export interface MoveResult {
@@ -199,6 +207,11 @@ export interface MoveResult {
   moved: boolean;
   to: ZoneName;
   ep: number;
+}
+
+/** カードをいまのゾーンから取り除く(置き先は呼び出し側が決める) */
+export function removeZoneCard(c: Ctx, uid: number): void {
+  removeFromZone(c, uid);
 }
 
 function removeFromZone(c: Ctx, uid: number): void {
@@ -330,7 +343,7 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
   const card = s.cards[uid];
   const from = card.zone;
   const snap = snapOf(c, uid);
-  const kind = charsLite(c, uid, card.zone === 'battle' || card.zone === 'limbo' ? card.face : -1).type === 'spell' ? 'spell' : 'creature';
+  const kind = kindOfType(charsLite(c, uid, card.zone === 'battle' || card.zone === 'limbo' ? card.face : -1).type);
   const wasEx = card.ex;
   // 山(進化元)を一緒に動かす
   let under: number[] = [];
@@ -391,6 +404,14 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   const snap = snapOf(c, uid);
   const faceIdx = opts.face ?? card.face ?? 0;
   const via = opts.via ?? 'effect';
+  // 出る時の置換(「相手のクリーチャーが出る時、かわりに〜に置く」)。状態を変更する前に判定する
+  if (c.reg.hasEntryReplace && !opts.noReplace) {
+    const dest = entryReplacement(c, uid, opts, faceIdx, via);
+    if (dest) {
+      moveCards(c, [uid], { to: dest, cause: 'replaced', noReplace: true });
+      return { uid, moved: false, to: dest, ep: s.cards[uid].ep };
+    }
+  }
   removeFromZone(c, uid);
   card.zone = 'battle';
   card.ep++;
@@ -398,7 +419,37 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   card.tapped = false;
   let perm: Permanent;
   let base: number[] = [];
-  if (opts.onto !== undefined) {
+  if (opts.under && opts.under.length > 0) {
+    // 下に重ねるカードを集める(バトルゾーンのカードは山ごと。他のゾーンのカードは、バトルゾーンへ移す)
+    const pile: number[] = [uid];
+    const seen = new Set<number>();
+    for (const u of opts.under) {
+      const uc = s.cards[u];
+      if (uc.zone === 'battle') {
+        if (seen.has(uc.pid)) continue;
+        seen.add(uc.pid);
+        const pm = permByPid(s, uc.pid);
+        if (!pm) continue;
+        pile.push(...pm.perm.cards);
+        const b = s.players[pm.owner].battle;
+        b.splice(b.indexOf(pm.perm), 1);
+      } else {
+        const ufrom = uc.zone;
+        const usnap = snapOf(c, u);
+        removeFromZone(c, u);
+        uc.zone = 'battle';
+        uc.ep++;
+        uc.tapped = false;
+        uc.face = 0;
+        pile.push(u);
+        evs.push(emit(c, 'moved', { card: u, owner: uc.owner, from: ufrom, to: 'battle', cause: opts.cause, kind: 'creature', ex: false, lki: usnap, underneath: true }));
+      }
+    }
+    perm = { pid: s.nextPid++, cards: pile, tapped: !!opts.tapped, sick: true, enteredTurn: s.turn };
+    for (const u of pile) s.cards[u].pid = perm.pid;
+    base = pile.slice(1);
+    s.players[owner].battle.push(perm);
+  } else if (opts.onto !== undefined) {
     const pm = permByPid(s, opts.onto);
     if (!pm) throw new Error('重ねる山がありません');
     perm = pm.perm;
@@ -419,14 +470,20 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
     card.pid = perm.pid;
     s.players[owner].battle.push(perm);
   }
-  evs.push(emit(c, 'moved', { card: uid, owner, from, to: 'battle', cause: opts.cause, kind: 'creature', ex: false, lki: snap, via }));
+  const ekind = kindOfType(c.reg.getFace(card.defId, faceIdx).type);
+  evs.push(emit(c, 'moved', { card: uid, owner, from, to: 'battle', cause: opts.cause, kind: ekind, ex: false, lki: snap, via }));
   // 侵略でバトルゾーンの別の山から移動する場合は「出た」扱いにならない(decks.md)
   const fromBattle = from === 'battle';
   if (!fromBattle) {
-    evs.push(emit(c, 'entered', { card: uid, owner, via, paid: opts.paid ?? 0, cost: opts.cost, free: !!opts.free, pid: perm.pid, kind: 'creature', face: faceIdx }));
+    evs.push(emit(c, 'entered', { card: uid, owner, via, paid: opts.paid ?? 0, cost: opts.cost, free: !!opts.free, pid: perm.pid, kind: ekind, face: faceIdx }));
   }
   if (opts.onto !== undefined) {
     evs.push(emit(c, 'evolved', { card: uid, owner, pid: perm.pid, base, via }));
+  }
+  // フィールドは、1枚だけ出していられる。新しく出したら、前のフィールドは墓地に置かれる
+  if (ekind === 'field' && opts.onto === undefined) {
+    const olds = s.players[owner].battle.filter((pm) => pm.pid !== perm.pid && kindOfType(c.reg.getFace(s.cards[pm.cards[0]].defId, s.cards[pm.cards[0]].face).type) === 'field').map((pm) => pm.cards[0]);
+    if (olds.length > 0) moveCards(c, olds, { to: 'grave', cause: 'fieldReplace' });
   }
   // EXライフ: 出る時、山札の上1枚をシールドにする
   const info = c.reg.getInfo(card.defId, faceIdx);
@@ -445,6 +502,56 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
     }
   }
   return { uid, moved: true, to: 'battle', ep: card.ep };
+}
+
+/**
+ * 出る時の置換(match.type = 'enter')。バトルゾーンの、能力を無視されていないカードが持つ。
+ * 当てはまるものがあれば、かわりに置く先のゾーンを返す(複数なら、出るカードの持ち主が選ぶ)。
+ */
+function entryReplacement(c: Ctx, uid: number, opts: MoveOpts, faceIdx: number, via: string): ZoneName | null {
+  const s = c.s;
+  const card = s.cards[uid];
+  const origin = opts.from ?? card.zone;
+  const cands: { label: string; to: ZoneName; optional: boolean }[] = [];
+  for (const p of [0, 1] as PlayerId[]) {
+    for (const perm of s.players[p].battle) {
+      const src = perm.cards[0];
+      if (src === uid) continue;
+      const info = infoOf(c, src);
+      for (const r of info.replaces) {
+        const a = r.ability;
+        if (a.match.type !== 'enter' || a.apply.type !== 'changeDest') continue;
+        const m = a.match;
+        const rel = (want: string | undefined, actual: PlayerId): boolean => want === undefined || want === 'any' || (want === 'self' ? actual === p : actual !== p);
+        if (!rel(m.owner, card.owner)) continue;
+        if (m.turn === 'own' && s.active !== p) continue;
+        if (m.turn === 'opponent' && s.active === p) continue;
+        if (m.via !== undefined && via !== m.via) continue;
+        if (m.notVia !== undefined && via === m.notVia) continue;
+        if (m.from !== undefined && origin !== m.from) continue;
+        if (m.notFrom !== undefined && origin === m.notFrom) continue;
+        const cc = mkCC(c, p, { self: src, it: uid, itFace: faceIdx });
+        if (a.while && !evalCond(mkCC(c, p, { self: src }), a.while)) continue;
+        if (m.cond && !evalCond(cc, m.cond)) continue;
+        cands.push({ label: a.label ?? 'かわりに置く', to: a.apply.to, optional: !!a.optional });
+      }
+    }
+  }
+  if (cands.length === 0) return null;
+  let chosen = 0;
+  if (cands.length > 1 || cands[0].optional) {
+    const options = [...cands.map((x) => x.label), '置換しない'];
+    const ans = ask<number[]>(c, {
+      player: card.owner,
+      why: 'replaceChoice',
+      input: { shape: 'option', options, pick: 1, repeat: false, allIf: false },
+      source: { uid, ep: card.ep },
+      prompt: `${c.reg.defs[card.defId].name}: 出る時の置換効果を選んでください`,
+    });
+    chosen = ans[0];
+    if (chosen >= cands.length) return null;
+  }
+  return cands[chosen].to;
 }
 
 // ───────────────────────── 置換パイプライン(effects 8) ─────────────────────────

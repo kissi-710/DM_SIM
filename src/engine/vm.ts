@@ -11,6 +11,7 @@ import {
   emit,
   enterBattle,
   moveCards,
+  removeZoneCard,
   setTapped,
   shuffleDeck,
 } from './ops';
@@ -431,7 +432,7 @@ function durationOf(c: Ctx, f: EffectFrame, until: string): ContEffect['until'] 
   if (until === 'nextTurnStart') return { kind: 'untilTurnStart', player: f.controller, afterTurn: s.turn };
   if (until === 'source') return { kind: 'source', uid: f.source.uid, ep: f.source.ep };
   // 次の、相手のターンの終わりまで(いまが自分のターンなら次のターン、相手のターン中ならその次の相手のターン)
-  if (until === 'oppTurnEnd') return { kind: 'endOfTurn', turn: s.active === f.controller ? s.turn + 1 : s.turn + 2 };
+  if (until === 'oppTurnEnd') return { kind: 'untilOppTurnEnd', player: f.controller, afterTurn: s.turn };
   throw new Error('未知の期限: ' + until);
 }
 
@@ -616,7 +617,7 @@ function actPut(c: Ctx, f: EffectFrame, cc: CC, a: any, key: string): void {
     const face = c.reg.getFace(s.cards[u].defId, fi);
     if (face.type === 'evolution') continue; // 進化元がないので出せない
     const r = enterBattle(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0 }, evs);
-    entered.push({ uid: u, ep: r.ep });
+    if (r.moved) entered.push({ uid: u, ep: r.ep });
   }
   if (a.as) f.vars[a.as] = entered;
   s.batchNo++;
@@ -735,6 +736,9 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
     case 'owe':
       mod = { kind: 'owe', civ: m.civ, n: m.n };
       break;
+    case 'oncePerTurnActs':
+      mod = { kind: 'oncePerTurnActs' };
+      break;
     default:
       mod = m.n === undefined ? { kind: 'cannotCast' } : { kind: 'cannotCast', n: evalExpr(cc, m.n) };
   }
@@ -781,6 +785,59 @@ function actBottom(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void 
   }
 }
 
+/** 無月の門など: このカードを、選んだカードの上に重ねて召喚する(コストは支払わない)。sel = 手札・墓地のカード、under = 下になるカード */
+function actSummonOnto(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const uid = resolveSel(cc, a.sel)[0];
+  if (uid === undefined) return;
+  const card = s.cards[uid];
+  if (card.zone !== 'hand' && card.zone !== 'grave') return;
+  const fi = creatureFace(c, uid);
+  if (fi < 0) return;
+  const under = varUids(cc, a.under).filter((u) => u !== uid);
+  const evs: Ev[] = [];
+  enterBattle(c, uid, { to: 'battle', cause: 'summon', via: 'summon', face: fi, paid: 0, free: true, under, from: card.zone }, evs);
+  s.batchNo++;
+  collectBatch(c, evs);
+  s.dirtySba = true;
+}
+
+/** 「このターンの後に自分のターンを追加する」 */
+function actExtraTurn(c: Ctx, f: EffectFrame, _cc: CC, _a: any, _key: string): void {
+  const s = c.s;
+  s.extraTurns = [...(s.extraTurns ?? []), f.controller];
+  emit(c, 'extraTurn', { by: f.controller, source: f.source.uid });
+}
+
+/** ゲーム中に1度の能力を使った印(cond の unused で調べる) */
+function actMarkUsed(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
+  c.s.usage['once:' + f.source.uid + ':' + a.key] = 1;
+}
+
+/** カードを、バトルゾーンの山(フィールドなど)の下に置く。sel = 置くカード、onto = 山の一番上のカード */
+function actPutUnder(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const base = resolveSel(cc, a.onto)[0];
+  if (base === undefined || s.cards[base].zone !== 'battle') return;
+  const pm = permByPid(s, s.cards[base].pid);
+  if (!pm) return;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone === 'battle') continue;
+    const from = card.zone;
+    const snap = snapOf(c, u);
+    removeZoneCard(c, u);
+    card.zone = 'battle';
+    card.ep++;
+    card.pid = pm.perm.pid;
+    card.tapped = false;
+    card.face = 0;
+    pm.perm.cards.push(u);
+    emit(c, 'moved', { card: u, owner: card.owner, from, to: 'battle', cause: 'putUnder', kind: 'spell', ex: false, lki: snap, underneath: true });
+  }
+  s.dirtySba = true;
+}
+
 function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   // 「そのターン中に〜を使っていなければ」の判定用に、印をログに残す
   emit(c, a, { owner: f.controller, source: f.source.uid });
@@ -817,6 +874,10 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['battle', actBattle],
   ['shuffleIn', actShuffleIn],
   ['bottom', actBottom],
+  ['summonOnto', actSummonOnto],
+  ['extraTurn', actExtraTurn],
+  ['markUsed', actMarkUsed],
+  ['putUnder', actPutUnder],
   ['log', actLog],
   ['setVar', actSetVar],
 ]);

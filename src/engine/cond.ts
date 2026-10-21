@@ -3,7 +3,7 @@ import type { Cond, Expr, Pattern, Selector } from './ast';
 import { canBeChosen, charsLite, charsOf, costBase, manaCivs } from './derive';
 import type { Ctx } from './state';
 import { opponentOf, permByPid } from './state';
-import type { Civ, Ev, PlayerId, Snap } from './types';
+import { type Civ, type Ev, type FaceType, isCreatureType, type PlayerId, type Snap } from './types';
 
 export interface CC {
   c: Ctx;
@@ -68,6 +68,14 @@ export function evalExpr(cc: CC, e: Expr | undefined, dflt = 0): number {
     return typeof v === 'number' ? v : Array.isArray(v) ? v.length : 0;
   }
   if ('count' in o) return selectCards(cc, o.count).length;
+  if ('under' in o) {
+    const uids = varUids(cc, o.under, { ignoreEp: true });
+    if (uids.length === 0) return 0;
+    const card = cc.c.s.cards[uids[0]];
+    if (card.zone !== 'battle') return 0;
+    const pm = permByPid(cc.c.s, card.pid);
+    return pm ? Math.max(0, pm.perm.cards.length - 1) : 0;
+  }
   if ('costOf' in o) {
     if (o.costOf === '$self' && cc.selfSnap) return cc.selfSnap.cost;
     const uids = varUids(cc, o.costOf, { ignoreEp: true });
@@ -137,6 +145,10 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('nonEmpty' in o) return varUids(cc, o.nonEmpty, { ignoreEp: true }).length > 0;
   if ('some' in o) return varUids(cc, o.some.var, { ignoreEp: true }).some((u) => evalCond({ ...cc, it: u, itFace: -1 }, o.some.where));
   if ('isSelf' in o) return cc.it != null && cc.it === cc.self;
+  // S・トリガーとして使って、出た/唱えた(S・トリガー・プラスのP能力の条件)
+  if ('stUsed' in o) return !!(cc.event && (cc.event.type === 'cast' || cc.event.type === 'entered') && s.usage['st:' + cc.event.card] === cc.event.id);
+  // ゲーム中に1度の能力を、まだ使っていない(markUsed で記録する)
+  if ('unused' in o) return cc.self == null || !cc.c.s.usage['once:' + cc.self + ':' + o.unused];
   if ('notInBattle' in o) {
     if (cc.self == null) return true;
     const def = s.cards[cc.self].defId;
@@ -187,15 +199,19 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     if (o.power.gte !== undefined && p < o.power.gte) return false;
     return true;
   }
-  if ('type' in o) {
-    if (o.type === 'creature') return ch.type === 'creature' || ch.type === 'evolution' || ch.type === 'smaxEvolution';
-    return ch.type === 'spell';
-  }
+  if ('type' in o) return matchesType(ch.type, o.type);
   if ('evolution' in o) {
     const isEvo = ch.type === 'evolution' || ch.type === 'smaxEvolution';
     return isEvo === o.evolution;
   }
-  if ('race' in o) return ch.races.some((r) => r.includes(o.race));
+  if ('race' in o) {
+    // ツインパクトは、バトルゾーン以外ではどちらの面の種族も持つ
+    const card = s.cards[it];
+    if ((cc.itFace ?? -1) < 0 && card.zone !== 'battle' && card.zone !== 'limbo') {
+      return cc.c.reg.defs[card.defId].faces.some((f) => (f.races ?? []).some((r) => r.includes(o.race)));
+    }
+    return ch.races.some((r) => r.includes(o.race));
+  }
   if ('tapped' in o) {
     const card = s.cards[it];
     if (card.zone === 'battle') return (permByPid(s, card.pid)?.perm.tapped ?? false) === o.tapped;
@@ -245,13 +261,24 @@ export function selectCards(cc: CC, sel: Selector): number[] {
         }
         if (sel.chooseable && z === 'battle' && owner !== cc.controller) {
           const pm = permByPid(s, s.cards[uid].pid);
-          if (pm && !canBeChosen(cc.c, pm.perm, cc.controller)) continue;
+          if (pm && !canBeChosen(cc.c, pm.perm, cc.controller, cc.self)) continue;
         }
         out.push(uid);
       }
     }
   }
   return out;
+}
+
+/** 面の種類が、条件・セレクタの type に合うか('element' = 呪文以外のバトルゾーンのカード) */
+export function matchesType(t: FaceType, want: string): boolean {
+  switch (want) {
+    case 'creature': return isCreatureType(t);
+    case 'spell': return t === 'spell';
+    case 'element': return t !== 'spell';
+    case 'card': return true;
+    default: return t === want; // tamaseed / field / crossgear
+  }
 }
 
 /** セレクタの type に合うか。合うなら判定に使う面(-1=面0)を、合わなければ null を返す。 */
@@ -261,12 +288,11 @@ function faceHint(cc: CC, uid: number, type: Selector['type']): number | null {
   const def = cc.c.reg.defs[card.defId];
   if (card.zone === 'battle' || card.zone === 'limbo') {
     const f = def.faces[card.face] ?? def.faces[0];
-    if (type === 'spell') return f.type === 'spell' ? card.face : null;
-    if (type === 'creature') return f.type !== 'spell' ? card.face : null;
-    return card.face;
+    if (!type || type === 'card') return card.face;
+    return matchesType(f.type, type) ? card.face : null;
   }
   if (!type || type === 'card') return -1;
-  const idx = def.faces.findIndex((f) => (type === 'spell' ? f.type === 'spell' : f.type !== 'spell'));
+  const idx = def.faces.findIndex((f) => matchesType(f.type, type));
   return idx < 0 ? null : idx;
 }
 
@@ -325,6 +351,12 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
     const uid: number | undefined = ev.card;
     if (uid === undefined) return false;
     if (!evalCond({ ...cc, it: uid, itFace: -1 }, pat.attackerCond)) return false;
+  }
+  // イベントのカード(出た・唱えた・離れたカードなど)が満たす条件
+  if (pat.cond) {
+    const uid: number | undefined = ev.card;
+    if (uid === undefined) return false;
+    if (!evalCond({ ...cc, it: uid, itFace: typeof ev.face === 'number' ? ev.face : -1 }, pat.cond)) return false;
   }
   return true;
 }

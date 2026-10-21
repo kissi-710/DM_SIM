@@ -1,10 +1,10 @@
 // 派生ビュー: コスト・パワー・文明・能力・攻撃可否など(effects 7)。状態を書き換えない。
 import type { Ability, Cond, StaticMod } from './ast';
-import { evalCond, mkCC } from './cond';
+import { evalCond, evalExpr, mkCC } from './cond';
 import { EMPTY_FACE_INFO, type FaceInfo } from './registry';
 import type { Ctx } from './state';
 import { opponentOf, permByPid } from './state';
-import type { Card, CardDef, Civ, ContEffect, Face, FaceType, PlayerId, Permanent } from './types';
+import { type Card, type CardDef, type Civ, type ContEffect, type Face, type FaceType, isCreatureType, type PlayerId, type Permanent } from './types';
 
 export interface Chars {
   face: Face;
@@ -195,10 +195,15 @@ export function breakerCount(c: Ctx, perm: Permanent): number {
 
 // ───────────────────────── 攻撃・ブロック・選択 ─────────────────────────
 
-export function canBeChosen(c: Ctx, perm: Permanent, by: PlayerId): boolean {
+export function canBeChosen(c: Ctx, perm: Permanent, by: PlayerId, source?: number | null): boolean {
   const owner = c.s.cards[perm.cards[0]].owner;
   if (owner === by) return true;
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'cannotBeChosen') return false;
+  // 「呪文によって相手に選ばれない」: 選ぶ効果の発生源が呪文の時
+  if (source != null && faceTypeOf(c, source) === 'spell') {
+    const info = infoOf(c, perm.cards[0]);
+    if (info.statics.some((st) => st.ability.mod.type === 'protectFromSpells')) return false;
+  }
   return true;
 }
 
@@ -234,7 +239,9 @@ export function isSick(c: Ctx, perm: Permanent): boolean {
 export function canAttack(c: Ctx, perm: Permanent, target: { kind: 'player' } | { kind: 'creature'; pid: number }): boolean {
   const s = c.s;
   const uid = perm.cards[0];
+  if (!isCreatureType(faceTypeOf(c, uid))) return false; // タマシード・フィールド・クロスギアは攻撃できない
   const owner = s.cards[uid].owner;
+  if (actsLimited(c, owner)) return false;
   if (perm.tapped) return false;
   if (hasEffect(c, perm.pid, 'cannotAttack')) return false;
   const speed = hasKeyword(c, perm, 'speedAttacker');
@@ -259,8 +266,19 @@ export function isUnblockable(c: Ctx, attacker: Permanent): boolean {
   return hasKeyword(c, attacker, 'unblockable');
 }
 
+/** 「各ターン1度までしか、クリーチャーで攻撃もブロックもできない」の制限で、もう動けないか */
+function actsLimited(c: Ctx, player: PlayerId): boolean {
+  if (!c.s.effects.some((e) => e.mod.kind === 'oncePerTurnActs' && e.controller !== player)) return false;
+  let n = 0;
+  for (const ev of c.s.turnLog) if ((ev.type === 'attackDeclared' || ev.type === 'blocked') && ev.owner === player) n++;
+  return n >= 1;
+}
+
 export function canBlock(c: Ctx, perm: Permanent): boolean {
   if (perm.tapped) return false;
+  if (hasEffect(c, perm.pid, 'cannotBlock')) return false;
+  if (actsLimited(c, c.s.cards[perm.cards[0]].owner)) return false;
+  if (!isCreatureType(faceTypeOf(c, perm.cards[0]))) return false;
   return hasKeyword(c, perm, 'blocker');
 }
 
@@ -287,6 +305,10 @@ export function costOf(c: Ctx, uid: number, faceIdx: number, opts: CostOpts = {}
   const info = c.reg.getInfo(card.defId, faceIdx);
   if (info.sympathy) cost -= s.players[card.owner].mana.length;
   if (info.hyperEnergy && opts.taps?.length) cost -= 2 * opts.taps.length;
+  if (info.selfCosts.length > 0) {
+    const cc = mkCC(c, card.owner, { self: uid });
+    for (const sc of info.selfCosts) if (!sc.cond || evalCond(cc, sc.cond)) cost += evalExpr(cc, sc.delta);
+  }
   for (const st of activeStatics(c, 'costDelta')) {
     if (st.controller !== card.owner) continue;
     const mod = st.ability.mod;
@@ -393,6 +415,11 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
 
 /** プレイヤーがこの呪文(面)を唱えられるか(ドルファディロムの制限など) */
 export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
+  // 「呪文を唱えられなくする効果を無視して、〜を唱えてもよい」(卍 新世壊 卍)
+  for (const st of activeStatics(c, 'ignoreCastBan')) {
+    if (st.controller !== player || st.ability.mod.type !== 'ignoreCastBan') continue;
+    if (evalCond(mkCC(c, player, { self: st.src, it: uid, itFace: faceIdx }), st.ability.mod.cond)) return true;
+  }
   // 「次の自分のターンのはじめまで、相手は呪文を唱えられない」(XXDDZ)。n があれば、そのコストの呪文だけ
   if (c.s.effects.length > 0) {
     const cost = c.reg.defs[c.s.cards[uid].defId].faces[faceIdx]?.cost ?? 0;

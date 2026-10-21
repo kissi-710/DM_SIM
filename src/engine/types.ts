@@ -21,7 +21,24 @@ export function errorMessage(e: unknown): string {
 
 import type { Ability, Cond } from './ast';
 
-export type FaceType = 'creature' | 'spell' | 'evolution' | 'smaxEvolution';
+export type FaceType = 'creature' | 'spell' | 'evolution' | 'smaxEvolution' | 'tamaseed' | 'field' | 'crossgear';
+
+/** クリーチャーとして扱う種類(進化・S-MAX進化を含む)。タマシード・フィールド・クロスギアは含まない */
+export const isCreatureType = (t: FaceType): boolean => t === 'creature' || t === 'evolution' || t === 'smaxEvolution';
+/** バトルゾーンに出る種類(呪文以外) */
+export const isPermanentType = (t: FaceType): boolean => t !== 'spell';
+/** 出来事(moved / entered)の kind に使う、カードの種類の区分 */
+export const kindOfType = (t: FaceType): 'spell' | 'creature' | 'tamaseed' | 'field' | 'crossgear' => {
+  switch (t) {
+    case 'spell':
+    case 'tamaseed':
+    case 'field':
+    case 'crossgear':
+      return t;
+    default:
+      return 'creature';
+  }
+};
 
 export interface Face {
   name: string;
@@ -191,6 +208,8 @@ export interface PoolEntry {
 export type Duration =
   | { kind: 'endOfTurn'; turn: number }
   | { kind: 'untilTurnStart'; player: PlayerId; afterTurn: number }
+  /** 次の、相手(player の相手)のターンの終わりまで: afterTurn より後で、player 以外のターンが終わる時に失効する */
+  | { kind: 'untilOppTurnEnd'; player: PlayerId; afterTurn: number }
   | { kind: 'source'; uid: number; ep: number };
 
 export type EffectMod =
@@ -199,6 +218,9 @@ export type EffectMod =
   | { kind: 'grant'; keyword: string }
   | { kind: 'cannotBeChosen' }
   | { kind: 'cannotBeAttacked' }
+  | { kind: 'cannotBlock' }
+  /** プレイヤー単位: 発生源の持ち主の相手は、各ターン1度までしか、クリーチャーで攻撃もブロックもできない */
+  | { kind: 'oncePerTurnActs' }
   /** ブロックを強制する(攻撃された時、ブロッカーとして選ばなければならない。総合ルール 507.1b) */
   | { kind: 'mustBlock' }
   /** プレイヤー単位(ContEffect.pid = -1): 発生源の持ち主の相手は呪文を唱えられない(n があれば、そのコストの呪文だけ) */
@@ -245,6 +267,10 @@ export interface GameState {
   winner: PlayerId | 'draw' | null;
   loseReason: string | null;
   skipTurn: boolean;
+  /** 「このターンの後に自分のターンを追加する」の予約(先頭から順に、追加のターンを行うプレイヤー) */
+  extraTurns?: PlayerId[];
+  /** 追加のターンの後に、本来の順番で次に行うプレイヤー */
+  resume?: PlayerId;
   manaCharged: boolean;
   /** 直近のブレイクで割られているシールド(革命2の枚数判定) */
   breaking: number[];

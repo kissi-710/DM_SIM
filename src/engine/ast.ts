@@ -7,6 +7,8 @@ export type Expr =
   | { var: string }
   | { count: Selector }
   | { costOf: string }
+  /** 変数のカードがいるバトルゾーンの山の、下に重なっているカードの枚数(フィールドの下など) */
+  | { under: string }
   | { add: Expr[] }
   | { sub: [Expr, Expr] }
   | { min: Expr[] }
@@ -16,7 +18,7 @@ export interface Selector {
   zone: ZoneName | ZoneName[];
   /** 能力の処理者から見た持ち主。'iter' は forPlayers の現在のプレイヤー */
   owner?: 'self' | 'opponent' | 'any' | 'iter';
-  type?: 'creature' | 'spell' | 'card';
+  type?: 'creature' | 'spell' | 'card' | 'element' | 'tamaseed' | 'field' | 'crossgear';
   where?: Cond;
   /** 「選ぶ」対象か(ジャストダイバー等の判定を行う) */
   chooseable?: boolean;
@@ -37,7 +39,7 @@ export type Cond =
   | { multicolor: boolean }
   | { cost: { eq?: Expr; lt?: Expr; lte?: Expr; gt?: Expr; gte?: Expr } }
   | { power: { lte?: number; gte?: number } }
-  | { type: 'creature' | 'spell' }
+  | { type: 'creature' | 'spell' | 'element' | 'tamaseed' | 'field' | 'crossgear' }
   | { evolution: boolean }
   | { race: string }
   | { tapped: boolean }
@@ -54,6 +56,10 @@ export type Cond =
   | { some: { var: string; where: Cond } }
   /** $it が、能力の発生源自身 */
   | { isSelf: true }
+  /** 誘発したイベント(出た・唱えた)が、S・トリガーとして使われたもの */
+  | { stUsed: true }
+  /** ゲーム中に1度の能力(key)を、まだ使っていない */
+  | { unused: string }
   | { turnOf: 'self' | 'opponent' }
   | { zoneIs: ZoneName }
   /** $it が、能力の発生源(EXライフを持つクリーチャー)のEXライフのシールドか */
@@ -124,6 +130,12 @@ export type KeywordName =
 
 export type StaticMod =
   | { type: 'costDelta'; delta: number; cond: Cond }
+  /** 相手のターンのはじめに、相手は自身のマナゾーンのカードを n 枚までしかアンタップできない */
+  | { type: 'untapLimit'; n: number }
+  /** このクリーチャーは、呪文によって相手に選ばれない */
+  | { type: 'protectFromSpells' }
+  /** 自分は、呪文を唱えられなくする効果を無視して、cond に合う呪文を唱えてもよい */
+  | { type: 'ignoreCastBan'; cond: Cond }
   | { type: 'cannotAttackPlayerWhenEntered' }
   | { type: 'cannotCast'; cond: Cond }
   | { type: 'powerAdd'; n: number }
@@ -145,6 +157,8 @@ export type Ability =
   | { kind: 'spell'; steps: StepDef[] }
   | { kind: 'static'; mod: StaticMod; while?: Cond }
   | { kind: 'replace'; match: Pattern; apply: ReplaceApply; optional?: boolean; while?: Cond; label?: string }
-  | { kind: 'permission'; play: 'summon' | 'cast'; from: ZoneName; after?: 'deckBottom' };
+  | { kind: 'permission'; play: 'summon' | 'cast' | 'put'; from: ZoneName; after?: 'deckBottom' }
+  /** このカード自身を使うコストの増減(delta は負で軽減。cond を満たす時だけ。評価は、このカードを使う人から見る) */
+  | { kind: 'selfCost'; delta: Expr; cond?: Cond };
 
 export type { EffectMod };

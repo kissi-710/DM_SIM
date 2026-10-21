@@ -1,6 +1,6 @@
 // カードDBの検証・正規化・索引化・能力のコンパイル(spec 4.3 / effects 4.3, 6)。
-import type { Ability, ActDef, Cond, StepDef, TriggerSpec } from './ast';
-import type { AbilityRef, CardDB, CardDef, Face } from './types';
+import type { Ability, ActDef, Cond, Expr, StepDef, TriggerSpec } from './ast';
+import { type AbilityRef, type CardDB, type CardDef, type Face, isCreatureType } from './types';
 
 // ───────────────────────── 命令(バイトコード) ─────────────────────────
 
@@ -41,6 +41,7 @@ export interface FaceInfo {
   shieldTriggers: { ability: Extract<Ability, { kind: 'keyword' }>; idx: number }[];
   gStrike: { ability: Extract<Ability, { kind: 'keyword' }>; idx: number } | null;
   breakers: { n: number; while?: Cond }[];
+  selfCosts: { delta: Expr; cond?: Cond }[];
   statics: { ability: Extract<Ability, { kind: 'static' }>; idx: number }[];
   replaces: { ability: Extract<Ability, { kind: 'replace' }>; idx: number }[];
   permissions: Extract<Ability, { kind: 'permission' }>[];
@@ -52,7 +53,7 @@ export interface FaceInfo {
 /** 能力を無視されているカードの FaceInfo(何の能力も持たない) */
 export const EMPTY_FACE_INFO: FaceInfo = {
   blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false, slayer: false,
-  sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], statics: [],
+  sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], statics: [],
   replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
 };
 
@@ -64,6 +65,10 @@ export interface Registry {
   /** イベント種類 → 定義ID → その定義の誘発能力(trigIndex の定義別の索引。collect が全カードを走査する時に使う) */
   trigByDef: Map<string, Map<string, TrigRef[]>>;
   progs: Map<string, Program>;
+  /** 出る時の置換(match.type = 'enter')を持つカードがあるか(なければ、出る処理で探さない) */
+  hasEntryReplace: boolean;
+  /** 呪文の解決後の置換(match.type = 'afterCast')を持つカードがあるか */
+  hasAfterCastReplace: boolean;
   getFace(defId: string, face: number): Face;
   getInfo(defId: string, face: number): FaceInfo;
   program(ref: AbilityRef, noOptional?: boolean): Program;
@@ -145,12 +150,12 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf',
+  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
@@ -224,10 +229,10 @@ export function validateCardDb(db: CardDB): string[] {
     if (!def.faces?.length) errs.push(`${w0}: faces がありません`);
     def.faces?.forEach((f, fi) => {
       const w = `${w0}面${fi}(${f.name})`;
-      if (!['creature', 'spell', 'evolution', 'smaxEvolution'].includes(f.type)) errs.push(`${w}: 未知の種類 ${f.type}`);
+      if (!['creature', 'spell', 'evolution', 'smaxEvolution', 'tamaseed', 'field', 'crossgear'].includes(f.type)) errs.push(`${w}: 未知の種類 ${f.type}`);
       if (typeof f.cost !== 'number') errs.push(`${w}: cost がありません`);
       if (!f.civs?.length) errs.push(`${w}: civs がありません`);
-      if (f.type !== 'spell' && typeof f.power !== 'number') errs.push(`${w}: power がありません`);
+      if (isCreatureType(f.type) && typeof f.power !== 'number') errs.push(`${w}: power がありません`);
       if (f.type === 'evolution' && !f.evolveFrom) errs.push(`${w}: 進化には evolveFrom が必要です`);
       f.abilities?.forEach((a, ai) => {
         const wa = `${w}能力${ai}`;
@@ -248,6 +253,7 @@ export function validateCardDb(db: CardDB): string[] {
             break;
           case 'static':
           case 'permission':
+          case 'selfCost':
             break;
           default:
             errs.push(`${wa}: 未知の能力 kind '${(a as { kind?: unknown }).kind}'`);
@@ -394,7 +400,7 @@ export function loadRegistry(origDb: CardDB): Registry {
     info[id] = faces.map((f, fi) => {
       const fi_: FaceInfo = {
         blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false, slayer: false,
-        sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], statics: [],
+        sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], statics: [],
         replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
       };
       f.abilities.forEach((a, idx) => {
@@ -437,6 +443,9 @@ export function loadRegistry(origDb: CardDB): Registry {
           case 'permission':
             fi_.permissions.push(a);
             break;
+          case 'selfCost':
+            fi_.selfCosts.push({ delta: a.delta, cond: a.cond });
+            break;
           case 'spell':
             fi_.spell = { ability: a, idx };
             break;
@@ -458,6 +467,9 @@ export function loadRegistry(origDb: CardDB): Registry {
   }
 
   const progs = new Map<string, Program>();
+  const hasReplace = (type: string) => Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'replace' && a.match.type === type)));
+  const hasEntryReplace = hasReplace('enter');
+  const hasAfterCastReplace = hasReplace('afterCast');
   // program() の高速な引き当て: 定義ID → (面・能力・任意なし) の配列。文字列キーを毎回作らない
   const progFast = new Map<string, (Program | undefined)[]>();
   const reg: Registry = {
@@ -467,6 +479,8 @@ export function loadRegistry(origDb: CardDB): Registry {
     trigIndex,
     trigByDef,
     progs,
+    hasEntryReplace,
+    hasAfterCastReplace,
     getFace(defId, face) {
       const d = defs[defId];
       if (!d) throw new Error(`未知のカード: ${defId}`);

@@ -46,6 +46,7 @@ import type {
   ProcName,
   ZoneName,
 } from './types';
+import { isCreatureType } from './types';
 
 // ───────────────────────── フレームの積み方 ─────────────────────────
 
@@ -67,7 +68,7 @@ export interface PlayPlan {
   ok: boolean;
   err?: string;
   face: number;
-  kind: 'summon' | 'cast';
+  kind: 'summon' | 'cast' | 'put';
   cost: number;
   need: number;
   civs: Civ[];
@@ -95,7 +96,7 @@ export function planPlay(
   const face = def.faces[faceIdx];
   if (!face) return fail('面がありません');
   const info = c.reg.getInfo(card.defId, faceIdx);
-  const kind = face.type === 'spell' ? 'cast' : 'summon';
+  const kind = face.type === 'spell' ? 'cast' : isCreatureType(face.type) ? 'summon' : 'put';
   let after: 'deckBottom' | null = null;
   if (from !== 'hand' && !free) {
     const perm = info.permissions.find((p) => p.from === from && p.play === kind);
@@ -245,7 +246,16 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       s.skipTurn = false;
       s.manaCharged = false;
       // 自分のマナとクリーチャーをアンタップし、召喚酔いを解除する
-      for (const u of s.players[P].mana) s.cards[u].tapped = false;
+      // 「相手のターンのはじめに、相手はマナゾーンのカードを n 枚までしかアンタップできない」(卍月 ガ・リュザーク 卍)
+      const limits = activeStatics(c, 'untapLimit').filter((st) => st.controller !== P);
+      let untapLeft = limits.length ? Math.min(...limits.map((st) => (st.ability.mod.type === 'untapLimit' ? st.ability.mod.n : 99))) : Infinity;
+      for (const u of s.players[P].mana) {
+        if (!s.cards[u].tapped) continue;
+        if (untapLeft > 0) {
+          s.cards[u].tapped = false;
+          untapLeft--;
+        }
+      }
       for (const perm of s.players[P].battle) {
         perm.tapped = false;
         perm.sick = false;
@@ -323,9 +333,22 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       return;
     }
     case 4: {
-      s.effects = s.effects.filter((e) => !(e.until.kind === 'endOfTurn' && e.until.turn <= s.turn));
+      s.effects = s.effects.filter(
+        (e) =>
+          !(e.until.kind === 'endOfTurn' && e.until.turn <= s.turn) &&
+          !(e.until.kind === 'untilOppTurnEnd' && s.turn > e.until.afterTurn && P !== e.until.player),
+      );
       s.turn += 1;
-      s.active = opponentOf(P);
+      // 「このターンの後に自分のターンを追加する」: 追加のターンの後は、本来の順番に戻る
+      const normal = s.resume ?? opponentOf(P);
+      const extra = s.extraTurns?.shift();
+      if (extra !== undefined) {
+        s.resume = normal;
+        s.active = extra;
+      } else {
+        s.resume = undefined;
+        s.active = normal;
+      }
       s.step = 'start';
       f.stage = 0;
       return;
@@ -377,9 +400,15 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       const p = v.plan;
       const card = s.cards[uid];
       const owner = card.owner;
-      if (p.kind === 'summon') {
+      if (p.kind === 'summon' || p.kind === 'put') {
         const evs: Ev[] = [];
-        enterBattle(c, uid, { to: 'battle', cause: 'summon', via: 'summon', onto: p.onto ?? undefined, face: p.face, paid: p.paid, cost: p.cost, free: p.free }, evs);
+        const via = p.kind === 'summon' ? 'summon' : 'put';
+        enterBattle(c, uid, { to: 'battle', cause: via, via, onto: p.onto ?? undefined, face: p.face, paid: p.paid, cost: p.cost, free: p.free, from: v.fromZone }, evs);
+        // S・トリガーとして使って出た印(S・トリガー・プラスのP能力の条件。イベントの内容は変えない)
+        if (v.st) {
+          const ent = evs.find((e) => e.type === 'entered' && e.card === uid);
+          if (ent) s.usage['st:' + uid] = ent.id;
+        }
         s.batchNo++;
         collectBatch(c, evs);
         s.dirtySba = true;
@@ -388,6 +417,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       }
       emit(c, 'cast', { card: uid, owner, free: p.free, paid: p.paid, cost: p.cost, face: p.face, from: v.fromZone });
       const ev = c.out[c.out.length - 1];
+      if (v.st) s.usage['st:' + uid] = ev.id; // S・トリガーとして唱えた印
       s.batchNo++;
       collectBatch(c, [ev]);
       f.stage = 2;
@@ -413,6 +443,11 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       // 呪文の解決後。墓地(または山札の下)に置く
       const p = v.plan;
       const card = s.cards[uid];
+      if (card.zone === 'limbo' && c.reg.hasAfterCastReplace && v.after !== 'hyper' && afterCastReplacement(c, uid, p.face)) {
+        // 唱え終わった呪文を、墓地のかわりに別の手順で動かす(フィールドの下に置く、など)
+        f.stage = 3;
+        return;
+      }
       if (card.zone === 'limbo') {
         if (v.after === 'hyper') {
           // インターステラ: 墓地(や山札の下)のかわりに超次元ゾーンに置く。呪文自身の置換と重なる時は超次元ゾーンを選ぶ
@@ -452,6 +487,46 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       popFrame(c, f);
       return;
   }
+}
+
+/**
+ * 唱え終わった呪文に当てはまる「かわりに〜する」(match.type = 'afterCast')を探し、あれば、その手順を行う効果を積んで true を返す。
+ * 持つのはバトルゾーンの、能力を無視されていないカード(複数あれば、先頭のもの)。
+ */
+function afterCastReplacement(c: Ctx, uid: number, faceIdx: number): boolean {
+  const s = c.s;
+  const card = s.cards[uid];
+  for (const p of [0, 1] as PlayerId[]) {
+    for (const perm of s.players[p].battle) {
+      const src = perm.cards[0];
+      const info = infoOf(c, src);
+      for (const r of info.replaces) {
+        const a = r.ability;
+        if (a.match.type !== 'afterCast' || a.apply.type !== 'steps') continue;
+        const m = a.match;
+        if (m.owner !== undefined && m.owner !== 'any' && (m.owner === 'self' ? card.owner !== p : card.owner === p)) continue;
+        if (a.while && !evalCond(mkCC(c, p, { self: src }), a.while)) continue;
+        if (m.cond && !evalCond(mkCC(c, p, { self: src, it: uid, itFace: faceIdx }), m.cond)) continue;
+        const sc = s.cards[src];
+        const ev: Ev = { id: nextId(s), causedBy: null, type: 'afterCast', turn: s.turn, card: uid, owner: card.owner };
+        s.cont.push({
+          kind: 'effect',
+          id: nextId(s),
+          causedBy: c.cause,
+          ability: { defId: sc.defId, face: sc.face, idx: r.idx },
+          source: { uid: src, ep: sc.ep },
+          lki: snapOf(c, src),
+          controller: p,
+          pc: 0,
+          vars: {},
+          trigger: ev,
+          noOptional: true,
+        });
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /** 自分の墓地から呪文を唱えた後、墓地のかわりに山札の下に置くか(サイクルペディア) */
@@ -1046,7 +1121,7 @@ function resolveEntry(c: Ctx, e: PoolEntry): void {
       causedBy: logged.id,
       name: 'play',
       stage: 0,
-      vars: { uid: e.source.uid, ep: card.ep, from: 'hand', face, free: true, after: null },
+      vars: { uid: e.source.uid, ep: card.ep, from: 'hand', face, free: true, after: null, st: true },
     });
     return;
   }
@@ -1096,7 +1171,7 @@ export function runSba(c: Ctx): boolean {
   // パワー0以下のクリーチャーは破壊される(108.1b)
   const dead: number[] = [];
   for (const p of [0, 1] as PlayerId[]) {
-    for (const perm of s.players[p].battle) if (powerOf(c, perm) <= 0) dead.push(perm.cards[0]);
+    for (const perm of s.players[p].battle) if (isCreatureType(faceTypeOf(c, perm.cards[0])) && powerOf(c, perm) <= 0) dead.push(perm.cards[0]);
   }
   if (dead.length) {
     moveCards(c, dead, { to: 'grave', cause: 'destroy' });

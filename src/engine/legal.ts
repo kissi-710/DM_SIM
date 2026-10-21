@@ -5,7 +5,7 @@ import { planPlay } from './procs';
 import type { Registry } from './registry';
 import type { Ctx } from './state';
 import { mkCtx, opponentOf } from './state';
-import type { Action, AnswerValue, GameState, InputSpec, Pending, PlayerId, PlayExtra } from './types';
+import { type Action, type AnswerValue, type GameState, type InputSpec, isCreatureType, type Pending, type PlayerId, type PlayExtra } from './types';
 
 export const ENUM_LIMIT = 200;
 
@@ -119,7 +119,7 @@ export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extra
       for (let fi = 0; fi < def.faces.length; fi++) {
         const face = def.faces[fi];
         const info = c.reg.getInfo(def.id, fi);
-        if (z !== 'hand' && !info.permissions.some((p) => p.from === z && p.play === (face.type === 'spell' ? 'cast' : 'summon'))) continue;
+        if (z !== 'hand' && !info.permissions.some((p) => p.from === z && p.play === (face.type === 'spell' ? 'cast' : isCreatureType(face.type) ? 'summon' : 'put'))) continue;
         for (const extra of extraVariants(c, player, uid, fi)) {
           const plan = planPlay(c, player, uid, z, fi, extra, false);
           if (plan.ok) out.push({ type: 'PLAY_CARD', uid, from: z, face: fi, extra });
