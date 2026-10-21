@@ -8,6 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "predev": "node scripts/check-wasm.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
@@ -16,8 +17,11 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests scripts",
+    "prebatch": "node scripts/check-wasm.mjs",
     "batch": "tsx src/cli/batch.ts",
+    "preprob": "node scripts/check-wasm.mjs",
     "prob": "tsx src/cli/prob.ts",
+    "preaibench": "node scripts/check-wasm.mjs",
     "aibench": "tsx src/cli/aibench.ts",
     "tune-eval": "tsx src/cli/tuneEval.ts",
     "build:wasm": "node scripts/build-wasm.mjs",

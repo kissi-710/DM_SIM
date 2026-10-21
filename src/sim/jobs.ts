@@ -28,6 +28,8 @@ export type SimJob =
 export type JobResult = ProbResult | PatternResult | MatchStats[] | CardStrength[];
 
 export type SimOut =
+  /** Worker の起動の完了。native は Rust 版(WASM)で探索するか(読み込めなければ TS 版。約 10 倍遅く、メモリも多く使う)。why は読み込めなかった理由 */
+  | { kind: 'ready'; native: boolean; why?: string }
   | { kind: 'progress'; done: number; total: number }
   | { kind: 'result'; job: 'prob'; result: ProbResult }
   | { kind: 'result'; job: 'patterns'; result: PatternResult }

@@ -9,6 +9,7 @@ import type { FirstMode, MatchStats } from '../sim/batch';
 import type { CardStrength } from '../sim/strength';
 import { allDecks, findDeck } from './decks';
 import { DeckSelect } from './DeckSelect';
+import { EngineWarning, type TsFallback } from './EngineWarning';
 import { runSimJob, type RunningJob } from './simClient';
 import { downloadText } from './util';
 import { errorMessage } from '../engine/types';
@@ -64,7 +65,9 @@ export function BatchView() {
   const [results, setResults] = useState<{ label: string; seed: number; s: MatchStats }[] | null>(null);
   const [strength, setStrength] = useState<{ seed: number; rows: CardStrength[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tsFallback, setTsFallback] = useState<TsFallback | null>(null);
   const job = useRef<RunningJob<unknown> | null>(null);
+  const onTsFallback = (why?: string) => setTsFallback({ why });
 
   const spec = (k: AgentKind, i: InfoPreset, hypothesisIds: string[] = []): AgentSpec => ({ kind: k, policy: makePolicy(i, { hypotheses: hypothesisIds }), iterations });
 
@@ -103,6 +106,7 @@ export function BatchView() {
     const hy = takeHypotheses(compare);
     if (hy === null) return;
     setResults(null);
+    setTsFallback(null);
     setProgress([0, 1]);
     try {
       const a = findDeck(deckA).cards;
@@ -116,6 +120,7 @@ export function BatchView() {
           opts: variants.map((v) => ({ deckA: a, deckB: b, agentA: spec(kindA, v.info, hy.a), agentB: spec(kindB, infoB, hy.b), games: first === 'duplicate' ? games + (games % 2) : games, seed, first })),
         },
         (d, t) => setProgress([d, t]),
+        onTsFallback,
       );
       job.current = running;
       const r: MatchStats[] = await running.promise;
@@ -134,11 +139,13 @@ export function BatchView() {
     const hy = takeHypotheses(false);
     if (hy === null) return;
     setStrength(null);
+    setTsFallback(null);
     setProgress([0, 1]);
     try {
       const running = runSimJob<CardStrength[]>(
         { type: 'strength', deck: findDeck(deckA).cards, opponent: findDeck(deckB).cards, agent: spec(kindA, infoA, hy.a), games, seed },
         (d, t) => setProgress([d, t]),
+        onTsFallback,
       );
       job.current = running;
       setStrength({ seed, rows: await running.promise });
@@ -241,6 +248,7 @@ export function BatchView() {
             </>
           )}
         </div>
+        <EngineWarning fallback={kindA === 'mcts' || kindB === 'mcts' ? tsFallback : null} />
         {error && <div className="panel" style={{ borderColor: 'var(--bad)' }}>{error}</div>}
         {results && (
           <div className="panel col">
