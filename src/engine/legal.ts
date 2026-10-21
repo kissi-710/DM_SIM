@@ -1,5 +1,5 @@
 // 合法手の列挙と検証(design 5 / effects 12)。
-import { canAttack, charsOf, costBase, costOf, defaultPlayFace, faceTypeOf, infoOf, isSick } from './derive';
+import { canAttack, charsOf, costBase, costOf, defaultPlayFace, faceTypeOf, grantedPlayFrom, infoOf, isSick } from './derive';
 import { evalCond, mkCC } from './cond';
 import { planPlay } from './procs';
 import type { Registry } from './registry';
@@ -140,7 +140,12 @@ export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extra
       for (let fi = 0; fi < def.faces.length; fi++) {
         const face = def.faces[fi];
         const info = c.reg.getInfo(def.id, fi);
-        if (z !== 'hand' && !info.permissions.some((p) => p.from === z && p.play === (face.type === 'spell' ? 'cast' : isCreatureType(face.type) ? 'summon' : 'put'))) continue;
+        if (
+          z !== 'hand' &&
+          !info.permissions.some((p) => p.from === z && p.play === (face.type === 'spell' ? 'cast' : isCreatureType(face.type) ? 'summon' : 'put')) &&
+          !(isCreatureType(face.type) && grantedPlayFrom(c, player, uid, fi, z) !== null)
+        )
+          continue;
         for (const extra of extraVariants(c, player, uid, fi)) {
           const plan = planPlay(c, player, uid, z, fi, extra, false);
           if (plan.ok) out.push({ type: 'PLAY_CARD', uid, from: z, face: fi, extra });

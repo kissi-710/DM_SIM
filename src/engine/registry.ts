@@ -80,6 +80,8 @@ export interface Registry {
   hasHandReplace: boolean;
   /** 出る時にタップさせる静的能力(enterTappedFirst)を持つカードがあるか */
   hasEnterTapped: boolean;
+  /** バトルゾーンを離れる時の置換(match.type = 'leave')を持つカードがあるか */
+  hasLeaveReplace: boolean;
   /** 各ターンはじめてバトルする自分のクリーチャーが勝つ静的能力を持つカードがあるか */
   hasFirstBattleWins: boolean;
   getFace(defId: string, face: number): Face;
@@ -99,6 +101,7 @@ function expandFace(face: Face): Face {
       out.push({
         kind: 'trigger',
         label: 'ヨビニオン',
+        gen: true,
         optional: true,
         spec: { on: { type: 'entered', via: 'summon' }, subject: 'self' },
         steps: [
@@ -120,6 +123,7 @@ function expandFace(face: Face): Face {
       out.push({
         kind: 'trigger',
         label: 'ジャストダイバー',
+        gen: true,
         spec: { on: { type: 'entered' }, subject: 'self' },
         steps: [
           {
@@ -132,6 +136,7 @@ function expandFace(face: Face): Face {
       out.push({
         kind: 'trigger',
         label: a.label ?? '革命チェンジ',
+        gen: true,
         optional: true,
         spec: {
           on: { type: 'attackDeclared', attackerCond: a.attacker, owner: 'self' },
@@ -151,6 +156,7 @@ function expandFace(face: Face): Face {
       out.push({
         kind: 'trigger',
         label: a.label ?? '侵略',
+        gen: true,
         optional: true,
         spec,
         steps: [{ op: 'act', act: { invade: {} } }],
@@ -163,12 +169,12 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'altUsed', 'nameHas',
+  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'altUsed', 'nameHas', 'hasCip',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
@@ -496,6 +502,7 @@ export function loadRegistry(origDb: CardDB): Registry {
   const hasEntryReplace = hasReplace('enter');
   const hasAfterCastReplace = hasReplace('afterCast');
   const hasMoveReplace = hasReplace('move');
+  const hasLeaveReplace = hasReplace('leave');
   const hasFirstBattleWins = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'static' && a.mod.type === 'firstBattleWins')));
   const hasEnterTapped = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'static' && a.mod.type === 'enterTappedFirst')));
   const hasHandReplace = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'replace' && a.match.type === 'moved' && a.match.from === 'hand')));
@@ -513,6 +520,7 @@ export function loadRegistry(origDb: CardDB): Registry {
     hasMoveReplace,
     hasHandReplace,
     hasEnterTapped,
+    hasLeaveReplace,
     hasFirstBattleWins,
     getFace(defId, face) {
       const d = defs[defId];

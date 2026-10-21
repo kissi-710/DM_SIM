@@ -11,6 +11,7 @@ import {
   canSummon,
   canUseCost,
   costBase,
+  grantedPlayFrom,
   costOf,
   faceTypeOf,
   hasKeyword,
@@ -29,6 +30,7 @@ import {
   drawCards,
   emit,
   enterBattle,
+  listens,
   moveCards,
   onSummoned,
   setTapped,
@@ -83,6 +85,8 @@ export interface PlayPlan {
   alt?: string;
   /** 使った「各ターンに1度」のコスト軽減の発生源 */
   once?: number[];
+  /** 他のカードの許可(allowPlayFrom)で使う時の、その発生源 */
+  grant?: number;
 }
 
 export function planPlay(
@@ -105,10 +109,14 @@ export function planPlay(
   const info = c.reg.getInfo(card.defId, faceIdx);
   const kind = face.type === 'spell' ? 'cast' : isCreatureType(face.type) ? 'summon' : 'put';
   let after: 'deckBottom' | null = null;
+  let grantSrc: number | null = null;
   if (from !== 'hand' && !free) {
     const perm = info.permissions.find((p) => p.from === from && p.play === kind);
-    if (!perm) return fail('そのゾーンからはプレイできません');
-    after = perm.after ?? null;
+    if (!perm) {
+      // 他のカードの「自分のターン中、〜を from から召喚してもよい」
+      grantSrc = kind === 'summon' ? grantedPlayFrom(c, player, uid, faceIdx, from) : null;
+      if (grantSrc === null) return fail('そのゾーンからはプレイできません');
+    } else after = perm.after ?? null;
   } else if (from !== 'hand' && free) {
     const perm = info.permissions.find((p) => p.from === from && p.play === kind);
     after = perm?.after ?? null;
@@ -188,7 +196,7 @@ export function planPlay(
       pay = plan;
     }
   }
-  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}), ...(once.length ? { once } : {}) };
+  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}), ...(once.length ? { once } : {}), ...(grantSrc !== null ? { grant: grantSrc } : {}) };
 }
 
 /** 支払いの選択肢(UI が「聞くか、自動で払うか」を決めるための情報) */
@@ -437,6 +445,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       card.face = plan.face;
       s.limbo.push(uid);
       for (const src of plan.once ?? []) s.usage['cd:' + src] = s.turn;
+      if (plan.grant !== undefined) s.usage['gp:' + plan.grant] = s.turn;
       v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free, alt: plan.alt ?? null };
       v.fromZone = prevZone;
       f.stage = 1;
@@ -603,7 +612,7 @@ type PermRef = NonNullable<ReturnType<typeof permByPid>>;
 
 /** 「バトルする時」の誘発を発行する(聞き手のいるカードがある時だけ。段階を増やさず、既存の対戦の記録を変えない) */
 function emitBattleStarted(c: Ctx, pm: PermRef, dm: PermRef): void {
-  if (!c.reg.trigByDef.has('battleStarted')) return;
+  if (!listens(c, 'battleStarted')) return;
   const evb = emit(c, 'battleStarted', {
     attacker: pm.perm.pid,
     defender: dm.perm.pid,
@@ -698,13 +707,13 @@ function runBattle(c: Ctx, f: ProcFrame): void {
         return;
       }
       const bi = resolveBattleCore(c, pma, pmd);
-      if (c.reg.trigByDef.has('afterBattle')) v.battle = bi;
+      if (listens(c, 'afterBattle')) v.battle = bi;
       f.stage = 2;
       pushProc(c, 'settle');
       return;
     }
     case 2: {
-      if (c.reg.trigByDef.has('afterBattle') && v.battle && s.winner === null && !s.skipTurn) {
+      if (listens(c, 'afterBattle') && v.battle && s.winner === null && !s.skipTurn) {
         const eva = emit(c, 'afterBattle', { ...v.battle });
         s.batchNo++;
         collectBatch(c, [eva]);
@@ -849,14 +858,14 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       }
       const bi = resolveBattleCore(c, pm, dm);
       // 「バトルの後」の誘発のために、バトルの当事者を残す(聞き手がいる時だけ)
-      if (c.reg.trigByDef.has('afterBattle')) v.battle = bi;
+      if (listens(c, 'afterBattle')) v.battle = bi;
       f.stage = 5;
       pushProc(c, 'settle');
       return;
     }
     case 5: {
       // 「バトルの後」の誘発(総合ルール 701.13d)。勝敗の誘発を解決し終えた後に誘発する
-      if (c.reg.trigByDef.has('afterBattle') && v.battle && s.winner === null && !s.skipTurn) {
+      if (listens(c, 'afterBattle') && v.battle && s.winner === null && !s.skipTurn) {
         const eva = emit(c, 'afterBattle', { ...v.battle });
         s.batchNo++;
         collectBatch(c, [eva]);
@@ -910,7 +919,7 @@ function runBreak(c: Ctx, f: ProcFrame): void {
       // 「ブレイクする前に」の誘発は、ブレイクするシールドを選んだ後、ブレイクする前に解決する(総合ルール 509.3 / 509.4)。
       // 聞き手のいるカードがある時だけ、イベントを発行する(既存の対戦の記録を変えない)
       f.stage = 3;
-      if (c.reg.trigByDef.has('beforeBreak')) {
+      if (listens(c, 'beforeBreak')) {
         const evb = emit(c, 'beforeBreak', { attacker: v.pid, owner: attackerOwner, defenderOwner: defender, cards: broken.slice() });
         s.batchNo++;
         collectBatch(c, [evb]);
@@ -921,7 +930,10 @@ function runBreak(c: Ctx, f: ProcFrame): void {
     case 3: {
       // 「ブレイクする前に」の効果の解決でクリーチャーが場を離れても、すでに選んだシールドはブレイクされる(509.4c)。
       // シールドゾーンから離れたカードだけは、ブレイクできない
-      const broken: number[] = (v.broken as number[]).filter((u) => s.cards[u].zone === 'shield' && s.cards[u].owner === defender);
+      // 「ブレイクする前に」の効果で、ブレイクするシールドの上にカードが重ねられていたら、山の一番上のカードをブレイクする
+      const underOf = new Map<number, number>();
+      for (const [top, under] of Object.entries(s.piles ?? {})) for (const u of under) underOf.set(u, Number(top));
+      const broken: number[] = [...new Set((v.broken as number[]).map((u) => underOf.get(u) ?? u))].filter((u) => s.cards[u].zone === 'shield' && s.cards[u].owner === defender);
       v.broken = broken;
       if (broken.length === 0) {
         popFrame(c, f);
@@ -949,7 +961,9 @@ function runBreak(c: Ctx, f: ProcFrame): void {
       }
       // S・トリガー/G・ストライクを宣言できるカード(革命2は、ブレイク後の枚数で判定)
       const cands: number[] = [];
-      for (const u of broken) {
+      // 重ねられたシールドは、山の全部のカードが手札に加わる。S・トリガーは、それぞれのカードで宣言できる
+      const withUnder = broken.flatMap((u) => [u, ...(s.piles?.[u] ?? [])]);
+      for (const u of withUnder) {
         if (declaration(c, u)) cands.push(u);
       }
       let declared: number[] = [];

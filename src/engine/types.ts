@@ -283,6 +283,11 @@ export interface GameState {
   extraTurns?: PlayerId[];
   /** 追加のターンの後に、本来の順番で次に行うプレイヤー */
   resume?: PlayerId;
+  /**
+   * シールドの山(カードを重ねて置かれたシールド): 一番上のカードの uid → その下に重なっているカードの uid(上から順)。
+   * 重なっているカードは zone が 'shield' だが、players[].shield には載らない(シールド1つ = 山1つ)。
+   */
+  piles?: Record<number, number[]>;
   manaCharged: boolean;
   /** 直近のブレイクで割られているシールド(革命2の枚数判定) */
   breaking: number[];

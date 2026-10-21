@@ -33,6 +33,33 @@ export function ask<T = any>(c: Ctx, spec: Omit<Pending, 'id'>): T {
   throw new NeedInput(spec);
 }
 
+// ───────────────────────── 聞き手のいるイベント ─────────────────────────
+
+const listenCache = new WeakMap<object, Map<string, boolean>>();
+
+/**
+ * この対局のデッキに、そのイベント(battleStarted / afterBattle / beforeBreak など)を聞く誘発型能力があるか。
+ * 聞き手がいる時だけイベントを発行する(段階を増やさず、聞き手のいない対戦の記録を変えない)ために使う。
+ * カードDB全体ではなく、対局のデッキで調べる(デッキが分からない状態では、カードDB全体で調べる)。
+ */
+export function listens(c: Ctx, type: string): boolean {
+  const byDef = c.reg.trigByDef.get(type);
+  if (!byDef) return false;
+  const ids = c.s.deckIds;
+  if (ids[0].length === 0 || ids[1].length === 0) return true;
+  let m = listenCache.get(ids);
+  if (!m) {
+    m = new Map();
+    listenCache.set(ids, m);
+  }
+  let hit = m.get(type);
+  if (hit === undefined) {
+    hit = ids.some((list) => list.some((d) => byDef.has(d)));
+    m.set(type, hit);
+  }
+  return hit;
+}
+
 // ───────────────────────── イベント ─────────────────────────
 
 export function emit(c: Ctx, type: string, payload: Record<string, any> = {}): Ev {
@@ -322,7 +349,7 @@ interface Proposal {
   /** 実行しない(置換でキャンセルされた) */
   cancelled?: boolean;
   /** 代わりに行う操作 */
-  also?: { kind: 'exShieldToGrave'; shield: number } | { kind: 'smaxSacrifice'; picks: number[] } | { kind: 'steps'; ref: AbilityRef };
+  also?: { kind: 'exShieldToGrave'; shield: number } | { kind: 'smaxSacrifice'; picks: number[] } | { kind: 'steps'; ref: AbilityRef; /** 手順を持つカード(省略 = 動くカード自身) */ src?: number };
   replaced?: boolean;
   by?: PlayerId;
 }
@@ -365,17 +392,21 @@ export function moveCards(c: Ctx, uids: number[], opts: MoveOpts): MoveResult[] 
     if (p.also?.kind === 'steps') {
       // かわりに、そのカードの手順を行う(手札から捨てられる時に出す、など)。手順は、いまの処理の後に行う
       const card = s.cards[p.uid];
+      const src = p.also.src ?? p.uid;
+      const sc = s.cards[src];
+      // 手順の中から、動くはずだったカードを `$ev.card` で参照できるようにする
+      const evp: Ev = { id: nextId(s), causedBy: null, type: 'replaced', turn: s.turn, card: p.uid, owner: card.owner };
       s.cont.push({
         kind: 'effect',
         id: nextId(s),
         causedBy: c.cause,
         ability: p.also.ref,
-        source: { uid: p.uid, ep: card.ep },
-        lki: snapOf(c, p.uid),
-        controller: card.owner,
+        source: { uid: src, ep: sc.ep },
+        lki: snapOf(c, src),
+        controller: sc.owner,
         pc: 0,
         vars: {},
-        trigger: null,
+        trigger: evp,
         noOptional: true,
       });
       results.push({ uid: p.uid, moved: false, to: p.from, ep: card.ep });
@@ -413,6 +444,20 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
   if (to === 'battle') {
     return enterBattle(c, uid, opts, evs);
   }
+  // シールドの山: ブレイク・墓地送りでは山ごと動く。それ以外(1枚だけを選んで動かす)は、そのカードだけが抜け、下のカードがシールドになる
+  let underShield: number[] = [];
+  if (from === 'shield' && s.piles?.[uid]) {
+    const pile = s.piles[uid];
+    delete s.piles[uid];
+    if (cause === 'break' || cause === 'burn') underShield = pile;
+    else {
+      const list = s.players[card.owner].shield;
+      const [nt, ...rest] = pile;
+      const i = list.indexOf(uid);
+      if (i >= 0) list[i] = nt;
+      if (rest.length) s.piles[nt] = rest;
+    }
+  }
   removeFromZone(c, uid);
   card.zone = to;
   card.ep++;
@@ -437,6 +482,19 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
       via: opts.via,
     }),
   );
+  for (const u of underShield) {
+    const uc = s.cards[u];
+    const usnap = snapOf(c, u);
+    removeFromZone(c, u);
+    uc.zone = to;
+    uc.ep++;
+    uc.pid = -1;
+    uc.tapped = to === 'mana' ? entersManaTapped(c, u, opts) : false;
+    uc.face = 0;
+    delete uc.up;
+    placeInZone(c, u, to, pos);
+    evs.push(emit(c, 'moved', { card: u, owner: uc.owner, from: 'shield', to, cause, kind: 'creature', ex: false, lki: usnap, underneath: true }));
+  }
   for (const u of under) {
     const uc = s.cards[u];
     const usnap = snapOf(c, u);
@@ -760,10 +818,20 @@ function applyLeaveReplacements(c: Ctx, p: Proposal): void {
     const a = r.ability;
     if (a.while && !evalCond(mkCC(c, owner, { self: p.uid }), a.while)) continue;
     const m = a.match;
-    if (m.type !== 'moved') continue;
+    if (m.type !== 'moved' && m.type !== 'leave') continue;
     if (m.from !== undefined && m.from !== p.from) continue;
     if (m.cause !== undefined && m.cause !== p.cause) continue;
-    if (a.apply.type === 'changeDest') {
+    if (m.cond && !evalCond(mkCC(c, owner, { self: p.uid, it: p.uid, itFace: -1 }), m.cond)) continue;
+    if (a.apply.type === 'steps') {
+      cands.push({
+        label: a.label ?? 'かわりの処理を行う',
+        optional: !!a.optional,
+        apply: (pp) => {
+          pp.cancelled = true;
+          pp.also = { kind: 'steps', ref: { defId: card.defId, face: card.face, idx: r.idx }, src: p.uid };
+        },
+      });
+    } else if (a.apply.type === 'changeDest') {
       const to = a.apply.to;
       cands.push({
         label: a.label ?? `かわりに${to === 'mana' ? 'マナゾーン' : to}に置く`,
@@ -795,6 +863,35 @@ function applyLeaveReplacements(c: Ctx, p: Proposal): void {
             pp.also = { kind: 'smaxSacrifice', picks };
           },
         });
+      }
+    }
+  }
+  // 他のクリーチャーが離れる時の置換(match.type = 'leave'。ウルトラ・セイバー・表向きのシールドの身代わりなど)
+  if (c.reg.hasLeaveReplace) {
+    for (const pl of [0, 1] as PlayerId[]) {
+      for (const perm of s.players[pl].battle) {
+        const src = perm.cards[0];
+        if (src === p.uid) continue;
+        const sc = s.cards[src];
+        for (const r of infoOf(c, src).replaces) {
+          const a = r.ability;
+          if (a.match.type !== 'leave' || a.apply.type !== 'steps') continue;
+          const m = a.match;
+          const rel = (want: string | undefined, actual: PlayerId): boolean => want === undefined || want === 'any' || (want === 'self' ? actual === pl : actual !== pl);
+          if (!rel(m.owner, card.owner)) continue;
+          if (m.from !== undefined && m.from !== p.from) continue;
+          if (m.cause !== undefined && m.cause !== p.cause) continue;
+          if (a.while && !evalCond(mkCC(c, pl, { self: src }), a.while)) continue;
+          if (m.cond && !evalCond(mkCC(c, pl, { self: src, it: p.uid, itFace: -1 }), m.cond)) continue;
+          cands.push({
+            label: a.label ?? 'かわりの処理を行う',
+            optional: !!a.optional,
+            apply: (pp) => {
+              pp.cancelled = true;
+              pp.also = { kind: 'steps', ref: { defId: sc.defId, face: sc.face, idx: r.idx }, src };
+            },
+          });
+        }
       }
     }
   }

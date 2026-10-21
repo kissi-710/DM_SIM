@@ -4,7 +4,7 @@ import { evalCond, evalExpr, mkCC } from './cond';
 import { EMPTY_FACE_INFO, type FaceInfo } from './registry';
 import type { Ctx } from './state';
 import { opponentOf, permByPid } from './state';
-import { type Card, type CardDef, type Civ, type ContEffect, type Face, type FaceType, isCreatureType, type PlayerId, type Permanent } from './types';
+import { type Card, type CardDef, type Civ, type ContEffect, type Face, type FaceType, isCreatureType, type PlayerId, type Permanent, type ZoneName } from './types';
 
 export interface Chars {
   face: Face;
@@ -468,6 +468,22 @@ export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number):
     if (evalCond(cc, mod.cond as Cond)) return false;
   }
   return true;
+}
+
+/**
+ * 「自分のターン中、〜を from のゾーンから召喚してもよい」(allowPlayFrom)で、このカードを from から召喚できる発生源。なければ null。
+ * 発生源ごとに「1体」(oncePerTurn)なら、そのターンに使っていないものだけ。
+ */
+export function grantedPlayFrom(c: Ctx, player: PlayerId, uid: number, faceIdx: number, from: ZoneName): number | null {
+  if (c.s.active !== player) return null;
+  for (const st of activeStatics(c, 'allowPlayFrom')) {
+    const mod = st.ability.mod;
+    if (st.controller !== player || mod.type !== 'allowPlayFrom' || mod.from !== from) continue;
+    if (mod.oncePerTurn && c.s.usage['gp:' + st.src] === c.s.turn) continue;
+    if (mod.cond && !evalCond(mkCC(c, player, { self: st.src, it: uid, itFace: faceIdx }), mod.cond)) continue;
+    return st.src;
+  }
+  return null;
 }
 
 /** 「相手はコストが n 以下のクリーチャーを召喚できない」(ミラダンテXII のファイナル革命)に当たらないか */

@@ -105,6 +105,7 @@ export function cloneState(s: GameState): GameState {
     rans: s.rans.slice(),
     breaking: s.breaking.slice(),
     ...(s.extraTurns ? { extraTurns: s.extraTurns.slice() } : {}),
+    ...(s.piles ? { piles: Object.fromEntries(Object.entries(s.piles).map(([k, v]) => [k, v.slice()])) } : {}),
     deckIds: s.deckIds,
     cfg: s.cfg,
     ...(s.knownDeck ? { knownDeck: [s.knownDeck[0].map((g) => g.slice()), s.knownDeck[1].map((g) => g.slice())] as GameState['knownDeck'] } : {}),

@@ -32,6 +32,15 @@ export function checkInvariants(s: GameState): string[] {
       }
     }
   }
+  // 重ねて置かれたシールド(山)の、下のカード
+  for (const [top, under] of Object.entries(s.piles ?? {})) {
+    const t = s.cards[Number(top)];
+    if (!t || t.zone !== 'shield') errs.push(`シールドの山の一番上 ${top} がシールドゾーンにない`);
+    for (const u of under) {
+      put(u, `${s.cards[u]?.owner}:shield-under`);
+      if (s.cards[u]?.zone !== 'shield') errs.push(`山の下のカード${u}の zone が shield でない`);
+    }
+  }
   for (const u of s.limbo) {
     put(u, 'limbo');
     if (s.cards[u].zone !== 'limbo') errs.push(`カード${u}の zone が limbo でない`);

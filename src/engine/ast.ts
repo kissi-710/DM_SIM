@@ -7,6 +7,8 @@ export type Expr =
   | { var: string }
   | { count: Selector }
   | { costOf: string }
+  /** 誘発したイベントの、配列の項目(cards など)の数。「各ブレイクの前に」で、ブレイクする枚数だけ繰り返す時に使う */
+  | { evLen: string }
   /** 変数のカードがいるバトルゾーンの山の、下に重なっているカードの枚数(フィールドの下など) */
   | { under: string }
   | { add: Expr[] }
@@ -66,6 +68,8 @@ export type Cond =
   | { altUsed: string }
   /** $it のカード名が、指定の文字列を含む */
   | { nameHas: string }
+  /** $it の(使う面の)能力に、「このクリーチャーが出た時」で始まる能力がある */
+  | { hasCip: true }
   /** ゲーム中に1度の能力(key)を、まだ使っていない */
   | { unused: string }
   | { turnOf: 'self' | 'opponent' }
@@ -155,6 +159,8 @@ export type StaticMod =
   | { type: 'enterTappedFirst' }
   /** 相手のターンのはじめに、相手は自身のマナゾーンのカードを n 枚までしかアンタップできない */
   | { type: 'untapLimit'; n: number }
+  /** 自分のターン中、cond に合う自分のカードを from のゾーンから召喚してもよい(コストは支払う)。oncePerTurn なら「1体」(発生源ごとに各ターン1度) */
+  | { type: 'allowPlayFrom'; from: ZoneName; cond?: Cond; oncePerTurn?: boolean }
   /** このクリーチャーは、相手に選ばれない(攻撃・ブロックはされる) */
   | { type: 'cannotBeChosen' }
   /** このクリーチャーは、呪文によって相手に選ばれない */
@@ -178,7 +184,7 @@ export type ReplaceApply =
 
 export type Ability =
   | { kind: 'keyword'; name: KeywordName; n?: number; while?: Cond; steps?: StepDef[]; attacker?: Cond; label?: string }
-  | { kind: 'trigger'; spec: TriggerSpec; optional?: boolean; steps: StepDef[]; label?: string }
+  | { kind: 'trigger'; spec: TriggerSpec; optional?: boolean; steps: StepDef[]; label?: string; /** キーワードから展開した誘発型能力(「出た時」で始まる能力に数えない) */ gen?: boolean }
   | { kind: 'spell'; steps: StepDef[] }
   | { kind: 'static'; mod: StaticMod; while?: Cond }
   | { kind: 'replace'; match: Pattern; apply: ReplaceApply; optional?: boolean; while?: Cond; label?: string }

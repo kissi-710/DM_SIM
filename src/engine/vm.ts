@@ -445,7 +445,7 @@ function actDraw(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
 
 function actMove(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
   const uids = resolveSel(cc, a.sel);
-  const res = moveCards(c, uids, { to: a.to, cause: a.cause ?? 'effect', pos: a.pos, tapped: a.tapped, by: f.controller });
+  const res = moveCards(c, uids, { to: a.to, cause: a.cause ?? 'effect', pos: a.pos, tapped: a.tapped, by: f.controller, ...(a.noReplace ? { noReplace: true } : {}) });
   if (a.as) {
     f.vars[a.as] = res.filter((r) => r.moved && r.to === a.to).map((r) => ({ uid: r.uid, ep: r.ep }));
   }
@@ -893,6 +893,65 @@ function actBreakShields(c: Ctx, f: EffectFrame, _cc: CC, _a: any, _key: string)
   });
 }
 
+/**
+ * ガチンコ・ジャッジ: 各プレイヤーは、自身の山札の上から1枚目を表向きにし、それを一番下に置く。
+ * そのカードのコストが相手以上であれば、自分の勝ち。勝った時、変数 as に自分の公開したカードを入れる(負けたら空)
+ */
+function actJudge(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const me = f.controller;
+  const opp = opponentOf(me);
+  const um = s.players[me].deck[0];
+  const uo = s.players[opp].deck[0];
+  const cm = um === undefined ? -1 : costBase(c, um);
+  const co = uo === undefined ? -1 : costBase(c, uo);
+  const shown = [um, uo].filter((u): u is number => u !== undefined);
+  if (shown.length > 0) emit(c, 'revealed', { cards: shown, to: 'all', from: 'deck' });
+  for (const u of shown) {
+    const owner = s.cards[u].owner;
+    const deck = s.players[owner].deck;
+    deck.splice(deck.indexOf(u), 1);
+    deck.push(u);
+    s.cards[u].ep++;
+  }
+  if (a?.as) f.vars[a.as] = cm >= co && um !== undefined ? [ref(c, um)] : [];
+}
+
+/**
+ * カードを、表向きでシールド1つの上に置く(重ねる)。sel = 置くカード(どのゾーンでもよい。持ち主のシールドに置く)、onto = 下になるシールド
+ * 重ねても、シールドの枚数は変わらない(シールド1つの上に置く)
+ */
+function actStackShield(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const uid = resolveSel(cc, a.sel)[0];
+  const base = resolveSel(cc, a.onto)[0];
+  if (uid === undefined || base === undefined) return;
+  const bc = s.cards[base];
+  const card = s.cards[uid];
+  if (bc.zone !== 'shield' || card.owner !== bc.owner || uid === base) return;
+  const list = s.players[bc.owner].shield;
+  const i = list.indexOf(base);
+  if (i < 0) return;
+  const from = card.zone;
+  if (from === 'shield') return; // シールドのカードどうしを重ねることは、いまのカードにはない
+  const snap = snapOf(c, uid);
+  // 下のカードたち(元の山の分も含む)
+  const piles = (s.piles ??= {});
+  const under = [base, ...(piles[base] ?? [])];
+  delete piles[base];
+  removeZoneCard(c, uid);
+  card.zone = 'shield';
+  card.ep++;
+  card.pid = -1;
+  card.tapped = false;
+  card.face = 0;
+  card.up = true;
+  list[i] = uid;
+  piles[uid] = under;
+  emit(c, 'moved', { card: uid, owner: card.owner, from, to: 'shield', cause: 'stackShield', kind: 'creature', ex: false, lki: snap });
+  s.dirtySba = true;
+}
+
 function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   // 「そのターン中に〜を使っていなければ」の判定用に、印をログに残す
   emit(c, a, { owner: f.controller, source: f.source.uid });
@@ -935,6 +994,8 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['putUnder', actPutUnder],
   ['tapLock', actTapLock],
   ['breakShields', actBreakShields],
+  ['judge', actJudge],
+  ['stackShield', actStackShield],
   ['log', actLog],
   ['setVar', actSetVar],
 ]);

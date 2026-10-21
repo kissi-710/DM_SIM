@@ -75,7 +75,10 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
   // 自分の隠れた領域(山札・シールドは本人にも見えない)
   const rv = policy.preset === 'partial' ? policy.reveal : undefined;
   if (!rv?.ownDeck) for (const u of v.players[player].deck) hide(u);
-  if (!rv?.ownShield) for (const u of v.players[player].shield) hide(u);
+  // 表向きのシールドは、見える(重なって置かれたシールドの下のカードは、裏向きなので隠す)
+  const underShield = Object.values(v.piles ?? {}).flat();
+  if (!rv?.ownShield) for (const u of v.players[player].shield) if (!v.cards[u].up) hide(u);
+  if (!rv?.ownShield) for (const u of underShield) if (v.cards[u].owner === player && !v.cards[u].up) hide(u);
   // 相手の隠れた領域
   const oppHand = v.players[opp].hand.slice();
   let reveal = 0;
@@ -93,7 +96,8 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
   oppHand.forEach((u, i) => {
     if (i >= reveal) hide(u);
   });
-  if (!rv?.opponentShield) for (const u of v.players[opp].shield) hide(u);
+  if (!rv?.opponentShield) for (const u of v.players[opp].shield) if (!v.cards[u].up) hide(u);
+  if (!rv?.opponentShield) for (const u of underShield) if (v.cards[u].owner === opp && !v.cards[u].up) hide(u);
   if (!rv?.opponentDeck) for (const u of v.players[opp].deck) hide(u);
   // 自分への質問で提示されたカードは見える(デドダムの上3枚など)
   const p = state.pending;

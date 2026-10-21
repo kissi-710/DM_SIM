@@ -70,6 +70,10 @@ export function evalExpr(cc: CC, e: Expr | undefined, dflt = 0): number {
     return typeof v === 'number' ? v : Array.isArray(v) ? v.length : 0;
   }
   if ('count' in o) return selectCards(cc, o.count).length;
+  if ('evLen' in o) {
+    const v = cc.event?.[o.evLen];
+    return Array.isArray(v) ? v.length : 0;
+  }
   if ('under' in o) {
     const uids = varUids(cc, o.under, { ignoreEp: true });
     if (uids.length === 0) return 0;
@@ -150,6 +154,17 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('faceUp' in o) return cc.it != null && !!s.cards[cc.it].up;
   if ('altUsed' in o) return cc.self != null && s.usage['alt:' + cc.self + ':' + o.altUsed] === s.turn;
   if ('nameHas' in o) return cc.it != null && cc.c.reg.defs[s.cards[cc.it].defId].name.includes(o.nameHas);
+  if ('hasCip' in o) {
+    if (cc.it == null) return false;
+    const cd = s.cards[cc.it];
+    const fi = (cc.itFace ?? -1) >= 0 ? cc.itFace! : cd.zone === 'battle' || cd.zone === 'limbo' ? cd.face : 0;
+    return cc.c.reg.getInfo(cd.defId, fi).triggers.some((t) => {
+      const sp = t.ability.spec;
+      if (t.ability.gen || sp.subject !== 'self') return false;
+      const ons = Array.isArray(sp.on) ? sp.on : [sp.on];
+      return ons.some((on) => on.type === 'entered' && on.via === undefined);
+    });
+  }
   if ('hyper' in o) {
     if (cc.self == null || s.cards[cc.self].zone !== 'battle') return false;
     return !!permByPid(s, s.cards[cc.self].pid)?.perm.hyper;
@@ -317,6 +332,7 @@ function faceHint(cc: CC, uid: number, type: Selector['type']): number | null {
  * イベントがパターンに合うか。owner/controller/player は cc.controller から見た相対('self'/'opponent'/'any')。
  */
 export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
+  const s = cc.c.s;
   if (pat.type !== ev.type) return false;
   if (pat.self && ev.card !== cc.self) return false;
   if (pat.role) {
@@ -346,6 +362,8 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
   if (pat.from !== undefined && ev.from !== pat.from) return false;
   if (pat.to !== undefined && ev.to !== pat.to) return false;
   if (pat.kind !== undefined && ev.kind !== pat.kind) return false;
+  // beforeBreak など: 攻撃しているのが、この能力の発生源自身
+  if (pat.selfAttacker && (cc.self == null || ev.attacker !== s.cards[cc.self].pid)) return false;
   if (pat.notVia !== undefined && ev.via === pat.notVia) return false;
   if (pat.targetKind !== undefined && ev.target?.kind !== pat.targetKind) return false;
   if (pat.ex !== undefined && !!ev.ex !== pat.ex) return false;
