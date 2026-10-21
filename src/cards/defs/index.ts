@@ -4,5 +4,6 @@ import { DECK_C } from './deckC';
 import { DECK_D } from './deckD';
 import { DECK_E } from './deckE';
 import { DECK_F } from './deckF';
+import { DECK_G } from './deckG';
 
-export const SD1_CARDS: CardDef[] = [...DECK_C, ...DECK_D, ...DECK_E, ...DECK_F];
+export const SD1_CARDS: CardDef[] = [...DECK_C, ...DECK_D, ...DECK_E, ...DECK_F, ...DECK_G];

@@ -78,6 +78,10 @@ export interface Registry {
   hasMoveReplace: boolean;
   /** 手札から捨てられる時の自身の置換(match: moved, from: hand)を持つカードがあるか */
   hasHandReplace: boolean;
+  /** 出る時にタップさせる静的能力(enterTappedFirst)を持つカードがあるか */
+  hasEnterTapped: boolean;
+  /** 各ターンはじめてバトルする自分のクリーチャーが勝つ静的能力を持つカードがあるか */
+  hasFirstBattleWins: boolean;
   getFace(defId: string, face: number): Face;
   getInfo(defId: string, face: number): FaceInfo;
   program(ref: AbilityRef, noOptional?: boolean): Program;
@@ -159,12 +163,12 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper',
+  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'altUsed', 'nameHas',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
@@ -492,6 +496,8 @@ export function loadRegistry(origDb: CardDB): Registry {
   const hasEntryReplace = hasReplace('enter');
   const hasAfterCastReplace = hasReplace('afterCast');
   const hasMoveReplace = hasReplace('move');
+  const hasFirstBattleWins = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'static' && a.mod.type === 'firstBattleWins')));
+  const hasEnterTapped = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'static' && a.mod.type === 'enterTappedFirst')));
   const hasHandReplace = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'replace' && a.match.type === 'moved' && a.match.from === 'hand')));
   // program() の高速な引き当て: 定義ID → (面・能力・任意なし) の配列。文字列キーを毎回作らない
   const progFast = new Map<string, (Program | undefined)[]>();
@@ -506,6 +512,8 @@ export function loadRegistry(origDb: CardDB): Registry {
     hasAfterCastReplace,
     hasMoveReplace,
     hasHandReplace,
+    hasEnterTapped,
+    hasFirstBattleWins,
     getFace(defId, face) {
       const d = defs[defId];
       if (!d) throw new Error(`未知のカード: ${defId}`);

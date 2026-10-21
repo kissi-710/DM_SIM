@@ -150,7 +150,26 @@ export function powerOf(c: Ctx, perm: Permanent): number {
     p += st.ability.mod.n;
   }
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'powerAdd') p += e.mod.n;
+  // パワーアタッカー: 攻撃中だけ
+  if (info.statics.length > 0 && isAttacking(c, perm.pid)) {
+    for (const st of info.statics) {
+      if (st.ability.mod.type !== 'powerAttacker') continue;
+      if (st.ability.while && !evalCond(mkCC(c, card.owner, { self: uid }), st.ability.while)) continue;
+      p += st.ability.mod.n;
+    }
+  }
   return p;
+}
+
+/** その山のクリーチャーが、いま攻撃中か(攻撃の手続きが終わっていない) */
+export function isAttacking(c: Ctx, pid: number): boolean {
+  for (const f of c.s.cont) if (f.kind === 'proc' && f.name === 'attack' && f.vars.pid === pid) return true;
+  return false;
+}
+
+/** そのプレイヤーが、ゲームに負けない効果を受けているか */
+export function playerCannotLose(c: Ctx, p: PlayerId): boolean {
+  return c.s.effects.some((e) => e.mod.kind === 'cannotLose' && e.controller === p);
 }
 
 export type KwName = 'blocker' | 'speedAttacker' | 'machFighter' | 'shieldTrigger' | 'justDiver' | 'exLife' | 'slayer' | 'unblockable';
@@ -294,6 +313,8 @@ export function mustBlock(c: Ctx, perm: Permanent): boolean {
 export interface CostOpts {
   taps?: number[];
   free?: boolean;
+  /** 「各ターンに1度」の軽減を使った発生源を、ここに集める(使ったと記録するのは、実際に使う側) */
+  once?: number[];
 }
 
 /** 召喚・詠唱するカードの最終コスト(0未満にならない)。 */
@@ -323,8 +344,12 @@ export function costOf(c: Ctx, uid: number, faceIdx: number, opts: CostOpts = {}
     if (st.controller !== card.owner) continue;
     const mod = st.ability.mod;
     if (mod.type !== 'costDelta') continue;
+    if (mod.oncePerTurn && s.usage['cd:' + st.src] === s.turn) continue;
     const cc = mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx });
-    if (evalCond(cc, mod.cond as Cond)) cost += mod.delta;
+    if (evalCond(cc, mod.cond as Cond)) {
+      cost += mod.delta;
+      if (mod.oncePerTurn) opts.once?.push(st.src);
+    }
   }
   return Math.max(0, cost);
 }

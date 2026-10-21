@@ -62,6 +62,10 @@ export type Cond =
   | { faceUp: true }
   /** 発生源が、ハイパーモード中 */
   | { hyper: true }
+  /** 発生源が、そのターンに別のコスト(altCost の id)を使って出た */
+  | { altUsed: string }
+  /** $it のカード名が、指定の文字列を含む */
+  | { nameHas: string }
   /** ゲーム中に1度の能力(key)を、まだ使っていない */
   | { unused: string }
   | { turnOf: 'self' | 'opponent' }
@@ -140,7 +144,15 @@ export type KeywordName =
   | 'revolutionChange';
 
 export type StaticMod =
-  | { type: 'costDelta'; delta: number; cond: Cond }
+  | { type: 'costDelta'; delta: number; cond: Cond; /** 各ターンに1度だけ(発生源ごと)。使うと、そのターンはもう働かない */ oncePerTurn?: boolean }
+  /** 攻撃中、このクリーチャーのパワーを n 増やす(パワーアタッカー) */
+  | { type: 'powerAttacker'; n: number }
+  /** このクリーチャーがシールドをブレイクする時、相手はそのシールドを手札に加えるかわりに墓地に置く */
+  | { type: 'burnShields' }
+  /** 各ターン、はじめて自分のクリーチャーがバトルする時、そのクリーチャーはそのバトルに勝つ */
+  | { type: 'firstBattleWins' }
+  /** 各ターン、はじめて出る相手のクリーチャーは、タップして出る */
+  | { type: 'enterTappedFirst' }
   /** 相手のターンのはじめに、相手は自身のマナゾーンのカードを n 枚までしかアンタップできない */
   | { type: 'untapLimit'; n: number }
   /** このクリーチャーは、相手に選ばれない(攻撃・ブロックはされる) */
@@ -184,6 +196,8 @@ export type Ability =
 export interface AltCostSpec {
   /** 手札から(このカード以外の)where に合うカードを n 枚捨てる */
   discard?: { n: number; where?: Cond };
+  /** マナは払うが、コストを n 少なくする(指定すると、マナを払うかわりにはならない) */
+  reduce?: number;
 }
 
 export type { EffectMod };

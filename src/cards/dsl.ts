@@ -174,3 +174,6 @@ export const hyperize = (tapOther = 1): Ability => ({ kind: 'hyperize', tapOther
 export const hyperMode: Cond = { hyper: true };
 /** シンカライズ */
 export const shinkalize = (): Ability => ({ kind: 'shinkalize' });
+
+/** カード名が、指定の文字列を含む */
+export const nameHas = (s: string): Cond => ({ nameHas: s });

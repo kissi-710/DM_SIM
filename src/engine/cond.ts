@@ -148,6 +148,8 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('some' in o) return varUids(cc, o.some.var, { ignoreEp: true }).some((u) => evalCond({ ...cc, it: u, itFace: -1 }, o.some.where));
   if ('isSelf' in o) return cc.it != null && cc.it === cc.self;
   if ('faceUp' in o) return cc.it != null && !!s.cards[cc.it].up;
+  if ('altUsed' in o) return cc.self != null && s.usage['alt:' + cc.self + ':' + o.altUsed] === s.turn;
+  if ('nameHas' in o) return cc.it != null && cc.c.reg.defs[s.cards[cc.it].defId].name.includes(o.nameHas);
   if ('hyper' in o) {
     if (cc.self == null || s.cards[cc.self].zone !== 'battle') return false;
     return !!permByPid(s, s.cards[cc.self].pid)?.perm.hyper;

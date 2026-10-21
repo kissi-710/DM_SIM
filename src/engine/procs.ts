@@ -16,6 +16,7 @@ import {
   hasKeyword,
   infoOf,
   isUnblockable,
+  playerCannotLose,
   manaCivs,
   mustBlock,
   payNeed,
@@ -80,6 +81,8 @@ export interface PlayPlan {
   /** 別のコストで捨てる手札 */
   discard?: number[];
   alt?: string;
+  /** 使った「各ターンに1度」のコスト軽減の発生源 */
+  once?: number[];
 }
 
 export function planPlay(
@@ -126,13 +129,15 @@ export function planPlay(
 
   // 別のコスト(マナを払うかわりに、手札を捨てる・マナを払わない)
   let freeAlt = false;
+  let reduceAlt = 0;
   let discard: number[] | undefined;
   if (extra?.alt !== undefined) {
     const ab = info.altCosts.find((a) => a.id === extra.alt);
     if (!ab) return fail('その別のコストはありません');
     if (from !== 'hand') return fail('手札から使う別のコストです');
     if (ab.when && !evalCond(mkCC(c, player, { self: uid }), ab.when)) return fail('別のコストを使える条件を満たしていません');
-    freeAlt = true; // 別のコストは、マナを払うかわりのコスト
+    freeAlt = ab.cost.reduce === undefined; // 別のコストは、マナを払うかわりのコスト(reduce は、マナを払う軽減)
+    reduceAlt = ab.cost.reduce ?? 0;
     if (ab.cost.discard) {
       const d = ab.cost.discard;
       const ccd = mkCC(c, player, { self: uid });
@@ -160,7 +165,8 @@ export function planPlay(
       seen.add(cost);
     }
   }
-  const cost = costOf(c, uid, faceIdx, { taps, free });
+  const once: number[] = [];
+  const cost = Math.max(0, costOf(c, uid, faceIdx, { taps, free, once }) - reduceAlt);
   const civs = face.civs;
   const need = free ? 0 : payNeed(cost, civs.length);
   let pay: number[] = [];
@@ -182,7 +188,7 @@ export function planPlay(
       pay = plan;
     }
   }
-  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}) };
+  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}), ...(once.length ? { once } : {}) };
 }
 
 /** 支払いの選択肢(UI が「聞くか、自動で払うか」を決めるための情報) */
@@ -430,7 +436,8 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       card.ep++;
       card.face = plan.face;
       s.limbo.push(uid);
-      v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free };
+      for (const src of plan.once ?? []) s.usage['cd:' + src] = s.turn;
+      v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free, alt: plan.alt ?? null };
       v.fromZone = prevZone;
       f.stage = 1;
       return;
@@ -444,6 +451,8 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         const via = p.kind === 'summon' ? 'summon' : 'put';
         enterBattle(c, uid, { to: 'battle', cause: via, via, onto: p.onto ?? undefined, face: p.face, paid: p.paid, cost: p.cost, free: p.free, from: v.fromZone }, evs);
         if (p.kind === 'summon' && s.cards[uid].zone === 'battle') onSummoned(c, uid);
+        // 別のコストを使って出た印(そのターンだけ。altUsed の条件で調べる)
+        if (p.alt && s.cards[uid].zone === 'battle') s.usage['alt:' + uid + ':' + p.alt] = s.turn;
         // S・トリガーとして使って出た印(S・トリガー・プラスのP能力の条件。イベントの内容は変えない)
         if (v.st) {
           const ent = evs.find((e) => e.type === 'entered' && e.card === uid);
@@ -610,10 +619,17 @@ function emitBattleStarted(c: Ctx, pm: PermRef, dm: PermRef): void {
 /** パワーを比べて、負けた方(同じなら両方)を破壊する。スレイヤーも処理する。「バトルの後」に使う当事者の情報を返す */
 function resolveBattleCore(c: Ctx, pm: PermRef, dm: PermRef) {
   const s = c.s;
-  const pa = powerOf(c, pm.perm);
-  const pd = powerOf(c, dm.perm);
+  let pa = powerOf(c, pm.perm);
+  let pd = powerOf(c, dm.perm);
   const aTop = pm.perm.cards[0];
   const dTop = dm.perm.cards[0];
+  // 各ターン、はじめて自分のクリーチャーがバトルする時、そのクリーチャーはそのバトルに勝つ(輝く革命 ボルシャック・フレア)
+  if (c.reg.hasFirstBattleWins) {
+    const aw = firstBattleWinsFor(c, pm.owner);
+    const dw = firstBattleWinsFor(c, dm.owner);
+    if (aw && !dw) pa = Infinity;
+    else if (dw && !aw) pd = Infinity;
+  }
   const losers: number[] = [];
   let winner: number | null = null;
   if (pa > pd) {
@@ -647,6 +663,16 @@ function resolveBattleCore(c: Ctx, pm: PermRef, dm: PermRef) {
   s.batchNo++;
   collectBatch(c, [ev]);
   return { attacker: aPid, defender: dPid, attackerCard: aTop, defenderCard: dTop, owner: aOwner };
+}
+
+/** そのプレイヤーの「各ターン、はじめてバトルするクリーチャーが勝つ」を、いま使えるか(使えるなら、使ったと記録する) */
+function firstBattleWinsFor(c: Ctx, owner: PlayerId): boolean {
+  const s = c.s;
+  const key = 'fbw:' + owner;
+  if (s.usage[key] === s.turn) return false;
+  if (!activeStatics(c, 'firstBattleWins').some((st) => st.controller === owner)) return false;
+  s.usage[key] = s.turn;
+  return true;
 }
 
 /** 効果によるバトル(「その2体をバトルさせる」)。vars: a, d = 山の pid(a が攻撃側扱い) */
@@ -865,6 +891,10 @@ function runBreak(c: Ctx, f: ProcFrame): void {
           pushProc(c, 'settle');
           return;
         }
+        if (playerCannotLose(c, defender)) {
+          popFrame(c, f); // ゲームに負けない効果を受けている: 攻撃は終わる
+          return;
+        }
         s.winner = attackerOwner;
         s.loseReason = 'ダイレクトアタック';
         emit(c, 'gameOver', { winner: attackerOwner, reason: 'ダイレクトアタック' });
@@ -908,6 +938,15 @@ function runBreak(c: Ctx, f: ProcFrame): void {
     case 1: {
       const broken: number[] = v.broken;
       s.breaking = broken.slice(); // 再実行時の復元
+      // ボルメテウス・サファイア・ドラゴン: シールドを手札に加えるかわりに墓地に置く(S・トリガーは使えない)
+      const atkPerm = permByPid(s, v.pid);
+      if (atkPerm && infoOf(c, atkPerm.perm.cards[0]).statics.some((st) => st.ability.mod.type === 'burnShields')) {
+        moveCards(c, broken, { to: 'grave', cause: 'burn', noReplace: true });
+        s.breaking = [];
+        f.stage = 2;
+        pushProc(c, 'settle');
+        return;
+      }
       // S・トリガー/G・ストライクを宣言できるカード(革命2は、ブレイク後の枚数で判定)
       const cands: number[] = [];
       for (const u of broken) {
@@ -1195,7 +1234,7 @@ export function runSba(c: Ctx): boolean {
   // 山札が0枚の敗北は、0枚になった出来事に対して1回(置換された後は、山札が増えるまで再度は起きない)
   for (const p of [0, 1] as PlayerId[]) if (s.players[p].deck.length > 0) delete s.usage['deckOutHandled' + p];
   const losers = ([0, 1] as PlayerId[]).filter(
-    (p) => s.players[p].deck.length === 0 && s.turn >= 1 && !(s.cfg.solitaire && p === 1) && !s.usage['deckOutHandled' + p],
+    (p) => s.players[p].deck.length === 0 && s.turn >= 1 && !(s.cfg.solitaire && p === 1) && !s.usage['deckOutHandled' + p] && !playerCannotLose(c, p),
   );
   if (losers.length) {
     for (const p of losers) {

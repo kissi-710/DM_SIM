@@ -2,7 +2,7 @@
 // 規約: 入力待ち(ask)は、状態を変更する前に行う。再実行しても二重に変更されない。
 import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
-import { charsLite, infoOf, isIgnored, manaCivs, payNeed } from './derive';
+import { activeStatics, charsLite, infoOf, isIgnored, manaCivs, payNeed } from './derive';
 import type { Ctx } from './state';
 import { nextId, opponentOf, permByPid, shuffleInPlace, snapOf } from './state';
 import {
@@ -519,10 +519,15 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
     // 適用されている継続効果は進化後も続く。出たターンだけ更新する
     perm.enteredTurn = s.turn;
   } else {
+    // 各ターン、はじめて出る相手のクリーチャーは、タップして出る
+    let tappedIn = !!opts.tapped;
+    if (!tappedIn && c.reg.hasEnterTapped && !s.turnLog.some((e) => e.type === 'entered' && e.owner === owner)) {
+      tappedIn = activeStatics(c, 'enterTappedFirst').some((st) => st.controller !== owner);
+    }
     perm = {
       pid: s.nextPid++,
       cards: [uid],
-      tapped: !!opts.tapped,
+      tapped: tappedIn,
       sick: true,
       enteredTurn: s.turn,
     };

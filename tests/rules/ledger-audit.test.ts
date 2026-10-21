@@ -102,7 +102,8 @@ describe('D-5/L10 同時に離れたクリーチャーの誘発(R 603.5d)', () =
     // 相手のカードごとに誘発する(tests/cards/interstellar.test.ts)ので、603.5d の「自身のみ過去の状態を見る」の差は出ない
     // 「無月」の頂 ＄スザーク＄(dm26sd1-D09)も同じ形(「相手の墓地にどこからでもカードが置かれた時」)で、同じ扱い
     // 龍后人形メアリー・ジェニー(dm26sd1-F09)は「自分のデスパペットが離れた時」。自身も同時に離れる場合は、自身の分だけ誘発する(lookBack。603.5d)
-    expect([...found].sort()).toEqual(['dm26rp2-S09', 'dm26sd1-D09', 'dm26sd1-F09']);
+    // ボルシャック・ヴォルジャアク(dm26sd1-G08)は「このクリーチャーが破壊された時」(lookBack で、離れる直前の状態を見る)
+    expect([...found].sort()).toEqual(['dm26rp2-S09', 'dm26sd1-D09', 'dm26sd1-F09', 'dm26sd1-G08']);
   });
 });
 
@@ -117,8 +118,9 @@ describe('D-12 自身が移動した時の誘発・D-10 EXライフの付与範�
         if (ons.some((on) => on.type === 'moved') && (spec.subject === 'self' || ons.some((on) => on.self === true))) found.push(card.id);
       });
     }
-    // dmrp17-km2(ドルファディロム)は「出た時、または EXライフのシールドが離れた時」で、自身の移動ではない
-    expect(found).toEqual(['dmrp17-km2']);
+    // dmrp17-km2(ドルファディロム)は「出た時、または EXライフのシールドが離れた時」で、自身の移動ではない。
+    // dm26sd1-G08(ボルシャック・ヴォルジャアク)は「このクリーチャーが破壊された時」で、lookBack(離れる直前の状態を見る。603.5)で実装した
+    expect(found.sort()).toEqual(['dm26sd1-G08', 'dmrp17-km2']);
   });
   it('EXライフを持つ進化クリーチャーはない。進化元の EXライフを進化先が使う場面(公式 Q&A 42663)は、28枚では起きない(D-10)', () => {
     const evoWithEx: string[] = [];

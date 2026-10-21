@@ -747,6 +747,9 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
     case 'cannotAttackAny':
       mod = { kind: 'cannotAttackAny' };
       break;
+    case 'cannotLose':
+      mod = { kind: 'cannotLose' };
+      break;
     default:
       mod = m.n === undefined ? { kind: 'cannotCast' } : { kind: 'cannotCast', n: evalExpr(cc, m.n) };
   }
@@ -874,6 +877,22 @@ function actTapLock(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void 
   s.dirtySba = true;
 }
 
+/** 自分のシールドをすべて、ブレイクする(S・トリガーも使える。終極宣言) */
+function actBreakShields(c: Ctx, f: EffectFrame, _cc: CC, _a: any, _key: string): void {
+  const s = c.s;
+  const me = f.controller;
+  const n = s.players[me].shield.length;
+  if (n === 0) return;
+  s.cont.push({
+    kind: 'proc',
+    id: nextId(s),
+    causedBy: c.cause,
+    name: 'break',
+    stage: 0,
+    vars: { pid: s.cards[f.source.uid].pid, owner: opponentOf(me), n },
+  });
+}
+
 function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   // 「そのターン中に〜を使っていなければ」の判定用に、印をログに残す
   emit(c, a, { owner: f.controller, source: f.source.uid });
@@ -915,6 +934,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['markUsed', actMarkUsed],
   ['putUnder', actPutUnder],
   ['tapLock', actTapLock],
+  ['breakShields', actBreakShields],
   ['log', actLog],
   ['setVar', actSetVar],
 ]);

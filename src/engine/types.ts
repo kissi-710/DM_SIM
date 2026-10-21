@@ -225,6 +225,8 @@ export type EffectMod =
   | { kind: 'cannotBlock' }
   /** プレイヤー単位: 発生源の持ち主の相手は、クリーチャーで攻撃できない */
   | { kind: 'cannotAttackAny' }
+  /** プレイヤー単位: 発生源の持ち主は、ゲームに負けない */
+  | { kind: 'cannotLose' }
   /** プレイヤー単位: 指定のクリーチャーの山(pids)・マナのカード(uids)は、次の持ち主のターンのはじめにアンタップしない */
   | { kind: 'noUntap'; pids: number[]; uids: number[] }
   /** プレイヤー単位: 発生源の持ち主が次に召喚するクリーチャーのコストを delta 増減する(次に召喚すると消える)。sa ならスピードアタッカーを与える */
