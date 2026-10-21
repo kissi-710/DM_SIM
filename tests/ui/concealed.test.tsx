@@ -27,6 +27,13 @@ describe('isConcealed', () => {
     for (const u of sim.s.players[0].hand) expect(isConcealed(sim.s, u)).toBe(false);
     expect(isConcealed(sim.s, sim.s.players[0].battle[0].cards[0])).toBe(false);
   });
+  it('表向きのシールド(G城)は公開。割るシールドの選択でも、見分けがつく', () => {
+    const sim = new Sim({ p0: { battle: [{ c: W, sick: false }] }, p1: { shield: ['ハッスル・キャッスル', N, N, N] } });
+    const castle = sim.uid(1, 'shield', 'ハッスル・キャッスル');
+    sim.s.cards[castle].up = true;
+    expect(isConcealed(sim.s, castle)).toBe(false);
+    for (const u of sim.s.players[1].shield) if (u !== castle) expect(isConcealed(sim.s, u)).toBe(true);
+  });
   it('ブレイクされて手札に加わる途中のカード(S・トリガーの宣言)は、持ち主に見える', () => {
     const sim = new Sim({ p0: { battle: ['終末縫合王 ザ=キラー・キーナリー'] }, p1: { shield: [N], deck: ['ティンパニ=シンバリー', 'ダミー'] } });
     sim.attack('終末縫合王 ザ=キラー・キーナリー', 'player');
