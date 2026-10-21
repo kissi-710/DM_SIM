@@ -140,6 +140,9 @@ describe('D-6/L9 山札切れの判定時点(R 104.2b)', () => {
         if (act.to === 'deck' || (act.move && act.move.to === 'deck') || (act.put && act.put.to === 'deck')) toDeck.push(card.id);
       });
     }
-    expect(toDeck).toEqual([]);
+    // 25の王道で足したカードのうち、山札の外のカード(手札など)を山札へ移すだけで、山札を離れて戻るものではないもの(確認済み):
+    //  dm26sd1-C11 一王二命三眼槍(ゲームに負ける時、かわりに手札のこのカードを山札の下に置く)
+    const SAFE = new Set(['dm26sd1-C11']);
+    expect(toDeck.filter((id) => !SAFE.has(id))).toEqual([]);
   });
 });

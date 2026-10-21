@@ -2,9 +2,10 @@
 import { blankDefsFor } from '../engine/blank';
 import type { CardDB, CardDef } from '../engine/types';
 import raw from './data/cards.json';
+import { SD1_CARDS } from './defs';
 
-/** 実在するカード(一覧・デッキ構築に出る) */
-export const CARD_LIST = raw as unknown as CardDef[];
+/** 実在するカード(一覧・デッキ構築に出る)。cards.json と、25の王道の新規カード(defs/) */
+export const CARD_LIST = [...(raw as unknown as CardDef[]), ...SD1_CARDS];
 
 /**
  * カードDB。CARD_LIST に加えて、カード単体の強さの測定で差し替える「無能力」カード(blank-コスト-文明)を持つ。
@@ -110,6 +111,32 @@ export const DECK_PRESETS: DeckPreset[] = [
     ],
   },
 ];
+
+/** 25の王道(DM26-SD1)の23デッキ。docs/decks-25oudou.md。各デッキのカードIDは src/cards/defs/ */
+export const SD1_DECKS: DeckPreset[] = [
+  {
+    id: 'sd1-c',
+    name: 'シールドゼロで鬼札逆転4c邪王門デッキ',
+    short: '4c邪王門',
+    list: [
+      ['dm26sd1-C01', 2], // ♪立ち上がる 悪魔に天使 堕ちるかな
+      ['dm26sd1-C02', 4], // 忍蛇の聖沌 c0br4
+      ['dm26sd1-C03', 3], // 深淵の逆転撃
+      ['dm26sd1-C04', 4], // 豊潤フォージュン
+      ['dm26sd1-C05', 4], // 闘争類拳嘩目 ステゴロ・カイザー / お清めシャラップ
+      ['dm26sd1-C06', 1], // 音卿の精霊龍 ラフルル・ラブ / 「未来から来る、だからミラクル」
+      ['dm26sd1-C07', 1], // 時の法皇 ミラダンテXII
+      ['dm26sd1-C08', 2], // 龍素記号wD サイクルペディア
+      ['dm26sd1-C09', 4], // 百鬼の邪王門
+      ['dm26sd1-C10', 4], // 鬼ヶ大王 ジャオウガ
+      ['dm26sd1-C11', 2], // 一王二命三眼槍
+      ['dm26sd1-C12', 1], // 蒼き団長 ドギラゴン剣
+      ['dm23bd1-014', 4], // 天災 デドダム
+      ['dm26sd1-C13', 4], // 切札勝太&カツキング -熱血の物語-
+    ],
+  },
+];
+DECK_PRESETS.push(...SD1_DECKS);
 
 export function deckCards(id: string): string[] {
   const p = DECK_PRESETS.find((d) => d.id === id);
