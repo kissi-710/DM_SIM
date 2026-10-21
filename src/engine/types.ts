@@ -223,6 +223,10 @@ export type EffectMod =
   | { kind: 'cannotBeChosen' }
   | { kind: 'cannotBeAttacked' }
   | { kind: 'cannotBlock' }
+  /** 攻撃クリーチャーの山: 最初の攻撃の終わりに、アンタップする */
+  | { kind: 'untapAfterAttack' }
+  /** プレイヤー単位: 発生源の持ち主の相手の、表記コストが n のクリーチャーは、攻撃もブロックもできない */
+  | { kind: 'cannotActCost'; n: number }
   /** プレイヤー単位: 発生源の持ち主の相手は、クリーチャーで攻撃できない */
   | { kind: 'cannotAttackAny' }
   /** プレイヤー単位: 発生源の持ち主は、ゲームに負けない */

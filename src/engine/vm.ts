@@ -750,6 +750,9 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
     case 'cannotLose':
       mod = { kind: 'cannotLose' };
       break;
+    case 'cannotActCost':
+      mod = { kind: 'cannotActCost', n: evalExpr(cc, m.n) };
+      break;
     default:
       mod = m.n === undefined ? { kind: 'cannotCast' } : { kind: 'cannotCast', n: evalExpr(cc, m.n) };
   }
@@ -952,6 +955,37 @@ function actStackShield(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): 
   s.dirtySba = true;
 }
 
+/**
+ * バトルゾーンに置いたまま、ツインパクトの呪文側を、コストを支払わずに唱える(マジック・フレンド・バースト・スマッシュ・バーストなど)。
+ * カードは動かない。呪文を唱えた時の能力は誘発する
+ */
+function actCastSide(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const uid = resolveSel(cc, a.sel)[0];
+  if (uid === undefined) return;
+  const card = s.cards[uid];
+  if (card.zone !== 'battle') return;
+  const fi = spellFace(c, uid);
+  if (fi < 0) return;
+  const info = c.reg.getInfo(card.defId, fi);
+  if (!info.spell) return;
+  const ev = emit(c, 'cast', { card: uid, owner: card.owner, free: true, paid: 0, cost: 0, face: fi, from: 'battle' });
+  s.batchNo++;
+  collectBatch(c, [ev]);
+  s.cont.push({
+    kind: 'effect',
+    id: nextId(s),
+    causedBy: ev.id,
+    ability: { defId: card.defId, face: fi, idx: info.spell.idx },
+    source: { uid, ep: card.ep },
+    lki: snapOf(c, uid),
+    controller: card.owner,
+    pc: 0,
+    vars: {},
+    trigger: ev,
+  });
+}
+
 function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   // 「そのターン中に〜を使っていなければ」の判定用に、印をログに残す
   emit(c, a, { owner: f.controller, source: f.source.uid });
@@ -995,6 +1029,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['tapLock', actTapLock],
   ['breakShields', actBreakShields],
   ['judge', actJudge],
+  ['castSide', actCastSide],
   ['stackShield', actStackShield],
   ['log', actLog],
   ['setVar', actSetVar],

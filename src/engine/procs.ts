@@ -732,6 +732,38 @@ function runBattle(c: Ctx, f: ProcFrame): void {
 
 // ───────────────────────── 攻撃 ─────────────────────────
 
+/**
+ * 攻撃の終わり: 「攻撃の終わりに」の誘発(聞き手がいる時だけ)・「最初の攻撃の終わりにアンタップする」を処理して、攻撃の手続きを終える。
+ * ターンが飛ばされる・勝敗が決まった場合は、何も起こさない。
+ */
+function endAttack(c: Ctx, f: ProcFrame): void {
+  const s = c.s;
+  const v = f.vars;
+  const pm = permByPid(s, v.pid);
+  // 攻撃が行われた(攻撃の宣言をした)クリーチャーがいる時だけ
+  if (pm && s.winner === null && !s.skipTurn) {
+    // 最初の攻撃の終わりにアンタップする効果(調律師ピーカプなど)
+    const un = s.effects.find((e) => e.pid === pm.perm.pid && e.mod.kind === 'untapAfterAttack');
+    if (un) {
+      s.effects = s.effects.filter((e) => e !== un);
+      setTapped(c, pm.perm.cards[0], false);
+    }
+    if (listens(c, 'attackEnded')) {
+      // 攻撃中にシールドをブレイクしたか(キリフダッシュの条件)
+      let broke = false;
+      for (let i = s.turnLog.length - 1; i >= 0; i--) {
+        const e = s.turnLog[i];
+        if (e.type === 'shieldBroken' && e.by === pm.perm.pid) broke = true;
+        if (e.type === 'attackDeclared' && e.attacker === pm.perm.pid) break;
+      }
+      const ev = emit(c, 'attackEnded', { card: pm.perm.cards[0], attacker: pm.perm.pid, owner: pm.owner, broke });
+      s.batchNo++;
+      collectBatch(c, [ev]);
+    }
+  }
+  popFrame(c, f);
+}
+
 function runAttack(c: Ctx, f: ProcFrame): void {
   const s = c.s;
   const v = f.vars;
@@ -739,7 +771,7 @@ function runAttack(c: Ctx, f: ProcFrame): void {
     case 0: {
       const pm = permByPid(s, v.pid);
       if (!pm) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const owner = pm.owner;
@@ -755,17 +787,17 @@ function runAttack(c: Ctx, f: ProcFrame): void {
     }
     case 1: {
       if (s.winner !== null || s.skipTurn) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const pm = permByPid(s, v.pid);
       if (!pm) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const target = v.target as { kind: 'player' } | { kind: 'creature'; pid: number };
       if (target.kind === 'creature' && !permByPid(s, target.pid)) {
-        popFrame(c, f); // 攻撃先が場を離れた → 攻撃は終了
+        endAttack(c, f); // 攻撃先が場を離れた → 攻撃は終了
         return;
       }
       const defender = opponentOf(pm.owner);
@@ -818,12 +850,12 @@ function runAttack(c: Ctx, f: ProcFrame): void {
     }
     case 2: {
       if (s.winner !== null || s.skipTurn) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const pm = permByPid(s, v.pid);
       if (!pm) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const target = v.target as { kind: 'player' } | { kind: 'creature'; pid: number };
@@ -834,7 +866,7 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       }
       const dm0 = permByPid(s, target.pid);
       if (!dm0) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       // 「バトルする時」の誘発は、パワーを比べる前に解決する(総合ルール 115.2 / 701.13a)。
@@ -846,14 +878,14 @@ function runAttack(c: Ctx, f: ProcFrame): void {
     case 4: {
       // バトル。「バトルする時」の効果の解決で、どちらかが場を離れていれば、バトルは行われない(115.3a)
       if (s.winner !== null || s.skipTurn) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const pm = permByPid(s, v.pid);
       const target = v.target as { kind: 'player' } | { kind: 'creature'; pid: number };
       const dm = target.kind === 'creature' ? permByPid(s, target.pid) : null;
       if (!pm || !dm) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const bi = resolveBattleCore(c, pm, dm);
@@ -873,11 +905,11 @@ function runAttack(c: Ctx, f: ProcFrame): void {
         pushProc(c, 'settle');
         return;
       }
-      popFrame(c, f);
+      endAttack(c, f);
       return;
     }
     case 3:
-      popFrame(c, f);
+      endAttack(c, f);
       return;
   }
 }

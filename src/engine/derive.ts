@@ -263,6 +263,7 @@ export function canAttack(c: Ctx, perm: Permanent, target: { kind: 'player' } | 
   const owner = s.cards[uid].owner;
   if (actsLimited(c, owner)) return false;
   if (s.effects.length > 0 && s.effects.some((e) => e.mod.kind === 'cannotAttackAny' && e.controller !== owner)) return false;
+  if (costLocked(c, uid)) return false;
   if (perm.tapped) return false;
   if (hasEffect(c, perm.pid, 'cannotAttack')) return false;
   const speed = hasKeyword(c, perm, 'speedAttacker');
@@ -295,8 +296,18 @@ function actsLimited(c: Ctx, player: PlayerId): boolean {
   return n >= 1;
 }
 
+/** 「表記コストが n のクリーチャーは、攻撃もブロックもできない」(♪やせ蛙)に当たるか */
+function costLocked(c: Ctx, uid: number): boolean {
+  const effs = c.s.effects;
+  if (effs.length === 0) return false;
+  const owner = c.s.cards[uid].owner;
+  for (const e of effs) if (e.mod.kind === 'cannotActCost' && e.controller !== owner && costBase(c, uid) === e.mod.n) return true;
+  return false;
+}
+
 export function canBlock(c: Ctx, perm: Permanent): boolean {
   if (perm.tapped) return false;
+  if (costLocked(c, perm.cards[0])) return false;
   if (hasEffect(c, perm.pid, 'cannotBlock')) return false;
   if (actsLimited(c, c.s.cards[perm.cards[0]].owner)) return false;
   if (!isCreatureType(faceTypeOf(c, perm.cards[0]))) return false;

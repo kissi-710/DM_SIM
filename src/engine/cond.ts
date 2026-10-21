@@ -1,6 +1,6 @@
 // 条件・式・セレクタの評価、イベントパターンの照合(effects 6.4 / 4.3)。
 import type { Cond, Expr, Pattern, Selector } from './ast';
-import { canBeChosen, charsLite, charsOf, costBase, manaCivs } from './derive';
+import { canBeChosen, charsLite, charsOf, costBase, infoOf, manaCivs } from './derive';
 import type { Ctx } from './state';
 import { opponentOf, permByPid } from './state';
 import { type Civ, type Ev, type FaceType, isCreatureType, type PlayerId, type Snap } from './types';
@@ -154,6 +154,7 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('faceUp' in o) return cc.it != null && !!s.cards[cc.it].up;
   if ('altUsed' in o) return cc.self != null && s.usage['alt:' + cc.self + ':' + o.altUsed] === s.turn;
   if ('nameHas' in o) return cc.it != null && cc.c.reg.defs[s.cards[cc.it].defId].name.includes(o.nameHas);
+  if ('eventIs' in o) return !!cc.event && Object.entries(o.eventIs).every(([k, v]) => cc.event![k] === v);
   if ('hasCip' in o) {
     if (cc.it == null) return false;
     const cd = s.cards[cc.it];
@@ -296,6 +297,14 @@ export function selectCards(cc: CC, sel: Selector): number[] {
         out.push(uid);
       }
     }
+  }
+  // 「相手がクリーチャーを選ぶなら、可能ならこのクリーチャーを選ぶ」(同期の妖精)
+  if (sel.chooseable && out.length > 1 && cc.c.reg.hasMustBeChosen) {
+    const taunt = out.filter((u) => {
+      const cd = s.cards[u];
+      return cd.zone === 'battle' && cd.owner !== cc.controller && infoOf(cc.c, u).statics.some((st) => st.ability.mod.type === 'mustBeChosen');
+    });
+    if (taunt.length > 0) return taunt;
   }
   return out;
 }

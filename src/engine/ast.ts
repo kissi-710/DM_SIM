@@ -70,6 +70,8 @@ export type Cond =
   | { nameHas: string }
   /** $it の(使う面の)能力に、「このクリーチャーが出た時」で始まる能力がある */
   | { hasCip: true }
+  /** 誘発したイベントの項目が、指定の値と等しい(例: paid: 0 = マナを支払わずに出た) */
+  | { eventIs: { [k: string]: string | number | boolean } }
   /** ゲーム中に1度の能力(key)を、まだ使っていない */
   | { unused: string }
   | { turnOf: 'self' | 'opponent' }
@@ -163,6 +165,8 @@ export type StaticMod =
   | { type: 'allowPlayFrom'; from: ZoneName; cond?: Cond; oncePerTurn?: boolean }
   /** このクリーチャーは、相手に選ばれない(攻撃・ブロックはされる) */
   | { type: 'cannotBeChosen' }
+  /** 相手がクリーチャーを選ぶなら、可能ならこのクリーチャーを選ばなければならない */
+  | { type: 'mustBeChosen' }
   /** このクリーチャーは、呪文によって相手に選ばれない */
   | { type: 'protectFromSpells' }
   /** 自分は、呪文を唱えられなくする効果を無視して、cond に合う呪文を唱えてもよい */

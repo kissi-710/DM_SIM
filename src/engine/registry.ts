@@ -82,6 +82,8 @@ export interface Registry {
   hasEnterTapped: boolean;
   /** バトルゾーンを離れる時の置換(match.type = 'leave')を持つカードがあるか */
   hasLeaveReplace: boolean;
+  /** 「相手がクリーチャーを選ぶなら、可能ならこのクリーチャーを選ぶ」(mustBeChosen)を持つカードがあるか */
+  hasMustBeChosen: boolean;
   /** 各ターンはじめてバトルする自分のクリーチャーが勝つ静的能力を持つカードがあるか */
   hasFirstBattleWins: boolean;
   getFace(defId: string, face: number): Face;
@@ -169,12 +171,12 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'altUsed', 'nameHas', 'hasCip',
+  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'altUsed', 'nameHas', 'hasCip', 'eventIs',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
@@ -447,10 +449,11 @@ export function loadRegistry(origDb: CardDB): Registry {
             fi_.triggers.push(ref);
             fi_.hasTriggerOrStatic = true;
             const ons = Array.isArray(a.spec.on) ? a.spec.on : [a.spec.on];
-            for (const on of ons) {
-              const l = trigIndex.get(on.type) ?? [];
+            // 同じ種類のイベントを複数のパターンで聞く能力も、その種類の索引には1回だけ載せる(二重に誘発しない)
+            for (const type of new Set(ons.map((on) => on.type))) {
+              const l = trigIndex.get(type) ?? [];
               l.push(ref);
-              trigIndex.set(on.type, l);
+              trigIndex.set(type, l);
             }
             break;
           }
@@ -503,6 +506,7 @@ export function loadRegistry(origDb: CardDB): Registry {
   const hasAfterCastReplace = hasReplace('afterCast');
   const hasMoveReplace = hasReplace('move');
   const hasLeaveReplace = hasReplace('leave');
+  const hasMustBeChosen = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'static' && a.mod.type === 'mustBeChosen')));
   const hasFirstBattleWins = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'static' && a.mod.type === 'firstBattleWins')));
   const hasEnterTapped = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'static' && a.mod.type === 'enterTappedFirst')));
   const hasHandReplace = Object.values(defs).some((d) => d.faces.some((f) => f.abilities.some((a) => a.kind === 'replace' && a.match.type === 'moved' && a.match.from === 'hand')));
@@ -521,6 +525,7 @@ export function loadRegistry(origDb: CardDB): Registry {
     hasHandReplace,
     hasEnterTapped,
     hasLeaveReplace,
+    hasMustBeChosen,
     hasFirstBattleWins,
     getFace(defId, face) {
       const d = defs[defId];
