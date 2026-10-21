@@ -11,6 +11,7 @@ import {
   emit,
   enterBattle,
   moveCards,
+  onSummoned,
   removeZoneCard,
   setTapped,
   shuffleDeck,
@@ -618,6 +619,7 @@ function actPut(c: Ctx, f: EffectFrame, cc: CC, a: any, key: string): void {
     if (face.type === 'evolution') continue; // 進化元がないので出せない
     const r = enterBattle(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0 }, evs);
     if (r.moved) entered.push({ uid: u, ep: r.ep });
+    if (r.moved && via === 'summon') onSummoned(c, u);
   }
   if (a.as) f.vars[a.as] = entered;
   s.batchNo++;
@@ -739,6 +741,9 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
     case 'oncePerTurnActs':
       mod = { kind: 'oncePerTurnActs' };
       break;
+    case 'nextSummon':
+      mod = { kind: 'nextSummon', delta: evalExpr(cc, m.delta), sa: !!m.sa };
+      break;
     default:
       mod = m.n === undefined ? { kind: 'cannotCast' } : { kind: 'cannotCast', n: evalExpr(cc, m.n) };
   }
@@ -838,6 +843,34 @@ function actPutUnder(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): voi
   s.dirtySba = true;
 }
 
+/** タップして、次の持ち主のターンのはじめにアンタップしない(クリーチャー・マナのカード) */
+function actTapLock(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const uids = resolveSel(cc, a.sel);
+  if (uids.length === 0) return;
+  const pids: number[] = [];
+  const mana: number[] = [];
+  const owners = new Set<PlayerId>();
+  for (const u of uids) {
+    const card = s.cards[u];
+    owners.add(card.owner);
+    setTapped(c, u, true);
+    if (card.zone === 'battle') pids.push(card.pid);
+    else if (card.zone === 'mana') mana.push(u);
+  }
+  for (const owner of owners) {
+    const mine = (u: number) => s.cards[u].owner === owner;
+    s.effects.push({
+      id: nextId(s),
+      pid: -1,
+      mod: { kind: 'noUntap', pids: pids.filter((p) => permByPid(s, p)?.owner === owner), uids: mana.filter(mine) },
+      until: { kind: 'untilTurnStart', player: owner, afterTurn: s.turn },
+      controller: f.controller,
+    });
+  }
+  s.dirtySba = true;
+}
+
 function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   // 「そのターン中に〜を使っていなければ」の判定用に、印をログに残す
   emit(c, a, { owner: f.controller, source: f.source.uid });
@@ -878,6 +911,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['extraTurn', actExtraTurn],
   ['markUsed', actMarkUsed],
   ['putUnder', actPutUnder],
+  ['tapLock', actTapLock],
   ['log', actLog],
   ['setVar', actSetVar],
 ]);

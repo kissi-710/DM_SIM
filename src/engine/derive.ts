@@ -307,7 +307,15 @@ export function costOf(c: Ctx, uid: number, faceIdx: number, opts: CostOpts = {}
   if (info.hyperEnergy && opts.taps?.length) cost -= 2 * opts.taps.length;
   if (info.selfCosts.length > 0) {
     const cc = mkCC(c, card.owner, { self: uid });
-    for (const sc of info.selfCosts) if (!sc.cond || evalCond(cc, sc.cond)) cost += evalExpr(cc, sc.delta);
+    for (const sc of info.selfCosts) {
+      if (sc.cond && !evalCond(cc, sc.cond)) continue;
+      cost += evalExpr(cc, sc.delta);
+      if (sc.floor !== undefined && cost < sc.floor) cost = sc.floor;
+    }
+  }
+  // 「このターン、次に召喚する自分のクリーチャーのコストを少なくする」
+  if (s.effects.length > 0 && isCreatureType(face.type)) {
+    for (const e of s.effects) if (e.mod.kind === 'nextSummon' && e.controller === card.owner) cost += e.mod.delta;
   }
   for (const st of activeStatics(c, 'costDelta')) {
     if (st.controller !== card.owner) continue;

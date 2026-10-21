@@ -41,7 +41,8 @@ export interface FaceInfo {
   shieldTriggers: { ability: Extract<Ability, { kind: 'keyword' }>; idx: number }[];
   gStrike: { ability: Extract<Ability, { kind: 'keyword' }>; idx: number } | null;
   breakers: { n: number; while?: Cond }[];
-  selfCosts: { delta: Expr; cond?: Cond }[];
+  selfCosts: { delta: Expr; cond?: Cond; floor?: number }[];
+  altCosts: Extract<Ability, { kind: 'altCost' }>[];
   statics: { ability: Extract<Ability, { kind: 'static' }>; idx: number }[];
   replaces: { ability: Extract<Ability, { kind: 'replace' }>; idx: number }[];
   permissions: Extract<Ability, { kind: 'permission' }>[];
@@ -53,7 +54,7 @@ export interface FaceInfo {
 /** 能力を無視されているカードの FaceInfo(何の能力も持たない) */
 export const EMPTY_FACE_INFO: FaceInfo = {
   blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false, slayer: false,
-  sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], statics: [],
+  sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], altCosts: [], statics: [],
   replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
 };
 
@@ -150,12 +151,12 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused',
+  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
@@ -254,6 +255,7 @@ export function validateCardDb(db: CardDB): string[] {
           case 'static':
           case 'permission':
           case 'selfCost':
+          case 'altCost':
             break;
           default:
             errs.push(`${wa}: 未知の能力 kind '${(a as { kind?: unknown }).kind}'`);
@@ -400,7 +402,7 @@ export function loadRegistry(origDb: CardDB): Registry {
     info[id] = faces.map((f, fi) => {
       const fi_: FaceInfo = {
         blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false, slayer: false,
-        sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], statics: [],
+        sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], altCosts: [], statics: [],
         replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
       };
       f.abilities.forEach((a, idx) => {
@@ -444,7 +446,10 @@ export function loadRegistry(origDb: CardDB): Registry {
             fi_.permissions.push(a);
             break;
           case 'selfCost':
-            fi_.selfCosts.push({ delta: a.delta, cond: a.cond });
+            fi_.selfCosts.push({ delta: a.delta, cond: a.cond, floor: a.floor });
+            break;
+          case 'altCost':
+            fi_.altCosts.push(a);
             break;
           case 'spell':
             fi_.spell = { ability: a, idx };

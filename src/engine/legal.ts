@@ -133,6 +133,16 @@ export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extra
 function extraVariants(c: Ctx, player: PlayerId, uid: number, fi: number): (PlayExtra | undefined)[] {
   const s = c.s;
   const def = c.reg.defs[s.cards[uid].defId];
+  const info = c.reg.getInfo(def.id, fi);
+  // 別のコスト(マナを払うかわりに、手札を捨てる・マナを払わない)は、別の使い方として並べる。使えるかは、呼び出し側が planPlay で調べる
+  const alts: PlayExtra[] = info.altCosts.map((ab) => ({ alt: ab.id }));
+  if (alts.length > 0) return [...extraVariantsBase(c, player, uid, fi), ...alts];
+  return extraVariantsBase(c, player, uid, fi);
+}
+
+function extraVariantsBase(c: Ctx, player: PlayerId, uid: number, fi: number): (PlayExtra | undefined)[] {
+  const s = c.s;
+  const def = c.reg.defs[s.cards[uid].defId];
   const face = def.faces[fi];
   const info = c.reg.getInfo(def.id, fi);
   const bases: (number | undefined)[] = [];

@@ -209,6 +209,22 @@ export interface MoveResult {
   ep: number;
 }
 
+/**
+ * クリーチャーが召喚された後の処理: 「このターン、次に召喚する自分のクリーチャー」の効果を使い切る。
+ * sa の効果は、召喚されたクリーチャーに、そのターンのスピードアタッカーを与える。
+ */
+export function onSummoned(c: Ctx, uid: number): void {
+  const s = c.s;
+  if (s.effects.length === 0) return;
+  const card = s.cards[uid];
+  const mine = s.effects.filter((e) => e.mod.kind === 'nextSummon' && e.controller === card.owner);
+  if (mine.length === 0) return;
+  s.effects = s.effects.filter((e) => !(e.mod.kind === 'nextSummon' && e.controller === card.owner));
+  if (card.zone === 'battle' && mine.some((e) => e.mod.kind === 'nextSummon' && e.mod.sa)) {
+    s.effects.push({ id: nextId(s), pid: card.pid, mod: { kind: 'grant', keyword: 'speedAttacker' }, until: { kind: 'endOfTurn', turn: s.turn }, controller: card.owner });
+  }
+}
+
 /** カードをいまのゾーンから取り除く(置き先は呼び出し側が決める) */
 export function removeZoneCard(c: Ctx, uid: number): void {
   removeFromZone(c, uid);
@@ -362,6 +378,7 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
   card.tapped = false;
   card.ex = false;
   card.exPid = -1;
+  delete card.up;
   if (to === 'mana') card.tapped = entersManaTapped(c, uid, opts);
   card.face = 0;
   placeInZone(c, uid, to, pos);

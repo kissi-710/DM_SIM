@@ -78,6 +78,8 @@ export interface Card {
   pid: number;
   /** 使用中の面(ツインパクト) */
   face: number;
+  /** シールドゾーンで表向きか(表向きのシールド。省略 = 裏向き) */
+  up?: boolean;
 }
 
 export interface Permanent {
@@ -219,6 +221,10 @@ export type EffectMod =
   | { kind: 'cannotBeChosen' }
   | { kind: 'cannotBeAttacked' }
   | { kind: 'cannotBlock' }
+  /** プレイヤー単位: 指定のクリーチャーの山(pids)・マナのカード(uids)は、次の持ち主のターンのはじめにアンタップしない */
+  | { kind: 'noUntap'; pids: number[]; uids: number[] }
+  /** プレイヤー単位: 発生源の持ち主が次に召喚するクリーチャーのコストを delta 増減する(次に召喚すると消える)。sa ならスピードアタッカーを与える */
+  | { kind: 'nextSummon'; delta: number; sa: boolean }
   /** プレイヤー単位: 発生源の持ち主の相手は、各ターン1度までしか、クリーチャーで攻撃もブロックもできない */
   | { kind: 'oncePerTurnActs' }
   /** ブロックを強制する(攻撃された時、ブロッカーとして選ばなければならない。総合ルール 507.1b) */
@@ -315,6 +321,10 @@ export interface PlayExtra {
   tap?: number[];
   /** 手動支払い(マナのuid) */
   pay?: number[];
+  /** マナを払うかわりの別のコスト(altCost の id) */
+  alt?: string;
+  /** 別のコストで捨てる手札(uid)。省略すると、候補の先頭から */
+  discard?: number[];
 }
 
 export type Action =

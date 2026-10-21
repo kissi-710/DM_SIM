@@ -29,6 +29,7 @@ import {
   emit,
   enterBattle,
   moveCards,
+  onSummoned,
   setTapped,
   smaxVictims,
 } from './ops';
@@ -76,6 +77,9 @@ export interface PlayPlan {
   after: 'deckBottom' | null;
   taps: number[];
   onto?: number;
+  /** 別のコストで捨てる手札 */
+  discard?: number[];
+  alt?: string;
 }
 
 export function planPlay(
@@ -120,6 +124,30 @@ export function planPlay(
     onto = pm.perm.pid;
   } else if (extra?.onto !== undefined) return fail('進化クリーチャーではありません');
 
+  // 別のコスト(マナを払うかわりに、手札を捨てる・マナを払わない)
+  let freeAlt = false;
+  let discard: number[] | undefined;
+  if (extra?.alt !== undefined) {
+    const ab = info.altCosts.find((a) => a.id === extra.alt);
+    if (!ab) return fail('その別のコストはありません');
+    if (from !== 'hand') return fail('手札から使う別のコストです');
+    if (ab.when && !evalCond(mkCC(c, player, { self: uid }), ab.when)) return fail('別のコストを使える条件を満たしていません');
+    freeAlt = true; // 別のコストは、マナを払うかわりのコスト
+    if (ab.cost.discard) {
+      const d = ab.cost.discard;
+      const ccd = mkCC(c, player, { self: uid });
+      const cands = s.players[player].hand.filter((u) => u !== uid && (!d.where || evalCond({ ...ccd, it: u, itFace: -1 }, d.where)));
+      if (extra.discard?.length) {
+        if (extra.discard.length !== d.n || new Set(extra.discard).size !== d.n || !extra.discard.every((u) => cands.includes(u))) return fail('捨てる手札が条件に合いません');
+        discard = extra.discard.slice();
+      } else {
+        if (cands.length < d.n) return fail('捨てる手札が足りません');
+        discard = cands.slice(0, d.n);
+      }
+    }
+  } else if (extra?.discard?.length) return fail('別のコストを選んでいません');
+  if (freeAlt) free = true;
+
   const taps = extra?.tap ?? [];
   if (taps.length) {
     if (!info.hyperEnergy) return fail('ハイパーエナジーを持ちません');
@@ -154,7 +182,7 @@ export function planPlay(
       pay = plan;
     }
   }
-  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto };
+  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}) };
 }
 
 /** 支払いの選択肢(UI が「聞くか、自動で払うか」を決めるための情報) */
@@ -249,15 +277,23 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       // 「相手のターンのはじめに、相手はマナゾーンのカードを n 枚までしかアンタップできない」(卍月 ガ・リュザーク 卍)
       const limits = activeStatics(c, 'untapLimit').filter((st) => st.controller !== P);
       let untapLeft = limits.length ? Math.min(...limits.map((st) => (st.ability.mod.type === 'untapLimit' ? st.ability.mod.n : 99))) : Infinity;
+      // 「次のターンのはじめに、アンタップしない」(noUntap)
+      const noUntapPids = new Set<number>();
+      const noUntapUids = new Set<number>();
+      for (const e of s.effects) {
+        if (e.mod.kind !== 'noUntap' || e.until.kind !== 'untilTurnStart' || e.until.player !== P) continue;
+        for (const p of e.mod.pids) noUntapPids.add(p);
+        for (const u of e.mod.uids) noUntapUids.add(u);
+      }
       for (const u of s.players[P].mana) {
-        if (!s.cards[u].tapped) continue;
+        if (!s.cards[u].tapped || noUntapUids.has(u)) continue;
         if (untapLeft > 0) {
           s.cards[u].tapped = false;
           untapLeft--;
         }
       }
       for (const perm of s.players[P].battle) {
-        perm.tapped = false;
+        if (!noUntapPids.has(perm.pid)) perm.tapped = false;
         perm.sick = false;
       }
       // 「次の自分のターンのはじめまで」の期限切れ(逆転撃の支払い(owe)は、支払いの段階で消す)
@@ -384,6 +420,8 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         setTapped(c, pm.perm.cards[0], true);
       }
       for (const u of plan.pay) setTapped(c, u, true);
+      // 別のコスト: 手札を捨てる
+      if (plan.discard?.length) moveCards(c, plan.discard, { to: 'grave', cause: 'discard' });
       // プレイ中として処理する(場所は limbo)
       const prevZone = card.zone;
       removeFrom(c, uid);
@@ -404,6 +442,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         const evs: Ev[] = [];
         const via = p.kind === 'summon' ? 'summon' : 'put';
         enterBattle(c, uid, { to: 'battle', cause: via, via, onto: p.onto ?? undefined, face: p.face, paid: p.paid, cost: p.cost, free: p.free, from: v.fromZone }, evs);
+        if (p.kind === 'summon' && s.cards[uid].zone === 'battle') onSummoned(c, uid);
         // S・トリガーとして使って出た印(S・トリガー・プラスのP能力の条件。イベントの内容は変えない)
         if (v.st) {
           const ent = evs.find((e) => e.type === 'entered' && e.card === uid);

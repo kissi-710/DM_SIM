@@ -145,6 +145,7 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('nonEmpty' in o) return varUids(cc, o.nonEmpty, { ignoreEp: true }).length > 0;
   if ('some' in o) return varUids(cc, o.some.var, { ignoreEp: true }).some((u) => evalCond({ ...cc, it: u, itFace: -1 }, o.some.where));
   if ('isSelf' in o) return cc.it != null && cc.it === cc.self;
+  if ('faceUp' in o) return cc.it != null && !!s.cards[cc.it].up;
   // S・トリガーとして使って、出た/唱えた(S・トリガー・プラスのP能力の条件)
   if ('stUsed' in o) return !!(cc.event && (cc.event.type === 'cast' || cc.event.type === 'entered') && s.usage['st:' + cc.event.card] === cc.event.id);
   // ゲーム中に1度の能力を、まだ使っていない(markUsed で記録する)

@@ -58,6 +58,8 @@ export type Cond =
   | { isSelf: true }
   /** 誘発したイベント(出た・唱えた)が、S・トリガーとして使われたもの */
   | { stUsed: true }
+  /** $it が、シールドゾーンで表向き */
+  | { faceUp: true }
   /** ゲーム中に1度の能力(key)を、まだ使っていない */
   | { unused: string }
   | { turnOf: 'self' | 'opponent' }
@@ -158,7 +160,15 @@ export type Ability =
   | { kind: 'static'; mod: StaticMod; while?: Cond }
   | { kind: 'replace'; match: Pattern; apply: ReplaceApply; optional?: boolean; while?: Cond; label?: string }
   | { kind: 'permission'; play: 'summon' | 'cast' | 'put'; from: ZoneName; after?: 'deckBottom' }
-  /** このカード自身を使うコストの増減(delta は負で軽減。cond を満たす時だけ。評価は、このカードを使う人から見る) */
-  | { kind: 'selfCost'; delta: Expr; cond?: Cond };
+  /** このカード自身を使うコストの増減(delta は負で軽減。cond を満たす時だけ。評価は、このカードを使う人から見る。floor: これを下回らない) */
+  | { kind: 'selfCost'; delta: Expr; cond?: Cond; floor?: number }
+  /** マナを払うかわりの、別のコスト(PlayExtra.alt で選ぶ)。手札から使う時 */
+  | { kind: 'altCost'; id: string; label: string; when?: Cond; cost: AltCostSpec };
+
+/** 別のコスト(マナを払うかわりに行う)。discard を持たなければ、何も払わない */
+export interface AltCostSpec {
+  /** 手札から(このカード以外の)where に合うカードを n 枚捨てる */
+  discard?: { n: number; where?: Cond };
+}
 
 export type { EffectMod };

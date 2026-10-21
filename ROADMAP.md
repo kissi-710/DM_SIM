@@ -328,7 +328,7 @@
 - [x] M10-0 全25デッキのデッキリストを取得して文書化(docs/decks-25oudou.md、docs/data/dm26sd1-decks.json)。公式ページはメンテナンス中のため dmwiki・gachi-matome・遊々亭で照合
 - [x] M10-1 デッキ C 4c邪王門(全カードの実装・テスト・デッキ定義。新規13種。`src/cards/defs/deckC.ts`、`tests/cards/sd1-deckC.test.ts`)
 - [x] M10-2 デッキ D 青魔導具(全カードの実装・テスト・デッキ定義。新規13種。`src/cards/defs/deckD.ts`、`tests/cards/sd1-deckD.test.ts`)
-- [ ] M10-3 デッキ E ラッカゴスペル(全カードの実装・テスト・デッキ定義)
+- [x] M10-3 デッキ E ラッカゴスペル(全カードの実装・テスト・デッキ定義。新規11種。`src/cards/defs/deckE.ts`、`tests/cards/sd1-deckE.test.ts`)
 - [ ] M10-4 デッキ F 青黒ハンデス(全カードの実装・テスト・デッキ定義)
 - [ ] M10-5 デッキ G 赤白アーマード(全カードの実装・テスト・デッキ定義)
 - [ ] M10-6 デッキ H 5cドラゴン娘(全カードの実装・テスト・デッキ定義)
