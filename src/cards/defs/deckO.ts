@@ -1,12 +1,15 @@
 // デッキO「タマシード戦略の火光水ライオネルデッキ」(docs/decks-25oudou.md)の新規カード。
 import type { Cond } from '../../engine/ast';
-import type { CardDef } from '../../engine/types';
+import type { CardDef, Face } from '../../engine/types';
 import {
   act, and, anyCiv, card, cip, civ, costLte, creature, destroy, draw, evolution, gStrike, ifc, isCreature, maybe, myCreature, not, or, poweredBreaker, race, select,
   shinkalize, spell, sTrigger, staticAb, tamaseed, tBreaker, trig, wBreaker,
 } from '../dsl';
 
 const REX = 'レクスターズ';
+
+/** スター進化(離れる時、かわりに一番上のカードだけが離れる) */
+const star = (f: Face): Face => ({ ...f, star: true });
 
 /** 自分の水の、クリーチャーまたはタマシードが合計3つ以上(シビルカウント3) */
 const sibyl3Water: Cond = {
@@ -21,7 +24,7 @@ export const DECK_O: CardDef[] = [
   // 1. 「正義星帝」 <ライオネル.Star>
   card(
     'dm26sd1-O01',
-    evolution('「正義星帝」 <ライオネル.Star>', 5, 'L', 9500, ['メタリカ', 'エンジェル・コマンド', REX], and(isCreature, or(race(REX), civ('L'))), [
+    star(evolution('「正義星帝」 <ライオネル.Star>', 5, 'L', 9500, ['メタリカ', 'エンジェル・コマンド', REX], and(isCreature, or(race(REX), civ('L'))), [
       wBreaker(),
       cip([
         draw(1),
@@ -44,7 +47,7 @@ export const DECK_O: CardDef[] = [
         ],
         { label: '各ターンに1度、自分のタマシードが出た時、コスト6以下の進化クリーチャーを1体、自分の手札から出してもよい' },
       ),
-    ]),
+    ])),
   ),
 
   // 2. MAX・ザ・ジョニー
@@ -237,12 +240,12 @@ export const DECK_O: CardDef[] = [
   // 10. アルカディアス・モモキング
   card(
     'dm26sd1-O10',
-    evolution('アルカディアス・モモキング', 6, 'LF', 12500, ['ジョーカーズ・ドラゴン', 'エンジェル・コマンド', REX], and(isCreature, or(race(REX), civ('L'), civ('F'))), [
+    star(evolution('アルカディアス・モモキング', 6, 'LF', 12500, ['ジョーカーズ・ドラゴン', 'エンジェル・コマンド', REX], and(isCreature, or(race(REX), civ('L'), civ('F'))), [
       tBreaker(),
       staticAb({ type: 'powerAddOthers', n: 2000, cond: race(REX) }),
       staticAb({ type: 'cannotCast', cond: not(civ('L')) }),
       staticAb({ type: 'enterTappedFirst' }),
-    ]),
+    ])),
   ),
 
   // 11. 邪脳の魔法陣

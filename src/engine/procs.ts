@@ -546,8 +546,6 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         if (pm) setTapped(c, pm.perm.cards[0], true);
       }
       if (plan.discard?.length) moveCards(c, plan.discard, { to: 'grave', cause: 'discard' });
-      // フシギバース: タップしたクリーチャーを、マナゾーンに置く
-      if (plan.toMana?.length) moveCards(c, plan.toMana, { to: 'mana', cause: 'manaPlace', tapped: true });
       // プレイ中として処理する(場所は limbo)
       const prevZone = card.zone;
       removeFrom(c, uid);
@@ -559,6 +557,14 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       if (plan.grant !== undefined) s.usage['gp:' + plan.grant] = s.turn;
       v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free, alt: plan.alt ?? null, rush: !!plan.rush, under: plan.under ?? null };
       v.fromZone = prevZone;
+      // フシギバース: タップしたクリーチャーを、マナゾーンに置く(離れる時の置換の質問が出ることがあるので、別の段階で行う)
+      v.toMana = plan.toMana ?? null;
+      f.stage = plan.toMana?.length ? 4 : 1;
+      return;
+    }
+    case 4: {
+      moveCards(c, (v.toMana as number[] | null) ?? [], { to: 'mana', cause: 'manaPlace', tapped: true });
+      v.toMana = null;
       f.stage = 1;
       return;
     }
