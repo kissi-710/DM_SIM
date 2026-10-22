@@ -1,6 +1,9 @@
 // デッキR「勝舞の魂クロスせよ!火光サムライデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。クロスギアのジェネレート・クロス・サムライ・メクレイドなど。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana, reg } from '../scenario';
+import { CARD_DB, deckCards } from '../../src/cards';
+import { makeRuleBased } from '../../src/ai/rulebased';
+import { playGameSync } from '../../src/sim/playGame';
 import { checkInvariants } from '../../src/engine/invariants';
 import { powerOf } from '../../src/engine/derive';
 import { mkCtx } from '../../src/engine/state';
@@ -174,4 +177,13 @@ describe('R01 悪魔世界の閃光 / R08 ムサシ「弐天」', () => {
     sim.drain();
     expect(sim.has(1, 'battle', 'AQvibrato')).toBe(false);
   });
+});
+
+describe('R02 マロクのエスケープ(状況起因処理との順序)', () => {
+  it('パワー0以下で破壊される時に使うエスケープは、手順(シールドを手札に)が終わってから、もう一度調べられる(聞き直しが終わらない不具合の回帰)', () => {
+    // デッキR 対 デッキS のルールベース同士の対局(seed 13 は、以前はマロクの置換の聞き直しが終わらなかった)
+    const r = playGameSync(CARD_DB, [makeRuleBased({}), makeRuleBased({})], { decks: [deckCards('sd1-r'), deckCards('sd1-s')], seed: 13, first: 0, maxSteps: 3000 });
+    expect(r.winner).not.toBeNull();
+    expect(r.steps).toBeLessThan(3000);
+  }, 60000);
 });

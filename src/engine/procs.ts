@@ -1555,7 +1555,13 @@ export function runSba(c: Ctx): boolean {
   const dead: number[] = [];
   for (const p of [0, 1] as PlayerId[]) {
     // 「離れない」クリーチャーは、破壊されない(破壊しようとしても何も起きないので、状況起因処理が終わらなくなるのを避ける)
-    for (const perm of s.players[p].battle) if (isCreatureType(faceTypeOf(c, perm.cards[0])) && powerOf(c, perm) <= 0 && !cannotLeave(c, perm.cards[0], 'destroy')) dead.push(perm.cards[0]);
+    for (const perm of s.players[p].battle) {
+      const u = perm.cards[0];
+      if (!isCreatureType(faceTypeOf(c, u)) || powerOf(c, perm) > 0 || cannotLeave(c, u, 'destroy')) continue;
+      // 破壊のかわりの手順(エスケープなど)がまだ終わっていないクリーチャーは、その手順のあとにもう一度調べる(手順が動かず、聞き直しが終わらなくなるのを避ける)
+      if (s.cont.some((f) => f.kind === 'effect' && f.trigger?.type === 'replaced' && f.trigger.card === u)) continue;
+      dead.push(u);
+    }
   }
   if (dead.length) {
     moveCards(c, dead, { to: 'grave', cause: 'destroy' });
