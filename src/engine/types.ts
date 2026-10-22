@@ -50,6 +50,10 @@ export interface Face {
   abilities: Ability[];
   /** 進化元の条件(type=evolution)。$it = 重ねる対象 */
   evolveFrom?: Cond;
+  /** スター進化(離れる時、かわりに一番上のカードだけが離れる) */
+  star?: boolean;
+  /** 究極進化(究極進化MAX の進化元の条件「究極進化クリーチャー」に使う) */
+  ultimate?: boolean;
 }
 
 export interface CardDef {
@@ -370,6 +374,8 @@ export interface PlayExtra {
   discard?: number[];
   /** 別のコストでタップする自分のクリーチャーの山(pid)。省略すると、アンタップしているものの先頭から */
   tapAlt?: number[];
+  /** 超無限墓地進化で、下に重ねる自分の墓地のクリーチャー(uid) */
+  under?: number[];
 }
 
 export type Action =

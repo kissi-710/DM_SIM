@@ -83,6 +83,8 @@ export type Cond =
   | { ownedBy: 'self' | 'opponent' }
   /** 変数のカード(進化クリーチャー)が、$it(バトルゾーンのクリーチャー)の上に進化できる(進化元の条件を満たす) */
   | { baseFor: string }
+  /** $it が、究極進化クリーチャーである */
+  | { ultimate: true }
   /** $it が、ツインパクトカード(面が2つ)である */
   | { twin: true }
   /** 変数のカードのコストが、すべて異なる(2枚以上) */
@@ -239,6 +241,10 @@ export type StaticMod =
   | { type: 'battleProxy'; cond: Cond }
   /** ガードマン: このクリーチャーをタップして、相手クリーチャーの攻撃先を、自分の他のクリーチャーからこのクリーチャーに変更してもよい */
   | { type: 'guardman' }
+  /** すべてのプレイヤーは、cond に合うクリーチャーを召喚できない */
+  | { type: 'cannotSummonAll'; cond: Cond }
+  /** 自分(プレイヤー)は、このクリーチャーよりパワーが小さいクリーチャーに攻撃されない */
+  | { type: 'protectPlayerFromWeaker' }
   /** このクリーチャーの攻撃中、相手は「G・ストライク」を使えない */
   | { type: 'noGStrike' }
   /** 相手のカードは、マナゾーンにタップして置かれる */
@@ -303,6 +309,10 @@ export interface AltCostSpec {
   endBottomDraw?: boolean;
   /** 出すかわりに、自分の超次元ゾーンに置く(パンドラ・シフト) */
   toHyper?: boolean;
+  /** 超無限墓地進化: 自分の墓地のクリーチャーを1体以上選び、その上に重ねて出す。選んだ数だけコストを少なくする(1未満にならない) */
+  graveEvolve?: boolean;
+  /** フシギバース: 自分のクリーチャーを1体タップしてマナゾーンに置き、base からそのコストを引いた数(min 未満にならない)を支払う */
+  fushigi?: { base: number; min: number };
 }
 
 export type { EffectMod };

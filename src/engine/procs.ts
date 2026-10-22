@@ -7,6 +7,7 @@ import {
   breakerCount,
   canAttack,
   canBlock,
+  cannotLeave,
   canGuard,
   hasSelfStatic,
   canPlayCard,
@@ -99,6 +100,10 @@ export interface PlayPlan {
   tapAlt?: number[];
   /** アビスラッシュで召喚する(墓地から) */
   rush?: boolean;
+  /** 超無限墓地進化で、下に重ねるカード */
+  under?: number[];
+  /** フシギバースで、マナゾーンに置くクリーチャー */
+  toMana?: number[];
 }
 
 export function planPlay(
@@ -149,7 +154,7 @@ export function planPlay(
   if (!canPlayCard(c, player, uid, faceIdx)) return fail('そのカードは使えません');
 
   let onto: number | undefined;
-  if (face.type === 'evolution') {
+  if (face.type === 'evolution' && !altAb?.cost.graveEvolve) {
     const pm = extra?.onto !== undefined ? permByPid(s, extra.onto) : null;
     if (!pm || pm.owner !== player) return fail('進化元を選んでください');
     const topUid = pm.perm.cards[0];
@@ -162,6 +167,8 @@ export function planPlay(
   let freeAlt = false;
   let reduceAlt = 0;
   let tapAlt: number[] | undefined;
+  let graveUnder: number[] | undefined;
+  let toMana: number[] | undefined;
   let payAlt: number | undefined;
   let discard: number[] | undefined;
   if (extra?.alt !== undefined) {
@@ -169,7 +176,7 @@ export function planPlay(
     if (!ab) return fail('その別のコストはありません');
     if (from !== (ab.cost.from?.[0] ?? 'hand') && !(ab.cost.from ?? ['hand']).includes(from)) return fail('そのゾーンから使う別のコストではありません');
     if (ab.when && !evalCond(mkCC(c, player, { self: uid }), ab.when)) return fail('別のコストを使える条件を満たしていません');
-    freeAlt = ab.cost.reduce === undefined && ab.cost.pay === undefined; // 別のコストは、マナを払うかわりのコスト(reduce は軽減、pay はコストのかわりに払う)
+    freeAlt = ab.cost.reduce === undefined && ab.cost.pay === undefined && !ab.cost.graveEvolve && !ab.cost.fushigi; // 別のコストは、マナを払うかわりのコスト(reduce は軽減、pay はコストのかわりに払う。墓地進化・フシギバースは、コストを払う)
     reduceAlt = ab.cost.reduce ?? 0;
     if (ab.cost.tapCreatures) {
       const n = ab.cost.tapCreatures;
@@ -183,6 +190,23 @@ export function planPlay(
       }
     }
     if (ab.cost.pay !== undefined) payAlt = ab.cost.pay;
+    if (ab.cost.graveEvolve) {
+      // 超無限墓地進化: 墓地のクリーチャーを1体以上選んで、その上に重ねて出す。選んだ数だけコストを少なくする(1未満にならない)
+      const under = (extra.under ?? []).slice();
+      const ok = under.length > 0 && new Set(under).size === under.length && under.every((u) => s.cards[u]?.zone === 'grave' && s.cards[u].owner === player && isCreatureType(faceTypeOf(c, u)));
+      if (!ok) return fail('墓地から重ねるクリーチャーを選んでください');
+      graveUnder = under;
+      reduceAlt = under.length;
+    }
+    if (ab.cost.fushigi) {
+      // フシギバース: 自分のクリーチャーを1体タップしてマナゾーンに置き、基準のコストからそのコストを引いた数を支払う
+      const pid = extra.tapAlt?.[0];
+      const pm = pid !== undefined ? permByPid(s, pid) : null;
+      if (!pm || pm.owner !== player || pm.perm.tapped || !isCreatureType(faceTypeOf(c, pm.perm.cards[0]))) return fail('マナゾーンに置く、アンタップしている自分のクリーチャーを選んでください');
+      payAlt = Math.max(ab.cost.fushigi.min, ab.cost.fushigi.base - costBase(c, pm.perm.cards[0]));
+      toMana = [pm.perm.cards[0]];
+      tapAlt = undefined;
+    }
     if (ab.cost.discard) {
       const d = ab.cost.discard;
       const ccd = mkCC(c, player, { self: uid });
@@ -211,7 +235,7 @@ export function planPlay(
     }
   }
   const once: number[] = [];
-  const cost = payAlt !== undefined ? payAlt : Math.max(0, costOf(c, uid, faceIdx, { taps, free, once }) - reduceAlt);
+  const cost = payAlt !== undefined ? payAlt : Math.max(graveUnder ? 1 : 0, costOf(c, uid, faceIdx, { taps, free, once }) - reduceAlt);
   const civs = face.civs;
   const need = free ? 0 : payNeed(cost, civs.length);
   let pay: number[] = [];
@@ -233,7 +257,7 @@ export function planPlay(
       pay = plan;
     }
   }
-  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}), ...(once.length ? { once } : {}), ...(grantSrc !== null ? { grant: grantSrc } : {}), ...(tapAlt ? { tapAlt } : {}), ...(rush ? { rush: true } : {}) };
+  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}), ...(once.length ? { once } : {}), ...(grantSrc !== null ? { grant: grantSrc } : {}), ...(tapAlt ? { tapAlt } : {}), ...(rush ? { rush: true } : {}), ...(graveUnder ? { under: graveUnder } : {}), ...(toMana ? { toMana } : {}) };
 }
 
 /** 支払いの選択肢(UI が「聞くか、自動で払うか」を決めるための情報) */
@@ -522,6 +546,8 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         if (pm) setTapped(c, pm.perm.cards[0], true);
       }
       if (plan.discard?.length) moveCards(c, plan.discard, { to: 'grave', cause: 'discard' });
+      // フシギバース: タップしたクリーチャーを、マナゾーンに置く
+      if (plan.toMana?.length) moveCards(c, plan.toMana, { to: 'mana', cause: 'manaPlace', tapped: true });
       // プレイ中として処理する(場所は limbo)
       const prevZone = card.zone;
       removeFrom(c, uid);
@@ -531,7 +557,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       s.limbo.push(uid);
       for (const src of plan.once ?? []) s.usage['cd:' + src] = s.turn;
       if (plan.grant !== undefined) s.usage['gp:' + plan.grant] = s.turn;
-      v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free, alt: plan.alt ?? null, rush: !!plan.rush };
+      v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free, alt: plan.alt ?? null, rush: !!plan.rush, under: plan.under ?? null };
       v.fromZone = prevZone;
       f.stage = 1;
       return;
@@ -549,7 +575,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       if (p.kind === 'summon' || p.kind === 'put') {
         const evs: Ev[] = [];
         const via = p.kind === 'summon' ? 'summon' : 'put';
-        enterBattle(c, uid, { to: 'battle', cause: via, via, onto: p.onto ?? undefined, face: p.face, paid: p.paid, cost: p.cost, free: p.free, from: v.fromZone }, evs);
+        enterBattle(c, uid, { to: 'battle', cause: via, via, onto: p.onto ?? undefined, face: p.face, paid: p.paid, cost: p.cost, free: p.free, from: v.fromZone, ...(p.under?.length ? { under: p.under } : {}) }, evs);
         if (p.kind === 'summon' && s.cards[uid].zone === 'battle') onSummoned(c, uid);
         // J・O・E: このターンの終わりに山札の下に置き、カードを1枚引く
         if (p.alt && s.cards[uid].zone === 'battle' && c.reg.getInfo(card.defId, p.face).altCosts.some((a) => a.id === p.alt && a.cost.endBottomDraw)) {
@@ -1522,7 +1548,8 @@ export function runSba(c: Ctx): boolean {
   // パワー0以下のクリーチャーは破壊される(108.1b)
   const dead: number[] = [];
   for (const p of [0, 1] as PlayerId[]) {
-    for (const perm of s.players[p].battle) if (isCreatureType(faceTypeOf(c, perm.cards[0])) && powerOf(c, perm) <= 0) dead.push(perm.cards[0]);
+    // 「離れない」クリーチャーは、破壊されない(破壊しようとしても何も起きないので、状況起因処理が終わらなくなるのを避ける)
+    for (const perm of s.players[p].battle) if (isCreatureType(faceTypeOf(c, perm.cards[0])) && powerOf(c, perm) <= 0 && !cannotLeave(c, perm.cards[0], 'destroy')) dead.push(perm.cards[0]);
   }
   if (dead.length) {
     moveCards(c, dead, { to: 'grave', cause: 'destroy' });

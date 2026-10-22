@@ -487,7 +487,9 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
   // 山(進化元)を一緒に動かす
   let under: number[] = [];
   let sealCards: number[] = [];
-  if (from === 'battle' && to !== 'battle' && !opts.alone) {
+  // スター進化: 離れる時、かわりに一番上のカードだけが離れる
+  const alone = !!opts.alone || (from === 'battle' && !!c.reg.getFace(card.defId, card.face).star);
+  if (from === 'battle' && to !== 'battle' && !alone) {
     const pm = permByPid(s, card.pid);
     if (pm && pm.perm.cards[0] === uid) {
       under = pm.perm.cards.slice(1);
@@ -839,6 +841,8 @@ function applyMoveReplacements(c: Ctx, p: Proposal): void {
         if (!rel(m.owner, card.owner)) continue;
         if (m.from !== undefined && p.from !== m.from) continue;
         if (m.notFrom !== undefined && p.from === m.notFrom) continue;
+        if (m.turn === 'opponent' && s.active === pl) continue;
+        if (m.turn === 'own' && s.active !== pl) continue;
         if (m.to !== undefined && p.to !== m.to) continue;
         if (m.notTo !== undefined && p.to === m.notTo) continue;
         if (m.cause !== undefined && p.cause !== m.cause) continue;

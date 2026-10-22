@@ -91,7 +91,9 @@ export type FeatureName =
   | 'tapAsMana'
   | 'flying'
   | 'noGStrike'
-  | 'oppManaTapped';
+  | 'oppManaTapped'
+  | 'cannotSummonAll'
+  | 'protectPlayerFromWeaker';
 
 export interface Registry {
   db: CardDB;
@@ -191,12 +193,12 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'useCip', 'graveToBottom', 'play', 'win', 'cross', 'ninjaChange', 'grantShieldTrigger', 'breakOpp', 'allowSummon', 'destroyTop', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'useCip', 'graveToBottom', 'play', 'win', 'cross', 'ninjaChange', 'grantShieldTrigger', 'breakOpp', 'allowSummon', 'destroyTop', 'dropUnder', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'selfTapped', 'twin', 'distinctCosts', 'crossed', 'hostIs', 'hasGear', 'hasKw', 'ownedBy', 'baseFor', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame', 'onBase', 'powerRank',
+  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'selfTapped', 'ultimate', 'twin', 'distinctCosts', 'crossed', 'hostIs', 'hasGear', 'hasKw', 'ownedBy', 'baseFor', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame', 'onBase', 'powerRank',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
@@ -550,6 +552,8 @@ export function loadRegistry(origDb: CardDB): Registry {
     tapAsMana: staticOf('tapAsMana'),
     flying: staticOf('flying'),
     noGStrike: staticOf('noGStrike'),
+    cannotSummonAll: staticOf('cannotSummonAll'),
+    protectPlayerFromWeaker: staticOf('protectPlayerFromWeaker'),
     oppManaTapped: staticOf('oppManaTapped'),
     battleProxy: staticOf('battleProxy'),
     sBack: featureDefs((ab) => ab.kind === 'keyword' && ab.name === 'sBack'),

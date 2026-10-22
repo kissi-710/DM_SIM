@@ -342,6 +342,15 @@ function canAttackBase(c: Ctx, perm: Permanent, target: { kind: 'player' } | { k
   if (target.kind === 'player') {
     if (sick && !speed) return false; // マッハファイターは出たターン、プレイヤーを攻撃できない
     if (playerAttackBlockedByEntry(c, perm, owner)) return false;
+    // 「自分は、このクリーチャーよりパワーが小さいクリーチャーに攻撃されない」(大樹王 ギガンディダノス)
+    if (gameHas(c, 'protectPlayerFromWeaker')) {
+      const atkPower = powerOf(c, perm);
+      for (const st of activeStatics(c, 'protectPlayerFromWeaker')) {
+        if (st.controller === owner) continue;
+        const sp = permByPid(s, s.cards[st.src].pid);
+        if (sp && atkPower < powerOf(c, sp.perm)) return false;
+      }
+    }
     return true;
   }
   const tp = permByPid(s, target.pid);
@@ -667,6 +676,13 @@ export function grantsRush(c: Ctx, src: number): boolean {
 
 /** 「相手はコストが n 以下のクリーチャーを召喚できない」(ミラダンテXII のファイナル革命)に当たらないか */
 export function canSummon(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
+  // 「すべてのプレイヤーは、パワー5000以下のクリーチャーを召喚できない」(暴走龍 5000GT)
+  if (gameHas(c, 'cannotSummonAll')) {
+    for (const st of activeStatics(c, 'cannotSummonAll')) {
+      const m = st.ability.mod;
+      if (m.type === 'cannotSummonAll' && evalCond(mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx }), m.cond)) return false;
+    }
+  }
   if (c.s.effects.length === 0) return true;
   const cost = c.reg.defs[c.s.cards[uid].defId].faces[faceIdx]?.cost ?? 0;
   for (const e of c.s.effects) if (e.mod.kind === 'cannotSummon' && e.controller !== player && cost <= e.mod.costLte) return false;

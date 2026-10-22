@@ -180,7 +180,17 @@ function extraVariants(c: Ctx, player: PlayerId, uid: number, fi: number): (Play
   const def = c.reg.defs[s.cards[uid].defId];
   const info = c.reg.getInfo(def.id, fi);
   // 別のコスト(マナを払うかわりに、手札を捨てる・マナを払わない)は、別の使い方として並べる。使えるかは、呼び出し側が planPlay で調べる
-  const alts: PlayExtra[] = info.altCosts.map((ab) => ({ alt: ab.id }));
+  const alts: PlayExtra[] = [];
+  for (const ab of info.altCosts) {
+    if (ab.cost.graveEvolve) {
+      // 超無限墓地進化: 墓地のクリーチャーを、コストの大きいものから k 体(1 ≤ k)
+      const g = s.players[s.cards[uid].owner].grave.filter((u) => isCreatureType(faceTypeOf(c, u))).sort((a, b) => costBase(c, b) - costBase(c, a));
+      for (let k = 1; k <= Math.min(g.length, 8); k++) alts.push({ alt: ab.id, under: g.slice(0, k) });
+    } else if (ab.cost.fushigi) {
+      // フシギバース: タップしてマナゾーンに置く自分のクリーチャーごと
+      for (const p of s.players[s.cards[uid].owner].battle) if (!p.tapped && isCreatureType(faceTypeOf(c, p.cards[0]))) alts.push({ alt: ab.id, tapAlt: [p.pid] });
+    } else alts.push({ alt: ab.id });
+  }
   if (alts.length > 0) return [...extraVariantsBase(c, player, uid, fi), ...alts];
   return extraVariantsBase(c, player, uid, fi);
 }

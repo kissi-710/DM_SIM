@@ -609,7 +609,8 @@ function actTap(c: Ctx, _f: EffectFrame, cc: CC, a: any, key: string): void {
 
 function actAddEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
-  const mods: EffectMod[] = a.mods ?? [a.mod];
+  // mod の n が式(オブジェクト)なら、その場で評価した数にする(「自分の墓地のクリーチャー1体につき-1000」など)
+  const mods: EffectMod[] = (a.mods ?? [a.mod]).map((m: any) => (m && typeof m.n === 'object' ? { ...m, n: evalExpr(cc, m.n) } : m));
   const targets = resolveSel(cc, a.sel);
   for (const u of targets) {
     const card = s.cards[u];
@@ -1139,6 +1140,34 @@ function actAllowSummon(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): 
   }
 }
 
+/** クリーチャー(進化の山)の下にあるカードを、n 枚(省略 = すべて)、墓地(または山札の下)に置く */
+function actDropUnder(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone !== 'battle') continue;
+    const pm = permByPid(s, card.pid);
+    if (!pm || pm.perm.cards[0] !== u) continue;
+    const n = Math.min(a.n ?? Infinity, pm.perm.cards.length - 1);
+    for (let i = 0; i < n; i++) {
+      const uc = pm.perm.cards.pop();
+      if (uc === undefined || uc === u) break;
+      const ucard = s.cards[uc];
+      const snap = snapOf(c, uc);
+      ucard.zone = a.to === 'deck' ? 'deck' : 'grave';
+      ucard.ep++;
+      ucard.pid = -1;
+      ucard.tapped = false;
+      ucard.face = 0;
+      const own = s.players[ucard.owner];
+      if (a.to === 'deck') own.deck.push(uc);
+      else own.grave.push(uc);
+      emit(c, 'moved', { card: uc, owner: ucard.owner, from: 'battle', to: ucard.zone, cause: 'trashUnder', kind: 'creature', ex: false, lki: snap, underneath: true });
+    }
+  }
+  s.dirtySba = true;
+}
+
 /** クリーチャー(進化の山)の一番上のカードだけを破壊する(下のカードは残る) */
 function actDestroyTop(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
@@ -1290,6 +1319,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['seal', actSeal],
   ['stab', actStab],
   ['rush', actRush],
+  ['dropUnder', actDropUnder],
   ['destroyTop', actDestroyTop],
   ['allowSummon', actAllowSummon],
   ['breakOpp', actBreakOpp],

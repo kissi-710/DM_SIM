@@ -233,6 +233,10 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     for (let i = from; i < s.turnLog.length; i++) if (matchPattern(cc, o.logged.pattern, s.turnLog[i])) n++;
     return n >= min;
   }
+  if ('ultimate' in o) {
+    if (cc.it == null) return false;
+    return cc.c.reg.defs[s.cards[cc.it].defId].faces.some((x) => x.ultimate) === o.ultimate;
+  }
   if ('twin' in o) {
     if (cc.it == null) return false;
     return (cc.c.reg.defs[s.cards[cc.it].defId].faces.length >= 2) === o.twin;
