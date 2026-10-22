@@ -173,7 +173,7 @@ export type KeywordName =
   | 'sBack';
 
 export type StaticMod =
-  | { type: 'costDelta'; delta: number; cond: Cond; /** 各ターンに1度だけ(発生源ごと)。使うと、そのターンはもう働かない */ oncePerTurn?: boolean }
+  | { type: 'costDelta'; delta: Expr; cond: Cond; /** 各ターンに1度だけ(発生源ごと)。使うと、そのターンはもう働かない */ oncePerTurn?: boolean; /** これを適用した後のコストの下限(「ただしコストは0以下にならない」= 1) */ floor?: number }
   /** 攻撃中、このクリーチャーのパワーを n 増やす(パワーアタッカー) */
   | { type: 'powerAttacker'; n: number }
   /** このクリーチャーがシールドをブレイクする時、相手はそのシールドを手札に加えるかわりに墓地に置く */
@@ -217,6 +217,12 @@ export type StaticMod =
   | { type: 'attackMeFirst' }
   /** 相手は、自身のターンに1回までしか呪文を唱えられない */
   | { type: 'oneSpellPerTurn' }
+  /** このクリーチャーは攻撃できない */
+  | { type: 'cannotAttack' }
+  /** このクリーチャーは、相手プレイヤーを攻撃できない */
+  | { type: 'cannotAttackPlayer' }
+  /** ガードマン: このクリーチャーをタップして、相手クリーチャーの攻撃先を、自分の他のクリーチャーからこのクリーチャーに変更してもよい */
+  | { type: 'guardman' }
   /** 自分の他のカード(cond に合うもの)のパワーを n 増やす */
   | { type: 'powerAddOthers'; n: number; cond: Cond };
 

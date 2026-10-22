@@ -318,6 +318,8 @@ function canAttackBase(c: Ctx, perm: Permanent, target: { kind: 'player' } | { k
   if (costLocked(c, uid)) return false;
   if (perm.tapped) return false;
   if (hasEffect(c, perm.pid, 'cannotAttack')) return false;
+  if (hasSelfStatic(c, uid, 'cannotAttack')) return false;
+  if (target.kind === 'player' && hasSelfStatic(c, uid, 'cannotAttackPlayer')) return false;
   const speed = hasKeyword(c, perm, 'speedAttacker');
   const mach = hasKeyword(c, perm, 'machFighter');
   const sick = isSick(c, perm);
@@ -355,6 +357,29 @@ function costLocked(c: Ctx, uid: number): boolean {
   const owner = c.s.cards[uid].owner;
   for (const e of effs) if (e.mod.kind === 'cannotActCost' && e.controller !== owner && costBase(c, uid) === e.mod.n) return true;
   return false;
+}
+
+/** そのカード自身が持つ常在型能力(while を満たしているもの)に、この種類があるか */
+export function hasSelfStatic(c: Ctx, uid: number, type: StaticMod['type']): boolean {
+  const statics = infoOf(c, uid).statics;
+  if (statics.length === 0) return false;
+  for (const st of statics) {
+    if (st.ability.mod.type !== type) continue;
+    if (st.ability.while && !evalCond(mkCC(c, c.s.cards[uid].owner, { self: uid }), st.ability.while)) continue;
+    return true;
+  }
+  return false;
+}
+
+/** ガードマン: 攻撃先が自分のクリーチャーの時に、ブロッカーのかわりにその攻撃先を変更できるか */
+export function canGuard(c: Ctx, perm: Permanent): boolean {
+  if (perm.tapped) return false;
+  if (c.s.sealed && isSealed(c, perm.cards[0])) return false;
+  if (costLocked(c, perm.cards[0])) return false;
+  if (hasEffect(c, perm.pid, 'cannotBlock')) return false;
+  if (actsLimited(c, c.s.cards[perm.cards[0]].owner)) return false;
+  if (!isCreatureType(faceTypeOf(c, perm.cards[0]))) return false;
+  return hasSelfStatic(c, perm.cards[0], 'guardman');
 }
 
 export function canBlock(c: Ctx, perm: Permanent): boolean {
@@ -411,7 +436,8 @@ export function costOf(c: Ctx, uid: number, faceIdx: number, opts: CostOpts = {}
     if (mod.oncePerTurn && s.usage['cd:' + st.src] === s.turn) continue;
     const cc = mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx });
     if (evalCond(cc, mod.cond as Cond)) {
-      cost += mod.delta;
+      cost += typeof mod.delta === 'number' ? mod.delta : evalExpr(cc, mod.delta);
+      if (mod.floor !== undefined && cost < mod.floor) cost = mod.floor;
       if (mod.oncePerTurn) opts.once?.push(st.src);
     }
   }

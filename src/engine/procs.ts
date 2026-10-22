@@ -7,6 +7,7 @@ import {
   breakerCount,
   canAttack,
   canBlock,
+  canGuard,
   canCast,
   canSummon,
   canUseCost,
@@ -867,7 +868,7 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       const attacked = v.target.kind === 'creature' ? v.target.pid : -1;
       const cands = isUnblockable(c, pm.perm)
         ? []
-        : s.players[defender].battle.filter((p) => p.pid !== attacked && canBlock(c, p)).map((p) => p.cards[0]);
+        : s.players[defender].battle.filter((p) => p.pid !== attacked && (canBlock(c, p) || (attacked !== -1 && canGuard(c, p)))).map((p) => p.cards[0]);
       // ブロッカーは、複数体を同時に選べる(507.1a / 507.2)。ブロックを強制する効果を受けているものは、必ず選ぶ(507.1b)。
       // 選んだ全員がタップし、最後に解決した1体だけが、攻撃先を変更してブロッククリーチャーになる(507.2a)
       const forced = cands.filter((u) => mustBlock(c, permByPid(s, s.cards[u].pid)!.perm));
@@ -1495,6 +1496,7 @@ function lossReplacement(c: Ctx, p: PlayerId, deckOut: boolean): boolean {
       if (a.apply.type !== 'steps' || a.match.type !== 'gameLoss') continue;
       if (a.match.turn === 'opponent' && s.active === p) continue;
       if (a.match.turn === 'own' && s.active !== p) continue;
+      if (a.match.reason === 'deckOut' && !deckOut) continue; // 山札切れによる敗北だけ
       if (a.while && !evalCond(mkCC(c, p, { self: uid }), a.while)) continue;
       cands.push({ uid, idx: r.idx, ab: a });
     }
