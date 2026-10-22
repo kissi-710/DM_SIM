@@ -194,7 +194,9 @@ export const mekureido = (raceName: string, x: number, times = 1): StepDef[] => 
     act({ lookTop: { n: 3, as: '$mk' } }),
     selectUpTo('$mc', { zone: 'deck', owner: 'self', of: '$mk', where: and(race(raceName), costLte(x)) }, 1, { prompt: `コストを支払わずに使う、${raceName}のコスト${x}以下のカードを選んでください(使わなくてもよい)` }),
     act({ bottom: { of: '$mk', except: '$mc' } }),
-    ifc({ nonEmpty: '$mc' }, [ifc({ some: { var: '$mc', where: { type: 'creature' } } }, [act({ summon: { sel: '$mc' } })], [act({ castFree: { sel: '$mc' } })])]),
+    ifc({ nonEmpty: '$mc' }, [
+      ifc({ some: { var: '$mc', where: { type: 'creature' } } }, [act({ summon: { sel: '$mc' } })], [ifc({ some: { var: '$mc', where: { type: 'spell' } } }, [act({ castFree: { sel: '$mc' } })], [act({ put: { sel: '$mc' } })])]),
+    ]),
   ];
   return times === 1 ? body : [{ op: 'repeat', times, body }];
 };

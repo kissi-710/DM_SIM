@@ -413,19 +413,26 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       emit(c, 'stepStart', { step: 'end', player: P });
       s.batchNo++;
       collectBatch(c, [c.out[c.out.length - 1]]);
-      // アビスラッシュ: ターンの終わりに山札の下に置く
-      for (const perm of s.players[P].battle.slice()) {
-        if (perm.rush !== s.turn) continue;
-        if (perm.rushIfAttacked && !s.turnLog.some((e) => e.type === 'attackDeclared' && e.attacker === perm.pid)) continue;
-        moveCards(c, [perm.cards[0]], { to: 'deck', cause: 'effect', pos: 'bottom' });
+      f.stage = 6;
+      pushProc(c, 'settle');
+      return;
+    }
+    case 6: {
+      // アビスラッシュ・J・O・E: ターンの終わりに山札の下に置く(置換の質問が出ることがあるので、1体ずつ別の段階で行う)
+      const done: number[] = (f.vars.bottomDone ??= []);
+      const perm = s.players[P].battle.find((x) => {
+        if (done.includes(x.pid)) return false;
+        if (x.rush === s.turn) return !(x.rushIfAttacked && !s.turnLog.some((e) => e.type === 'attackDeclared' && e.attacker === x.pid));
+        return x.endBottom === s.turn;
+      });
+      if (!perm) {
+        f.stage = 4;
+        return;
       }
+      const moved = moveCards(c, [perm.cards[0]], { to: 'deck', cause: 'effect', pos: 'bottom' });
+      done.push(perm.pid);
       // J・O・E: 山札の下に置いたら、カードを1枚引く
-      for (const perm of s.players[P].battle.slice()) {
-        if (perm.endBottom !== s.turn) continue;
-        const moved = moveCards(c, [perm.cards[0]], { to: 'deck', cause: 'effect', pos: 'bottom' });
-        if (moved.some((r) => r.moved)) drawCards(c, P, 1);
-      }
-      f.stage = 4;
+      if (perm.endBottom === s.turn && moved.some((r) => r.moved)) drawCards(c, P, 1);
       pushProc(c, 'settle');
       return;
     }

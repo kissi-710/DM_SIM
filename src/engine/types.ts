@@ -101,6 +101,8 @@ export interface Permanent {
   rush?: number;
   /** アビスラッシュの、攻撃していた時だけ山札の下に置く(ジャガイストの効果で出した場合) */
   rushIfAttacked?: boolean;
+  /** クロスギア: クロスしているクリーチャーの山(pid)。そのクリーチャーが場を離れたら、クロスは外れたものとして扱う */
+  crossedOn?: number;
   /** J・O・E: このターンの終わりに山札の下に置き、そうしたらカードを1枚引く(値は、そのターン) */
   endBottom?: number;
 }
@@ -257,6 +259,8 @@ export type EffectMod =
   | { kind: 'cannotCast'; n?: number }
   /** プレイヤー単位: 発生源の持ち主の相手は、コストが costLte 以下のクリーチャーを召喚できない */
   | { kind: 'cannotSummon'; costLte: number }
+  /** プレイヤー単位: 発生源の持ち主の相手は、コストが n 以下の呪文を唱えられない */
+  | { kind: 'cannotCastLte'; n: number }
   /** プレイヤー単位: 発生源の持ち主の相手の、コストが n のバトルゾーンのカードの能力を無視する */
   | { kind: 'ignoreCost'; n: number }
   /** プレイヤー単位: 発生源の持ち主の相手の、クリーチャーすべての能力を無視する */
@@ -373,6 +377,8 @@ export type Action =
   | { type: 'END_TURN' }
   /** ハイパー化(自分のメインステップ中。pid = ハイパー化するクリーチャーの山、tap = タップする他のクリーチャーの山) */
   | { type: 'HYPERIZE'; pid: number; tap: number[] }
+  /** クロス(自分のメインステップ中。gear = クロスギアの山、target = クロスするクリーチャーの山。クロスギアのコストをもう一度支払う) */
+  | { type: 'CROSS'; gear: number; target: number }
   | { type: 'ANSWER'; id: number; value: AnswerValue };
 
 export type AnswerValue = number[] | Record<string, number[]> | boolean | number | true;

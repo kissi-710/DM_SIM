@@ -1,5 +1,5 @@
 // 合法手の列挙と検証(design 5 / effects 12)。
-import { canAttack, charsOf, costBase, costOf, defaultPlayFace, faceTypeOf, grantedPlayFrom, infoOf, isSick } from './derive';
+import { canAttack, charsOf, costBase, costOf, crossCost, defaultPlayFace, faceTypeOf, grantedPlayFrom, infoOf, isSick, payNeed, planPayment } from './derive';
 import { evalCond, mkCC } from './cond';
 import { planPlay } from './procs';
 import type { Registry } from './registry';
@@ -67,11 +67,28 @@ function turnActions(c: Ctx, player: PlayerId): Action[] {
   if (s.step === 'main') {
     for (const a of playActions(c, player, true)) add(a, playActionKey(s, a));
     for (const a of hyperizeActions(c, player)) add(a);
+    for (const a of crossActions(c, player)) add(a);
     add({ type: 'END_MAIN' });
   }
   if (s.step === 'main' || s.step === 'attack') {
     for (const a of attackActions(c, player)) add(a);
     add({ type: 'END_TURN' });
+  }
+  return out;
+}
+
+/** クロスできるクロスギアとクリーチャーの組(クロスギアのコストをもう一度、マナで払えるもの) */
+export function crossActions(c: Ctx, player: PlayerId): Extract<Action, { type: 'CROSS' }>[] {
+  const s = c.s;
+  const out: Extract<Action, { type: 'CROSS' }>[] = [];
+  const mine = s.players[player].battle;
+  const gears = mine.filter((p) => faceTypeOf(c, p.cards[0]) === 'crossgear');
+  if (gears.length === 0) return out;
+  const hosts = mine.filter((p) => isCreatureType(faceTypeOf(c, p.cards[0])));
+  for (const g of gears) {
+    const { cost, civs } = crossCost(c, g.cards[0]);
+    if (!planPayment(c, player, civs, payNeed(cost, civs.length))) continue;
+    for (const h of hosts) if (g.crossedOn !== h.pid) out.push({ type: 'CROSS', gear: g.pid, target: h.pid });
   }
   return out;
 }
@@ -417,6 +434,10 @@ export function validateAction(s: GameState, reg: Registry, a: Action): string |
       const pm = s.players[player].battle.find((x) => x.pid === a.attacker);
       if (!pm) return '攻撃できるクリーチャーではありません';
       return canAttack(c, pm, a.target) ? null : 'その対象は攻撃できません';
+    }
+    case 'CROSS': {
+      if (s.step !== 'main') return '今はクロスできません';
+      return crossActions(c, player).some((x) => x.gear === a.gear && x.target === a.target) ? null : 'クロスできません';
     }
     case 'HYPERIZE': {
       if (s.step !== 'main') return '今はハイパー化できません';

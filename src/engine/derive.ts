@@ -173,6 +173,18 @@ export function powerOf(c: Ctx, perm: Permanent): number {
     if (st.ability.while && !evalCond(cc, st.ability.while)) continue;
     p += evalExpr(cc, st.ability.mod.expr);
   }
+  // このクロスギアをクロスしたクリーチャーのパワーを増やす(竜装 ゴウソク・タキオンアーマー)
+  if (gameHas(c, 'hostPowerAdd')) {
+    for (const g of c.s.players[card.owner].battle) {
+      if (g.crossedOn !== perm.pid) continue;
+      for (const st of infoOf(c, g.cards[0]).statics) {
+        const m = st.ability.mod;
+        if (m.type !== 'hostPowerAdd') continue;
+        if (st.ability.while && !evalCond(mkCC(c, card.owner, { self: g.cards[0] }), st.ability.while)) continue;
+        p += m.n;
+      }
+    }
+  }
   // 自分の他のカードのパワーを増やす(アルカディアス・モモキング)
   if (gameHas(c, 'powerAddOthers')) {
     for (const st of activeStatics(c, 'powerAddOthers')) {
@@ -538,6 +550,14 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
 
 // ───────────────────────── 呪文の制限 ─────────────────────────
 
+/** クロスのコスト(クロスギアのマナコストをもう一度払う。コスト軽減の効果も受ける)と文明 */
+export function crossCost(c: Ctx, gearUid: number): { cost: number; civs: Civ[] } {
+  const card = c.s.cards[gearUid];
+  const def = c.reg.defs[card.defId];
+  const fi = faceIdxOf(card, def);
+  return { cost: costOf(c, gearUid, fi), civs: def.faces[fi].civs };
+}
+
 /** 「相手は、〜のカードを使えない」(超球の超人)に当たらないか。召喚・唱える・出すのすべてに働く */
 export function canPlayCard(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
   if (!gameHas(c, 'cannotPlay')) return true;
@@ -564,7 +584,10 @@ export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number):
   // 「次の自分のターンのはじめまで、相手は呪文を唱えられない」(XXDDZ)。n があれば、そのコストの呪文だけ
   if (c.s.effects.length > 0) {
     const cost = c.reg.defs[c.s.cards[uid].defId].faces[faceIdx]?.cost ?? 0;
-    for (const e of c.s.effects) if (e.mod.kind === 'cannotCast' && e.controller !== player && (e.mod.n === undefined || e.mod.n === cost)) return false;
+    for (const e of c.s.effects) {
+      if (e.mod.kind === 'cannotCast' && e.controller !== player && (e.mod.n === undefined || e.mod.n === cost)) return false;
+      if (e.mod.kind === 'cannotCastLte' && e.controller !== player && cost <= e.mod.n) return false;
+    }
   }
   for (const st of activeStatics(c, 'cannotCast')) {
     if (st.controller === player) continue; // 「相手は〜できない」

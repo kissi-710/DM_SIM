@@ -69,6 +69,12 @@ export type Cond =
   | { faceUp: true }
   /** 発生源が、ハイパーモード中 */
   | { hyper: true }
+  /** 発生源(クロスギア)が、クリーチャーにクロスされている(true)・されていない(false) */
+  | { crossed: boolean }
+  /** 発生源(クロスギア)がクロスしているクリーチャーが、cond を満たす */
+  | { hostIs: Cond }
+  /** 発生源(クリーチャー)に、クロスギアがクロスされている */
+  | { hasGear: true }
   /** 発生源(バトルゾーンのクリーチャー)が、タップしている(true)・アンタップしている(false) */
   | { selfTapped: boolean }
   /** $it の持ち主が、能力の処理者(self)・その相手(opponent) */
@@ -227,6 +233,8 @@ export type StaticMod =
   | { type: 'battleProxy'; cond: Cond }
   /** ガードマン: このクリーチャーをタップして、相手クリーチャーの攻撃先を、自分の他のクリーチャーからこのクリーチャーに変更してもよい */
   | { type: 'guardman' }
+  /** このクロスギアをクロスしたクリーチャーのパワーを n 増やす */
+  | { type: 'hostPowerAdd'; n: number }
   /** 自分の他のカード(cond に合うもの)のパワーを n 増やす */
   | { type: 'powerAddOthers'; n: number; cond: Cond };
 

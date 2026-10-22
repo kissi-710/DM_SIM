@@ -748,6 +748,9 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
     case 'cannotSummon':
       mod = { kind: 'cannotSummon', costLte: evalExpr(cc, m.costLte) };
       break;
+    case 'cannotCastLte':
+      mod = { kind: 'cannotCastLte', n: evalExpr(cc, m.n) };
+      break;
     case 'ignoreCost':
       mod = { kind: 'ignoreCost', n: evalExpr(cc, m.n) };
       break;
@@ -903,10 +906,11 @@ function actTapLock(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void 
 }
 
 /** 自分のシールドをすべて、ブレイクする(S・トリガーも使える。終極宣言) */
-function actBreakShields(c: Ctx, f: EffectFrame, _cc: CC, _a: any, _key: string): void {
+function actBreakShields(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   const s = c.s;
   const me = f.controller;
-  const n = s.players[me].shield.length;
+  // n があれば、そのぶんだけ(なければすべて)
+  const n = Math.min(a?.n ?? Infinity, s.players[me].shield.length);
   if (n === 0) return;
   s.cont.push({
     kind: 'proc',
@@ -1037,6 +1041,21 @@ function actSeal(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
 /** 持ち主の山札の上から depth 枚目の位置に、横向きに刺す */
 function actStab(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   stabIntoDeck(c, resolveSel(cc, a.sel), a.depth ?? 4);
+}
+
+/** クロスギア(gear)を、クリーチャー(to)にクロスする(コストは支払わない) */
+function actCross(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const gu = (typeof a.gear === 'string' ? varUids(cc, a.gear, { ignoreEp: true }) : resolveSel(cc, a.gear))[0];
+  const hu = (typeof a.to === 'string' ? varUids(cc, a.to, { ignoreEp: true }) : resolveSel(cc, a.to))[0];
+  if (gu === undefined || hu === undefined) return;
+  const gp = s.cards[gu].zone === 'battle' ? permByPid(s, s.cards[gu].pid) : null;
+  const hp = s.cards[hu].zone === 'battle' ? permByPid(s, s.cards[hu].pid) : null;
+  if (!gp || !hp || gp.owner !== hp.owner || gp.perm.crossedOn === hp.perm.pid) return;
+  gp.perm.crossedOn = hp.perm.pid;
+  emit(c, 'crossed', { card: gu, owner: gp.owner, host: hp.perm.cards[0], hostPid: hp.perm.pid, free: true });
+  collectBatch(c, [c.out[c.out.length - 1]]);
+  void f;
 }
 
 /** 自分はゲームに勝つ */
@@ -1171,6 +1190,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['seal', actSeal],
   ['stab', actStab],
   ['rush', actRush],
+  ['cross', actCross],
   ['win', actWin],
   ['play', actPlay],
   ['useCip', actUseCip],

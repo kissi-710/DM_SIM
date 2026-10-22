@@ -3,7 +3,7 @@ import type { Cond, Expr, Pattern, Selector } from './ast';
 import { canBeChosen, charsLite, charsOf, costBase, hasKeyword, infoOf, manaCivs } from './derive';
 import type { Ctx } from './state';
 import { gameHas, opponentOf, permByPid } from './state';
-import { type Civ, type Ev, type FaceType, isCreatureType, type PlayerId, type Snap } from './types';
+import { type Civ, type Ev, type FaceType, isCreatureType, type Permanent, type PlayerId, type Snap } from './types';
 
 export interface CC {
   c: Ctx;
@@ -19,6 +19,17 @@ export interface CC {
   event?: Ev | null;
   /** 進化元を調べている(シンカライズのタマシードを、クリーチャーとして扱う) */
   evo?: boolean;
+}
+
+/** クロスギア(uid)がクロスしているクリーチャーの山。クロスされていなければ(クロス先が場を離れていても)null */
+export function crossHostOf(c: Ctx, gearUid: number): Permanent | null {
+  const s = c.s;
+  const card = s.cards[gearUid];
+  if (card.zone !== 'battle') return null;
+  const gp = permByPid(s, card.pid);
+  if (!gp || gp.perm.crossedOn === undefined) return null;
+  const hp = permByPid(s, gp.perm.crossedOn);
+  return hp && hp.owner === gp.owner ? hp.perm : null;
 }
 
 export function mkCC(c: Ctx, controller: PlayerId, extra: Partial<CC> = {}): CC {
@@ -221,6 +232,21 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     for (let i = from; i < s.turnLog.length; i++) if (matchPattern(cc, o.logged.pattern, s.turnLog[i])) n++;
     return n >= min;
   }
+  if ('crossed' in o) {
+    if (cc.self == null) return false;
+    return (crossHostOf(cc.c, cc.self) !== null) === o.crossed;
+  }
+  if ('hostIs' in o) {
+    if (cc.self == null) return false;
+    const host = crossHostOf(cc.c, cc.self);
+    return host !== null && evalCond({ ...cc, it: host.cards[0], itFace: s.cards[host.cards[0]].face }, o.hostIs);
+  }
+  if ('hasGear' in o) {
+    if (cc.self == null) return false;
+    const sp = permByPid(s, s.cards[cc.self].pid);
+    if (!sp) return false;
+    return s.players[s.cards[cc.self].owner].battle.some((g) => g.crossedOn === sp.perm.pid);
+  }
   if ('ownedBy' in o) {
     if (cc.it == null) return false;
     return (s.cards[cc.it].owner === cc.controller) === (o.ownedBy === 'self');
@@ -334,6 +360,7 @@ export function selectCards(cc: CC, sel: Selector): number[] {
       else if (z === 'limbo') list = s.limbo.filter((u) => s.cards[u].owner === owner);
       else list = s.players[owner][z];
       for (const uid of list) {
+        if (sel.of && s.cards[uid].zone !== z) continue; // 変数のカードのうち、そのゾーンに今あるものだけ
         if (except.includes(uid)) continue;
         if (sel.notSelf && uid === cc.self) continue;
         const hint = faceHint(cc, uid, sel.type);
@@ -443,6 +470,12 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
     if (!rel(pat.winner, ev.winnerOwner)) return false;
   }
   if (pat.broke !== undefined && !!ev.broke !== pat.broke) return false;
+  // クロスギアをクロスしているクリーチャーが攻撃する時
+  if (pat.hostAttacker) {
+    if (cc.self == null) return false;
+    const host = crossHostOf(cc.c, cc.self);
+    if (!host || ev.attacker !== host.pid) return false;
+  }
   if (pat.attackerCond) {
     const uid: number | undefined = ev.card;
     if (uid === undefined) return false;

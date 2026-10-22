@@ -1,6 +1,6 @@
 // エンジンの入口: 初期化・step(reducer)・実行ループ(design 5)。
 import { loadRegistry, type Registry } from './registry';
-import { defaultPlayFace } from './derive';
+import { crossCost, defaultPlayFace, payNeed, planPayment } from './derive';
 import { runSba, pushProc, runProc } from './procs';
 import { collectBatch, emit, moveCards, setTapped } from './ops';
 import { legalActions, validateAction } from './legal';
@@ -191,6 +191,22 @@ function applyTurnAction(c: Ctx, a: Exclude<Action, { type: 'ANSWER' }>): void {
       s.step = 'attack';
       pushProc(c, 'settle');
       pushProc(c, 'attack', { pid: a.attacker, target: a.target });
+      return;
+    }
+    case 'CROSS': {
+      // クロス: クロスギアのコストをもう一度マナで払い、自分のクリーチャーにクロスする
+      pushProc(c, 'settle');
+      const gp = permByPid(s, a.gear);
+      const tp = permByPid(s, a.target);
+      if (!gp || !tp) return;
+      const gu = gp.perm.cards[0];
+      const { cost, civs } = crossCost(c, gu);
+      const pay = planPayment(c, gp.owner, civs, payNeed(cost, civs.length));
+      if (!pay) return;
+      for (const u of pay) setTapped(c, u, true);
+      gp.perm.crossedOn = tp.perm.pid;
+      emit(c, 'crossed', { card: gu, owner: gp.owner, host: tp.perm.cards[0], hostPid: tp.perm.pid });
+      collectBatch(c, [c.out[c.out.length - 1]]);
       return;
     }
     case 'HYPERIZE': {
