@@ -553,7 +553,7 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
 // ───────────────────────── 呪文の制限 ─────────────────────────
 
 /** そのクリーチャーは、離れない効果を受けているか */
-export function cannotLeave(c: Ctx, uid: number): boolean {
+export function cannotLeave(c: Ctx, uid: number, cause?: string): boolean {
   const card = c.s.cards[uid];
   if (card.zone !== 'battle') return false;
   if (c.s.effects.length > 0 && c.s.effects.some((e) => e.pid === card.pid && e.mod.kind === 'cannotLeave')) return true;
@@ -561,6 +561,7 @@ export function cannotLeave(c: Ctx, uid: number): boolean {
   for (const st of activeStatics(c, 'cannotLeaveOwn')) {
     const m = st.ability.mod;
     if (m.type !== 'cannotLeaveOwn' || st.controller !== card.owner) continue;
+    if (m.exceptDestroy && cause === 'destroy') continue;
     if (evalCond(mkCC(c, st.controller, { self: st.src, it: uid, itFace: card.face }), m.cond)) return true;
   }
   return false;

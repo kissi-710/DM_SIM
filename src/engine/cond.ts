@@ -261,8 +261,16 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     return evalCond({ ...cc, self: evoUid, it: cc.it, itFace: s.cards[cc.it].face, evo: true }, evoFace.evolveFrom);
   }
   if ('hasKw' in o) {
-    const hk = permByPid(s, s.cards[cc.it ?? -1]?.pid ?? -1);
-    return cc.it != null && s.cards[cc.it].zone === 'battle' && hk != null && hasKeyword(cc.c, hk.perm, o.hasKw);
+    if (cc.it == null) return false;
+    const hc = s.cards[cc.it];
+    if (hc.zone === 'battle') {
+      const hk = permByPid(s, hc.pid);
+      return hk != null && hasKeyword(cc.c, hk.perm, o.hasKw);
+    }
+    // バトルゾーン以外(手札など): そのカードの(クリーチャー面の)能力に、そのキーワードがあるか
+    const hdef = cc.c.reg.defs[hc.defId];
+    const hfi = hdef.faces.findIndex((x) => x.type !== 'spell');
+    return hfi >= 0 && !!(cc.c.reg.getInfo(hc.defId, hfi) as unknown as Record<string, unknown>)[o.hasKw];
   }
   if ('selfTapped' in o) {
     if (cc.self == null) return false;
@@ -454,6 +462,10 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
   if (pat.selfAttacker && (cc.self == null || ev.attacker !== s.cards[cc.self].pid)) return false;
   if (pat.notVia !== undefined && ev.via === pat.notVia) return false;
   if (pat.targetKind !== undefined && ev.target?.kind !== pat.targetKind) return false;
+  // 攻撃先が、この能力の発生源自身(クリーチャー)
+  if (pat.targetSelf) {
+    if (cc.self == null || ev.target?.kind !== 'creature' || ev.target.pid !== s.cards[cc.self].pid) return false;
+  }
   if (pat.ex !== undefined && !!ev.ex !== pat.ex) return false;
   if (pat.step !== undefined && ev.step !== pat.step) return false;
   if (pat.paid !== undefined && ev.paid !== pat.paid) return false;

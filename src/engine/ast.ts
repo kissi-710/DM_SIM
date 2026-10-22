@@ -234,7 +234,7 @@ export type StaticMod =
   /** ガードマン: このクリーチャーをタップして、相手クリーチャーの攻撃先を、自分の他のクリーチャーからこのクリーチャーに変更してもよい */
   | { type: 'guardman' }
   /** 自分のクリーチャー(cond に合うもの)は、離れない */
-  | { type: 'cannotLeaveOwn'; cond: Cond }
+  | { type: 'cannotLeaveOwn'; cond: Cond; /** 破壊されて離れるのは防がない(バラバラエティ) */ exceptDestroy?: boolean }
   /** 相手のクリーチャーは、出たターン攻撃できない(スピードアタッカーでも) */
   | { type: 'noAttackOnEntry' }
   /** このクロスギアをクロスしたクリーチャーのパワーを n 増やす */

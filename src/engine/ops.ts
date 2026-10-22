@@ -881,7 +881,7 @@ function applyLeaveReplacements(c: Ctx, p: Proposal): void {
   const card = s.cards[p.uid];
   if (p.from !== 'battle') return;
   // 「離れない」(ペトローバ・ハイパー・エン・ゲルス): バトルゾーンを離れる移動はすべて起きない
-  if (p.to !== 'battle' && cannotLeave(c, p.uid)) {
+  if (p.to !== 'battle' && cannotLeave(c, p.uid, p.cause)) {
     p.cancelled = true;
     return;
   }
