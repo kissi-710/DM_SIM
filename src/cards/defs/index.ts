@@ -8,5 +8,6 @@ import { DECK_G } from './deckG';
 import { DECK_H } from './deckH';
 import { DECK_I } from './deckI';
 import { DECK_J } from './deckJ';
+import { DECK_K } from './deckK';
 
-export const SD1_CARDS: CardDef[] = [...DECK_C, ...DECK_D, ...DECK_E, ...DECK_F, ...DECK_G, ...DECK_H, ...DECK_I, ...DECK_J];
+export const SD1_CARDS: CardDef[] = [...DECK_C, ...DECK_D, ...DECK_E, ...DECK_F, ...DECK_G, ...DECK_H, ...DECK_I, ...DECK_J, ...DECK_K];

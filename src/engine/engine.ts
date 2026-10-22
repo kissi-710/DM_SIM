@@ -49,7 +49,7 @@ export function checkDeck(db: CardDB | Registry, deck: string[], strict = true):
   if (strict) {
     if (deck.length !== 40) errors.push(`デッキは40枚です(現在 ${deck.length} 枚)`);
     for (const [id, n] of count) {
-      if (n > 4 && id !== 'dummy') errors.push(`${reg.defs[id]?.name ?? id} は4枚までです(現在 ${n} 枚)`);
+      if (n > 4 && id !== 'dummy' && !reg.defs[id]?.unlimited) errors.push(`${reg.defs[id]?.name ?? id} は4枚までです(現在 ${n} 枚)`);
     }
   } else if (deck.length < 11) {
     errors.push('デッキは11枚以上必要です(シールド5+手札5+ドロー)');

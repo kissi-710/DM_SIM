@@ -95,6 +95,7 @@ export function cloneJson<T>(v: T): T {
 function cloneCard(c: Card): Card {
   const n: Card = { defId: c.defId, owner: c.owner, zone: c.zone, ep: c.ep, tapped: c.tapped, ex: c.ex, exPid: c.exPid, pid: c.pid, face: c.face };
   if (c.up) n.up = true;
+  if (c.side) n.side = true;
   return n;
 }
 
@@ -106,7 +107,7 @@ function clonePlayer(p: PlayerZones): PlayerZones {
     shield: p.shield.slice(),
     grave: p.grave.slice(),
     hyper: p.hyper.slice(),
-    battle: p.battle.map((b) => ({ ...b, cards: b.cards.slice() })),
+    battle: p.battle.map((b) => ({ ...b, cards: b.cards.slice(), ...(b.seals ? { seals: b.seals.slice() } : {}) })),
   };
 }
 
@@ -129,6 +130,7 @@ export function cloneState(s: GameState): GameState {
     rans: s.rans.slice(),
     breaking: s.breaking.slice(),
     ...(s.extraTurns ? { extraTurns: s.extraTurns.slice() } : {}),
+    ...(s.pendingLoss ? { pendingLoss: s.pendingLoss.slice() } : {}),
     ...(s.piles ? { piles: Object.fromEntries(Object.entries(s.piles).map(([k, v]) => [k, v.slice()])) } : {}),
     deckIds: s.deckIds,
     cfg: s.cfg,

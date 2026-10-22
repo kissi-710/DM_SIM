@@ -35,6 +35,7 @@ import {
   onSummoned,
   setTapped,
   smaxVictims,
+  stabIntoDeck,
 } from './ops';
 import type { Ctx } from './state';
 import { gameHas, nextId, opponentOf, permByPid, rngInt, snapOf } from './state';
@@ -1015,6 +1016,14 @@ function runBreak(c: Ctx, f: ProcFrame): void {
         pushProc(c, 'settle');
         return;
       }
+      // Q.Q.QX.(5.S.D.): シールドを手札に加えるかわりに、相手の山札の上から4枚目の位置に、横向きに刺す
+      if (atkPerm && infoOf(c, atkPerm.perm.cards[0]).statics.some((st) => st.ability.mod.type === 'stab5sd')) {
+        s.breaking = [];
+        stabIntoDeck(c, broken, 4);
+        f.stage = 2;
+        pushProc(c, 'settle');
+        return;
+      }
       // S・トリガー/G・ストライクを宣言できるカード(革命2は、ブレイク後の枚数で判定)
       const cands: number[] = [];
       // 重ねられたシールドは、山の全部のカードが手札に加わる。S・トリガーは、それぞれのカードで宣言できる
@@ -1300,6 +1309,21 @@ export function runSba(c: Ctx): boolean {
   const s = c.s;
   if (!s.dirtySba) return false;
   if (s.winner !== null) return false;
+  // 山札の横向きのカードを手札に加えたプレイヤーは、ゲームに負ける(「ゲームに負ける時」の置換・負けない効果が使える)
+  if (s.pendingLoss && s.pendingLoss.length > 0) {
+    const p = s.pendingLoss[0];
+    if (lossReplacement(c, p, false)) {
+      s.pendingLoss.shift();
+      return true;
+    }
+    s.pendingLoss.shift();
+    if (!playerCannotLose(c, p)) {
+      s.winner = opponentOf(p);
+      s.loseReason = '山札の横向きのカードを手札に加えた';
+      emit(c, 'gameOver', { winner: s.winner, reason: s.loseReason });
+    }
+    return true;
+  }
   // 山札が0枚のプレイヤーは敗北(104.2b)
   // 山札が0枚の敗北は、0枚になった出来事に対して1回(置換された後は、山札が増えるまで再度は起きない)
   for (const p of [0, 1] as PlayerId[]) if (s.players[p].deck.length > 0) delete s.usage['deckOutHandled' + p];

@@ -177,3 +177,8 @@ export const shinkalize = (): Ability => ({ kind: 'shinkalize' });
 
 /** カード名が、指定の文字列を含む */
 export const nameHas = (s: string): Cond => ({ nameHas: s });
+
+/** このカードをデッキに何枚入れてもよい */
+export const unlimited = (def: CardDef): CardDef => ({ ...def, unlimited: true });
+/** パワード・ブレイカー(パワー n ごとに、シールドをもう1つブレイクする) */
+export const poweredBreaker = (n = 6000): Ability => kw('poweredBreaker', { n });

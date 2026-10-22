@@ -74,6 +74,11 @@ export function evalExpr(cc: CC, e: Expr | undefined, dflt = 0): number {
     const v = cc.event?.[o.evLen];
     return Array.isArray(v) ? v.length : 0;
   }
+  if ('distinct' in o) {
+    const set = new Set<number>();
+    for (const u of selectCards(cc, o.distinct.sel)) set.add(costBase(cc.c, u));
+    return set.size;
+  }
   if ('under' in o) {
     const uids = varUids(cc, o.under, { ignoreEp: true });
     if (uids.length === 0) return 0;
@@ -92,6 +97,11 @@ export function evalExpr(cc: CC, e: Expr | undefined, dflt = 0): number {
   if ('sub' in o) return evalExpr(cc, o.sub[0]) - evalExpr(cc, o.sub[1]);
   if ('min' in o) return Math.min(...o.min.map((x: Expr) => evalExpr(cc, x)));
   if ('max' in o) return Math.max(...o.max.map((x: Expr) => evalExpr(cc, x)));
+  if ('mul' in o) return o.mul.reduce((a: number, x: Expr) => a * evalExpr(cc, x), 1);
+  if ('powerOf' in o) {
+    const uids = varUids(cc, o.powerOf, { ignoreEp: true });
+    return uids.length === 0 ? 0 : charsOf(cc.c, uids[0], -1).power;
+  }
   throw new Error('未知の式: ' + JSON.stringify(e));
 }
 
@@ -154,6 +164,17 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('faceUp' in o) return cc.it != null && !!s.cards[cc.it].up;
   if ('altUsed' in o) return cc.self != null && s.usage['alt:' + cc.self + ':' + o.altUsed] === s.turn;
   if ('nameHas' in o) return cc.it != null && cc.c.reg.defs[s.cards[cc.it].defId].name.includes(o.nameHas);
+  if ('onBase' in o) {
+    const base = cc.event?.base?.[0];
+    return typeof base === 'number' && evalCond({ ...cc, it: base, itFace: -1 }, o.onBase);
+  }
+  if ('powerRank' in o) {
+    if (cc.it == null) return false;
+    const powers = selectCards(cc, o.powerRank.of).map((u) => charsOf(cc.c, u, -1).power);
+    if (powers.length === 0) return false;
+    const want = o.powerRank.which === 'max' ? Math.max(...powers) : Math.min(...powers);
+    return charsOf(cc.c, cc.it, -1).power === want;
+  }
   if ('allSame' in o) {
     const uids = varUids(cc, o.allSame.var, { ignoreEp: true });
     if (uids.length === 0) return false;
@@ -226,8 +247,11 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   }
   if ('power' in o) {
     const p = ch.power;
-    if (o.power.lte !== undefined && p > o.power.lte) return false;
-    if (o.power.gte !== undefined && p < o.power.gte) return false;
+    const q = o.power;
+    if (q.lte !== undefined && p > evalExpr(cc, q.lte)) return false;
+    if (q.gte !== undefined && p < evalExpr(cc, q.gte)) return false;
+    if (q.lt !== undefined && !(p < evalExpr(cc, q.lt))) return false;
+    if (q.gt !== undefined && !(p > evalExpr(cc, q.gt))) return false;
     return true;
   }
   if ('type' in o) {

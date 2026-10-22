@@ -1,7 +1,7 @@
 // 効果のインタプリタ(effects 6.5)。フレームは pc と vars(JSON)だけを持ち、再開できる。
 import type { ActDef, Cond, Expr, Selector, StepDef } from './ast';
 import { type CC, evalCond, evalExpr, selectCards, varUids } from './cond';
-import { charsOf, costBase, infoOf } from './derive';
+import { charsOf, costBase, deckLocked, infoOf } from './derive';
 import type { Instr } from './registry';
 import {
   addShieldFromDeck,
@@ -15,6 +15,7 @@ import {
   removeZoneCard,
   setTapped,
   shuffleDeck,
+  stabIntoDeck,
 } from './ops';
 import type { Ctx } from './state';
 import { nextId, opponentOf, permByPid, rngInt, shuffleInPlace, snapOf } from './state';
@@ -474,6 +475,10 @@ function actLookTop(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void 
   const s = c.s;
   const who = playerOf(f, a.who);
   const n = evalExpr(cc, a.n);
+  if (deckLocked(c, who)) {
+    f.vars[a.as] = []; // 山札を見れない(5.S.D.)
+    return;
+  }
   const top = s.players[who].deck.slice(0, n);
   f.vars[a.as] = top.map((u) => ref(c, u));
   // この能力で見たカード。後の選択肢(modes)で、選ぶ人に見せる(マルル: 見てから選ぶ)
@@ -791,6 +796,7 @@ function actBottom(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void 
   const uids = varUids(cc, a.of, { ignoreEp: true }).filter((u) => s.cards[u].zone === 'deck');
   if (uids.length === 0) return;
   const owner = s.cards[uids[0]].owner;
+  if (deckLocked(c, owner)) return; // 山札の順序を変えられない(5.S.D.)
   const deck = s.players[owner].deck;
   for (const u of uids) deck.splice(deck.indexOf(u), 1);
   for (const u of uids) {
@@ -986,6 +992,37 @@ function actCastSide(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): voi
   });
 }
 
+/** 封印を付ける: 持ち主の山札の上から1枚を、裏向きで、そのクリーチャーの上に置く */
+function actSeal(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone !== 'battle') continue;
+    const pm = permByPid(s, card.pid);
+    if (!pm) continue;
+    const deck = s.players[card.owner].deck;
+    const d = deck[0];
+    if (d === undefined) continue;
+    const snap = snapOf(c, d);
+    removeZoneCard(c, d);
+    const dc = s.cards[d];
+    dc.zone = 'battle';
+    dc.ep++;
+    dc.pid = pm.perm.pid;
+    dc.face = 0;
+    dc.tapped = false;
+    (pm.perm.seals ??= []).push(d);
+    s.sealed = true;
+    emit(c, 'moved', { card: d, owner: dc.owner, from: 'deck', to: 'battle', cause: 'seal', kind: 'creature', ex: false, lki: snap, underneath: true });
+  }
+  s.dirtySba = true;
+}
+
+/** 持ち主の山札の上から depth 枚目の位置に、横向きに刺す */
+function actStab(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  stabIntoDeck(c, resolveSel(cc, a.sel), a.depth ?? 4);
+}
+
 function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   // 「そのターン中に〜を使っていなければ」の判定用に、印をログに残す
   emit(c, a, { owner: f.controller, source: f.source.uid });
@@ -1030,6 +1067,8 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['breakShields', actBreakShields],
   ['judge', actJudge],
   ['castSide', actCastSide],
+  ['seal', actSeal],
+  ['stab', actStab],
   ['stackShield', actStackShield],
   ['log', actLog],
   ['setVar', actSetVar],

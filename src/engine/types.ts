@@ -58,6 +58,8 @@ export interface CardDef {
   faces: Face[]; // ツインパクトは2面(0=クリーチャー面, 1=呪文面)
   text?: string;
   image?: string | null;
+  /** このカードをデッキに何枚入れてもよい(特攻の忠剣ハチ公) */
+  unlimited?: boolean;
 }
 export type CardDB = Record<string, CardDef>;
 
@@ -80,6 +82,8 @@ export interface Card {
   face: number;
   /** シールドゾーンで表向きか(表向きのシールド。省略 = 裏向き) */
   up?: boolean;
+  /** 山札に、横向きに刺されているか(終葬 5.S.D.) */
+  side?: boolean;
 }
 
 export interface Permanent {
@@ -91,6 +95,8 @@ export interface Permanent {
   enteredTurn: number;
   /** ハイパーモード中か(次の持ち主のターンのはじめまで) */
   hyper?: boolean;
+  /** 封印(裏向きで、この山の上に置かれたカードの uid)。封印されているクリーチャーは無視される(能力を失い、攻撃もブロックもできない) */
+  seals?: number[];
 }
 
 export interface PlayerZones {
@@ -223,6 +229,8 @@ export type EffectMod =
   | { kind: 'cannotBeChosen' }
   | { kind: 'cannotBeAttacked' }
   | { kind: 'cannotBlock' }
+  /** 攻撃クリーチャーの山: ブレイクするシールドの数を、少なくとも n にする(このターン) */
+  | { kind: 'breaker'; n: number }
   /** 攻撃クリーチャーの山: 最初の攻撃の終わりに、アンタップする */
   | { kind: 'untapAfterAttack' }
   /** プレイヤー単位: 発生源の持ち主の相手の、表記コストが n のクリーチャーは、攻撃もブロックもできない */
@@ -287,6 +295,10 @@ export interface GameState {
   extraTurns?: PlayerId[];
   /** 追加のターンの後に、本来の順番で次に行うプレイヤー */
   resume?: PlayerId;
+  /** 封印がいちど付けられたか(能力の無視の判定を省くための印) */
+  sealed?: boolean;
+  /** ゲームに負ける手続きを待っているプレイヤー(山札の横向きのカードを手札に加えた、など) */
+  pendingLoss?: PlayerId[];
   /**
    * シールドの山(カードを重ねて置かれたシールド): 一番上のカードの uid → その下に重なっているカードの uid(上から順)。
    * 重なっているカードは zone が 'shield' だが、players[].shield には載らない(シールド1つ = 山1つ)。

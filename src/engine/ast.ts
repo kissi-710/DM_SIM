@@ -11,10 +11,15 @@ export type Expr =
   | { evLen: string }
   /** 変数のカードがいるバトルゾーンの山の、下に重なっているカードの枚数(フィールドの下など) */
   | { under: string }
+  /** セレクタに合うカードの、コストの種類の数(「コストが異なるクリーチャー1体につき」) */
+  | { distinct: { sel: Selector; by: 'cost' } }
   | { add: Expr[] }
   | { sub: [Expr, Expr] }
   | { min: Expr[] }
-  | { max: Expr[] };
+  | { max: Expr[] }
+  | { mul: Expr[] }
+  /** 変数のカードの、いまのパワー */
+  | { powerOf: string };
 
 export interface Selector {
   zone: ZoneName | ZoneName[];
@@ -40,7 +45,7 @@ export type Cond =
   | { civsAll: Civ[] }
   | { multicolor: boolean }
   | { cost: { eq?: Expr; lt?: Expr; lte?: Expr; gt?: Expr; gte?: Expr } }
-  | { power: { lte?: number; gte?: number } }
+  | { power: { lte?: Expr; gte?: Expr; lt?: Expr; gt?: Expr } }
   | { type: 'creature' | 'spell' | 'element' | 'tamaseed' | 'field' | 'crossgear' }
   | { evolution: boolean }
   | { race: string }
@@ -74,6 +79,10 @@ export type Cond =
   | { eventIs: { [k: string]: string | number | boolean } }
   /** 変数のカードがすべて where を満たし、コストがすべて同じ(1枚以上) */
   | { allSame: { var: string; where?: Cond } }
+  /** 誘発したイベント(重なった時)で、$it の下にあった(重ねられた)クリーチャーが where を満たす */
+  | { onBase: Cond }
+  /** $it のパワーが、セレクタに合うカードの中で、一番大きい(max)・小さい(min) */
+  | { powerRank: { which: 'max' | 'min'; of: Selector } }
   /** ゲーム中に1度の能力(key)を、まだ使っていない */
   | { unused: string }
   | { turnOf: 'self' | 'opponent' }
@@ -149,7 +158,9 @@ export type KeywordName =
   | 'yobinion'
   | 'invasion'
   | 'slayer'
-  | 'revolutionChange';
+  | 'revolutionChange'
+  /** パワード・ブレイカー: パワー n ごとに、シールドをもう1つブレイクする */
+  | 'poweredBreaker';
 
 export type StaticMod =
   | { type: 'costDelta'; delta: number; cond: Cond; /** 各ターンに1度だけ(発生源ごと)。使うと、そのターンはもう働かない */ oncePerTurn?: boolean }
@@ -183,7 +194,13 @@ export type StaticMod =
   /** 自分は、山札が0枚でもゲームに負けない */
   | { type: 'noDeckOutLoss' }
   /** 相手のクリーチャーは、タップして出る */
-  | { type: 'enterTapped' };
+  | { type: 'enterTapped' }
+  /** このクリーチャーのパワーを、式の値だけ増やす(「〜1体につき+3000」など。評価は、このクリーチャーから見る) */
+  | { type: 'powerAddExpr'; expr: Expr }
+  /** このクリーチャーがシールドをブレイクする時、相手はそのシールドを手札に加えるかわりに、自身の山札の上から4枚目の位置に横向きに刺す(5.S.D.) */
+  | { type: 'stab5sd' }
+  /** 相手は、自身の山札を見れず、順序を変えられない */
+  | { type: 'deckLock' };
 
 export type ReplaceApply =
   | { type: 'changeDest'; to: ZoneName }

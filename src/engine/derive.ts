@@ -83,8 +83,21 @@ export function faceTypeOf(c: Ctx, uid: number): FaceType {
 
 export function infoOf(c: Ctx, uid: number): FaceInfo {
   const card = c.s.cards[uid];
-  if (card.zone === 'battle' && c.s.effects.length > 0 && isIgnored(c, uid)) return EMPTY_FACE_INFO;
+  if (card.zone === 'battle' && (c.s.effects.length > 0 || c.s.sealed) && isIgnored(c, uid)) return EMPTY_FACE_INFO;
   return c.reg.getInfo(card.defId, faceIdxOf(card, c.reg.defs[card.defId]));
+}
+
+/** 封印されているか(封印されているクリーチャーは、能力を失い、攻撃もブロックもできない) */
+export function isSealed(c: Ctx, uid: number): boolean {
+  const card = c.s.cards[uid];
+  if (!c.s.sealed || card.zone !== 'battle') return false;
+  const pm = permByPid(c.s, card.pid);
+  return !!pm && (pm.perm.seals?.length ?? 0) > 0;
+}
+
+/** 相手は、自身の山札を見れず、順序を変えられない(5.S.D.) */
+export function deckLocked(c: Ctx, p: PlayerId): boolean {
+  return activeStatics(c, 'deckLock').some((st) => st.controller !== p);
 }
 
 /**
@@ -93,6 +106,7 @@ export function infoOf(c: Ctx, uid: number): FaceInfo {
  */
 export function isIgnored(c: Ctx, uid: number): boolean {
   const card = c.s.cards[uid];
+  if (c.s.sealed && isSealed(c, uid)) return true;
   for (const e of c.s.effects) {
     if (e.mod.kind !== 'ignoreCost' || e.controller === card.owner) continue;
     if (costBase(c, uid) === e.mod.n) return true;
@@ -150,6 +164,13 @@ export function powerOf(c: Ctx, perm: Permanent): number {
     p += st.ability.mod.n;
   }
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'powerAdd') p += e.mod.n;
+  // 式で増減するパワー(「コストが異なるクリーチャー1体につき+3000」など)
+  for (const st of info.statics) {
+    if (st.ability.mod.type !== 'powerAddExpr') continue;
+    const cc = mkCC(c, card.owner, { self: uid });
+    if (st.ability.while && !evalCond(cc, st.ability.while)) continue;
+    p += evalExpr(cc, st.ability.mod.expr);
+  }
   // パワーアタッカー: 攻撃中だけ
   if (info.statics.length > 0 && isAttacking(c, perm.pid)) {
     for (const st of info.statics) {
@@ -209,6 +230,9 @@ export function breakerCount(c: Ctx, perm: Permanent): number {
     if (b.while && !evalCond(mkCC(c, c.s.cards[uid].owner, { self: uid }), b.while)) continue;
     n = Math.max(n, b.n);
   }
+  // パワード・ブレイカー: パワー n ごとに、シールドをもう1つ(1 + パワー / n)
+  if (info.poweredBreaker) n = Math.max(n, 1 + Math.floor(powerOf(c, perm) / info.poweredBreaker));
+  for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'breaker') n = Math.max(n, e.mod.n);
   return n;
 }
 
@@ -263,6 +287,7 @@ export function canAttack(c: Ctx, perm: Permanent, target: { kind: 'player' } | 
   const uid = perm.cards[0];
   if (!isCreatureType(faceTypeOf(c, uid))) return false; // タマシード・フィールド・クロスギアは攻撃できない
   const owner = s.cards[uid].owner;
+  if (s.sealed && isSealed(c, uid)) return false;
   if (actsLimited(c, owner)) return false;
   if (s.effects.length > 0 && s.effects.some((e) => e.mod.kind === 'cannotAttackAny' && e.controller !== owner)) return false;
   if (costLocked(c, uid)) return false;
@@ -309,6 +334,7 @@ function costLocked(c: Ctx, uid: number): boolean {
 
 export function canBlock(c: Ctx, perm: Permanent): boolean {
   if (perm.tapped) return false;
+  if (c.s.sealed && isSealed(c, perm.cards[0])) return false;
   if (costLocked(c, perm.cards[0])) return false;
   if (hasEffect(c, perm.pid, 'cannotBlock')) return false;
   if (actsLimited(c, c.s.cards[perm.cards[0]].owner)) return false;

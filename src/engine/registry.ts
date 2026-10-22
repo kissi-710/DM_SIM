@@ -45,6 +45,8 @@ export interface FaceInfo {
   altCosts: Extract<Ability, { kind: 'altCost' }>[];
   /** ハイパー化の、タップする他のクリーチャーの数(なければ null) */
   hyperize: number | null;
+  /** パワード・ブレイカー: パワー n ごとにシールドをもう1つブレイクする(なければ null) */
+  poweredBreaker: number | null;
   /** シンカライズを持つか */
   shinkalize: boolean;
   statics: { ability: Extract<Ability, { kind: 'static' }>; idx: number }[];
@@ -58,7 +60,7 @@ export interface FaceInfo {
 /** 能力を無視されているカードの FaceInfo(何の能力も持たない) */
 export const EMPTY_FACE_INFO: FaceInfo = {
   blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false, slayer: false,
-  sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], altCosts: [], hyperize: null, shinkalize: false, statics: [],
+  sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], altCosts: [], hyperize: null, poweredBreaker: null, shinkalize: false, statics: [],
   replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
 };
 
@@ -172,17 +174,17 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame',
+  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame', 'onBase', 'powerRank',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
   'blocker', 'breaker', 'shieldTrigger', 'gStrike', 'speedAttacker', 'machFighter', 'exLife', 'justDiver',
-  'sympathy', 'hyperEnergy', 'yobinion', 'invasion', 'slayer', 'revolutionChange',
+  'sympathy', 'hyperEnergy', 'yobinion', 'invasion', 'slayer', 'revolutionChange', 'poweredBreaker',
 ]);
 
 /** 条件(カードデータの JSON)の検査。形がまだ信用できない入力なので、型は緩く受ける */
@@ -425,7 +427,7 @@ export function loadRegistry(origDb: CardDB): Registry {
     info[id] = faces.map((f, fi) => {
       const fi_: FaceInfo = {
         blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false, slayer: false,
-        sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], altCosts: [], hyperize: null, shinkalize: false, statics: [],
+        sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], altCosts: [], hyperize: null, poweredBreaker: null, shinkalize: false, statics: [],
         replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
       };
       f.abilities.forEach((a, idx) => {
@@ -442,6 +444,7 @@ export function loadRegistry(origDb: CardDB): Registry {
             else if (a.name === 'slayer') fi_.slayer = true;
             else if (a.name === 'sympathy') fi_.sympathy = true;
             else if (a.name === 'hyperEnergy') fi_.hyperEnergy = true;
+            else if (a.name === 'poweredBreaker') fi_.poweredBreaker = a.n ?? 6000;
             else if (a.name === 'shieldTrigger') fi_.shieldTriggers.push({ ability: a, idx });
             else if (a.name === 'gStrike') fi_.gStrike = { ability: a, idx };
             break;

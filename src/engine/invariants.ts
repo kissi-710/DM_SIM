@@ -30,6 +30,13 @@ export function checkInvariants(s: GameState): string[] {
         if (c.pid !== perm.pid) errs.push(`カード${u}の pid が違う`);
         if (c.owner !== p) errs.push(`カード${u}の持ち主が違う(battle)`);
       }
+      // 封印(山の上に置かれた裏向きのカード)
+      for (const u of perm.seals ?? []) {
+        put(u, `${p}:battle-seal`);
+        const c = s.cards[u];
+        if (c.zone !== 'battle') errs.push(`封印のカード${u}の zone が battle でない`);
+        if (c.pid !== perm.pid) errs.push(`封印のカード${u}の pid が違う`);
+      }
     }
   }
   // 重ねて置かれたシールド(山)の、下のカード

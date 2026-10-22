@@ -2,7 +2,7 @@
 // 規約: 入力待ち(ask)は、状態を変更する前に行う。再実行しても二重に変更されない。
 import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
-import { activeStatics, charsLite, infoOf, isIgnored, manaCivs, payNeed } from './derive';
+import { activeStatics, charsLite, deckLocked, infoOf, isIgnored, manaCivs, payNeed } from './derive';
 import type { Ctx } from './state';
 import { gameHas, nextId, opponentOf, permByPid, shuffleInPlace, snapOf } from './state';
 import {
@@ -274,6 +274,55 @@ export function onSummoned(c: Ctx, uid: number): void {
   }
 }
 
+/** 封印を1つ墓地に置く: owner の、cmdCivs と同じ文明を持つ封印されたクリーチャーのそれぞれから、封印を1つ */
+function releaseSeals(c: Ctx, owner: PlayerId, cmdCivs: string[], evs: Ev[]): void {
+  const s = c.s;
+  for (const perm of s.players[owner].battle) {
+    if (!perm.seals?.length) continue;
+    const top = s.cards[perm.cards[0]];
+    const civs = c.reg.getFace(top.defId, top.face).civs as string[];
+    if (!civs.some((x) => cmdCivs.includes(x))) continue;
+    const u = perm.seals.shift()!;
+    if (perm.seals.length === 0) delete perm.seals;
+    const uc = s.cards[u];
+    const usnap = snapOf(c, u);
+    uc.zone = 'grave';
+    uc.ep++;
+    uc.pid = -1;
+    s.players[uc.owner].grave.push(u);
+    evs.push(emit(c, 'moved', { card: u, owner: uc.owner, from: 'battle', to: 'grave', cause: 'sealRelease', kind: 'creature', ex: false, lki: usnap, underneath: true }));
+  }
+}
+
+/**
+ * カードを、持ち主の山札の上から n 枚目の位置に、横向きに刺す(終葬 5.S.D.)。横向きのカードを手札に加えたプレイヤーは、ゲームに負ける
+ */
+export function stabIntoDeck(c: Ctx, uids: number[], depth: number): void {
+  const s = c.s;
+  const evs: Ev[] = [];
+  for (const uid of uids) {
+    const card = s.cards[uid];
+    const from = card.zone;
+    const snap = snapOf(c, uid);
+    removeFromZone(c, uid);
+    const deck = s.players[card.owner].deck;
+    deck.splice(Math.min(depth - 1, deck.length), 0, uid);
+    card.zone = 'deck';
+    card.ep++;
+    card.pid = -1;
+    card.tapped = false;
+    card.ex = false;
+    card.exPid = -1;
+    card.face = 0;
+    delete card.up;
+    card.side = true;
+    evs.push(emit(c, 'moved', { card: uid, owner: card.owner, from, to: 'deck', cause: 'stab', kind: 'creature', ex: false, lki: snap }));
+  }
+  s.batchNo++;
+  collectBatch(c, evs);
+  s.dirtySba = true;
+}
+
 /** カードをいまのゾーンから取り除く(置き先は呼び出し側が決める) */
 export function removeZoneCard(c: Ctx, uid: number): void {
   removeFromZone(c, uid);
@@ -436,10 +485,22 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
   const wasEx = card.ex;
   // 山(進化元)を一緒に動かす
   let under: number[] = [];
+  let sealCards: number[] = [];
   if (from === 'battle' && to !== 'battle' && !opts.alone) {
     const pm = permByPid(s, card.pid);
-    if (pm && pm.perm.cards[0] === uid) under = pm.perm.cards.slice(1);
+    if (pm && pm.perm.cards[0] === uid) {
+      under = pm.perm.cards.slice(1);
+      sealCards = pm.perm.seals?.slice() ?? []; // 封印は、山が離れる時に、墓地に置かれる
+    }
     // 山に付いているEXシールドは、離れる時の置換で処理済み
+  }
+  // 山札に横向きに刺されたカード(終葬 5.S.D.): 山札から出る時に印を外す。手札に加えたプレイヤーは、ゲームに負ける
+  if (card.side) {
+    delete card.side;
+    if (from === 'deck' && to === 'hand') {
+      (s.pendingLoss ??= []).push(card.owner);
+      s.dirtySba = true;
+    }
   }
   if (to === 'battle') {
     return enterBattle(c, uid, opts, evs);
@@ -506,6 +567,18 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
     uc.face = 0;
     placeInZone(c, u, to, pos);
     evs.push(emit(c, 'moved', { card: u, owner: uc.owner, from: 'battle', to, cause, kind: 'creature', ex: false, lki: usnap, underneath: true }));
+  }
+  // 封印されていたカードは、墓地に置かれる
+  for (const u of sealCards) {
+    const uc = s.cards[u];
+    if (uc.zone !== 'battle') continue;
+    const usnap = snapOf(c, u);
+    uc.zone = 'grave';
+    uc.ep++;
+    uc.pid = -1;
+    uc.face = 0;
+    s.players[uc.owner].grave.push(u);
+    evs.push(emit(c, 'moved', { card: u, owner: uc.owner, from: 'battle', to: 'grave', cause: 'seal', kind: 'creature', ex: false, lki: usnap, underneath: true }));
   }
   return { uid, moved: true, to, ep: card.ep };
 }
@@ -602,6 +675,10 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   }
   if (opts.onto !== undefined) {
     evs.push(emit(c, 'evolved', { card: uid, owner, pid: perm.pid, base, via }));
+  }
+  // コマンドが出た時、その持ち主は、そのコマンドと同じ文明を持つ自身のカードから、封印を1つ墓地に置く
+  if (s.sealed && !fromBattle && ekind === 'creature' && (c.reg.getFace(card.defId, faceIdx).races ?? []).some((r) => r.includes('コマンド'))) {
+    releaseSeals(c, owner, c.reg.getFace(card.defId, faceIdx).civs, evs);
   }
   // フィールドは、1枚だけ出していられる。新しく出したら、前のフィールドは墓地に置かれる
   if (ekind === 'field' && opts.onto === undefined) {
@@ -993,6 +1070,7 @@ function drawEmptyReplacement(c: Ctx, player: PlayerId): void {
 }
 
 export function shuffleDeck(c: Ctx, player: PlayerId): void {
+  if (deckLocked(c, player)) return; // 山札の順序を変えられない(5.S.D.)
   shuffleInPlace(c.s, c.s.players[player].deck);
   // 山札全体を混ぜたら、公開された札の位置の手がかりは失われる
   if (c.s.knownDeck) c.s.knownDeck[player] = [];
