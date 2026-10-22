@@ -8,6 +8,7 @@ import {
   canAttack,
   canBlock,
   canGuard,
+  canPlayCard,
   canCast,
   canSummon,
   canUseCost,
@@ -47,6 +48,7 @@ import type {
   EffectFrame,
   Ev,
   PlayExtra,
+  Permanent,
   PlayerId,
   PoolEntry,
   ProcFrame,
@@ -141,6 +143,7 @@ export function planPlay(
   if (kind === 'cast' && !canCast(c, player, uid, faceIdx)) return fail('この呪文は唱えられません');
   if (kind === 'summon' && !canSummon(c, player, uid, faceIdx)) return fail('このクリーチャーは召喚できません');
   if (!canUseCost(c, player, face.cost)) return fail('そのコストのカードは実行できません');
+  if (!canPlayCard(c, player, uid, faceIdx)) return fail('そのカードは使えません');
 
   let onto: number | undefined;
   if (face.type === 'evolution') {
@@ -742,6 +745,37 @@ function firstBattleWinsFor(c: Ctx, owner: PlayerId): boolean {
 }
 
 /** 効果によるバトル(「その2体をバトルさせる」)。vars: a, d = 山の pid(a が攻撃側扱い) */
+/** バトルの当事者を、「かわりにこのクリーチャーにバトルさせてもよい」(battleProxy)で置き換える。置き換えなければ、そのまま返す */
+function battleProxySwap(c: Ctx, pma: { perm: Permanent; owner: PlayerId }, pmd: { perm: Permanent; owner: PlayerId }): { a: { perm: Permanent; owner: PlayerId }; d: { perm: Permanent; owner: PlayerId } } {
+  const s = c.s;
+  if (!gameHas(c, 'battleProxy')) return { a: pma, d: pmd };
+  const swap = (side: { perm: Permanent; owner: PlayerId }): { perm: Permanent; owner: PlayerId } => {
+    const owner = side.owner;
+    const cands = s.players[owner].battle.filter((x) => {
+      if (x === side.perm || x === pma.perm || x === pmd.perm) return false;
+      return infoOf(c, x.cards[0]).statics.some(
+        (st) =>
+          st.ability.mod.type === 'battleProxy' &&
+          (!st.ability.while || evalCond(mkCC(c, owner, { self: x.cards[0] }), st.ability.while)) &&
+          evalCond(mkCC(c, owner, { self: x.cards[0], it: side.perm.cards[0], itFace: s.cards[side.perm.cards[0]].face }), st.ability.mod.cond),
+      );
+    });
+    if (cands.length === 0) return side;
+    const ans = ask<number[]>(c, {
+      player: owner,
+      why: 'may',
+      input: { shape: 'pick', candidates: cands.map((x) => x.cards[0]), min: 0, max: 1 },
+      source: { uid: cands[0].cards[0], ep: s.cards[cands[0].cards[0]].ep },
+      prompt: 'バトルを、かわりにこのクリーチャーにさせますか?(選べば置き換える)',
+    });
+    if (ans.length === 0) return side;
+    return permByPid(s, s.cards[ans[0]].pid)!;
+  };
+  const a = swap(pma);
+  const d = swap(pmd);
+  return { a, d };
+}
+
 function runBattle(c: Ctx, f: ProcFrame): void {
   const s = c.s;
   const v = f.vars;
@@ -753,8 +787,12 @@ function runBattle(c: Ctx, f: ProcFrame): void {
         popFrame(c, f);
         return;
       }
+      // 「自分の他のジャイアントが相手のクリーチャーとバトルする時、かわりにこのクリーチャーにバトルさせてもよい」(銀河竜 ゴルファンタジスタ)
+      const swapped = battleProxySwap(c, pma, pmd);
+      v.a = swapped.a.perm.pid;
+      v.d = swapped.d.perm.pid;
       f.stage = 1;
-      emitBattleStarted(c, pma, pmd);
+      emitBattleStarted(c, swapped.a, swapped.d);
       return;
     }
     case 1: {
@@ -934,8 +972,11 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       }
       // 「バトルする時」の誘発は、パワーを比べる前に解決する(総合ルール 115.2 / 701.13a)。
       // 聞き手のいるカードがある時だけ、イベントを発行する(段階を増やさず、既存の対戦の記録を変えない)
+      const sw = battleProxySwap(c, pm, dm0);
+      v.ba = sw.a.perm.pid;
+      v.bd = sw.d.perm.pid;
       f.stage = 4;
-      emitBattleStarted(c, pm, dm0);
+      emitBattleStarted(c, sw.a, sw.d);
       return;
     }
     case 4: {
@@ -944,9 +985,10 @@ function runAttack(c: Ctx, f: ProcFrame): void {
         endAttack(c, f);
         return;
       }
-      const pm = permByPid(s, v.pid);
       const target = v.target as { kind: 'player' } | { kind: 'creature'; pid: number };
-      const dm = target.kind === 'creature' ? permByPid(s, target.pid) : null;
+      // バトルの当事者(置き換えられていなければ、攻撃したクリーチャーと攻撃先)
+      const pm = permByPid(s, v.ba ?? v.pid);
+      const dm = target.kind === 'creature' ? permByPid(s, v.bd ?? target.pid) : null;
       if (!pm || !dm) {
         endAttack(c, f);
         return;

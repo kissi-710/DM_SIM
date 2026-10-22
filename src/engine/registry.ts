@@ -80,7 +80,9 @@ export type FeatureName =
   | 'sBack'
   | 'enteredFrom'
   | 'oneSpellPerTurn'
-  | 'powerAddOthers';
+  | 'powerAddOthers'
+  | 'cannotPlay'
+  | 'battleProxy';
 
 export interface Registry {
   db: CardDB;
@@ -530,6 +532,8 @@ export function loadRegistry(origDb: CardDB): Registry {
     attackMeFirst: staticOf('attackMeFirst'),
     oneSpellPerTurn: staticOf('oneSpellPerTurn'),
     powerAddOthers: staticOf('powerAddOthers'),
+    cannotPlay: staticOf('cannotPlay'),
+    battleProxy: staticOf('battleProxy'),
     sBack: featureDefs((ab) => ab.kind === 'keyword' && ab.name === 'sBack'),
     enteredFrom: featureDefs((ab) => ab.kind === 'trigger' && (Array.isArray(ab.spec.on) ? ab.spec.on : [ab.spec.on]).some((p) => p.type === 'entered' && p.from !== undefined)),
   };

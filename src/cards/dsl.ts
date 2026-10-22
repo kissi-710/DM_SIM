@@ -56,6 +56,7 @@ const kw = (name: KeywordName, extra: Partial<Extract<Ability, { kind: 'keyword'
 export const blocker = (): Ability => kw('blocker');
 export const breaker = (n: number, whileCond?: Cond): Ability => kw('breaker', { n, ...(whileCond ? { while: whileCond } : {}) });
 export const wBreaker = (): Ability => breaker(2);
+/** 超重竜・銀河竜など: 革命チェンジ[コスト5以上のジャイアント] */
 /** ガードマン */
 export const guardman = (): Ability => staticAb({ type: 'guardman' });
 /** G・ブレイカー: 相手のシールドをすべてブレイクし、その攻撃の後、自分のシールドをすべてブレイクする(ブレイク数99として扱う) */

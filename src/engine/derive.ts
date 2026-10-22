@@ -538,6 +538,18 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
 
 // ───────────────────────── 呪文の制限 ─────────────────────────
 
+/** 「相手は、〜のカードを使えない」(超球の超人)に当たらないか。召喚・唱える・出すのすべてに働く */
+export function canPlayCard(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
+  if (!gameHas(c, 'cannotPlay')) return true;
+  for (const st of activeStatics(c, 'cannotPlay')) {
+    if (st.controller === player) continue;
+    const mod = st.ability.mod;
+    if (mod.type !== 'cannotPlay') continue;
+    if (evalCond(mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx }), mod.cond)) return false;
+  }
+  return true;
+}
+
 /** プレイヤーがこの呪文(面)を唱えられるか(ドルファディロムの制限など) */
 export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
   // 「相手は、自身のターンに1回までしか呪文を唱えられない」(ジョギラゴン&ジョニー)
