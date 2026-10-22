@@ -1,6 +1,6 @@
 // 条件・式・セレクタの評価、イベントパターンの照合(effects 6.4 / 4.3)。
 import type { Cond, Expr, Pattern, Selector } from './ast';
-import { canBeChosen, charsLite, charsOf, costBase, infoOf, manaCivs } from './derive';
+import { canBeChosen, charsLite, charsOf, costBase, hasKeyword, infoOf, manaCivs } from './derive';
 import type { Ctx } from './state';
 import { gameHas, opponentOf, permByPid } from './state';
 import { type Civ, type Ev, type FaceType, isCreatureType, type PlayerId, type Snap } from './types';
@@ -221,6 +221,10 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     for (let i = from; i < s.turnLog.length; i++) if (matchPattern(cc, o.logged.pattern, s.turnLog[i])) n++;
     return n >= min;
   }
+  if ('hasKw' in o) {
+    const hk = permByPid(s, s.cards[cc.it ?? -1]?.pid ?? -1);
+    return cc.it != null && s.cards[cc.it].zone === 'battle' && hk != null && hasKeyword(cc.c, hk.perm, o.hasKw);
+  }
   if ('selfTapped' in o) {
     if (cc.self == null) return false;
     const sp = permByPid(s, s.cards[cc.self].pid);
@@ -425,6 +429,7 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
     if (ev.winnerOwner === undefined) return false;
     if (!rel(pat.winner, ev.winnerOwner)) return false;
   }
+  if (pat.broke !== undefined && !!ev.broke !== pat.broke) return false;
   if (pat.attackerCond) {
     const uid: number | undefined = ev.card;
     if (uid === undefined) return false;

@@ -415,6 +415,12 @@ function runTurn(c: Ctx, f: ProcFrame): void {
         if (perm.rushIfAttacked && !s.turnLog.some((e) => e.type === 'attackDeclared' && e.attacker === perm.pid)) continue;
         moveCards(c, [perm.cards[0]], { to: 'deck', cause: 'effect', pos: 'bottom' });
       }
+      // J・O・E: 山札の下に置いたら、カードを1枚引く
+      for (const perm of s.players[P].battle.slice()) {
+        if (perm.endBottom !== s.turn) continue;
+        const moved = moveCards(c, [perm.cards[0]], { to: 'deck', cause: 'effect', pos: 'bottom' });
+        if (moved.some((r) => r.moved)) drawCards(c, P, 1);
+      }
       f.stage = 4;
       pushProc(c, 'settle');
       return;
@@ -459,7 +465,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       const owner = card.owner;
       const plan = planPlay(c, owner, uid, v.from, v.face, v.extra, !!v.free);
       if (!plan.ok) {
-        if (v.free) {
+        if (v.free || v.soft) {
           popFrame(c, f); // 無料で使えない(進化元がない等)
           return;
         }
@@ -500,6 +506,11 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         const via = p.kind === 'summon' ? 'summon' : 'put';
         enterBattle(c, uid, { to: 'battle', cause: via, via, onto: p.onto ?? undefined, face: p.face, paid: p.paid, cost: p.cost, free: p.free, from: v.fromZone }, evs);
         if (p.kind === 'summon' && s.cards[uid].zone === 'battle') onSummoned(c, uid);
+        // J・O・E: このターンの終わりに山札の下に置き、カードを1枚引く
+        if (p.alt && s.cards[uid].zone === 'battle' && c.reg.getInfo(card.defId, p.face).altCosts.some((a) => a.id === p.alt && a.cost.endBottomDraw)) {
+          const pm = permByPid(s, s.cards[uid].pid);
+          if (pm) pm.perm.endBottom = s.turn;
+        }
         // アビスラッシュ
         if (p.rush && s.cards[uid].zone === 'battle') {
           const pm = permByPid(s, s.cards[uid].pid);
@@ -805,6 +816,12 @@ function endAttack(c: Ctx, f: ProcFrame): void {
       s.batchNo++;
       collectBatch(c, [ev]);
     }
+  }
+  // G・ブレイカー: その攻撃の後、自分のシールドをすべてブレイクする
+  if (pm && s.winner === null && !s.skipTurn && s.players[pm.owner].shield.length > 0 && breakerCount(c, pm.perm) >= 99) {
+    popFrame(c, f);
+    s.cont.push({ kind: 'proc', id: nextId(s), causedBy: c.cause, name: 'break', stage: 0, vars: { pid: pm.perm.pid, owner: opponentOf(pm.owner), n: s.players[pm.owner].shield.length } });
+    return;
   }
   popFrame(c, f);
 }

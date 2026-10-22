@@ -101,6 +101,8 @@ export interface Permanent {
   rush?: number;
   /** アビスラッシュの、攻撃していた時だけ山札の下に置く(ジャガイストの効果で出した場合) */
   rushIfAttacked?: boolean;
+  /** J・O・E: このターンの終わりに山札の下に置き、そうしたらカードを1枚引く(値は、そのターン) */
+  endBottom?: number;
 }
 
 export interface PlayerZones {
@@ -257,6 +259,8 @@ export type EffectMod =
   | { kind: 'cannotSummon'; costLte: number }
   /** プレイヤー単位: 発生源の持ち主の相手の、コストが n のバトルゾーンのカードの能力を無視する */
   | { kind: 'ignoreCost'; n: number }
+  /** プレイヤー単位: 発生源の持ち主の相手の、クリーチャーすべての能力を無視する */
+  | { kind: 'ignoreAll' }
   /** プレイヤー単位: 発生源の持ち主は、次の自分のターンのはじめに civ を含む n 枚のマナを支払う。払えなければゲームに負ける(逆転撃) */
   | { kind: 'owe'; civ: Civ; n: number }
   /** プレイヤー単位: 発生源の持ち主の相手は、コストが n のカードを実行できない */

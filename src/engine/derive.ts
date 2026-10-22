@@ -108,7 +108,9 @@ export function isIgnored(c: Ctx, uid: number): boolean {
   const card = c.s.cards[uid];
   if (c.s.sealed && isSealed(c, uid)) return true;
   for (const e of c.s.effects) {
-    if (e.mod.kind !== 'ignoreCost' || e.controller === card.owner) continue;
+    if (e.controller === card.owner) continue;
+    if (e.mod.kind === 'ignoreAll') return true;
+    if (e.mod.kind !== 'ignoreCost') continue;
     if (costBase(c, uid) === e.mod.n) return true;
   }
   return false;
@@ -504,6 +506,10 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
 
 /** プレイヤーがこの呪文(面)を唱えられるか(ドルファディロムの制限など) */
 export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
+  // 「相手は、自身のターンに1回までしか呪文を唱えられない」(ジョギラゴン&ジョニー)
+  if (gameHas(c, 'oneSpellPerTurn') && c.s.active === player && activeStatics(c, 'oneSpellPerTurn').some((st) => st.controller !== player)) {
+    if (c.s.turnLog.some((e) => e.type === 'cast' && e.owner === player)) return false;
+  }
   // 「呪文を唱えられなくする効果を無視して、〜を唱えてもよい」(卍 新世壊 卍)
   for (const st of activeStatics(c, 'ignoreCastBan')) {
     if (st.controller !== player || st.ability.mod.type !== 'ignoreCastBan') continue;

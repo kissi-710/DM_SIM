@@ -11,5 +11,6 @@ import { DECK_J } from './deckJ';
 import { DECK_K } from './deckK';
 import { DECK_L } from './deckL';
 import { DECK_M } from './deckM';
+import { DECK_N } from './deckN';
 
-export const SD1_CARDS: CardDef[] = [...DECK_C, ...DECK_D, ...DECK_E, ...DECK_F, ...DECK_G, ...DECK_H, ...DECK_I, ...DECK_J, ...DECK_K, ...DECK_L, ...DECK_M];
+export const SD1_CARDS: CardDef[] = [...DECK_C, ...DECK_D, ...DECK_E, ...DECK_F, ...DECK_G, ...DECK_H, ...DECK_I, ...DECK_J, ...DECK_K, ...DECK_L, ...DECK_M, ...DECK_N];

@@ -439,7 +439,8 @@ function durationOf(c: Ctx, f: EffectFrame, until: string): ContEffect['until'] 
 }
 
 function actDraw(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
-  const n = typeof a === 'number' ? a : evalExpr(cc, a.n);
+  // 引く枚数は、数・{ n: 式, who? }・式(例: { count: ... })のどれでもよい
+  const n = typeof a === 'number' ? a : 'n' in a ? evalExpr(cc, a.n) : evalExpr(cc, a);
   const who = playerOf(f, typeof a === 'object' ? a.who : undefined);
   drawCards(c, who, n);
 }
@@ -740,6 +741,9 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
     case 'ignoreCost':
       mod = { kind: 'ignoreCost', n: evalExpr(cc, m.n) };
       break;
+    case 'ignoreAll':
+      mod = { kind: 'ignoreAll' };
+      break;
     case 'owe':
       mod = { kind: 'owe', civ: m.civ, n: m.n };
       break;
@@ -1038,10 +1042,29 @@ function actRush(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   }
 }
 
+/** そのカードを、別のコスト(alt)で使う(キリフダッシュ)。払えなければ何も起きない */
+function actPlay(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    const fi = creatureFace(c, u);
+    if (fi < 0) continue;
+    s.cont.push({
+      kind: 'proc',
+      id: nextId(s),
+      causedBy: c.cause,
+      name: 'play',
+      stage: 0,
+      vars: { uid: u, ep: card.ep, from: card.zone, face: fi, free: false, extra: a.alt !== undefined ? { alt: a.alt } : undefined, after: null, settle: false, soft: true },
+    });
+  }
+}
+
 /** そのカードの「このクリーチャーが出た時」で始まる能力を1つ使う(どのゾーンのカードでもよい。最初の1つ) */
 function actUseCip(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
-  for (const u of resolveSel(cc, a.sel)) {
+  // 捨てたばかりのカードなど、直前に動いたカードも指せるように、世代は見ない
+  for (const u of typeof a.sel === 'string' ? varUids(cc, a.sel, { ignoreEp: true }) : resolveSel(cc, a.sel)) {
     const card = s.cards[u];
     const def = c.reg.defs[card.defId];
     for (let fi = 0; fi < def.faces.length; fi++) {
@@ -1128,6 +1151,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['seal', actSeal],
   ['stab', actStab],
   ['rush', actRush],
+  ['play', actPlay],
   ['useCip', actUseCip],
   ['graveToBottom', actGraveToBottom],
   ['stackShield', actStackShield],

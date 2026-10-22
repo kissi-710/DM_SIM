@@ -71,6 +71,8 @@ export type Cond =
   | { hyper: true }
   /** 発生源(バトルゾーンのクリーチャー)が、タップしている(true)・アンタップしている(false) */
   | { selfTapped: boolean }
+  /** $it(バトルゾーンのクリーチャー)が、そのキーワードを持つ(「ブロッカー」を持つクリーチャー) */
+  | { hasKw: 'blocker' | 'speedAttacker' | 'machFighter' | 'slayer' }
   /** 発生源が、そのターンに別のコスト(altCost の id)を使って出た */
   | { altUsed: string }
   /** $it のカード名が、指定の文字列を含む */
@@ -208,7 +210,9 @@ export type StaticMod =
   /** 相手は、自身の「S・トリガー」を使えない(G・ストライクは使える) */
   | { type: 'noOppShieldTrigger' }
   /** 相手のクリーチャーが攻撃するなら、可能ならこのクリーチャーを攻撃する */
-  | { type: 'attackMeFirst' };
+  | { type: 'attackMeFirst' }
+  /** 相手は、自身のターンに1回までしか呪文を唱えられない */
+  | { type: 'oneSpellPerTurn' };
 
 export type ReplaceApply =
   | { type: 'changeDest'; to: ZoneName }
@@ -245,6 +249,8 @@ export interface AltCostSpec {
   discard?: { n: number; where?: Cond };
   /** マナは払うが、コストを n 少なくする(指定すると、マナを払うかわりにはならない) */
   reduce?: number;
+  /** こうして出したら、このターンの終わりに山札の下に置く。そうしたら、カードを1枚引く(J・O・E) */
+  endBottomDraw?: boolean;
 }
 
 export type { EffectMod };
