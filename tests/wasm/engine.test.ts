@@ -8,7 +8,7 @@ import { deckCards } from '../../src/cards';
 import { createGame, legalActions, step } from '../../src/engine/engine';
 import { FAIR, toPlayerView } from '../../src/engine/view';
 import { mulberry } from '../../src/sim/playGame';
-import { DmEngine } from '../../src/wasm/dmEngine';
+import { DmEngine, rustRegistryJson } from '../../src/wasm/dmEngine';
 import { reg } from '../scenario';
 
 const wasmPath = new URL('../../src/wasm/dmsim.wasm', import.meta.url);
@@ -17,12 +17,12 @@ const has = existsSync(wasmPath);
 describe.skipIf(!has)('Rust 版エンジン(WASM)', () => {
   it('アロケータの最大のクラス(4MB)を超える入力でも確保に失敗しない', () => {
     // 空白で 9MB に水増ししたカード定義。確保が null を返すと、読み込みで例外になる
-    const big = JSON.stringify(reg.defs) + ' '.repeat(9 * 1024 * 1024);
+    const big = rustRegistryJson(reg.defs) + ' '.repeat(9 * 1024 * 1024);
     expect(() => DmEngine.createSync(readFileSync(wasmPath), big)).not.toThrow();
   });
 
   it('ラウンドの評価が TS 版と一致する(複数の局面・シード)', () => {
-    const eng = DmEngine.createSync(readFileSync(wasmPath), JSON.stringify(reg.defs));
+    const eng = DmEngine.createSync(readFileSync(wasmPath), rustRegistryJson(reg.defs));
     const native = eng.asNativeRounds();
     const l1 = makeRuleBased({});
     let compared = 0;
@@ -58,7 +58,7 @@ describe.skipIf(!has)('Rust 版エンジン(WASM)', () => {
   }, 120000);
 
   it('ヨビニオンで公開された山札の下の札の推論(決定化)が TS 版と一致する', () => {
-    const eng = DmEngine.createSync(readFileSync(wasmPath), JSON.stringify(reg.defs));
+    const eng = DmEngine.createSync(readFileSync(wasmPath), rustRegistryJson(reg.defs));
     const native = eng.asNativeRounds();
     const l1 = makeRuleBased({});
     let s = createGame(reg, { decks: [deckCards('maruru'), deckCards('zardy')], seed: 5, first: 0 }).state;
@@ -94,7 +94,7 @@ describe.skipIf(!has)('Rust 版エンジン(WASM)', () => {
   }, 120000);
 
   it('学習した召喚の方針(playModel)が TS 版と一致する', () => {
-    const eng = DmEngine.createSync(readFileSync(wasmPath), JSON.stringify(reg.defs));
+    const eng = DmEngine.createSync(readFileSync(wasmPath), rustRegistryJson(reg.defs));
     const native = eng.asNativeRounds();
     const l1 = makeRuleBased({});
     const playModel = JSON.parse(readFileSync(new URL('../../src/ai/models/play-v1.json', import.meta.url), 'utf8')).w as number[];
@@ -130,7 +130,7 @@ describe.skipIf(!has)('Rust 版エンジン(WASM)', () => {
   }, 120000);
 
   it('木の探索(ターン内の行動列)が TS 版と一致する(続きからの反復も同じ)', () => {
-    const eng = DmEngine.createSync(readFileSync(wasmPath), JSON.stringify(reg.defs));
+    const eng = DmEngine.createSync(readFileSync(wasmPath), rustRegistryJson(reg.defs));
     const native = eng.asNativeTree();
     const l1 = makeRuleBased({});
     let s = createGame(reg, { decks: [deckCards('maruru'), deckCards('zardy')], seed: 21, first: 0 }).state;
@@ -157,7 +157,7 @@ describe.skipIf(!has)('Rust 版エンジン(WASM)', () => {
   }, 120000);
 
   it('ペア比較の木(数ラウンドを順に評価)が TS 版と一致する', () => {
-    const eng = DmEngine.createSync(readFileSync(wasmPath), JSON.stringify(reg.defs));
+    const eng = DmEngine.createSync(readFileSync(wasmPath), rustRegistryJson(reg.defs));
     const nativeFn = eng.asNativePairedRound();
     const l1 = makeRuleBased({});
     let s = createGame(reg, { decks: [deckCards('zardy'), deckCards('maruru')], seed: 31, first: 0 }).state;

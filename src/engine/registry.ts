@@ -84,6 +84,7 @@ export type FeatureName =
   | 'cannotPlay'
   | 'battleProxy'
   | 'hostPowerAdd'
+  | 'stUsed'
   | 'cannotLeaveOwn'
   | 'noAttackOnEntry'
   | 'spellShieldTrigger'
@@ -545,6 +546,7 @@ export function loadRegistry(origDb: CardDB): Registry {
     powerAddOthers: staticOf('powerAddOthers'),
     cannotPlay: staticOf('cannotPlay'),
     hostPowerAdd: staticOf('hostPowerAdd'),
+    stUsed: featureDefs((ab) => JSON.stringify(ab).includes('"stUsed"')),
     cannotLeaveOwn: staticOf('cannotLeaveOwn'),
     noAttackOnEntry: staticOf('noAttackOnEntry'),
     spellShieldTrigger: staticOf('spellShieldTrigger'),

@@ -525,9 +525,18 @@ fn run_play(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
 
 // ───────────────────────── 攻撃 ─────────────────────────
 
-/// そのイベントの種類を監視する能力が、カードのどこかにあるか(なければ、イベントを発行しない)
+/// そのイベントの種類を監視する能力が、対局のデッキのカードにあるか(なければ、イベントを発行しない)。
+/// TS 版(ops.ts の listens)と同じ: デッキが分からない状態では、カードDB全体で調べる
 fn has_listener(c: &Ctx, ty: Sym) -> bool {
-    c.reg.trig_by_def.get(ty.0 as usize).map_or(false, |o| o.is_some())
+    let by_def = match c.reg.trig_by_def.get(ty.0 as usize) {
+        Some(Some(v)) => v,
+        _ => return false,
+    };
+    let ids = &c.s.deck_ids;
+    if ids.len() < 2 || ids[0].is_empty() || ids[1].is_empty() {
+        return true;
+    }
+    ids.iter().any(|l| l.iter().any(|&d| by_def.get(d as usize).map_or(false, |r| !r.is_empty())))
 }
 
 fn run_attack(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {

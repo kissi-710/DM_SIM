@@ -138,7 +138,7 @@ export function setNativePairedRound(f: NativePairedRound | null): void {
 
 /** 標準の ISMCTS: 反復 [0, iterations) を行い、根の統計を返す(TS 基準)。木は呼び出しごとに作り直す(同じ引数なら同じ結果) */
 export function treeSearch(env: SearchEnv, reg: Registry, base: number, iterations: number, o: TreeOpts = DEFAULT_TREE_OPTS): TreeStats {
-  if (native && !nativeUnsupported(env.weights)) {
+  if (native && !nativeUnsupported(env.weights, env)) {
     try {
       return native(env, base, iterations, o);
     } catch {
@@ -207,7 +207,7 @@ export class PairedTree {
 
   /** 1ラウンド。手ごとの報酬(alive でない手・例外を出した手は NaN) */
   round(seed: number, alive: number[]): number[] {
-    if (nativePaired && !nativeUnsupported(this.env.weights)) {
+    if (nativePaired && !nativeUnsupported(this.env.weights, this.env)) {
       try {
         return nativePaired(this.env, seed, alive, this.o);
       } catch {

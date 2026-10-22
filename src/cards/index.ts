@@ -8,6 +8,12 @@ import { SD1_CARDS } from './defs';
 export const CARD_LIST = [...(raw as unknown as CardDef[]), ...SD1_CARDS];
 
 /**
+ * Rust 版(WASM)が持たないカード: 25の王道の新規カード(M10。ルール・能力は TS 版が基準)。
+ * これらを含む対局の探索は、TS 版で評価する(src/wasm/dmEngine.ts の rustRegistryJson、src/ai/mcts.ts の setNativeSkipCards)
+ */
+export const TS_ONLY_CARD_IDS: string[] = SD1_CARDS.map((c) => c.id);
+
+/**
  * カードDB。CARD_LIST に加えて、カード単体の強さの測定で差し替える「無能力」カード(blank-コスト-文明)を持つ。
  * 無能力カードは、探索用の WASM にも渡る(定義を1回だけ読む)ので、DB に入れておく。一覧(CARD_LIST)には出ない。
  */

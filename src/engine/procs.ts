@@ -465,30 +465,28 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       emit(c, 'stepStart', { step: 'end', player: P });
       s.batchNo++;
       collectBatch(c, [c.out[c.out.length - 1]]);
-      f.stage = 6;
-      pushProc(c, 'settle');
-      return;
-    }
-    case 6: {
-      // アビスラッシュ・J・O・E: ターンの終わりに山札の下に置く(置換の質問が出ることがあるので、1体ずつ別の段階で行う)
-      const done: number[] = (f.vars.bottomDone ??= []);
-      const perm = s.players[P].battle.find((x) => {
-        if (done.includes(x.pid)) return false;
-        if (x.rush === s.turn) return !(x.rushIfAttacked && !s.turnLog.some((e) => e.type === 'attackDeclared' && e.attacker === x.pid));
-        return x.endBottom === s.turn;
-      });
-      if (!perm) {
-        f.stage = 4;
-        return;
-      }
-      const moved = moveCards(c, [perm.cards[0]], { to: 'deck', cause: 'effect', pos: 'bottom' });
-      done.push(perm.pid);
-      // J・O・E: 山札の下に置いたら、カードを1枚引く
-      if (perm.endBottom === s.turn && moved.some((r) => r.moved)) drawCards(c, P, 1);
+      f.stage = 4;
       pushProc(c, 'settle');
       return;
     }
     case 4: {
+      // アビスラッシュ・J・O・E: ターンの終わりに山札の下に置く(置換の質問が出ることがあるので、1体ずつ、この段階の先頭で行う)
+      {
+        const done: number[] = (f.vars.bottomDone as number[] | undefined) ?? [];
+        const perm = s.players[P].battle.find((x) => {
+          if (done.includes(x.pid)) return false;
+          if (x.rush === s.turn) return !(x.rushIfAttacked && !s.turnLog.some((e) => e.type === 'attackDeclared' && e.attacker === x.pid));
+          return x.endBottom === s.turn;
+        });
+        if (perm) {
+          const moved = moveCards(c, [perm.cards[0]], { to: 'deck', cause: 'effect', pos: 'bottom' });
+          f.vars.bottomDone = [...done, perm.pid];
+          // J・O・E: 山札の下に置いたら、カードを1枚引く
+          if (perm.endBottom === s.turn && moved.some((r) => r.moved)) drawCards(c, P, 1);
+          pushProc(c, 'settle');
+          return;
+        }
+      }
       s.effects = s.effects.filter(
         (e) =>
           !(e.until.kind === 'endOfTurn' && e.until.turn <= s.turn) &&
@@ -555,16 +553,16 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       s.limbo.push(uid);
       for (const src of plan.once ?? []) s.usage['cd:' + src] = s.turn;
       if (plan.grant !== undefined) s.usage['gp:' + plan.grant] = s.turn;
-      v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free, alt: plan.alt ?? null, rush: !!plan.rush, under: plan.under ?? null };
+      v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free, ...(plan.alt ? { alt: plan.alt } : {}), ...(plan.rush ? { rush: true } : {}), ...(plan.under ? { under: plan.under } : {}) };
       v.fromZone = prevZone;
       // フシギバース: タップしたクリーチャーを、マナゾーンに置く(離れる時の置換の質問が出ることがあるので、別の段階で行う)
-      v.toMana = plan.toMana ?? null;
+      if (plan.toMana?.length) v.toMana = plan.toMana;
       f.stage = plan.toMana?.length ? 4 : 1;
       return;
     }
     case 4: {
-      moveCards(c, (v.toMana as number[] | null) ?? [], { to: 'mana', cause: 'manaPlace', tapped: true });
-      v.toMana = null;
+      moveCards(c, (v.toMana as number[] | undefined) ?? [], { to: 'mana', cause: 'manaPlace', tapped: true });
+      delete v.toMana;
       f.stage = 1;
       return;
     }
@@ -598,7 +596,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         // S・トリガーとして使って出た印(S・トリガー・プラスのP能力の条件。イベントの内容は変えない)
         if (v.st) {
           const ent = evs.find((e) => e.type === 'entered' && e.card === uid);
-          if (ent) s.usage['st:' + uid] = ent.id;
+          if (ent && gameHas(c, 'stUsed')) s.usage['st:' + uid] = ent.id;
         }
         s.batchNo++;
         collectBatch(c, evs);
@@ -608,7 +606,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       }
       emit(c, 'cast', { card: uid, owner, free: p.free, paid: p.paid, cost: p.cost, face: p.face, from: v.fromZone });
       const ev = c.out[c.out.length - 1];
-      if (v.st) s.usage['st:' + uid] = ev.id; // S・トリガーとして唱えた印
+      if (v.st && gameHas(c, 'stUsed')) s.usage['st:' + uid] = ev.id; // S・トリガーとして唱えた印(その印を見る能力があるゲームだけ)
       s.batchNo++;
       collectBatch(c, [ev]);
       f.stage = 2;
@@ -1050,8 +1048,10 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       // 「バトルする時」の誘発は、パワーを比べる前に解決する(総合ルール 115.2 / 701.13a)。
       // 聞き手のいるカードがある時だけ、イベントを発行する(段階を増やさず、既存の対戦の記録を変えない)
       const sw = battleProxySwap(c, pm, dm0);
-      v.ba = sw.a.perm.pid;
-      v.bd = sw.d.perm.pid;
+      if (sw.a !== pm || sw.d !== dm0) {
+        v.ba = sw.a.perm.pid;
+        v.bd = sw.d.perm.pid;
+      }
       f.stage = 4;
       emitBattleStarted(c, sw.a, sw.d);
       return;
@@ -1489,7 +1489,7 @@ function resolveEntry(c: Ctx, e: PoolEntry): void {
       causedBy: logged.id,
       name: 'play',
       stage: 0,
-      vars: { uid: e.source.uid, ep: card.ep, from: 'hand', face, free: true, after: null, st: true },
+      vars: { uid: e.source.uid, ep: card.ep, from: 'hand', face, free: true, after: null, ...(gameHas(c, 'stUsed') ? { st: true } : {}) },
     });
     return;
   }
