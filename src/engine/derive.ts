@@ -246,6 +246,7 @@ function grantedByStatic(c: Ctx, perm: Permanent, kw: KwName): boolean {
 
 export function breakerCount(c: Ctx, perm: Permanent): number {
   const uid = perm.cards[0];
+  if (hasSelfStatic(c, uid, 'cannotBreak')) return 0; // シールドをブレイクできない
   const info = infoOf(c, uid);
   let n = 1;
   for (const b of info.breakers) {
@@ -346,6 +347,8 @@ function canAttackBase(c: Ctx, perm: Permanent, target: { kind: 'player' } | { k
   const tp = permByPid(s, target.pid);
   if (!tp || tp.owner === owner) return false;
   if (!canBeAttacked(c, tp.perm)) return false;
+  // 飛行: 飛行を持たないクリーチャーからは、攻撃されない
+  if (gameHas(c, 'flying') && hasSelfStatic(c, tp.perm.cards[0], 'flying') && !hasSelfStatic(c, uid, 'flying')) return false;
   if (tp.perm.tapped) return true;
   // アンタップ状態のクリーチャーは、出たターンのマッハファイターだけが攻撃できる
   return sick && mach;
@@ -469,6 +472,25 @@ export function payNeed(cost: number, civCount: number): number {
 
 const ALL_CIVS: Civ[] = ['light', 'water', 'darkness', 'fire', 'nature'];
 
+/** マナの支払いに使える、アンタップのカード(マナゾーンのカードと、「タップしてマナとして使える」クリーチャー) */
+export function manaSources(c: Ctx, player: PlayerId, exclude: number[] = []): number[] {
+  const s = c.s;
+  const out = s.players[player].mana.filter((u) => !s.cards[u].tapped && !exclude.includes(u));
+  if (gameHas(c, 'tapAsMana')) {
+    for (const perm of s.players[player].battle) {
+      const u = perm.cards[0];
+      if (!perm.tapped && !exclude.includes(u) && hasSelfStatic(c, u, 'tapAsMana')) out.push(u);
+    }
+  }
+  return out;
+}
+
+/** マナの支払いに使う時の文明(「すべての文明を持つかのように」使えるクリーチャーは、すべて) */
+export function sourceCivs(c: Ctx, uid: number): Civ[] {
+  if (c.s.cards[uid].zone === 'battle') return ALL_CIVS;
+  return manaCivs(c, uid);
+}
+
 export function manaCivs(c: Ctx, uid: number): Civ[] {
   const card = c.s.cards[uid];
   // 「自分のマナゾーンにあるカードは、すべての文明を持つ」(怪盗妖精カサブランカ)
@@ -483,9 +505,8 @@ export function manaCivs(c: Ctx, uid: number): Civ[] {
  * 払えなければ null。
  */
 export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number, exclude: number[] = [], keepFor: number[] = []): number[] | null {
-  const s = c.s;
   if (need <= 0) return [];
-  const avail = s.players[player].mana.filter((u) => !s.cards[u].tapped && !exclude.includes(u));
+  const avail = manaSources(c, player, exclude);
   if (avail.length < need) return null;
   // 価値(残したいほど高い)
   const want: Record<string, number> = {};
@@ -493,7 +514,7 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
   const mc = new Map<number, Civ[]>();
   const value = new Map<number, number>();
   for (const u of avail) {
-    const cs = manaCivs(c, u);
+    const cs = sourceCivs(c, u);
     mc.set(u, cs);
     let v = 0.01 * cs.length;
     for (const cv of cs) v += want[cv] ?? 0;
@@ -625,6 +646,8 @@ export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number):
  * 発生源ごとに「1体」(oncePerTurn)なら、そのターンに使っていないものだけ。
  */
 export function grantedPlayFrom(c: Ctx, player: PlayerId, uid: number, faceIdx: number, from: ZoneName): number | null {
+  // 冒険妖精ポレキチ: このターン、そのクリーチャーをマナゾーンから召喚してもよい
+  if (from === 'mana' && c.s.active === player && c.s.usage[`pm:${uid}:${c.s.cards[uid].ep}`] === c.s.turn) return uid;
   if (c.s.active !== player || !gameHas(c, 'allowPlayFrom')) return null;
   if (from === 'deck' && c.s.players[player].deck[0] !== uid) return null; // 山札から召喚できるのは、一番上のカードだけ
   for (const st of activeStatics(c, 'allowPlayFrom')) {

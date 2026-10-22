@@ -8,6 +8,7 @@ import {
   canAttack,
   canBlock,
   canGuard,
+  hasSelfStatic,
   canPlayCard,
   canCast,
   canSummon,
@@ -21,7 +22,8 @@ import {
   infoOf,
   isUnblockable,
   playerCannotLose,
-  manaCivs,
+  manaSources,
+  sourceCivs,
   mustBlock,
   payNeed,
   planPayment,
@@ -219,7 +221,7 @@ export function planPlay(
       if (m.length !== need || new Set(m).size !== m.length) return fail('支払うマナの枚数が違います');
       for (const u of m) {
         const mc = s.cards[u];
-        if (!mc || mc.owner !== player || mc.zone !== 'mana' || mc.tapped || u === uid) return fail('そのマナは使えません');
+        if (!mc || mc.owner !== player || u === uid || !manaSources(c, player).includes(u)) return fail('そのマナは使えません');
       }
       if (!covers(c, m, civs)) return fail('文明を満たしていません');
       pay = m.slice();
@@ -256,11 +258,10 @@ export interface PayChoice {
 export function payChoice(c: Ctx, player: PlayerId, uid: number, from: ZoneName, faceIdx: number, extra: PlayExtra | undefined, free: boolean): PayChoice {
   const base = planPlay(c, player, uid, from, faceIdx, { ...(extra ?? {}), pay: undefined }, free);
   if (!base.ok || base.need <= 0) return { need: base.need, avail: [], auto: base.pay, obvious: true };
-  const s = c.s;
-  const avail = s.players[player].mana.filter((u) => !s.cards[u].tapped && u !== uid);
+  const avail = manaSources(c, player, [uid]);
   const groups = new Map<string, number[]>();
   for (const u of avail) {
-    const key = manaCivs(c, u).slice().sort().join(',');
+    const key = sourceCivs(c, u).slice().sort().join(',');
     const g = groups.get(key);
     if (g) g.push(u);
     else groups.set(key, [u]);
@@ -289,7 +290,7 @@ export function payChoice(c: Ctx, player: PlayerId, uid: number, from: ZoneName,
 
 /** 選んだマナが、必要な文明を1枚ずつ(1枚は1文明)満たせるか */
 function covers(c: Ctx, mana: number[], civs: Civ[]): boolean {
-  const cs = mana.map((u) => manaCivs(c, u));
+  const cs = mana.map((u) => sourceCivs(c, u));
   const used = new Set<number>();
   const go = (i: number): boolean => {
     if (i === civs.length) return true;
@@ -939,7 +940,11 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       const attacked = v.target.kind === 'creature' ? v.target.pid : -1;
       const cands = isUnblockable(c, pm.perm)
         ? []
-        : s.players[defender].battle.filter((p) => p.pid !== attacked && (canBlock(c, p) || (attacked !== -1 && canGuard(c, p)))).map((p) => p.cards[0]);
+        : s.players[defender].battle
+            .filter((p) => p.pid !== attacked && (canBlock(c, p) || (attacked !== -1 && canGuard(c, p))))
+            // 飛行: 飛行を持つクリーチャーは、飛行を持たないクリーチャーにブロックされない
+            .filter((p) => !(gameHas(c, 'flying') && hasSelfStatic(c, pm.perm.cards[0], 'flying') && !hasSelfStatic(c, p.cards[0], 'flying')))
+            .map((p) => p.cards[0]);
       // ブロッカーは、複数体を同時に選べる(507.1a / 507.2)。ブロックを強制する効果を受けているものは、必ず選ぶ(507.1b)。
       // 選んだ全員がタップし、最後に解決した1体だけが、攻撃先を変更してブロッククリーチャーになる(507.2a)
       const forced = cands.filter((u) => mustBlock(c, permByPid(s, s.cards[u].pid)!.perm));

@@ -81,6 +81,7 @@ export function evalExpr(cc: CC, e: Expr | undefined, dflt = 0): number {
     return typeof v === 'number' ? v : Array.isArray(v) ? v.length : 0;
   }
   if ('count' in o) return selectCards(cc, o.count).length;
+  if ('len' in o) return varUids(cc, o.len, { ignoreEp: true }).length;
   if ('evLen' in o) {
     const v = cc.event?.[o.evLen];
     return Array.isArray(v) ? v.length : 0;

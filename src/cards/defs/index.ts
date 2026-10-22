@@ -19,5 +19,6 @@ import { DECK_R } from './deckR';
 import { DECK_S } from './deckS';
 import { DECK_T } from './deckT';
 import { DECK_U } from './deckU';
+import { DECK_V } from './deckV';
 
-export const SD1_CARDS: CardDef[] = [...DECK_C, ...DECK_D, ...DECK_E, ...DECK_F, ...DECK_G, ...DECK_H, ...DECK_I, ...DECK_J, ...DECK_K, ...DECK_L, ...DECK_M, ...DECK_N, ...DECK_O, ...DECK_P, ...DECK_Q, ...DECK_R, ...DECK_S, ...DECK_T, ...DECK_U];
+export const SD1_CARDS: CardDef[] = [...DECK_C, ...DECK_D, ...DECK_E, ...DECK_F, ...DECK_G, ...DECK_H, ...DECK_I, ...DECK_J, ...DECK_K, ...DECK_L, ...DECK_M, ...DECK_N, ...DECK_O, ...DECK_P, ...DECK_Q, ...DECK_R, ...DECK_S, ...DECK_T, ...DECK_U, ...DECK_V];

@@ -5,11 +5,13 @@ import { charsOf, costBase, deckLocked, infoOf } from './derive';
 import type { Instr } from './registry';
 import {
   addShieldFromDeck,
+  applyEntryReplacement,
   ask,
   collectBatch,
   drawCards,
   emit,
   enterBattle,
+  entryReplacement,
   moveCards,
   onSummoned,
   removeZoneCard,
@@ -18,7 +20,7 @@ import {
   stabIntoDeck,
 } from './ops';
 import type { Ctx } from './state';
-import { nextId, opponentOf, permByPid, rngInt, shuffleInPlace, snapOf } from './state';
+import { gameHas, nextId, opponentOf, permByPid, rngInt, shuffleInPlace, snapOf } from './state';
 import type { ContEffect, EffectFrame, EffectMod, Ev, InputSpec, ObjRef, PlayerId } from './types';
 
 // ───────────────────────── コンテキスト ─────────────────────────
@@ -625,10 +627,25 @@ function actPut(c: Ctx, f: EffectFrame, cc: CC, a: any, key: string): void {
   const via = key === 'summon' ? 'summon' : 'effect';
   const evs: Ev[] = [];
   const entered: ObjRef[] = [];
+  // 複数を同時に出す時、出る時の置換の質問は、最初の1枚を出す前にまとめて行う(質問は、状態を変更する前に行うため)
+  const reps = new Map<number, NonNullable<ReturnType<typeof entryReplacement>>>();
+  const batch = uids.length > 1 && gameHas(c, 'entryReplace');
+  if (batch) {
+    for (const u of uids) {
+      const fi = creatureFace(c, u);
+      if (fi < 0) continue;
+      const rep = entryReplacement(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0 }, fi, via);
+      if (rep) reps.set(u, rep);
+    }
+  }
   for (const u of uids) {
     const fi = creatureFace(c, u);
     if (fi < 0) continue;
     const face = c.reg.getFace(s.cards[u].defId, fi);
+    if (reps.has(u)) {
+      applyEntryReplacement(c, u, reps.get(u)!);
+      continue;
+    }
     let onto: number | undefined;
     if (face.type === 'evolution') {
       // 進化クリーチャーは、進化元(onto: 変数のクリーチャー)の上に出す。進化元の条件を満たさなければ出せない
@@ -638,7 +655,7 @@ function actPut(c: Ctx, f: EffectFrame, cc: CC, a: any, key: string): void {
       if (topUid === undefined || !evalCond({ ...cc, self: u, it: topUid, itFace: s.cards[topUid].face, evo: true }, face.evolveFrom)) continue;
       onto = s.cards[topUid].pid;
     }
-    const r = enterBattle(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0, ...(onto !== undefined ? { onto } : {}) }, evs);
+    const r = enterBattle(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0, ...(batch ? { noReplace: true } : {}), ...(onto !== undefined ? { onto } : {}) }, evs);
     if (r.moved) entered.push({ uid: u, ep: r.ep });
     if (r.moved && via === 'summon') onSummoned(c, u);
   }
@@ -732,10 +749,13 @@ function actRevolutionChange(c: Ctx, f: EffectFrame, cc: CC, _a: any, _key: stri
   if (!fr) return;
   const fi = creatureFace(c, uid);
   if (fi < 0) return;
+  // 出る時の置換の質問は、状態を変更する前(手札に戻す前)に行う
+  const rep = gameHas(c, 'entryReplace') ? entryReplacement(c, uid, { to: 'battle', cause: 'revolutionChange', via: 'revolutionChange', face: fi, tapped: true, paid: 0 }, fi, 'revolutionChange') : null;
   const res = moveCards(c, [trig.card], { to: 'hand', cause: 'revolutionChange' });
   if (!res[0]?.moved) return; // 置換されて離れなかった(EXライフなど): 入れ替わらない
   const evs: Ev[] = [];
-  enterBattle(c, uid, { to: 'battle', cause: 'revolutionChange', via: 'revolutionChange', face: fi, tapped: true, paid: 0 }, evs);
+  if (rep) applyEntryReplacement(c, uid, rep);
+  else enterBattle(c, uid, { to: 'battle', cause: 'revolutionChange', via: 'revolutionChange', face: fi, tapped: true, paid: 0, noReplace: true }, evs);
   fr.vars.pid = s.cards[uid].pid;
   s.batchNo++;
   collectBatch(c, evs);
@@ -1072,10 +1092,12 @@ function actNinjaChange(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): v
   if (fi < 0) return;
   const wasTapped = oldPm.perm.tapped;
   const oldPid = oldPm.perm.pid;
+  const rep = gameHas(c, 'entryReplace') ? entryReplacement(c, uid, { to: 'battle', cause: 'ninjaChange', via: 'ninjaChange', face: fi, tapped: wasTapped, paid: 0 }, fi, 'ninjaChange') : null;
   const res = moveCards(c, [old], { to: 'hand', cause: 'bounce' });
   if (!res[0]?.moved) return;
   const evs: Ev[] = [];
-  enterBattle(c, uid, { to: 'battle', cause: 'ninjaChange', via: 'ninjaChange', face: fi, tapped: wasTapped, paid: 0 }, evs);
+  if (rep) applyEntryReplacement(c, uid, rep);
+  else enterBattle(c, uid, { to: 'battle', cause: 'ninjaChange', via: 'ninjaChange', face: fi, tapped: wasTapped, paid: 0, noReplace: true }, evs);
   const newPid = s.cards[uid].pid;
   if (fr && fr.vars.target && fr.vars.target.kind === 'creature' && fr.vars.target.pid === oldPid) fr.vars.target = { kind: 'creature', pid: newPid };
   s.batchNo++;
@@ -1106,6 +1128,15 @@ function actCross(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
   emit(c, 'crossed', { card: gu, owner: gp.owner, host: hp.perm.cards[0], hostPid: hp.perm.pid, free: true });
   collectBatch(c, [c.out[c.out.length - 1]]);
   void f;
+}
+
+/** そのカード(マナゾーン)を、このターン、マナゾーンから召喚してもよい(コストは支払う) */
+function actAllowSummon(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone === 'mana') s.usage[`pm:${u}:${card.ep}`] = s.turn;
+  }
 }
 
 /** このクリーチャー(発生源)が、相手のシールドを n 個ブレイクする(破天九語) */
@@ -1250,6 +1281,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['seal', actSeal],
   ['stab', actStab],
   ['rush', actRush],
+  ['allowSummon', actAllowSummon],
   ['breakOpp', actBreakOpp],
   ['cross', actCross],
   ['ninjaChange', actNinjaChange],

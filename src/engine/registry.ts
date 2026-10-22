@@ -87,7 +87,9 @@ export type FeatureName =
   | 'cannotLeaveOwn'
   | 'noAttackOnEntry'
   | 'spellShieldTrigger'
-  | 'manaAllCivs';
+  | 'manaAllCivs'
+  | 'tapAsMana'
+  | 'flying';
 
 export interface Registry {
   db: CardDB;
@@ -187,7 +189,7 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'useCip', 'graveToBottom', 'play', 'win', 'cross', 'ninjaChange', 'grantShieldTrigger', 'breakOpp', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'useCip', 'graveToBottom', 'play', 'win', 'cross', 'ninjaChange', 'grantShieldTrigger', 'breakOpp', 'allowSummon', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
@@ -409,7 +411,7 @@ function abilitySteps(a: Ability): StepDef[] {
     case 'keyword':
       return a.steps ?? [];
     case 'replace':
-      return a.apply.type === 'steps' ? a.apply.steps : [];
+      return a.apply.type === 'steps' ? a.apply.steps : a.apply.type === 'changeDest' ? a.apply.then ?? [] : [];
     default:
       return [];
   }
@@ -543,6 +545,8 @@ export function loadRegistry(origDb: CardDB): Registry {
     noAttackOnEntry: staticOf('noAttackOnEntry'),
     spellShieldTrigger: staticOf('spellShieldTrigger'),
     manaAllCivs: staticOf('manaAllCivs'),
+    tapAsMana: staticOf('tapAsMana'),
+    flying: staticOf('flying'),
     battleProxy: staticOf('battleProxy'),
     sBack: featureDefs((ab) => ab.kind === 'keyword' && ab.name === 'sBack'),
     enteredFrom: featureDefs((ab) => ab.kind === 'trigger' && (Array.isArray(ab.spec.on) ? ab.spec.on : [ab.spec.on]).some((p) => p.type === 'entered' && p.from !== undefined)),

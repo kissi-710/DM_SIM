@@ -596,11 +596,8 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   const via = opts.via ?? 'effect';
   // 出る時の置換(「相手のクリーチャーが出る時、かわりに〜に置く」)。状態を変更する前に判定する
   if (gameHas(c, 'entryReplace') && !opts.noReplace) {
-    const dest = entryReplacement(c, uid, opts, faceIdx, via);
-    if (dest) {
-      moveCards(c, [uid], { to: dest, cause: 'replaced', noReplace: true });
-      return { uid, moved: false, to: dest, ep: s.cards[uid].ep };
-    }
+    const rep = entryReplacement(c, uid, opts, faceIdx, via);
+    if (rep) return applyEntryReplacement(c, uid, rep);
   }
   removeFromZone(c, uid);
   card.zone = 'battle';
@@ -706,15 +703,42 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   return { uid, moved: true, to: 'battle', ep: card.ep };
 }
 
+
+/** 出る時の置換(entryReplacement の結果)を実行する: かわりの行き先に置き、置いた後の手順があれば積む */
+export function applyEntryReplacement(c: Ctx, uid: number, rep: NonNullable<ReturnType<typeof entryReplacement>>): MoveResult {
+  const s = c.s;
+  const card = s.cards[uid];
+  // 出ない: いまのゾーン(プレイ中なら、元のゾーン)に残る
+  if (!rep.stay || card.zone === 'limbo') moveCards(c, [uid], { to: rep.to, cause: 'replaced', noReplace: true });
+  // 置いた後の手順(ベイB セガーレ: その後、自分はこのクリーチャーをマナゾーンに置く)
+  if (rep.then) {
+    const sc = s.cards[rep.then.src];
+    s.cont.push({
+      kind: 'effect',
+      id: nextId(s),
+      causedBy: c.cause,
+      ability: { defId: sc.defId, face: sc.face, idx: rep.then.idx },
+      source: { uid: rep.then.src, ep: sc.ep },
+      lki: snapOf(c, rep.then.src),
+      controller: rep.then.owner,
+      pc: 0,
+      vars: {},
+      trigger: null,
+      noOptional: true,
+    });
+  }
+  return { uid, moved: false, to: rep.to, ep: s.cards[uid].ep };
+}
+
 /**
  * 出る時の置換(match.type = 'enter')。バトルゾーンの、能力を無視されていないカードが持つ。
  * 当てはまるものがあれば、かわりに置く先のゾーンを返す(複数なら、出るカードの持ち主が選ぶ)。
  */
-function entryReplacement(c: Ctx, uid: number, opts: MoveOpts, faceIdx: number, via: string): ZoneName | null {
+export function entryReplacement(c: Ctx, uid: number, opts: MoveOpts, faceIdx: number, via: string): { to: ZoneName; stay?: boolean; then?: { src: number; idx: number; owner: PlayerId } } | null {
   const s = c.s;
   const card = s.cards[uid];
   const origin = opts.from ?? card.zone;
-  const cands: { label: string; to: ZoneName; optional: boolean }[] = [];
+  const cands: { label: string; to: ZoneName; optional: boolean; stay?: boolean; then?: { src: number; idx: number; owner: PlayerId } }[] = [];
   // 「山札から手札以外のゾーンに置かれる時」の置換(move)も、バトルゾーンへ出る時に当てはまる
   if (origin === 'deck') {
     for (const pl of [0, 1] as PlayerId[]) {
@@ -741,7 +765,7 @@ function entryReplacement(c: Ctx, uid: number, opts: MoveOpts, faceIdx: number, 
       const info = infoOf(c, src);
       for (const r of info.replaces) {
         const a = r.ability;
-        if (a.match.type !== 'enter' || a.apply.type !== 'changeDest') continue;
+        if (a.match.type !== 'enter' || (a.apply.type !== 'changeDest' && a.apply.type !== 'stay')) continue;
         const m = a.match;
         const rel = (want: string | undefined, actual: PlayerId): boolean => want === undefined || want === 'any' || (want === 'self' ? actual === p : actual !== p);
         if (!rel(m.owner, card.owner)) continue;
@@ -754,14 +778,14 @@ function entryReplacement(c: Ctx, uid: number, opts: MoveOpts, faceIdx: number, 
         const cc = mkCC(c, p, { self: src, it: uid, itFace: faceIdx });
         if (a.while && !evalCond(mkCC(c, p, { self: src }), a.while)) continue;
         if (m.cond && !evalCond(cc, m.cond)) continue;
-        cands.push({ label: a.label ?? 'かわりに置く', to: a.apply.to, optional: !!a.optional });
+        cands.push({ label: a.label ?? 'かわりに置く', to: a.apply.type === 'stay' ? origin : a.apply.to, optional: !!a.optional, ...(a.apply.type === 'changeDest' && a.apply.then ? { then: { src, idx: r.idx, owner: p } } : {}), ...(a.apply.type === 'stay' ? { stay: true } : {}) });
       }
     }
   }
   if (cands.length === 0) return null;
   let chosen = 0;
   // 同じ行き先に置く強制の置換が重なっているだけなら、どれを使っても同じ(聞かない)
-  const sameDest = cands.every((x) => !x.optional && x.to === cands[0].to);
+  const sameDest = cands.every((x) => !x.optional && x.to === cands[0].to && !x.then);
   if (!sameDest && (cands.length > 1 || cands[0].optional)) {
     const options = [...cands.map((x) => x.label), '置換しない'];
     const ans = ask<number[]>(c, {
@@ -774,7 +798,7 @@ function entryReplacement(c: Ctx, uid: number, opts: MoveOpts, faceIdx: number, 
     chosen = ans[0];
     if (chosen >= cands.length) return null;
   }
-  return cands[chosen].to;
+  return { to: cands[chosen].to, ...(cands[chosen].then ? { then: cands[chosen].then } : {}), ...(cands[chosen].stay ? { stay: true } : {}) };
 }
 
 // ───────────────────────── 置換パイプライン(effects 8) ─────────────────────────

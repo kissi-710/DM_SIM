@@ -9,6 +9,8 @@ export type Expr =
   | { costOf: string }
   /** 誘発したイベントの、配列の項目(cards など)の数。「各ブレイクの前に」で、ブレイクする枚数だけ繰り返す時に使う */
   | { evLen: string }
+  /** 変数のカードの枚数 */
+  | { len: string }
   /** 変数のカードがいるバトルゾーンの山の、下に重なっているカードの枚数(フィールドの下など) */
   | { under: string }
   /** セレクタに合うカードの、コストの種類の数(「コストが異なるクリーチャー1体につき」) */
@@ -237,6 +239,12 @@ export type StaticMod =
   | { type: 'battleProxy'; cond: Cond }
   /** ガードマン: このクリーチャーをタップして、相手クリーチャーの攻撃先を、自分の他のクリーチャーからこのクリーチャーに変更してもよい */
   | { type: 'guardman' }
+  /** 飛行: 「飛行」を持たないクリーチャーから、攻撃もブロックもされない */
+  | { type: 'flying' }
+  /** このクリーチャーは、シールドをブレイクできない */
+  | { type: 'cannotBreak' }
+  /** このクリーチャーを、自分のマナゾーンにあり、すべての文明を持つかのようにタップしてもよい(マナの支払いに使える) */
+  | { type: 'tapAsMana' }
   /** 自分のシールドゾーンから手札に加える呪文すべてに、「S・トリガー」を与える */
   | { type: 'spellShieldTrigger' }
   /** 自分のマナゾーンにあるカードは、すべての文明を持つ */
@@ -251,7 +259,9 @@ export type StaticMod =
   | { type: 'powerAddOthers'; n: number; cond: Cond };
 
 export type ReplaceApply =
-  | { type: 'changeDest'; to: ZoneName }
+  /** 出る時の置換: かわりに、出ない(いまのゾーンに残る) */
+  | { type: 'stay' }
+  | { type: 'changeDest'; to: ZoneName; /** 置いた後に、置換の持ち主が行う手順(「その後、自分はこのクリーチャーをマナゾーンに置く」など。出る時の置換のみ) */ then?: StepDef[] }
   | { type: 'cancelTrigger' }
   | { type: 'smaxSacrifice' }
   /** かわりに、この手順を行う(出来事は起きない)。ゲームに負ける時の置換などで使う */
