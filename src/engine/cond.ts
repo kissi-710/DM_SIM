@@ -232,6 +232,15 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     for (let i = from; i < s.turnLog.length; i++) if (matchPattern(cc, o.logged.pattern, s.turnLog[i])) n++;
     return n >= min;
   }
+  if ('twin' in o) {
+    if (cc.it == null) return false;
+    return (cc.c.reg.defs[s.cards[cc.it].defId].faces.length >= 2) === o.twin;
+  }
+  if ('distinctCosts' in o) {
+    const uids = varUids(cc, o.distinctCosts, { ignoreEp: true });
+    if (uids.length < 2) return false;
+    return new Set(uids.map((u) => costBase(cc.c, u))).size === uids.length;
+  }
   if ('crossed' in o) {
     if (cc.self == null) return false;
     return (crossHostOf(cc.c, cc.self) !== null) === o.crossed;

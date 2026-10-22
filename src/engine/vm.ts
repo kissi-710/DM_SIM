@@ -644,7 +644,8 @@ function actPut(c: Ctx, f: EffectFrame, cc: CC, a: any, key: string): void {
   }
   if (a.as) f.vars[a.as] = entered;
   s.batchNo++;
-  collectBatch(c, evs);
+  // noTriggers: 出ることによって起こる効果(「出た時」の能力)はすべて無視する
+  collectBatch(c, a.noTriggers ? evs.filter((e) => e.type !== 'entered') : evs);
   s.dirtySba = true;
 }
 
@@ -1107,6 +1108,16 @@ function actCross(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
   void f;
 }
 
+/** このクリーチャー(発生源)が、相手のシールドを n 個ブレイクする(破天九語) */
+function actBreakOpp(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const me = f.controller;
+  const opp = opponentOf(me);
+  const n = Math.min(a?.n ?? 1, s.players[opp].shield.length);
+  if (n <= 0) return;
+  s.cont.push({ kind: 'proc', id: nextId(s), causedBy: c.cause, name: 'break', stage: 0, vars: { pid: s.cards[f.source.uid].pid, owner: me, n } });
+}
+
 /** 自分はゲームに勝つ */
 function actWin(c: Ctx, f: EffectFrame, _cc: CC, _a: any, _key: string): void {
   const s = c.s;
@@ -1239,6 +1250,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['seal', actSeal],
   ['stab', actStab],
   ['rush', actRush],
+  ['breakOpp', actBreakOpp],
   ['cross', actCross],
   ['ninjaChange', actNinjaChange],
   ['grantShieldTrigger', actGrantShieldTrigger],

@@ -81,6 +81,10 @@ export type Cond =
   | { ownedBy: 'self' | 'opponent' }
   /** 変数のカード(進化クリーチャー)が、$it(バトルゾーンのクリーチャー)の上に進化できる(進化元の条件を満たす) */
   | { baseFor: string }
+  /** $it が、ツインパクトカード(面が2つ)である */
+  | { twin: true }
+  /** 変数のカードのコストが、すべて異なる(2枚以上) */
+  | { distinctCosts: string }
   /** $it(バトルゾーンのクリーチャー)が、そのキーワードを持つ(「ブロッカー」を持つクリーチャー) */
   | { hasKw: 'blocker' | 'speedAttacker' | 'machFighter' | 'slayer' }
   /** 発生源が、そのターンに別のコスト(altCost の id)を使って出た */
@@ -233,6 +237,10 @@ export type StaticMod =
   | { type: 'battleProxy'; cond: Cond }
   /** ガードマン: このクリーチャーをタップして、相手クリーチャーの攻撃先を、自分の他のクリーチャーからこのクリーチャーに変更してもよい */
   | { type: 'guardman' }
+  /** 自分のシールドゾーンから手札に加える呪文すべてに、「S・トリガー」を与える */
+  | { type: 'spellShieldTrigger' }
+  /** 自分のマナゾーンにあるカードは、すべての文明を持つ */
+  | { type: 'manaAllCivs' }
   /** 自分のクリーチャー(cond に合うもの)は、離れない */
   | { type: 'cannotLeaveOwn'; cond: Cond; /** 破壊されて離れるのは防がない(バラバラエティ) */ exceptDestroy?: boolean }
   /** 相手のクリーチャーは、出たターン攻撃できない(スピードアタッカーでも) */

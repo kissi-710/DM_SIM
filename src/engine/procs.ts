@@ -1230,6 +1230,8 @@ export function declaration(c: Ctx, uid: number): { kind: 'shieldTrigger' | 'gSt
   // 豪龍の記憶: 「S・トリガー」を与えられたシールド(次の持ち主のターンのはじめまで)
   const grantedTurn = s.usage[`stg:${uid}:${card.ep}`];
   const granted = grantedTurn !== undefined && card.zone === 'shield' && s.turn - grantedTurn <= 1;
+  // 「自分のシールドゾーンから手札に加える呪文すべてに、S・トリガーを与える」(天雷龍姫エリザベス)
+  const spellGranted = gameHas(c, 'spellShieldTrigger') && activeStatics(c, 'spellShieldTrigger').some((st) => st.controller === card.owner);
   // 相手の「自身の S・トリガーを使えない」(バイラス・カースド)
   const stBanned = gameHas(c, 'noOppShieldTrigger') && activeStatics(c, 'noOppShieldTrigger').some((st) => st.controller !== card.owner);
   for (let fi = 0; fi < def.faces.length; fi++) {
@@ -1237,6 +1239,9 @@ export function declaration(c: Ctx, uid: number): { kind: 'shieldTrigger' | 'gSt
     for (const st of stBanned ? [] : info.shieldTriggers) {
       if (st.ability.while && !evalCond(cc, st.ability.while)) continue;
       return { kind: 'shieldTrigger', ref: { defId: card.defId, face: fi, idx: st.idx }, face: fi };
+    }
+    if (spellGranted && !stBanned && def.faces[fi].type === 'spell') {
+      return { kind: 'shieldTrigger', ref: { defId: card.defId, face: fi, idx: 0 }, face: fi };
     }
     if (granted && !stBanned && def.faces.length > 0 && fi === (def.faces.findIndex((x) => x.type === 'spell') >= 0 ? def.faces.findIndex((x) => x.type === 'spell') : 0)) {
       return { kind: 'shieldTrigger', ref: { defId: card.defId, face: fi, idx: 0 }, face: fi };

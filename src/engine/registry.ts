@@ -85,7 +85,9 @@ export type FeatureName =
   | 'battleProxy'
   | 'hostPowerAdd'
   | 'cannotLeaveOwn'
-  | 'noAttackOnEntry';
+  | 'noAttackOnEntry'
+  | 'spellShieldTrigger'
+  | 'manaAllCivs';
 
 export interface Registry {
   db: CardDB;
@@ -185,12 +187,12 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'useCip', 'graveToBottom', 'play', 'win', 'cross', 'ninjaChange', 'grantShieldTrigger', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'useCip', 'graveToBottom', 'play', 'win', 'cross', 'ninjaChange', 'grantShieldTrigger', 'breakOpp', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'selfTapped', 'crossed', 'hostIs', 'hasGear', 'hasKw', 'ownedBy', 'baseFor', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame', 'onBase', 'powerRank',
+  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'selfTapped', 'twin', 'distinctCosts', 'crossed', 'hostIs', 'hasGear', 'hasKw', 'ownedBy', 'baseFor', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame', 'onBase', 'powerRank',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
@@ -539,6 +541,8 @@ export function loadRegistry(origDb: CardDB): Registry {
     hostPowerAdd: staticOf('hostPowerAdd'),
     cannotLeaveOwn: staticOf('cannotLeaveOwn'),
     noAttackOnEntry: staticOf('noAttackOnEntry'),
+    spellShieldTrigger: staticOf('spellShieldTrigger'),
+    manaAllCivs: staticOf('manaAllCivs'),
     battleProxy: staticOf('battleProxy'),
     sBack: featureDefs((ab) => ab.kind === 'keyword' && ab.name === 'sBack'),
     enteredFrom: featureDefs((ab) => ab.kind === 'trigger' && (Array.isArray(ab.spec.on) ? ab.spec.on : [ab.spec.on]).some((p) => p.type === 'entered' && p.from !== undefined)),

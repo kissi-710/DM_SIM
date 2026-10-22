@@ -467,8 +467,12 @@ export function payNeed(cost: number, civCount: number): number {
   return Math.max(cost, civCount, 0);
 }
 
+const ALL_CIVS: Civ[] = ['light', 'water', 'darkness', 'fire', 'nature'];
+
 export function manaCivs(c: Ctx, uid: number): Civ[] {
   const card = c.s.cards[uid];
+  // 「自分のマナゾーンにあるカードは、すべての文明を持つ」(怪盗妖精カサブランカ)
+  if (card.zone === 'mana' && gameHas(c, 'manaAllCivs') && activeStatics(c, 'manaAllCivs').some((st) => st.controller === card.owner)) return ALL_CIVS;
   const def = c.reg.defs[card.defId];
   return card.zone === 'battle' || card.zone === 'limbo' ? def.faces[faceIdxOf(card, def)].civs : unionCivs(def.faces);
 }
