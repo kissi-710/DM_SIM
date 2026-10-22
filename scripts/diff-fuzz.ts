@@ -54,7 +54,7 @@ for (let g = 0; g < N; g++) {
       setNativeRounds(null);
       const a = evalRound(env, reg, rs, alive);
       let b: number[];
-      try { b = native(env, rs, alive); } catch (e) { rustErr++; bad.push(`g${g} i${i}: Rust 例外 ${(e as Error).message.slice(0, 100)}`); continue; }
+      try { b = native(env, rs, alive); } catch (e) { rustErr++; if (rustErr <= 3) writeFileSync(`scratch/survey/err-${g}-${i}.json`, JSON.stringify({ env, rs, alive, decks, defs: rustRegistryJson(reg.defs) })); bad.push(`g${g} i${i}: Rust 例外 ${(e as Error).message.slice(0, 100)}`); continue; }
       checked++;
       const same = a.length === b.length && a.every((x, k) => (Number.isNaN(x) && Number.isNaN(b[k])) || Math.abs(x - b[k]) < 1e-9);
       if (!same) { diffs++; writeFileSync(`scratch/survey/case-${g}-${i}.json`, JSON.stringify({ env, rs, alive, ts: a, rust: b, decks })); if (bad.length < 8) bad.push(`g${g} i${i} turn${s.turn} why=${s.pending!.why} ts=${JSON.stringify(a.map((x) => +x.toFixed(3)))} rs=${JSON.stringify(b.map((x) => +x.toFixed(3)))}`); }

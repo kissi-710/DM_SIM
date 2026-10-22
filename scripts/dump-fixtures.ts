@@ -3,7 +3,7 @@
 // 内容: 展開済みのカード定義(registry.defs)と、数試合の「状態 → 合法手 → 行動」の列。
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { CARD_DB, TS_ONLY_CARD_IDS, deckCards } from '../src/cards';
+import { CARD_DB, RUST_READY_DECKS, SD1_DECKS, TS_ONLY_CARD_IDS, deckCards } from '../src/cards';
 import { makeRuleBased } from '../src/ai/rulebased';
 import { randomAgent } from '../src/ai/random';
 import type { Agent } from '../src/ai/types';
@@ -21,7 +21,11 @@ import { BATTLE_TEST_CARDS } from '../tests/fixtures/battle-cards';
 const out = process.argv[2] ?? 'rust/fixtures/games.json';
 // 攻撃まわりのイベント(バトルする時・バトルの後・ブレイクする前に)・呪文の置換・使用宣言を試すテスト用のカードも入れる
 // Rust 版が持たないカード(25の王道の新規カード)は、正解データに入れない
-const RUST_DB = Object.fromEntries(Object.entries(CARD_DB).filter(([id]) => !TS_ONLY_CARD_IDS.includes(id)));
+// 開発中のデッキ(DM_DEV_DECKS=sd1-c,sd1-d ...)は、Rust 版への実装の途中でも、正解データに入れる(差分テストで、ずれを見つけるため)
+const DEV_DECKS = (process.env.DM_DEV_DECKS ?? '').split(',').filter(Boolean);
+const devIds = new Set(SD1_DECKS.filter((d) => DEV_DECKS.includes(d.id)).flatMap((d) => d.list.map(([id]) => id)));
+const NEW_DECKS = [...RUST_READY_DECKS, ...DEV_DECKS.filter((d) => !RUST_READY_DECKS.includes(d))];
+const RUST_DB = Object.fromEntries(Object.entries(CARD_DB).filter(([id]) => !TS_ONLY_CARD_IDS.includes(id) || devIds.has(id)));
 // 効果によるバトル・無限パワー・タップして出る・召喚封じ・G城のテスト用のカードも入れる
 const reg = loadRegistry({ ...RUST_DB, ...Object.fromEntries([...ATTACK_TEST_CARDS, ...BATTLE_TEST_CARDS].map((c) => [c.id, c])) });
 const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v));
@@ -98,6 +102,15 @@ for (const [a, b, seed, k] of [
 ] as const) {
   games.push(play(a, b, seed, [k[0], k[1]]));
 }
+// 25の王道(DM26-SD1)の新デッキ: 同じデッキ同士・既存のデッキとの対戦
+NEW_DECKS.forEach((d, di) => {
+  const seeds = [201, 202, 203, 204, 205, 206, 207, 208].map((s) => s + di * 20);
+  const plan: ['random' | 'rule', 'random' | 'rule'][] = [['random', 'random'], ['random', 'random'], ['rule', 'rule'], ['rule', 'random'], ['random', 'rule'], ['random', 'random'], ['rule', 'rule'], ['random', 'random']];
+  seeds.forEach((seed, i) => {
+    const other = i < 4 ? d : ['maruru', 'zardy', 'interstellar-maruru', 'zardy-rev5c'][i - 4];
+    games.push(play(d, other, seed, plan[i]));
+  });
+});
 // テスト用のカードで組んだデッキ: バトルする時・バトルの後・ブレイクする前に・呪文の置換(チャージャー)・
 // 非ターン・プレイヤーの使用宣言・複数ブロッカー・強制ブロックの手続きを、Rust 版と突き合わせる
 const rep = (n: number, id: string): string[] => Array.from({ length: n }, () => id);
@@ -157,7 +170,7 @@ const rounds: { env: SearchEnv; seeds: number[]; alive: number[]; rows: (number 
 for (const g of games) {
   let nThis = 0;
   for (let i = 0; i < g.states.length - 1; i += 3) {
-    if (nThis >= 15) break; // 1試合から取る数(デッキの組が偏らないように)
+    if (nThis >= 6) break; // 1試合から取る数(デッキの組が偏らないように)
     const st = g.states[i] as GameState;
     const legal = g.legal[i] as Action[];
     if (!st.pending || legal.length < 2) continue;
@@ -179,9 +192,9 @@ for (const g of games) {
     const rows = seeds.map((sd) => evalRound(env, reg, sd, alive).map((x) => (Number.isNaN(x) ? null : x)));
     rounds.push({ env: plain(env), seeds, alive, rows });
     nThis++;
-    if (rounds.length >= 120) break;
+    if (rounds.length >= 160) break;
   }
-  if (rounds.length >= 120) break;
+  if (rounds.length >= 160) break;
 }
 // 木の探索の正解: 同じ入力・同じ種・同じ反復数で、根の手ごとの訪問回数と報酬の合計
 const trees: { env: SearchEnv; base: number; iterations: number; c: number; maxDepth: number; visits: number[]; sums: number[] }[] = [];
