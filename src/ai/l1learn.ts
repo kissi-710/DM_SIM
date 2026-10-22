@@ -1,5 +1,6 @@
 // 実験: ターン中の行動(マナチャージ・召喚・攻撃・ターン終了)を、学習した線形の評価で選ぶ方針。
 // 目標は「その手のあと L1 で続けた時の勝率」(教師の手の価値)。ルールベース(L1)の1回分の方針改善(policy iteration)。
+import { TS_ONLY_CARD_IDS } from '../cards';
 import { breakerCount, canBlock, charsLite, costBase, costOf, hasKeyword, isUnblockable, manaCivs, payNeed, powerOf } from '../engine/derive';
 import { mkCtx } from '../engine/state';
 import type { Registry } from '../engine/registry';
@@ -13,7 +14,9 @@ function defIndex(reg: Registry): Map<string, number> {
   let m = defIndexCache.get(reg);
   if (!m) {
     m = new Map();
-    for (const id of Object.keys(reg.defs).sort()) if (id !== '?' && id !== 'dummy' && !id.startsWith('blank')) m.set(id, m.size);
+    // 学習済みのモデル・Rust 版と添字の並びを揃えるため、25の王道の新規カード(TS_ONLY_CARD_IDS)はカード別の特徴量を持たない
+    const tsOnly = new Set(TS_ONLY_CARD_IDS);
+    for (const id of Object.keys(reg.defs).sort()) if (id !== '?' && id !== 'dummy' && !id.startsWith('blank') && !tsOnly.has(id)) m.set(id, m.size);
     defIndexCache.set(reg, m);
   }
   return m;

@@ -30,7 +30,8 @@ const randomDeck = (): string[] => {
   }
   return d;
 };
-const presets = DECK_PRESETS.map((p) => deckCards(p.id));
+// Rust 版が持たないカード(25の王道の新規カード)を含むデッキは除く
+const presets = DECK_PRESETS.filter((p) => !p.list.some(([id]) => TS_ONLY_CARD_IDS.includes(id))).map((p) => deckCards(p.id));
 const N = Number(process.argv[2] ?? 60);
 const agents = [makeAgent({ kind: 'rule' }), makeAgent({ kind: 'random' })];
 let checked = 0, diffs = 0, errs = 0, rustErr = 0;
