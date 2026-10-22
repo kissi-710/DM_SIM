@@ -12,6 +12,7 @@ import {
   canUseCost,
   costBase,
   grantedPlayFrom,
+  grantsRush,
   costOf,
   faceTypeOf,
   hasKeyword,
@@ -90,6 +91,8 @@ export interface PlayPlan {
   grant?: number;
   /** 別のコストでタップする自分のクリーチャーの山 */
   tapAlt?: number[];
+  /** アビスラッシュで召喚する(墓地から) */
+  rush?: boolean;
 }
 
 export function planPlay(
@@ -113,6 +116,7 @@ export function planPlay(
   const kind = face.type === 'spell' ? 'cast' : isCreatureType(face.type) ? 'summon' : 'put';
   let after: 'deckBottom' | null = null;
   let grantSrc: number | null = null;
+  let rush = false;
   const altAb = extra?.alt !== undefined ? info.altCosts.find((a) => a.id === extra.alt) : undefined;
   if (from !== 'hand' && !free) {
     const perm = info.permissions.find((p) => p.from === from && p.play === kind);
@@ -123,10 +127,15 @@ export function planPlay(
       // 他のカードの「自分のターン中、〜を from から召喚してもよい」
       grantSrc = kind === 'summon' ? grantedPlayFrom(c, player, uid, faceIdx, from) : null;
       if (grantSrc === null) return fail('そのゾーンからはプレイできません');
-    } else after = perm.after ?? null;
+      rush = grantsRush(c, grantSrc);
+    } else {
+      after = perm.after ?? null;
+      rush = !!perm.rush;
+    }
   } else if (from !== 'hand' && free) {
     const perm = info.permissions.find((p) => p.from === from && p.play === kind);
     after = perm?.after ?? null;
+    rush = !!perm?.rush;
   }
   if (kind === 'cast' && !canCast(c, player, uid, faceIdx)) return fail('この呪文は唱えられません');
   if (kind === 'summon' && !canSummon(c, player, uid, faceIdx)) return fail('このクリーチャーは召喚できません');
@@ -217,7 +226,7 @@ export function planPlay(
       pay = plan;
     }
   }
-  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}), ...(once.length ? { once } : {}), ...(grantSrc !== null ? { grant: grantSrc } : {}), ...(tapAlt ? { tapAlt } : {}) };
+  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}), ...(once.length ? { once } : {}), ...(grantSrc !== null ? { grant: grantSrc } : {}), ...(tapAlt ? { tapAlt } : {}), ...(rush ? { rush: true } : {}) };
 }
 
 /** 支払いの選択肢(UI が「聞くか、自動で払うか」を決めるための情報) */
@@ -400,6 +409,12 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       emit(c, 'stepStart', { step: 'end', player: P });
       s.batchNo++;
       collectBatch(c, [c.out[c.out.length - 1]]);
+      // アビスラッシュ: ターンの終わりに山札の下に置く
+      for (const perm of s.players[P].battle.slice()) {
+        if (perm.rush !== s.turn) continue;
+        if (perm.rushIfAttacked && !s.turnLog.some((e) => e.type === 'attackDeclared' && e.attacker === perm.pid)) continue;
+        moveCards(c, [perm.cards[0]], { to: 'deck', cause: 'effect', pos: 'bottom' });
+      }
       f.stage = 4;
       pushProc(c, 'settle');
       return;
@@ -471,7 +486,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       s.limbo.push(uid);
       for (const src of plan.once ?? []) s.usage['cd:' + src] = s.turn;
       if (plan.grant !== undefined) s.usage['gp:' + plan.grant] = s.turn;
-      v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free, alt: plan.alt ?? null };
+      v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free, alt: plan.alt ?? null, rush: !!plan.rush };
       v.fromZone = prevZone;
       f.stage = 1;
       return;
@@ -485,6 +500,11 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         const via = p.kind === 'summon' ? 'summon' : 'put';
         enterBattle(c, uid, { to: 'battle', cause: via, via, onto: p.onto ?? undefined, face: p.face, paid: p.paid, cost: p.cost, free: p.free, from: v.fromZone }, evs);
         if (p.kind === 'summon' && s.cards[uid].zone === 'battle') onSummoned(c, uid);
+        // アビスラッシュ
+        if (p.rush && s.cards[uid].zone === 'battle') {
+          const pm = permByPid(s, s.cards[uid].pid);
+          if (pm) pm.perm.rush = s.turn;
+        }
         // 別のコストを使って出た印(そのターンだけ。altUsed の条件で調べる)
         if (p.alt && s.cards[uid].zone === 'battle') s.usage['alt:' + uid + ':' + p.alt] = s.turn;
         // S・トリガーとして使って出た印(S・トリガー・プラスのP能力の条件。イベントの内容は変えない)
@@ -1041,9 +1061,33 @@ function runBreak(c: Ctx, f: ProcFrame): void {
           prompt: 'S・トリガー/G・ストライクを宣言するカードを選んでください',
         });
       }
+      // S・バック: 宣言しなかったシールドのカードを捨てて、手札の呪文をコストを支払わずに唱える
+      const sbacks: { u: number; back: number }[] = [];
+      if (gameHas(c, 'sBack')) {
+        for (const u of broken) {
+          if (declared.includes(u)) continue;
+          const back = s.players[defender].hand.find((h) => !sbacks.some((x) => x.back === h) && sBackMatches(c, defender, h, u));
+          if (back === undefined) continue;
+          const yes = ask<boolean>(c, {
+            player: defender,
+            why: 'may',
+            input: { shape: 'yesno' },
+            source: { uid: back, ep: s.cards[back].ep },
+            prompt: `S・バック: 《${c.reg.defs[s.cards[u].defId].name}》を捨てて、手札の《${c.reg.defs[s.cards[back].defId].name}》をコストを支払わずに唱えますか?`,
+          });
+          if (yes) sbacks.push({ u, back });
+        }
+      }
       // 宣言がすべて終わってから、手札に加える(112.3a)
       const kinds = declared.map((u) => ({ u, d: declaration(c, u)! }));
-      moveCards(c, broken, { to: 'hand', cause: 'break', noReplace: true });
+      moveCards(c, sbacks.length ? broken.filter((u) => !sbacks.some((x) => x.u === u)) : broken, { to: 'hand', cause: 'break', noReplace: true });
+      if (sbacks.length) moveCards(c, sbacks.map((x) => x.u), { to: 'grave', cause: 'discard', noReplace: true });
+      for (const { back } of sbacks) {
+        const bc = s.cards[back];
+        const sf = c.reg.defs[bc.defId].faces.findIndex((x) => x.type === 'spell');
+        if (sf < 0) continue;
+        s.cont.push({ kind: 'proc', id: nextId(s), causedBy: c.cause, name: 'play', stage: 0, vars: { uid: back, ep: bc.ep, from: 'hand', face: sf, free: true, after: null, settle: false } });
+      }
       s.breaking = [];
       const batch = ++s.batchNo;
       for (const { u, d } of kinds) {
@@ -1070,6 +1114,18 @@ function runBreak(c: Ctx, f: ProcFrame): void {
       popFrame(c, f);
       return;
   }
+}
+
+/** S・バック: 手札のカード back が、シールドから手札に加わるカード u に対して使えるか */
+function sBackMatches(c: Ctx, owner: PlayerId, back: number, u: number): boolean {
+  if (back === u) return false;
+  const def = c.reg.defs[c.s.cards[back].defId];
+  for (const face of def.faces) {
+    for (const a of face.abilities) {
+      if (a.kind === 'keyword' && a.name === 'sBack' && a.attacker && evalCond({ ...mkCC(c, owner, { self: back }), it: u, itFace: -1 }, a.attacker)) return true;
+    }
+  }
+  return false;
 }
 
 /** シールドゾーンから手札に加わる時に宣言できる能力(S・トリガー / G・ストライク)。 */

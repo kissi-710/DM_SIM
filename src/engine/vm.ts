@@ -1025,6 +1025,62 @@ function actStab(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   stabIntoDeck(c, resolveSel(cc, a.sel), a.depth ?? 4);
 }
 
+/** アビスラッシュ(効果で出したクリーチャー): このターン攻撃でき、ターンの終わりに(ifAttacked なら、攻撃していれば)山札の下に置く */
+function actRush(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone !== 'battle') continue;
+    const pm = permByPid(s, card.pid);
+    if (!pm) continue;
+    pm.perm.rush = s.turn;
+    if (a.ifAttacked) pm.perm.rushIfAttacked = true;
+  }
+}
+
+/** そのカードの「このクリーチャーが出た時」で始まる能力を1つ使う(どのゾーンのカードでもよい。最初の1つ) */
+function actUseCip(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    const def = c.reg.defs[card.defId];
+    for (let fi = 0; fi < def.faces.length; fi++) {
+      if (!def.faces[fi].races && def.faces[fi].type === 'spell') continue;
+      const t = c.reg.getInfo(card.defId, fi).triggers.find((r) => {
+        if (r.ability.gen || r.ability.spec.subject !== 'self') return false;
+        const on = Array.isArray(r.ability.spec.on) ? r.ability.spec.on : [r.ability.spec.on];
+        return on.length === 1 && on[0].type === 'entered';
+      });
+      if (!t) continue;
+      const ev: Ev = { id: nextId(s), causedBy: null, type: 'entered', turn: s.turn, card: u, owner: card.owner };
+      s.cont.push({
+        kind: 'effect',
+        id: nextId(s),
+        causedBy: c.cause,
+        ability: { defId: card.defId, face: fi, idx: t.idx },
+        source: ref(c, u),
+        lki: snapOf(c, u),
+        controller: f.controller,
+        pc: 0,
+        vars: {},
+        trigger: ev,
+        noOptional: true,
+      });
+      break;
+    }
+  }
+}
+
+/** プレイヤーの墓地をシャッフルして、山札の下に置く */
+function actGraveToBottom(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const who = playerOf(f, a?.who);
+  const uids = s.players[who].grave.slice();
+  if (uids.length === 0) return;
+  shuffleInPlace(s, uids);
+  moveCards(c, uids, { to: 'deck', cause: 'effect', pos: 'bottom' });
+}
+
 function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   // 「そのターン中に〜を使っていなければ」の判定用に、印をログに残す
   emit(c, a, { owner: f.controller, source: f.source.uid });
@@ -1071,6 +1127,9 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['castSide', actCastSide],
   ['seal', actSeal],
   ['stab', actStab],
+  ['rush', actRush],
+  ['useCip', actUseCip],
+  ['graveToBottom', actGraveToBottom],
   ['stackShield', actStackShield],
   ['log', actLog],
   ['setVar', actSetVar],

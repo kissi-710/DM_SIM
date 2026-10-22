@@ -162,7 +162,9 @@ export type KeywordName =
   | 'slayer'
   | 'revolutionChange'
   /** パワード・ブレイカー: パワー n ごとに、シールドをもう1つブレイクする */
-  | 'poweredBreaker';
+  | 'poweredBreaker'
+  /** S・バック: attacker(条件)に合うカードが、自分のシールドゾーンから手札に加わる時、それを捨てて、手札のこの呪文をコストを支払わずに唱えてもよい */
+  | 'sBack';
 
 export type StaticMod =
   | { type: 'costDelta'; delta: number; cond: Cond; /** 各ターンに1度だけ(発生源ごと)。使うと、そのターンはもう働かない */ oncePerTurn?: boolean }
@@ -177,7 +179,7 @@ export type StaticMod =
   /** 相手のターンのはじめに、相手は自身のマナゾーンのカードを n 枚までしかアンタップできない */
   | { type: 'untapLimit'; n: number }
   /** 自分のターン中、cond に合う自分のカードを from のゾーンから召喚してもよい(コストは支払う)。oncePerTurn なら「1体」(発生源ごとに各ターン1度) */
-  | { type: 'allowPlayFrom'; from: ZoneName; cond?: Cond; oncePerTurn?: boolean }
+  | { type: 'allowPlayFrom'; from: ZoneName; cond?: Cond; oncePerTurn?: boolean; /** アビスラッシュを与える(墓地から召喚すると、そのターン攻撃でき、ターンの終わりに山札の下に置かれる) */ rush?: boolean }
   /** このクリーチャーは、相手に選ばれない(攻撃・ブロックはされる) */
   | { type: 'cannotBeChosen' }
   /** 相手がクリーチャーを選ぶなら、可能ならこのクリーチャーを選ばなければならない */
@@ -221,7 +223,7 @@ export type Ability =
   | { kind: 'spell'; steps: StepDef[] }
   | { kind: 'static'; mod: StaticMod; while?: Cond }
   | { kind: 'replace'; match: Pattern; apply: ReplaceApply; optional?: boolean; while?: Cond; label?: string }
-  | { kind: 'permission'; play: 'summon' | 'cast' | 'put'; from: ZoneName; after?: 'deckBottom' }
+  | { kind: 'permission'; play: 'summon' | 'cast' | 'put'; from: ZoneName; after?: 'deckBottom'; /** アビスラッシュ */ rush?: boolean }
   /** このカード自身を使うコストの増減(delta は負で軽減。cond を満たす時だけ。評価は、このカードを使う人から見る。floor: これを下回らない) */
   | { kind: 'selfCost'; delta: Expr; cond?: Cond; floor?: number }
   /** ハイパー化: 自分のメインステップ中に、自分の他のクリーチャーを tapOther 体タップして、ハイパーモードを解放できる(次の自分のターンのはじめまで) */

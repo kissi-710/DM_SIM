@@ -193,5 +193,9 @@ export const mekureido = (raceName: string, x: number, times = 1): StepDef[] => 
   ];
   return times === 1 ? body : [{ op: 'repeat', times, body }];
 };
+/** アビスラッシュ: このクリーチャーを、自分の墓地から召喚してもよい。そうしたら、このターンプレイヤーを攻撃でき、ターンの終わりに山札の下に置かれる */
+export const abyssRush = (): Ability => ({ kind: 'permission', play: 'summon', from: 'grave', rush: true });
+/** S・バック: cond に合うカードが、自分のシールドゾーンから手札に加わる時 */
+export const sBack = (cond: Cond): Ability => kw('sBack', { attacker: cond });
 /** パワード・ブレイカー(パワー n ごとに、シールドをもう1つブレイクする) */
 export const poweredBreaker = (n = 6000): Ability => kw('poweredBreaker', { n });

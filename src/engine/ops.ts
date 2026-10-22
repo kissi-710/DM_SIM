@@ -671,7 +671,9 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
   // 侵略でバトルゾーンの別の山から移動する場合は「出た」扱いにならない(decks.md)
   const fromBattle = from === 'battle';
   if (!fromBattle) {
-    evs.push(emit(c, 'entered', { card: uid, owner, via, paid: opts.paid ?? 0, cost: opts.cost, free: !!opts.free, pid: perm.pid, kind: ekind, face: faceIdx }));
+    // 出た元のゾーン。「山札から出た時」などを見る能力があるゲームだけ、イベントに残す(既存の対戦の記録を変えない)
+    const efrom = opts.from ?? from;
+    evs.push(emit(c, 'entered', { card: uid, owner, via, paid: opts.paid ?? 0, cost: opts.cost, free: !!opts.free, pid: perm.pid, kind: ekind, face: faceIdx, ...(gameHas(c, 'enteredFrom') ? { from: efrom } : {}) }));
   }
   if (opts.onto !== undefined) {
     evs.push(emit(c, 'evolved', { card: uid, owner, pid: perm.pid, base, via }));

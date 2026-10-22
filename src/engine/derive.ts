@@ -278,6 +278,7 @@ function playerAttackBlockedByEntry(c: Ctx, perm: Permanent, owner: PlayerId): b
  */
 export function isSick(c: Ctx, perm: Permanent): boolean {
   if (!perm.sick) return false;
+  if (perm.rush === c.s.turn) return false; // アビスラッシュ: そのターン、プレイヤーを攻撃できる
   const t = faceTypeOf(c, perm.cards[0]);
   return t !== 'evolution' && t !== 'smaxEvolution';
 }
@@ -538,6 +539,11 @@ export function grantedPlayFrom(c: Ctx, player: PlayerId, uid: number, faceIdx: 
     return st.src;
   }
   return null;
+}
+
+/** allowPlayFrom の発生源が、アビスラッシュを与えているか */
+export function grantsRush(c: Ctx, src: number): boolean {
+  return infoOf(c, src).statics.some((st) => st.ability.mod.type === 'allowPlayFrom' && !!st.ability.mod.rush);
 }
 
 /** 「相手はコストが n 以下のクリーチャーを召喚できない」(ミラダンテXII のファイナル革命)に当たらないか */

@@ -76,7 +76,9 @@ export type FeatureName =
   | 'enterTapped'
   | 'allowPlayFrom'
   | 'noOppShieldTrigger'
-  | 'attackMeFirst';
+  | 'attackMeFirst'
+  | 'sBack'
+  | 'enteredFrom';
 
 export interface Registry {
   db: CardDB;
@@ -176,7 +178,7 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'useCip', 'graveToBottom', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
@@ -186,7 +188,7 @@ const KNOWN_COND = new Set([
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
   'blocker', 'breaker', 'shieldTrigger', 'gStrike', 'speedAttacker', 'machFighter', 'exLife', 'justDiver',
-  'sympathy', 'hyperEnergy', 'yobinion', 'invasion', 'slayer', 'revolutionChange', 'poweredBreaker',
+  'sympathy', 'hyperEnergy', 'yobinion', 'invasion', 'slayer', 'revolutionChange', 'poweredBreaker', 'sBack',
 ]);
 
 /** 条件(カードデータの JSON)の検査。形がまだ信用できない入力なので、型は緩く受ける */
@@ -524,6 +526,8 @@ export function loadRegistry(origDb: CardDB): Registry {
     allowPlayFrom: staticOf('allowPlayFrom'),
     noOppShieldTrigger: staticOf('noOppShieldTrigger'),
     attackMeFirst: staticOf('attackMeFirst'),
+    sBack: featureDefs((ab) => ab.kind === 'keyword' && ab.name === 'sBack'),
+    enteredFrom: featureDefs((ab) => ab.kind === 'trigger' && (Array.isArray(ab.spec.on) ? ab.spec.on : [ab.spec.on]).some((p) => p.type === 'entered' && p.from !== undefined)),
   };
   // program() の高速な引き当て: 定義ID → (面・能力・任意なし) の配列。文字列キーを毎回作らない
   const progFast = new Map<string, (Program | undefined)[]>();

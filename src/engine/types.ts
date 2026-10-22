@@ -97,6 +97,10 @@ export interface Permanent {
   hyper?: boolean;
   /** 封印(裏向きで、この山の上に置かれたカードの uid)。封印されているクリーチャーは無視される(能力を失い、攻撃もブロックもできない) */
   seals?: number[];
+  /** アビスラッシュ: このターン、召喚酔いせずに攻撃でき、ターンの終わりに山札の下に置かれる(値は、そのターン) */
+  rush?: number;
+  /** アビスラッシュの、攻撃していた時だけ山札の下に置く(ジャガイストの効果で出した場合) */
+  rushIfAttacked?: boolean;
 }
 
 export interface PlayerZones {
