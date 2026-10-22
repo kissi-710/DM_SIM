@@ -61,6 +61,31 @@ describe('25の王道: デッキリストと実装の一致', () => {
   });
 });
 
+describe('25の王道: 全23デッキ(C〜Y)の実装', () => {
+  it('C から Y までの23デッキがすべて、デッキ定義として登録されている', () => {
+    const letters = sd1Presets.map((p) => letterOf(p.id));
+    expect(letters).toEqual('CDEFGHIJKLMNOPQRSTUVWXY'.split(''));
+    expect(letters.length).toBe(23);
+  });
+  it('取得したデッキリスト(docs/data/dm26sd1-decks.json)の C〜Y のカードは、すべて能力を持つカードとして実装されている', () => {
+    for (const p of sd1Presets) {
+      for (const [id] of p.list) {
+        const def = reg.defs[id];
+        expect(def, `${p.id}: ${id}`).toBeDefined();
+        for (const f of def.faces) expect(f.abilities.length, `${p.id}: ${f.name} に能力がありません`).toBeGreaterThan(0);
+      }
+    }
+  });
+  it('同名のカードは、特攻の忠剣ハチ公以外、4枚を超えない', () => {
+    for (const p of sd1Presets) {
+      for (const [id, n] of p.list) {
+        if (id === 'dm26sd1-K01') continue;
+        expect(n, `${p.id}: ${reg.defs[id].name}`).toBeLessThanOrEqual(4);
+      }
+    }
+  });
+});
+
 describe('25の王道: 対局', () => {
   const opp = deckCards('maruru');
   for (const p of sd1Presets) {
