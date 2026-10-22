@@ -2,7 +2,7 @@
 // 規約: 入力待ち(ask)は、状態を変更する前に行う。再実行しても二重に変更されない。
 import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
-import { activeStatics, cannotLeave, charsLite, deckLocked, infoOf, isIgnored, manaCivs, payNeed } from './derive';
+import { activeStatics, battlePower, cannotLeave, charsLite, deckLocked, hasKeyword, infoOf, isIgnored, manaCivs, payNeed, shieldStatic } from './derive';
 import type { Ctx } from './state';
 import { gameHas, nextId, opponentOf, permByPid, shuffleInPlace, snapOf } from './state';
 import {
@@ -249,6 +249,8 @@ export interface MoveOpts {
   from?: ZoneName;
   /** この移動を起こした効果の使い手(置換の判定に使う。イベントには載せない) */
   by?: PlayerId;
+  /** シールドゾーンへ表向きで置く(G城の実行) */
+  up?: boolean;
 }
 
 export interface MoveResult {
@@ -412,7 +414,11 @@ export function moveCards(c: Ctx, uids: number[], opts: MoveOpts): MoveResult[] 
   const proposals: Proposal[] = [];
   for (const uid of uids) {
     const card = s.cards[uid];
-    proposals.push({ uid, from: card.zone, to: opts.to, cause: opts.cause, pos: opts.pos, by: opts.by });
+    // 表向きのシールド(G城)がシールドゾーンを離れる時は、かわりに墓地に置く(手札に加わらない)。
+    // カードを重ねた山の一番上(piles に載る。煌龍 サッヴァークなど)は、これではない: 山ごと手札に加わる
+    if (card.zone === 'shield' && card.up && !s.piles?.[uid] && opts.to !== 'shield' && opts.to !== 'grave') {
+      proposals.push({ uid, from: card.zone, to: 'grave', cause: 'replaced', pos: opts.pos, replaced: true, by: opts.by });
+    } else proposals.push({ uid, from: card.zone, to: opts.to, cause: opts.cause, pos: opts.pos, by: opts.by });
   }
   // フェーズA: 置換の判定(状態を変更しない)
   if (!opts.noReplace) {
@@ -529,7 +535,8 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
   card.tapped = false;
   card.ex = false;
   card.exPid = -1;
-  delete card.up;
+  if (card.up) delete card.up;
+  if (to === 'shield' && opts.up) card.up = true;
   if (to === 'mana') card.tapped = entersManaTapped(c, uid, opts);
   card.face = 0;
   placeInZone(c, uid, to, pos);
@@ -544,6 +551,7 @@ function doMove(c: Ctx, uid: number, to: ZoneName, cause: string, pos: 'top' | '
       ex: wasEx,
       lki: snap,
       via: opts.via,
+      ...(card.up ? { up: true } : {}),
     }),
   );
   for (const u of underShield) {
@@ -602,6 +610,10 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
     const rep = entryReplacement(c, uid, opts, faceIdx, via);
     if (rep) return applyEntryReplacement(c, uid, rep);
   }
+  // 相手の表向きのシールド(G城)がある間、召喚以外の方法で出る時は、かわりにマナゾーンに置く
+  if (from !== 'battle' && via !== 'summon' && shieldStatic(c, opponentOf(owner), 'nonSummonEntryToMana')) {
+    return doMove(c, uid, 'mana', 'replaced', undefined, evs, { ...opts, to: 'mana' });
+  }
   removeFromZone(c, uid);
   card.zone = 'battle';
   card.ep++;
@@ -651,7 +663,8 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
     perm.enteredTurn = s.turn;
   } else {
     // 各ターン、はじめて出る相手のクリーチャーは、タップして出る
-    let tappedIn = !!opts.tapped;
+    // 「タップして出る」(プチョヘンザ): 相手の常在型能力。進化で重なる時は、すでにいる山なので対象外
+    let tappedIn = !!opts.tapped || entersTappedByStatic(c, uid, owner, faceIdx);
     if (!tappedIn && gameHas(c, 'enterTapped')) {
       if (!s.turnLog.some((e) => e.type === 'entered' && e.owner === owner)) tappedIn = activeStatics(c, 'enterTappedFirst').some((st) => st.controller !== owner);
       if (!tappedIn) tappedIn = activeStatics(c, 'enterTapped').some((st) => st.controller !== owner);
@@ -802,6 +815,89 @@ export function entryReplacement(c: Ctx, uid: number, opts: MoveOpts, faceIdx: n
     if (chosen >= cands.length) return null;
   }
   return { to: cands[chosen].to, ...(cands[chosen].then ? { then: cands[chosen].then } : {}), ...(cands[chosen].stay ? { stay: true } : {}) };
+}
+
+/** 相手の常在型能力(entersTapped)で、このクリーチャーがタップして出るか */
+function entersTappedByStatic(c: Ctx, uid: number, owner: PlayerId, faceIdx: number): boolean {
+  for (const st of activeStatics(c, 'entersTapped')) {
+    if (st.controller === owner) continue;
+    const mod = st.ability.mod;
+    if (mod.type !== 'entersTapped') continue;
+    if (evalCond(mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx }), mod.cond)) return true;
+  }
+  return false;
+}
+
+// ───────────────────────── バトル ─────────────────────────
+
+function firstBattleWinsFor(c: Ctx, owner: PlayerId): boolean {
+  const s = c.s;
+  const key = 'fbw:' + owner;
+  if (s.usage[key] === s.turn) return false;
+  if (!activeStatics(c, 'firstBattleWins').some((st) => st.controller === owner)) return false;
+  s.usage[key] = s.turn;
+  return true;
+}
+
+export interface BattleResult {
+  aPid: number;
+  dPid: number;
+  aTop: number;
+  dTop: number;
+  aOwner: PlayerId;
+}
+
+/**
+ * 2体のクリーチャーをバトルさせる(攻撃によるバトルと、効果によるバトルで共通)。
+ * パワーの大きい方が勝ち、同じなら両方破壊される。スレイヤーは、勝敗にかかわらず相手を破壊する。
+ * 破壊と battleEnded の誘発の収集まで行う。解決(settle)は呼び出し側。
+ */
+export function resolveBattle(c: Ctx, aPid: number, dPid: number): BattleResult | null {
+  const s = c.s;
+  const pm = permByPid(s, aPid);
+  const dm = permByPid(s, dPid);
+  if (!pm || !dm) return null;
+  let pa = battlePower(c, pm.perm);
+  let pd = battlePower(c, dm.perm);
+  // 各ターン、はじめて自分のクリーチャーがバトルする時、そのクリーチャーはそのバトルに勝つ(輝く革命 ボルシャック・フレア)
+  if (gameHas(c, 'firstBattleWins')) {
+    const aw = firstBattleWinsFor(c, pm.owner);
+    const dw = firstBattleWinsFor(c, dm.owner);
+    if (aw && !dw) pa = Infinity;
+    else if (dw && !aw) pd = Infinity;
+  }
+  const aTop = pm.perm.cards[0];
+  const dTop = dm.perm.cards[0];
+  const losers: number[] = [];
+  let winner: number | null = null;
+  if (pa > pd) {
+    losers.push(dTop);
+    winner = aTop;
+  } else if (pa < pd) {
+    losers.push(aTop);
+    winner = dTop;
+  } else losers.push(aTop, dTop);
+  // スレイヤー: バトルの後、バトルした相手を破壊する(勝敗にかかわらず)
+  if (hasKeyword(c, pm.perm, 'slayer') && !losers.includes(dTop)) losers.push(dTop);
+  if (hasKeyword(c, dm.perm, 'slayer') && !losers.includes(aTop)) losers.push(aTop);
+  const aOwner = pm.owner;
+  const dOwner = dm.owner;
+  moveCards(c, losers, { to: 'grave', cause: 'destroy' });
+  const winPid = winner === null ? null : winner === aTop ? aPid : dPid;
+  const ev = emit(c, 'battleEnded', {
+    attacker: aPid,
+    defender: dPid,
+    winner: winPid,
+    card: winner,
+    winnerCard: winner,
+    loserCard: winner === null ? null : winner === aTop ? dTop : aTop,
+    loserOwner: winner === null ? undefined : winner === aTop ? dOwner : aOwner,
+    winnerOwner: winner === null ? undefined : winner === aTop ? aOwner : dOwner,
+    draw: winner === null,
+  });
+  s.batchNo++;
+  collectBatch(c, [ev]);
+  return { aPid, dPid, aTop, dTop, aOwner };
 }
 
 // ───────────────────────── 置換パイプライン(effects 8) ─────────────────────────

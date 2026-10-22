@@ -2,7 +2,7 @@
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { charsOf, hasKeyword, powerOf } from '../engine/derive';
 import { mkCtx, permByPid } from '../engine/state';
-import type { GameState } from '../engine/types';
+import { type GameState, isCreatureType } from '../engine/types';
 import { faceTypeLabel } from './typeLabel';
 import { CIV_COLOR, reg, wardOf, type Ward } from './format';
 
@@ -110,7 +110,7 @@ export function CardView(p: CardProps) {
   const c = mkCtx(s, reg);
   const ch = charsOf(c, uid, -1);
   let power: number | null = null;
-  if (face.type !== 'spell') {
+  if (isCreatureType(face.type)) {
     power = face.power ?? 0;
     if (card.zone === 'battle') {
       const pm = permByPid(s, card.pid);

@@ -334,11 +334,13 @@ pub struct MoveOpts {
     pub face: Option<i32>,
     /// 進化・侵略などで下に入るカードを一緒に動かさない
     pub alone: bool,
+    /// シールドゾーンへ表向きで置く(G城の実行)
+    pub up: bool,
 }
 
 impl MoveOpts {
     pub fn new(to: Zone, cause: Sym) -> MoveOpts {
-        MoveOpts { to, cause, pos: None, onto: None, via: None, tapped: false, paid: None, cost: None, free: false, no_replace: false, face: None, alone: false }
+        MoveOpts { to, cause, pos: None, onto: None, via: None, tapped: false, paid: None, cost: None, free: false, no_replace: false, face: None, alone: false, up: false }
     }
 }
 
@@ -433,7 +435,15 @@ pub fn move_cards(c: &mut Ctx, uids: &[i32], opts: &MoveOpts) -> Res<Vec<MoveRes
     crate::prof!(18);
     let mut proposals: Vec<Proposal> = uids
         .iter()
-        .map(|&uid| Proposal { uid, from: c.s.cards[uid as usize].zone, to: opts.to, cause: opts.cause, pos: opts.pos, cancelled: false, also: None })
+        .map(|&uid| {
+            let card = &c.s.cards[uid as usize];
+            // 表向きのシールド(G城)がシールドゾーンを離れる時は、かわりに墓地に置く(手札に加わらない)
+            if card.zone == Zone::Shield && card.up && opts.to != Zone::Shield && opts.to != Zone::Grave {
+                Proposal { uid, from: card.zone, to: Zone::Grave, cause: s::REPLACED, pos: opts.pos, cancelled: false, also: None }
+            } else {
+                Proposal { uid, from: card.zone, to: opts.to, cause: opts.cause, pos: opts.pos, cancelled: false, also: None }
+            }
+        })
         .collect();
     // フェーズA: 置換の判定(状態を変更しない)
     if !opts.no_replace {
@@ -490,7 +500,14 @@ fn do_move(c: &mut Ctx, uid: i32, to: Zone, cause: Sym, pos: Option<bool>, evs: 
     let e = c.env();
     let snap = Rc::new(snap_of(e, uid));
     let hint = if from == Zone::Battle || from == Zone::Limbo { face } else { -1 };
-    let kind = if chars_lite(e, uid, hint).ty == FaceType::Spell { s::SPELL } else { s::CREATURE };
+    let face_ty = chars_lite(e, uid, hint).ty;
+    let kind = if face_ty == FaceType::Spell {
+        s::SPELL
+    } else if face_ty == FaceType::Castle {
+        s::CASTLE
+    } else {
+        s::CREATURE
+    };
     // 山(進化元)を一緒に動かす
     let mut under: Vec<i32> = Vec::new();
     if from == Zone::Battle && to != Zone::Battle && !opts.alone {
@@ -513,6 +530,7 @@ fn do_move(c: &mut Ctx, uid: i32, to: Zone, cause: Sym, pos: Option<bool>, evs: 
         card.ex = false;
         card.ex_pid = -1;
         card.face = 0;
+        card.up = to == Zone::Shield && opts.up;
     }
     // 移動先のゾーンでの特性で判定する(TS 版と同じ。ツインパクトは、場(バトルゾーン)の面ではなく、マナゾーンでは両面の文明で多色)
     if to == Zone::Mana {
@@ -532,6 +550,9 @@ fn do_move(c: &mut Ctx, uid: i32, to: Zone, cause: Sym, pos: Option<bool>, evs: 
     ];
     if let Some(v) = opts.via {
         f.push((s::VIA, Val::Str(v)));
+    }
+    if c.s.cards[uid as usize].up {
+        f.push((s::UP, Val::Bool(true)));
     }
     evs.push(emit(c, s::MOVED, f));
     for u in under {
@@ -583,6 +604,12 @@ pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>
     let snap = Rc::new(snap_of(c.env(), uid));
     let face_idx = opts.face.unwrap_or(c.s.cards[uid as usize].face);
     let via = opts.via.unwrap_or(s::EFFECT);
+    // 相手の表向きのシールド(G城)がある間、召喚以外の方法で出る時は、かわりにマナゾーンに置く
+    if from != Zone::Battle && via != s::SUMMON && shield_static(c.env(), opp(owner), |m| matches!(m, StaticMod::NonSummonEntryToMana)) {
+        let mut o2 = opts.clone();
+        o2.to = Zone::Mana;
+        return do_move(c, uid, Zone::Mana, s::REPLACED, None, evs, &o2);
+    }
     remove_from_zone(c, uid);
     {
         let card = &mut c.s.cards[uid as usize];
@@ -609,7 +636,9 @@ pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>
     } else {
         perm_pid = c.s.next_pid;
         c.s.next_pid += 1;
-        let perm = Perm { pid: perm_pid, cards: vec![uid], tapped: opts.tapped, sick: true, entered_turn: c.s.turn };
+        // 「タップして出る」(プチョヘンザ)。進化で重なる時は、すでにいる山なので対象外
+        let enters_tapped = opts.tapped || enters_tapped_by_static(c.env(), uid, owner, face_idx);
+        let perm = Perm { pid: perm_pid, cards: vec![uid], tapped: enters_tapped, sick: true, entered_turn: c.s.turn };
         c.s.cards[uid as usize].pid = perm_pid;
         c.s.players[owner as usize].battle.push(perm);
     }
@@ -690,6 +719,82 @@ pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>
     }
     let ep = c.s.cards[uid as usize].ep;
     Ok(MoveResult { uid, moved: true, to: Zone::Battle, ep })
+}
+
+// ───────────────────────── バトル ─────────────────────────
+
+pub struct BattleResult {
+    pub a_pid: i32,
+    pub d_pid: i32,
+    pub a_top: i32,
+    pub d_top: i32,
+    pub a_owner: PlayerId,
+}
+
+/// 2体のクリーチャーをバトルさせる(攻撃によるバトルと、効果によるバトルで共通)。
+/// パワーの大きい方が勝ち、同じなら両方破壊される。スレイヤーは、勝敗にかかわらず相手を破壊する。
+/// 破壊と battleEnded の誘発の収集まで行う。解決(settle)は呼び出し側。どちらかがいなければ None。
+pub fn resolve_battle(c: &mut Ctx, a_pid: i32, d_pid: i32) -> Res<Option<BattleResult>> {
+    let (po, pi) = match c.s.perm_by_pid(a_pid) {
+        Some(x) => x,
+        None => return Ok(None),
+    };
+    let (dop, di) = match c.s.perm_by_pid(d_pid) {
+        Some(x) => x,
+        None => return Ok(None),
+    };
+    let e = c.env();
+    let pa = battle_power(e, &c.s.players[po as usize].battle[pi]);
+    let pd = battle_power(e, &c.s.players[dop as usize].battle[di]);
+    let a_top = c.s.players[po as usize].battle[pi].cards[0];
+    let d_top = c.s.players[dop as usize].battle[di].cards[0];
+    let mut losers: Vec<i32> = Vec::new();
+    let mut winner: Option<i32> = None;
+    if pa > pd {
+        losers.push(d_top);
+        winner = Some(a_top);
+    } else if pa < pd {
+        losers.push(a_top);
+        winner = Some(d_top);
+    } else {
+        losers.push(a_top);
+        losers.push(d_top);
+    }
+    // スレイヤー: バトルの後、バトルした相手を破壊する(勝敗にかかわらず)
+    let a_slay = has_keyword(e, &c.s.players[po as usize].battle[pi], Kw::Slayer);
+    let d_slay = has_keyword(e, &c.s.players[dop as usize].battle[di], Kw::Slayer);
+    if a_slay && !losers.contains(&d_top) {
+        losers.push(d_top);
+    }
+    if d_slay && !losers.contains(&a_top) {
+        losers.push(a_top);
+    }
+    let (a_owner, d_owner) = (po, dop);
+    move_cards(c, &losers, &MoveOpts::new(Zone::Grave, s::DESTROY))?;
+    let win_pid = winner.map(|w| if w == a_top { a_pid } else { d_pid });
+    let mut fv: Vec<(Sym, Val)> = vec![
+        (s::ATTACKER, Val::Int(a_pid as i64)),
+        (s::DEFENDER, Val::Int(d_pid as i64)),
+        (s::WINNER, win_pid.map_or(Val::Null, |p| Val::Int(p as i64))),
+        (s::CARD, winner.map_or(Val::Null, |w| Val::Int(w as i64))),
+        (s::WINNER_CARD, winner.map_or(Val::Null, |w| Val::Int(w as i64))),
+        (
+            s::LOSER_CARD,
+            match winner {
+                None => Val::Null,
+                Some(w) => Val::Int(if w == a_top { d_top } else { a_top } as i64),
+            },
+        ),
+    ];
+    if let Some(w) = winner {
+        fv.push((s::LOSER_OWNER, Val::Int(if w == a_top { d_owner } else { a_owner } as i64)));
+        fv.push((s::WINNER_OWNER, Val::Int(if w == a_top { a_owner } else { d_owner } as i64)));
+    }
+    fv.push((s::DRAW, Val::Bool(winner.is_none())));
+    let ev = emit(c, s::BATTLE_ENDED, fv);
+    c.s.batch_no += 1;
+    collect_batch(c, &[ev]);
+    Ok(Some(BattleResult { a_pid, d_pid, a_top, d_top, a_owner }))
 }
 
 // ───────────────────────── 置換パイプライン(effects 8) ─────────────────────────

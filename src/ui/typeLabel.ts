@@ -9,6 +9,7 @@ const LABEL: Record<FaceType, string> = {
   tamaseed: 'タマシード',
   field: 'フィールド',
   crossgear: 'クロスギア',
+  castle: 'G城',
 };
 
 export const faceTypeLabel = (t: FaceType): string => LABEL[t];

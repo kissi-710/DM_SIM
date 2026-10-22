@@ -53,7 +53,7 @@ export function kindsOf(reg: Registry, defId: string): string[] {
   if (!def) return [];
   const out = new Set<string>();
   def.faces.forEach((f, fi) => {
-    out.add(f.type === 'spell' ? 'spell' : 'creature');
+    out.add(f.type === 'spell' ? 'spell' : f.type === 'castle' ? 'castle' : 'creature');
     const info = reg.getInfo(defId, fi);
     if (info.shieldTriggers.length > 0) out.add('shieldTrigger');
     if (info.blocker) out.add('blocker');

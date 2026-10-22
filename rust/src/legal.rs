@@ -22,6 +22,12 @@ pub fn legal_actions(s: &State, reg: &Registry) -> Vec<Action> {
     if p.why == Why::TurnAction {
         return turn_actions(Env { s, reg }, p.player);
     }
+    // ブレイクするシールド: 見分けのつく違いごとに1つ(どれを選んでも同じ裏向きのシールドは、探索の分岐に数えない)
+    if p.why == Why::PickShield {
+        if let Some(InputSpec::Pick { candidates, min, .. }) = &p.input {
+            return crate::procs::shield_pick_choices(s, candidates, *min as usize).into_iter().map(|v| Action::Answer { id: p.id, value: Val::ints(&v) }).collect();
+        }
+    }
     enumerate_answers(p, ENUM_LIMIT).into_iter().map(|value| Action::Answer { id: p.id, value }).collect()
 }
 

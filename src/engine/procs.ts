@@ -12,7 +12,7 @@ import {
   hasSelfStatic,
   canPlayCard,
   canCast,
-  canSummon,
+  canSummonCard,
   canUseCost,
   costBase,
   grantedPlayFrom,
@@ -40,6 +40,7 @@ import {
   listens,
   moveCards,
   onSummoned,
+  resolveBattle,
   setTapped,
   smaxVictims,
   stabIntoDeck,
@@ -51,6 +52,7 @@ import type {
   Civ,
   EffectFrame,
   Ev,
+  GameState,
   PlayExtra,
   Permanent,
   PlayerId,
@@ -81,7 +83,7 @@ export interface PlayPlan {
   ok: boolean;
   err?: string;
   face: number;
-  kind: 'summon' | 'cast' | 'put';
+  kind: 'summon' | 'cast' | 'put' | 'castle';
   cost: number;
   need: number;
   civs: Civ[];
@@ -124,7 +126,7 @@ export function planPlay(
   const face = def.faces[faceIdx];
   if (!face) return fail('面がありません');
   const info = c.reg.getInfo(card.defId, faceIdx);
-  const kind = face.type === 'spell' ? 'cast' : isCreatureType(face.type) ? 'summon' : 'put';
+  const kind = face.type === 'spell' ? 'cast' : face.type === 'castle' ? 'castle' : isCreatureType(face.type) ? 'summon' : 'put';
   let after: 'deckBottom' | null = null;
   let grantSrc: number | null = null;
   let rush = false;
@@ -149,7 +151,7 @@ export function planPlay(
     rush = !!perm?.rush;
   }
   if (kind === 'cast' && !canCast(c, player, uid, faceIdx)) return fail('この呪文は唱えられません');
-  if (kind === 'summon' && !canSummon(c, player, uid, faceIdx)) return fail('このクリーチャーは召喚できません');
+  if (kind === 'summon' && !canSummonCard(c, player, uid, faceIdx)) return fail('このクリーチャーは召喚できません');
   if (!canUseCost(c, player, face.cost)) return fail('そのコストのカードは実行できません');
   if (!canPlayCard(c, player, uid, faceIdx)) return fail('そのカードは使えません');
 
@@ -604,6 +606,16 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         f.stage = 3;
         return;
       }
+      if (p.kind === 'castle') {
+        // G城の実行: 呪文を唱えたことにはならない。表向きのシールドとして置く(シールドゾーンに置かれた時の誘発を集める)
+        emit(c, 'executed', { card: uid, owner, free: p.free, paid: p.paid, cost: p.cost, face: p.face, from: v.fromZone });
+        const evx = c.out[c.out.length - 1];
+        s.batchNo++;
+        collectBatch(c, [evx]);
+        moveCards(c, [uid], { to: 'shield', cause: 'castle', up: true, noReplace: true });
+        f.stage = 3;
+        return;
+      }
       emit(c, 'cast', { card: uid, owner, free: p.free, paid: p.paid, cost: p.cost, face: p.face, from: v.fromZone });
       const ev = c.out[c.out.length - 1];
       if (v.st && gameHas(c, 'stUsed')) s.usage['st:' + uid] = ev.id; // S・トリガーとして唱えた印(その印を見る能力があるゲームだけ)
@@ -758,64 +770,10 @@ function emitBattleStarted(c: Ctx, pm: PermRef, dm: PermRef): void {
 
 /** パワーを比べて、負けた方(同じなら両方)を破壊する。スレイヤーも処理する。「バトルの後」に使う当事者の情報を返す */
 function resolveBattleCore(c: Ctx, pm: PermRef, dm: PermRef) {
-  const s = c.s;
-  let pa = powerOf(c, pm.perm);
-  let pd = powerOf(c, dm.perm);
-  const aTop = pm.perm.cards[0];
-  const dTop = dm.perm.cards[0];
-  // 各ターン、はじめて自分のクリーチャーがバトルする時、そのクリーチャーはそのバトルに勝つ(輝く革命 ボルシャック・フレア)
-  if (gameHas(c, 'firstBattleWins')) {
-    const aw = firstBattleWinsFor(c, pm.owner);
-    const dw = firstBattleWinsFor(c, dm.owner);
-    if (aw && !dw) pa = Infinity;
-    else if (dw && !aw) pd = Infinity;
-  }
-  const losers: number[] = [];
-  let winner: number | null = null;
-  if (pa > pd) {
-    losers.push(dTop);
-    winner = aTop;
-  } else if (pa < pd) {
-    losers.push(aTop);
-    winner = dTop;
-  } else losers.push(aTop, dTop);
-  // スレイヤー: バトルの後、バトルした相手を破壊する(勝敗にかかわらず)
-  if (hasKeyword(c, pm.perm, 'slayer') && !losers.includes(dTop)) losers.push(dTop);
-  if (hasKeyword(c, dm.perm, 'slayer') && !losers.includes(aTop)) losers.push(aTop);
-  const aOwner = pm.owner;
-  const dOwner = dm.owner;
-  const aPid = pm.perm.pid;
-  const dPid = dm.perm.pid;
-  moveCards(c, losers, { to: 'grave', cause: 'destroy' });
-  const winPid = winner === null ? null : winner === aTop ? aPid : dPid;
-  emit(c, 'battleEnded', {
-    attacker: aPid,
-    defender: dPid,
-    winner: winPid,
-    card: winner,
-    winnerCard: winner,
-    loserCard: winner === null ? null : winner === aTop ? dTop : aTop,
-    loserOwner: winner === null ? undefined : winner === aTop ? dOwner : aOwner,
-    winnerOwner: winner === null ? undefined : winner === aTop ? aOwner : dOwner,
-    draw: winner === null,
-  });
-  const ev = c.out[c.out.length - 1];
-  s.batchNo++;
-  collectBatch(c, [ev]);
-  return { attacker: aPid, defender: dPid, attackerCard: aTop, defenderCard: dTop, owner: aOwner };
+  const br = resolveBattle(c, pm.perm.pid, dm.perm.pid)!;
+  return { attacker: br.aPid, defender: br.dPid, attackerCard: br.aTop, defenderCard: br.dTop, owner: br.aOwner };
 }
 
-/** そのプレイヤーの「各ターン、はじめてバトルするクリーチャーが勝つ」を、いま使えるか(使えるなら、使ったと記録する) */
-function firstBattleWinsFor(c: Ctx, owner: PlayerId): boolean {
-  const s = c.s;
-  const key = 'fbw:' + owner;
-  if (s.usage[key] === s.turn) return false;
-  if (!activeStatics(c, 'firstBattleWins').some((st) => st.controller === owner)) return false;
-  s.usage[key] = s.turn;
-  return true;
-}
-
-/** 効果によるバトル(「その2体をバトルさせる」)。vars: a, d = 山の pid(a が攻撃側扱い) */
 /** バトルの当事者を、「かわりにこのクリーチャーにバトルさせてもよい」(battleProxy)で置き換える。置き換えなければ、そのまま返す */
 function battleProxySwap(c: Ctx, pma: { perm: Permanent; owner: PlayerId }, pmd: { perm: Permanent; owner: PlayerId }): { a: { perm: Permanent; owner: PlayerId }; d: { perm: Permanent; owner: PlayerId } } {
   const s = c.s;
@@ -1125,10 +1083,21 @@ function runBreak(c: Ctx, f: ProcFrame): void {
         return;
       }
       const n = Math.min(v.n, shields.length);
-      // どのシールドを割るかは攻撃側が選ぶが、裏向きなので無作為に扱う(spec 3.7)
-      const pool = shields.slice();
-      const broken: number[] = [];
-      while (broken.length < n) broken.push(pool.splice(rngInt(s, pool.length), 1)[0]);
+      let broken: number[] = [];
+      if (n < shields.length && shieldClasses(s, shields).length >= 2) {
+        // 見分けのつくシールド(EXライフなど)があり、全部は割れない: どれを割るかは攻撃側が選ぶ(509.3)
+        broken = ask<number[]>(c, {
+          player: attackerOwner,
+          why: 'pickShield',
+          input: { shape: 'pick', candidates: shields.slice(), min: n, max: n },
+          source: null,
+          prompt: `ブレイクするシールドを${n}枚選んでください(表向きのシールドとEXライフのシールドは見分けがつきます。ほかは裏向きで見分けがつきません)`,
+        });
+      } else {
+        // 見分けがつかない(全部が裏向きで同じ扱い)ので、無作為に扱う(spec 3.7)
+        const pool = shields.slice();
+        while (broken.length < n) broken.push(pool.splice(rngInt(s, pool.length), 1)[0]);
+      }
       v.broken = broken;
       // 「ブレイクする前に」の誘発は、ブレイクするシールドを選んだ後、ブレイクする前に解決する(総合ルール 509.3 / 509.4)。
       // 聞き手のいるカードがある時だけ、イベントを発行する(既存の対戦の記録を変えない)
@@ -1263,6 +1232,41 @@ function sBackMatches(c: Ctx, owner: PlayerId, back: number, u: number): boolean
     }
   }
   return false;
+}
+
+/**
+ * シールドを「攻撃側から見て見分けがつくか」で分けた組(シールドゾーンの並びの順)。
+ * 裏向きのシールドは中身が見えず、どれも同じ扱い(組 -1)。見分けがつくのは、EXライフのシールド(どのクリーチャーに紐づくかで組が分かれる)と、
+ * 表向きのシールド(G城。同じ札ごとに組が分かれる)。ブレイクの選択の判定と合法手の列挙は、この関数だけを見る。
+ */
+export function shieldClasses(s: GameState, shields: number[]): number[][] {
+  const groups = new Map<number | string, number[]>();
+  for (const u of shields) {
+    const card = s.cards[u];
+    const key = card.up ? `up:${card.defId}` : card.ex ? card.exPid : -1;
+    const g = groups.get(key);
+    if (g) g.push(u);
+    else groups.set(key, [u]);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * ブレイクするシールドの選び方を、見分けがつく違いごとに1つずつ(各組から何枚か。組の中は並びの先頭から)。
+ * どれを選んでも同じものは数えない。AI の探索の分岐を減らす(legalActions)。
+ */
+export function shieldPickChoices(s: GameState, shields: number[], n: number): number[][] {
+  const classes = shieldClasses(s, shields);
+  const out: number[][] = [];
+  const go = (i: number, left: number, cur: number[]) => {
+    if (i === classes.length) {
+      if (left === 0) out.push(cur.slice());
+      return;
+    }
+    for (let k = 0; k <= Math.min(classes[i].length, left); k++) go(i + 1, left - k, cur.concat(classes[i].slice(0, k)));
+  };
+  go(0, n, []);
+  return out;
 }
 
 /** シールドゾーンから手札に加わる時に宣言できる能力(S・トリガー / G・ストライク)。 */

@@ -6,20 +6,20 @@ import type { CardDB } from '../src/engine/types';
 
 describe('スモーク', () => {
   it('全デッキが40枚で、全カードが読み込める', () => {
-    for (const id of ['maruru', 'zardy', 'lost-maruru', 'interstellar-maruru']) {
+    for (const id of ['maruru', 'zardy', 'lost-maruru', 'interstellar-maruru', 'zardy-rev5c']) {
       const d = deckCards(id);
       expect(d.length).toBe(40);
       expect(checkDeck(CARD_DB, d, true).ok).toBe(true);
     }
-    // 33種+ダミー+25の王道の新規カード(CARD_LIST)。レジストリはこれに、無能力カード(カード単体の強さの差し替え先)と不明カード('?')が加わる
-    expect(CARD_LIST.length).toBeGreaterThanOrEqual(34);
+    // 41種+ダミー+25の王道の新規カード(CARD_LIST)。レジストリはこれに、無能力カード(カード単体の強さの差し替え先)と不明カード('?')が加わる
+    expect(CARD_LIST.length).toBeGreaterThanOrEqual(42);
     expect(Object.keys(loadRegistryFor().defs).length).toBe(Object.keys(CARD_DB).length + 1);
   });
 
-  it('元の4デッキに含まれる異なるカードは33種', () => {
+  it('デッキに含まれる異なるカードは41種', () => {
     const ids = new Set<string>();
-    for (const p of DECK_PRESETS.filter((d) => ['maruru', 'zardy', 'lost-maruru', 'interstellar-maruru'].includes(d.id))) for (const [id] of p.list) ids.add(id);
-    expect(ids.size).toBe(33);
+    for (const p of DECK_PRESETS.filter((d) => !d.id.startsWith('sd1-'))) for (const [id] of p.list) ids.add(id);
+    expect(ids.size).toBe(41);
     for (const id of ids) expect(CARD_DB[id]).toBeDefined();
   });
 
@@ -37,7 +37,7 @@ describe('カードデータの検証(spec 4.3)', () => {
   const base = (): CardDB => JSON.parse(JSON.stringify(CARD_DB));
   it('正しいデータはエラーなし', () => {
     expect(validateCardDb(CARD_DB)).toEqual([]);
-    expect(CARD_LIST.length).toBeGreaterThanOrEqual(34);
+    expect(CARD_LIST.length).toBeGreaterThanOrEqual(42);
   });
   it('未知の原始操作・未知のキーワード・必須項目の不足はエラーになる', () => {
     const a = base();

@@ -215,7 +215,9 @@ export function Board(b: BoardProps) {
     const isOppShield = !mine;
     const key = 'zone:oppShield';
     const ex = z.shield.filter((u) => s.cards[u].ex).length;
-    const canPeek = mine && b.peek;
+    // 表向きのシールド(G城)は、両者に見える
+    const up = z.shield.filter((u) => s.cards[u].up).length;
+    const canPeek = (mine && b.peek) || up > 0;
     return (
       <div
         data-zone={`shield:${p}`}
@@ -227,6 +229,7 @@ export function Board(b: BoardProps) {
         <span className="chip-label">シールド</span>
         <b>{z.shield.length}</b>
         {ex > 0 && <span className="chip-sub">EX {ex}</span>}
+        {up > 0 && <span className="chip-sub">表 {up}</span>}
         {isOppShield && live && liveDrops.has(key) ? <span className="arrow-hint">← 攻撃</span> : null}
       </div>
     );
@@ -350,7 +353,7 @@ export function Board(b: BoardProps) {
                     uid={u}
                     num={can ? n : undefined}
                     tapped={false}
-                    hidden={listOf.zone === 'shield' && !(listOf.p === viewer && b.peek)}
+                    hidden={listOf.zone === 'shield' && !(listOf.p === viewer && b.peek) && !s.cards[u].up}
                     badge={listOf.zone === 'mana' && s.cards[u].tapped ? 'タップ' : undefined}
                     selectable={can}
                     onClick={

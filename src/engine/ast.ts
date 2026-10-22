@@ -48,7 +48,9 @@ export type Cond =
   | { multicolor: boolean }
   | { cost: { eq?: Expr; lt?: Expr; lte?: Expr; gt?: Expr; gte?: Expr } }
   | { power: { lte?: Expr; gte?: Expr; lt?: Expr; gt?: Expr } }
-  | { type: 'creature' | 'spell' | 'element' | 'tamaseed' | 'field' | 'crossgear' }
+  /** $it のパワーが、能力の発生源(self)のパワーより小さい(プチョヘンザのファイナル革命) */
+  | { powerLtSelf: true }
+  | { type: 'creature' | 'spell' | 'element' | 'tamaseed' | 'field' | 'crossgear' | 'castle' }
   | { evolution: boolean }
   | { race: string }
   | { tapped: boolean }
@@ -213,6 +215,12 @@ export type StaticMod =
   | { type: 'powerAdd'; n: number }
   /** 自分の墓地から呪文を唱えた後、墓地のかわりに山札の下に置く */
   | { type: 'graveCastToBottom' }
+  /** バトルする時、パワーは無限として扱う(カツムゲン) */
+  | { type: 'infinitePowerInBattle' }
+  /** 相手の、cond に合うクリーチャーは、タップして出る(プチョヘンザ)。cond の $it = 出るクリーチャー */
+  | { type: 'entersTapped'; cond: Cond }
+  /** シールドゾーンに表向きである間(G城)、相手のクリーチャーが召喚以外の方法で出る時、かわりにマナゾーンに置く */
+  | { type: 'nonSummonEntryToMana' }
   /** 自分のクリーチャー(cond に合うもの)すべてにキーワードを与える。unblockable = ブロックされない */
   | { type: 'grantKeyword'; keyword: 'speedAttacker' | 'machFighter' | 'slayer' | 'unblockable' | 'blocker' | 'cannotBeAttacked'; cond: Cond }
   /** 自分は、山札が0枚でもゲームに負けない */

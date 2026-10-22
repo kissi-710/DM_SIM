@@ -124,7 +124,7 @@ export const DECK_C: CardDef[] = [
         selectUpTo('$s', { zone: 'hand', owner: 'self', type: 'spell', where: and({ civ: 'light' }, costLte(5)) }, 1, { prompt: 'コストを支払わずに唱える光の呪文を選んでください(選ばなければカードを1枚引く)' }),
         ifc({ nonEmpty: '$s' }, [act({ castFree: { sel: '$s' } })], [draw(1)]),
       ]),
-      finalRevolution([act({ playerEffect: { mod: { kind: 'cannotSummon', costLte: 7 }, until: 'oppTurnEnd' } })]),
+      finalRevolution([act({ playerEffect: { mod: { kind: 'cannotSummon', maxCost: 7 }, until: 'oppTurnEnd' } })]),
     ]),
   ),
 

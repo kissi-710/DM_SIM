@@ -199,7 +199,7 @@ const KNOWN_ACTS = new Set([
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'selfTapped', 'ultimate', 'twin', 'distinctCosts', 'crossed', 'hostIs', 'hasGear', 'hasKw', 'ownedBy', 'baseFor', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame', 'onBase', 'powerRank',
+  'turnOf', 'zoneIs', 'exShield', 'powerLtSelf', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'selfTapped', 'ultimate', 'twin', 'distinctCosts', 'crossed', 'hostIs', 'hasGear', 'hasKw', 'ownedBy', 'baseFor', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame', 'onBase', 'powerRank',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
@@ -273,7 +273,7 @@ export function validateCardDb(db: CardDB): string[] {
     if (!def.faces?.length) errs.push(`${w0}: faces がありません`);
     def.faces?.forEach((f, fi) => {
       const w = `${w0}面${fi}(${f.name})`;
-      if (!['creature', 'spell', 'evolution', 'smaxEvolution', 'tamaseed', 'field', 'crossgear'].includes(f.type)) errs.push(`${w}: 未知の種類 ${f.type}`);
+      if (!['creature', 'spell', 'evolution', 'smaxEvolution', 'tamaseed', 'field', 'crossgear', 'castle'].includes(f.type)) errs.push(`${w}: 未知の種類 ${f.type}`);
       if (typeof f.cost !== 'number') errs.push(`${w}: cost がありません`);
       if (!Array.isArray(f.civs)) errs.push(`${w}: civs がありません`); // 無色は空の配列
       if (isCreatureType(f.type) && typeof f.power !== 'number') errs.push(`${w}: power がありません`);

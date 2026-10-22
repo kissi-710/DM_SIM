@@ -63,7 +63,7 @@ export function charsOf(c: Ctx, uid: number, hint: number = -1): Chars {
 
 /** PLAY_CARD で面を省いた時に使う面(最初のクリーチャー面。呪文だけなら 0) */
 export function defaultPlayFace(def: CardDef): number {
-  const k = def.faces.findIndex((f) => f.type !== 'spell');
+  const k = def.faces.findIndex((f) => isCreatureType(f.type));
   return k >= 0 ? k : 0;
 }
 
@@ -151,6 +151,24 @@ export function activeStatics(c: Ctx, modType?: StaticMod['type']): ActiveStatic
   return out;
 }
 
+/**
+ * プレイヤーの表向きのシールド(G城)が持つ常在型能力に、modType があるか。
+ * 城は、シールドゾーンに表向きである間だけ働く(バトルゾーンの常在型能力は activeStatics)。
+ */
+export function shieldStatic(c: Ctx, controller: PlayerId, modType: StaticMod['type']): boolean {
+  const s = c.s;
+  for (const uid of s.players[controller].shield) {
+    const card = s.cards[uid];
+    if (!card.up) continue;
+    for (const st of c.reg.getInfo(card.defId, 0).statics) {
+      if (st.ability.mod.type !== modType) continue;
+      if (st.ability.while && !evalCond(mkCC(c, controller, { self: uid }), st.ability.while)) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
 // ───────────────────────── パワー・能力 ─────────────────────────
 
 export function powerOf(c: Ctx, perm: Permanent): number {
@@ -216,6 +234,17 @@ export function playerCannotLose(c: Ctx, p: PlayerId): boolean {
 }
 
 export type KwName = 'blocker' | 'speedAttacker' | 'machFighter' | 'shieldTrigger' | 'justDiver' | 'exLife' | 'slayer' | 'unblockable' | 'cannotBeAttacked';
+/** バトルの時のパワー(カツムゲン: 無限)。無限は Infinity で表す(比べるだけで、状態には入れない) */
+export function battlePower(c: Ctx, perm: Permanent): number {
+  const uid = perm.cards[0];
+  for (const st of infoOf(c, uid).statics) {
+    if (st.ability.mod.type !== 'infinitePowerInBattle') continue;
+    if (st.ability.while && !evalCond(mkCC(c, c.s.cards[uid].owner, { self: uid }), st.ability.while)) continue;
+    return Infinity;
+  }
+  return powerOf(c, perm);
+}
+
 
 export function hasKeyword(c: Ctx, perm: Permanent, kw: KwName): boolean {
   const uid = perm.cards[0];
@@ -674,8 +703,8 @@ export function grantsRush(c: Ctx, src: number): boolean {
   return infoOf(c, src).statics.some((st) => st.ability.mod.type === 'allowPlayFrom' && !!st.ability.mod.rush);
 }
 
-/** 「相手はコストが n 以下のクリーチャーを召喚できない」(ミラダンテXII のファイナル革命)に当たらないか */
-export function canSummon(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
+/** そのカードを召喚してよいか(「すべてのプレイヤーは、パワー5000以下のクリーチャーを召喚できない」と、召喚封じ(canSummon)) */
+export function canSummonCard(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
   // 「すべてのプレイヤーは、パワー5000以下のクリーチャーを召喚できない」(暴走龍 5000GT)
   if (gameHas(c, 'cannotSummonAll')) {
     for (const st of activeStatics(c, 'cannotSummonAll')) {
@@ -683,9 +712,14 @@ export function canSummon(c: Ctx, player: PlayerId, uid: number, faceIdx: number
       if (m.type === 'cannotSummonAll' && evalCond(mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx }), m.cond)) return false;
     }
   }
-  if (c.s.effects.length === 0) return true;
-  const cost = c.reg.defs[c.s.cards[uid].defId].faces[faceIdx]?.cost ?? 0;
-  for (const e of c.s.effects) if (e.mod.kind === 'cannotSummon' && e.controller !== player && cost <= e.mod.costLte) return false;
+  return canSummon(c, player, c.reg.defs[c.s.cards[uid].defId].faces[faceIdx]?.cost ?? 0);
+}
+
+/** 「相手はコストが maxCost 以下のクリーチャーを召喚できない」(ミラダンテXII のファイナル革命)に当たらないか */
+export function canSummon(c: Ctx, player: PlayerId, cost: number): boolean {
+  for (const e of c.s.effects) {
+    if (e.mod.kind === 'cannotSummon' && e.controller !== player && cost <= e.mod.maxCost) return false;
+  }
   return true;
 }
 

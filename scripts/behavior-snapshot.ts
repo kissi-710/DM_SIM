@@ -38,8 +38,8 @@ const AGENTS: [string, AgentSpec][] = [
  * 1試合 → [手数, 手順の hash, イベント列の hash, 勝者, ターン, seq, rng, カードの hash, 終了理由, 合法手の列の hash]
  * 合法手の列の hash は、毎手のあとの legalActions(選ばれなかった手も含む)の並び全体。選ばれた手の列だけでは見えない、列挙の変化を捉える。
  */
-/** 挙動スナップショットの基準にするデッキ(元の4つ。新しいデッキを足しても、基準の hash は変わらない) */
-const LEGACY_DECKS = ['maruru', 'zardy', 'lost-maruru', 'interstellar-maruru'];
+/** 挙動スナップショットの基準にするデッキ(元の5つ。新しいデッキを足しても、基準の hash は変わらない) */
+const LEGACY_DECKS = ['maruru', 'zardy', 'lost-maruru', 'interstellar-maruru', 'zardy-rev5c'];
 
 function play(a: AgentSpec, b: AgentSpec, da: string, db: string, seed: number): unknown[] {
   const ev: string[] = [];
@@ -57,7 +57,7 @@ function play(a: AgentSpec, b: AgentSpec, da: string, db: string, seed: number):
 
 export function snapshot(): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  // 25の王道(DM26-SD1)の新デッキを足しても、元の 978 件が変わらないように、基準にするデッキは、最初の4つに固定する
+  // 25の王道(DM26-SD1)の新デッキを足しても、元の 978 件が変わらないように、基準にするデッキは、元の5つに固定する
   const ids = DECK_PRESETS.map((d) => d.id).filter((id) => LEGACY_DECKS.includes(id));
   // 全デッキの組(総当たり)× ルールベース/ランダム × 4 シード
   for (const [an, as] of AGENTS.slice(0, 2)) {

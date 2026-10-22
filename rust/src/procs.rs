@@ -42,6 +42,8 @@ pub struct PlayPlan {
     pub err: Option<&'static str>,
     pub face: i32,
     pub cast: bool,
+    /// G城の実行(呪文を唱えることではない)
+    pub castle: bool,
     pub cost: i32,
     pub need: i32,
     pub pay: Vec<i32>,
@@ -51,7 +53,7 @@ pub struct PlayPlan {
 }
 
 fn plan_fail(face: i32, err: &'static str) -> PlayPlan {
-    PlayPlan { ok: false, err: Some(err), face, cast: false, cost: 0, need: 0, pay: vec![], after_bottom: false, taps: vec![], onto: None }
+    PlayPlan { ok: false, err: Some(err), face, cast: false, castle: false, cost: 0, need: 0, pay: vec![], after_bottom: false, taps: vec![], onto: None }
 }
 
 pub fn plan_play(e: Env, player: PlayerId, uid: i32, from: Zone, face_idx: i32, extra: Option<&PlayExtra>, free: bool) -> PlayPlan {
@@ -81,6 +83,7 @@ fn plan_play_inner(e: Env, player: PlayerId, uid: i32, from: Zone, face_idx: i32
     };
     let info = e.reg.info(card.def, face_idx);
     let cast = face.ty == FaceType::Spell;
+    let castle = face.ty == FaceType::Castle;
     let mut after_bottom = false;
     let perm_of = |f: Zone| -> Option<bool> {
         for &pi in &info.permissions {
@@ -105,6 +108,9 @@ fn plan_play_inner(e: Env, player: PlayerId, uid: i32, from: Zone, face_idx: i32
     }
     if !can_use_cost(e, player, face.cost) {
         return plan_fail(face_idx, "そのコストのカードは実行できません");
+    }
+    if face.ty.is_creature() && !can_summon(e, player, face.cost) {
+        return plan_fail(face_idx, "そのクリーチャーは召喚できません");
     }
     let mut onto: Option<i32> = None;
     if face.ty == FaceType::Evolution {
@@ -182,7 +188,7 @@ fn plan_play_inner(e: Env, player: PlayerId, uid: i32, from: Zone, face_idx: i32
             }
         }
     }
-    PlayPlan { ok: true, err: None, face: face_idx, cast, cost, need, pay, after_bottom, taps, onto }
+    PlayPlan { ok: true, err: None, face: face_idx, cast, castle, cost, need, pay, after_bottom, taps, onto }
 }
 
 /// 選んだマナが、必要な文明を1枚ずつ(1枚は1文明)満たせるか
@@ -380,7 +386,7 @@ fn run_play(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
             }
             c.s.limbo.push(uid);
             let plan_val = Val::Obj(Rc::new(vec![
-                (s::KIND, Val::Str(if plan.cast { s::CAST } else { s::SUMMON })),
+                (s::KIND, Val::Str(if plan.cast { s::CAST } else if plan.castle { s::CASTLE } else { s::SUMMON })),
                 (s::PAID, Val::Int(plan.pay.len() as i64)),
                 (s::COST, Val::Int(plan.cost as i64)),
                 (s::AFTER, if plan.after_bottom { Val::Str(s::DECK_BOTTOM) } else { Val::Null }),
@@ -418,6 +424,30 @@ fn run_play(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                 return Ok(());
             }
             let from_zone = var_get(&f.vars, s::FROM_ZONE).cloned().unwrap_or(Val::Null);
+            if kind == Some(s::CASTLE) {
+                // G城の実行: 呪文を唱えたことにはならない。表向きのシールドとして置く(シールドゾーンに置かれた時の誘発を集める)
+                let ev = emit(
+                    c,
+                    s::EXECUTED,
+                    vec![
+                        (s::CARD, Val::Int(uid as i64)),
+                        (s::OWNER, Val::Int(owner as i64)),
+                        (s::FREE, Val::Bool(free)),
+                        (s::PAID, Val::Int(paid as i64)),
+                        (s::COST, Val::Int(cost as i64)),
+                        (s::FACE, Val::Int(face as i64)),
+                        (s::FROM, from_zone),
+                    ],
+                );
+                c.s.batch_no += 1;
+                collect_batch(c, &[ev]);
+                let mut o = MoveOpts::new(Zone::Shield, s::CASTLE);
+                o.up = true;
+                o.no_replace = true;
+                move_cards(c, &[uid], &o)?;
+                f.stage = 3;
+                return Ok(());
+            }
             let ev = emit(
                 c,
                 s::CAST,
@@ -722,87 +752,29 @@ fn run_attack(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                 Target::Creature(tp) => tp,
                 Target::Player => return pop_frame(c, f.id),
             };
-            let (a_pid, a_top) = {
-                let pm = &c.s.players[po as usize].battle[pi];
-                (pm.pid, pm.cards[0])
-            };
+            let a_pid = c.s.players[po as usize].battle[pi].pid;
             {
-                    let (dop, di) = match c.s.perm_by_pid(tp) {
-                        Some(x) => x,
-                        None => return pop_frame(c, f.id),
-                    };
-                    let e = c.env();
-                    let pa = power_of(e, &c.s.players[po as usize].battle[pi]);
-                    let pd = power_of(e, &c.s.players[dop as usize].battle[di]);
-                    let (d_pid, d_top) = {
-                        let dm = &c.s.players[dop as usize].battle[di];
-                        (dm.pid, dm.cards[0])
-                    };
-                    let mut losers: Vec<i32> = Vec::new();
-                    let mut winner: Option<i32> = None;
-                    if pa > pd {
-                        losers.push(d_top);
-                        winner = Some(a_top);
-                    } else if pa < pd {
-                        losers.push(a_top);
-                        winner = Some(d_top);
-                    } else {
-                        losers.push(a_top);
-                        losers.push(d_top);
-                    }
-                    // スレイヤー: バトルの後、バトルした相手を破壊する(勝敗にかかわらず)
-                    let (a_slay, d_slay) = {
-                        let e = c.env();
-                        (has_keyword(e, &c.s.players[po as usize].battle[pi], Kw::Slayer), has_keyword(e, &c.s.players[dop as usize].battle[di], Kw::Slayer))
-                    };
-                    if a_slay && !losers.contains(&d_top) {
-                        losers.push(d_top);
-                    }
-                    if d_slay && !losers.contains(&a_top) {
-                        losers.push(a_top);
-                    }
-                    let (a_owner, d_owner) = (po, dop);
-                    move_cards(c, &losers, &MoveOpts::new(Zone::Grave, s::DESTROY))?;
-                    let win_pid = winner.map(|w| if w == a_top { a_pid } else { d_pid });
-                    let mut fv: Vec<(Sym, Val)> = vec![
-                        (s::ATTACKER, Val::Int(a_pid as i64)),
-                        (s::DEFENDER, Val::Int(d_pid as i64)),
-                        (s::WINNER, win_pid.map_or(Val::Null, |p| Val::Int(p as i64))),
-                        (s::CARD, winner.map_or(Val::Null, |w| Val::Int(w as i64))),
-                        (s::WINNER_CARD, winner.map_or(Val::Null, |w| Val::Int(w as i64))),
-                        (
-                            s::LOSER_CARD,
-                            match winner {
-                                None => Val::Null,
-                                Some(w) => Val::Int(if w == a_top { d_top } else { a_top } as i64),
-                            },
-                        ),
-                    ];
-                    if let Some(w) = winner {
-                        fv.push((s::LOSER_OWNER, Val::Int(if w == a_top { d_owner } else { a_owner } as i64)));
-                        fv.push((s::WINNER_OWNER, Val::Int(if w == a_top { a_owner } else { d_owner } as i64)));
-                    }
-                    fv.push((s::DRAW, Val::Bool(winner.is_none())));
-                    let ev = emit(c, s::BATTLE_ENDED, fv);
-                    c.s.batch_no += 1;
-                    collect_batch(c, &[ev]);
-                    // 「バトルの後」の誘発のために、バトルの当事者を残す(聞き手がいる時だけ)
-                    if has_listener(c, s::AFTER_BATTLE) {
-                        var_set(
-                            &mut f.vars,
-                            sym("battle"),
-                            Val::Obj(Rc::new(vec![
-                                (s::ATTACKER, Val::Int(a_pid as i64)),
-                                (s::DEFENDER, Val::Int(d_pid as i64)),
-                                (s::ATTACKER_CARD, Val::Int(a_top as i64)),
-                                (s::DEFENDER_CARD, Val::Int(d_top as i64)),
-                                (s::OWNER, Val::Int(a_owner as i64)),
-                            ])),
-                        );
-                    }
-                    f.stage = 5;
-                    push_proc(c, ProcName::Settle, vec![]);
-                    Ok(())
+                let br = match resolve_battle(c, a_pid, tp)? {
+                    Some(b) => b,
+                    None => return pop_frame(c, f.id),
+                };
+                // 「バトルの後」の誘発のために、バトルの当事者を残す(聞き手がいる時だけ)
+                if has_listener(c, s::AFTER_BATTLE) {
+                    var_set(
+                        &mut f.vars,
+                        sym("battle"),
+                        Val::Obj(Rc::new(vec![
+                            (s::ATTACKER, Val::Int(br.a_pid as i64)),
+                            (s::DEFENDER, Val::Int(br.d_pid as i64)),
+                            (s::ATTACKER_CARD, Val::Int(br.a_top as i64)),
+                            (s::DEFENDER_CARD, Val::Int(br.d_top as i64)),
+                            (s::OWNER, Val::Int(br.a_owner as i64)),
+                        ])),
+                    );
+                }
+                f.stage = 5;
+                push_proc(c, ProcName::Settle, vec![]);
+                Ok(())
             }
         }
         5 => {
@@ -846,12 +818,21 @@ fn run_break(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                 return pop_frame(c, f.id);
             }
             let n = (vi(&f.vars, s::N) as usize).min(shields.len());
-            // どのシールドを割るかは攻撃側が選ぶが、裏向きなので無作為に扱う(spec 3.7)
-            let mut pool = shields;
             let mut broken: Vec<i32> = Vec::new();
-            while broken.len() < n {
-                let i = c.s.rng_int(pool.len());
-                broken.push(pool.remove(i));
+            if n < shields.len() && shield_classes(&c.s, &shields).len() >= 2 {
+                // 見分けのつくシールド(EXライフなど)があり、全部は割れない: どれを割るかは攻撃側が選ぶ(509.3)
+                let ans = ask(
+                    c,
+                    NeedInput { player: attacker_owner, why: Why::PickShield, input: Some(InputSpec::Pick { candidates: shields.clone(), min: n as i32, max: n as i32 }), source: None },
+                )?;
+                broken = ans.to_i32s();
+            } else {
+                // 見分けがつかない(全部が裏向きで同じ扱い)ので、無作為に扱う(spec 3.7)
+                let mut pool = shields;
+                while broken.len() < n {
+                    let i = c.s.rng_int(pool.len());
+                    broken.push(pool.remove(i));
+                }
             }
             var_set(&mut f.vars, s::BROKEN, Val::ints(&broken));
             // 「ブレイクする前に」の誘発は、ブレイクするシールドを選んだ後、ブレイクする前に解決する(総合ルール 509.3 / 509.4)。
@@ -952,6 +933,50 @@ fn run_break(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
         2 => pop_frame(c, f.id),
         _ => Ok(()),
     }
+}
+
+/// シールドを「攻撃側から見て見分けがつくか」で分けた組(シールドゾーンの並びの順。procs.ts の shieldClasses)。
+/// 裏向きのシールドはどれも同じ扱い(組 -1)。見分けがつくのは、EXライフのシールド(紐づくクリーチャーごとに組が分かれる)と、
+/// 表向きのシールド(G城。同じ札ごとに組が分かれる。キーは -2 - 定義番号)。
+pub fn shield_classes(s: &State, shields: &[i32]) -> Vec<Vec<i32>> {
+    let mut groups: Vec<(i32, Vec<i32>)> = Vec::new();
+    for &u in shields {
+        let card = &s.cards[u as usize];
+        let key = if card.up {
+            -2 - card.def as i32
+        } else if card.ex {
+            card.ex_pid
+        } else {
+            -1
+        };
+        match groups.iter_mut().find(|g| g.0 == key) {
+            Some(g) => g.1.push(u),
+            None => groups.push((key, vec![u])),
+        }
+    }
+    groups.into_iter().map(|g| g.1).collect()
+}
+
+/// ブレイクするシールドの選び方を、見分けがつく違いごとに1つずつ(procs.ts の shieldPickChoices)。
+pub fn shield_pick_choices(s: &State, shields: &[i32], n: usize) -> Vec<Vec<i32>> {
+    let classes = shield_classes(s, shields);
+    let mut out: Vec<Vec<i32>> = Vec::new();
+    fn go(classes: &[Vec<i32>], i: usize, left: usize, cur: &mut Vec<i32>, out: &mut Vec<Vec<i32>>) {
+        if i == classes.len() {
+            if left == 0 {
+                out.push(cur.clone());
+            }
+            return;
+        }
+        for k in 0..=classes[i].len().min(left) {
+            let len = cur.len();
+            cur.extend_from_slice(&classes[i][..k]);
+            go(classes, i + 1, left - k, cur, out);
+            cur.truncate(len);
+        }
+    }
+    go(&classes, 0, n, &mut Vec::new(), &mut out);
+    out
 }
 
 #[derive(Clone, Copy)]

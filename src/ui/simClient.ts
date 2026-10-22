@@ -15,7 +15,11 @@ export function workerCount(): number {
   return Math.max(1, Math.min(8, (hc ?? 4) - 1));
 }
 
-export function runSimJob<T>(job: SimJob, onProgress?: (done: number, total: number) => void): RunningJob<T> {
+/**
+ * onTsFallback: Worker が Rust 版(WASM)を読み込めず TS 版で動く時に、1 度だけ呼ばれる(why は理由)。
+ * 古い dmsim.wasm は新しいカードを読めず、黙って TS 版(約 10 倍遅く、Worker ごとに約 240MB)になって CPU・メモリを使い切るので、画面に警告を出すために使う。
+ */
+export function runSimJob<T>(job: SimJob, onProgress?: (done: number, total: number) => void, onTsFallback?: (why?: string) => void): RunningJob<T> {
   const n = workerCount();
   // 負荷の偏りをならすため、Worker の数より細かく分けて、空いた Worker から順に渡す
   const plan = planJob({ defs: CARD_DB }, job, n * 3);
@@ -27,6 +31,7 @@ export function runSimJob<T>(job: SimJob, onProgress?: (done: number, total: num
   let next = 0;
   let finished = 0;
   let dead = false;
+  let tsReported = false;
   let rejectFn: (e: Error) => void = () => {};
 
   const stopAll = () => {
@@ -57,7 +62,12 @@ export function runSimJob<T>(job: SimJob, onProgress?: (done: number, total: num
       w.onmessage = (e: MessageEvent<SimOut>) => {
         if (dead) return;
         const m = e.data;
-        if (m.kind === 'progress') {
+        if (m.kind === 'ready') {
+          if (!m.native && !tsReported) {
+            tsReported = true;
+            onTsFallback?.(m.why);
+          }
+        } else if (m.kind === 'progress') {
           doneUnits[cur] = Math.min(plan.units[cur], m.done);
           report();
         } else if (m.kind === 'result') {

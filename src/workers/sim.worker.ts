@@ -15,20 +15,23 @@ const reg = loadRegistry(CARD_DB);
 
 // Rust 版(WASM)。ビルドされていなければ何もしない(結果は TS 版と同じ)
 const wasmUrls = import.meta.glob<string>('../wasm/dmsim.wasm', { query: '?url', import: 'default', eager: true });
+const post = (m: SimOut) => (self as unknown as Worker).postMessage(m);
 const nativeReady: Promise<void> = (async () => {
   const url = Object.values(wasmUrls)[0];
-  if (!url) return;
+  if (!url) throw new Error('src/wasm/dmsim.wasm がありません');
   const bytes = await (await fetch(url)).arrayBuffer();
   const eng = await DmEngine.create(bytes, rustRegistryJson(reg.defs));
   setNativeRounds(eng.asNativeRounds());
   setNativeTree(eng.asNativeTree());
   setNativePairedRound(eng.asNativePairedRound());
   console.info('[sim.worker] Rust 版エンジン(WASM)で探索します');
+  post({ kind: 'ready', native: true });
 })().catch((e) => {
+  // 古い wasm は新しいカードを読めずにここへ来る。黙って遅くならないよう、画面へ知らせる(UI は simClient が受け取る)
   console.warn('[sim.worker] Rust 版エンジン(WASM)を読み込めませんでした。TS 版で動きます:', e);
+  post({ kind: 'ready', native: false, why: errorMessage(e) });
 });
 let lastPost = 0;
-const post = (m: SimOut) => (self as unknown as Worker).postMessage(m);
 const progress = (done: number, total: number) => {
   const now = Date.now();
   if (now - lastPost > 80 || done === total) {

@@ -47,6 +47,14 @@ export function getVar(cc: CC, name: string): any {
     const u = cc.event?.card;
     return typeof u === 'number' ? { uid: u, ep: cc.c.s.cards[u].ep } : null;
   }
+  if (name === '$eventCard') {
+    // 誘発の原因になったイベントのカード(出たクリーチャーなど)。出た後に別の山になっていれば無効
+    const ev = cc.event;
+    if (!ev || typeof ev.card !== 'number') return null;
+    const card = cc.c.s.cards[ev.card];
+    if (ev.pid !== undefined && card.pid !== ev.pid) return null;
+    return { uid: ev.card, ep: card.ep };
+  }
   const parts = name.split('.');
   let v: any = cc.vars[parts[0]];
   for (let i = 1; i < parts.length && v != null; i++) v = v[parts[i]];
@@ -302,7 +310,7 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   // ここから先は「判定対象のカード $it」を使う条件
   if (cc.it == null) throw new Error('$it が無い条件: ' + JSON.stringify(cond));
   const it = cc.it;
-  const ch = 'power' in o ? charsOf(cc.c, it, cc.itFace ?? -1) : charsLite(cc.c, it, cc.itFace ?? -1);
+  const ch = 'power' in o || 'powerLtSelf' in o ? charsOf(cc.c, it, cc.itFace ?? -1) : charsLite(cc.c, it, cc.itFace ?? -1);
   if ('civ' in o) return ch.civs.includes(o.civ);
   if ('civsAll' in o) return (o.civsAll as Civ[]).every((x) => ch.civs.includes(x));
   if ('multicolor' in o) return (ch.civs.length > 1) === o.multicolor;
@@ -324,6 +332,7 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     if (q.gt !== undefined && !(p > evalExpr(cc, q.gt))) return false;
     return true;
   }
+  if ('powerLtSelf' in o) return cc.self != null && ch.power < charsOf(cc.c, cc.self).power;
   if ('type' in o) {
     if (cc.evo && o.type === 'creature' && ch.type === 'tamaseed') {
       const cd = s.cards[it];
@@ -339,9 +348,9 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     // ツインパクトは、バトルゾーン以外ではどちらの面の種族も持つ
     const card = s.cards[it];
     if ((cc.itFace ?? -1) < 0 && card.zone !== 'battle' && card.zone !== 'limbo') {
-      return cc.c.reg.defs[card.defId].faces.some((f) => (f.races ?? []).some((r) => r.includes(o.race)));
+      return cc.c.reg.defs[card.defId].faces.some((f) => (f.races ?? []).some((r) => raceMatches(r, o.race)));
     }
-    return ch.races.some((r) => r.includes(o.race));
+    return ch.races.some((r) => raceMatches(r, o.race));
   }
   if ('tapped' in o) {
     const card = s.cards[it];
@@ -358,6 +367,15 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
 }
 
 // ───────────────────────── セレクタ ─────────────────────────
+
+/**
+ * 種族の一致。種族名に want を含めば一致とする(「コマンド」は「アーマード・ドラゴン」などの複合名の一部にも当たる)。
+ * ただし「ドラゴンギルド」は、ドラゴンとは別の種族なので、「ドラゴン」には当たらない。
+ */
+export function raceMatches(race: string, want: string): boolean {
+  const GUILD = 'ドラゴンギルド';
+  return (want.includes(GUILD) ? race : race.split(GUILD).join('')).includes(want);
+}
 
 function ownersOf(cc: CC, owner: Selector['owner']): PlayerId[] {
   switch (owner ?? 'self') {
@@ -484,6 +502,7 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
   if (pat.step !== undefined && ev.step !== pat.step) return false;
   if (pat.paid !== undefined && ev.paid !== pat.paid) return false;
   if (pat.free !== undefined && !!ev.free !== pat.free) return false;
+  if (pat.up !== undefined && !!ev.up !== pat.up) return false;
   if (pat.causeType !== undefined && ev.cause?.type !== pat.causeType) return false;
   // abilityTriggered: その能力の持ち主が、トリガーの原因のイベントのカード自身(出たクリーチャー自身の能力)か。
   // 他のクリーチャーが出たことでトリガーした能力は含めない(オルゲイト: 公式 Q&A 46068。キーナリーの抑制と同じ範囲)

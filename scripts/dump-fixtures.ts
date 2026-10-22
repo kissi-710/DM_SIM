@@ -16,12 +16,14 @@ import { evalRound, roundSeed, type SearchEnv } from '../src/ai/mcts';
 import { BASE_FEATURES, type ValueModel } from '../src/ai/valueModel';
 import { PairedTree, treeSearch } from '../src/ai/tree';
 import { ATTACK_TEST_CARDS } from '../tests/fixtures/attack-cards';
+import { BATTLE_TEST_CARDS } from '../tests/fixtures/battle-cards';
 
 const out = process.argv[2] ?? 'rust/fixtures/games.json';
 // 攻撃まわりのイベント(バトルする時・バトルの後・ブレイクする前に)・呪文の置換・使用宣言を試すテスト用のカードも入れる
 // Rust 版が持たないカード(25の王道の新規カード)は、正解データに入れない
 const RUST_DB = Object.fromEntries(Object.entries(CARD_DB).filter(([id]) => !TS_ONLY_CARD_IDS.includes(id)));
-const reg = loadRegistry({ ...RUST_DB, ...Object.fromEntries(ATTACK_TEST_CARDS.map((c) => [c.id, c])) });
+// 効果によるバトル・無限パワー・タップして出る・召喚封じ・G城のテスト用のカードも入れる
+const reg = loadRegistry({ ...RUST_DB, ...Object.fromEntries([...ATTACK_TEST_CARDS, ...BATTLE_TEST_CARDS].map((c) => [c.id, c])) });
 const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 
 interface Rec {
@@ -82,6 +84,17 @@ for (const [a, b, seed, k] of [
   ['interstellar-maruru', 'interstellar-maruru', 24, ['rule', 'random']],
   ['interstellar-maruru', 'interstellar-maruru', 25, ['random', 'random']],
   ['interstellar-maruru', 'interstellar-maruru', 26, ['random', 'random']],
+  // 革命5cザーディ(G城・効果バトル・革命チェンジ・ファイナル革命・タップして出る・召喚封じ)
+  ['zardy-rev5c', 'zardy-rev5c', 51, ['random', 'random']],
+  ['zardy-rev5c', 'zardy-rev5c', 52, ['rule', 'rule']],
+  ['zardy-rev5c', 'zardy-rev5c', 53, ['random', 'random']],
+  ['zardy-rev5c', 'maruru', 54, ['rule', 'rule']],
+  ['interstellar-maruru', 'zardy-rev5c', 55, ['random', 'random']],
+  ['zardy-rev5c', 'zardy-rev5c', 56, ['rule', 'random']],
+  ['zardy-rev5c', 'zardy-rev5c', 57, ['random', 'random']],
+  ['zardy-rev5c', 'zardy-rev5c', 58, ['random', 'rule']],
+  ['zardy-rev5c', 'zardy-rev5c', 59, ['random', 'random']],
+  ['zardy-rev5c', 'zardy-rev5c', 60, ['rule', 'rule']],
 ] as const) {
   games.push(play(a, b, seed, [k[0], k[1]]));
 }
@@ -108,6 +121,24 @@ for (const [seed, k] of [
   [38, ['random', 'rule']],
 ] as const) {
   games.push(play(DECK_T3, DECK_T2, seed, [k[0], k[1]]));
+}
+// 効果によるバトル・バトル時の無限パワー・踏み倒しへのバトル・多色が出た時・タップして出る・召喚封じ・G城(表向きのシールド・マナへの置換)を、Rust 版と突き合わせる
+const DECK_B1 = [
+  ...rep(4, 'tc-castle'), ...rep(4, 'tb-fighter'), ...rep(3, 'tb-inf'), ...rep(3, 'tb-slayer'), ...rep(3, 'tb-big'), ...rep(3, 'tb-mid'),
+  ...rep(3, 'tb-small'), ...rep(3, 'tb-watch'), ...rep(2, 'tb-multi'), ...rep(3, 'tb-two'), ...rep(3, 'tb-fire'), ...rep(2, 'tb-tapin'),
+  ...rep(2, 'tb-lock'), ...rep(2, 'tb-sweep'),
+];
+for (const [seed, k] of [
+  [41, ['random', 'random']],
+  [42, ['random', 'random']],
+  [43, ['rule', 'rule']],
+  [44, ['rule', 'random']],
+  [45, ['random', 'rule']],
+  [46, ['random', 'random']],
+  [47, ['rule', 'rule']],
+  [48, ['random', 'random']],
+] as const) {
+  games.push(play(DECK_B1, DECK_B1, seed, [k[0], k[1]]));
 }
 // ツインパクト・「マナゾーンに置く」効果を多く入れたデッキ: バトルゾーンからマナゾーンへ移るツインパクトのカードが、
 // タップして置かれること(マナゾーンでは両面の文明で多色。spec 3.4.1 M-1)を、Rust 版と突き合わせる

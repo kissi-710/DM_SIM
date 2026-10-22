@@ -64,6 +64,7 @@ syms! {
     KW_SPEED_ATTACKER => "speedAttacker", KW_MACH_FIGHTER => "machFighter", KW_JUST_DIVER => "justDiver",
     KW_SLAYER => "slayer", KW_UNBLOCKABLE => "unblockable", CAST_HYPER => "castHyper",
     REVOLUTION_CHANGE => "revolutionChange",
+    UP => "up", EXECUTED => "executed", CASTLE => "castle",
 }
 
 thread_local! {
@@ -204,6 +205,8 @@ pub enum FaceType {
     Spell,
     Evolution,
     SmaxEvolution,
+    /// G城(実行すると、表向きのシールドになる。クリーチャーでも呪文でもない)
+    Castle,
 }
 
 impl FaceType {
@@ -213,11 +216,16 @@ impl FaceType {
             "spell" => FaceType::Spell,
             "evolution" => FaceType::Evolution,
             "smaxEvolution" => FaceType::SmaxEvolution,
+            "castle" => FaceType::Castle,
             _ => return None,
         })
     }
     pub fn is_evo(self) -> bool {
         matches!(self, FaceType::Evolution | FaceType::SmaxEvolution)
+    }
+    /// クリーチャーとして出る種類か(呪文でも城でもない)
+    pub fn is_creature(self) -> bool {
+        !matches!(self, FaceType::Spell | FaceType::Castle)
     }
 }
 
@@ -467,6 +475,8 @@ pub struct Card {
     pub ex_pid: i32,
     pub pid: i32,
     pub face: i32,
+    /// 表向きのシールドか(G城。シールドゾーンにある間だけ true)
+    pub up: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -624,6 +634,8 @@ pub enum EffectMod {
     CannotCast,
     /// プレイヤー単位: 発生源の持ち主の相手は、コストが n のカードを実行できない
     CannotUseCost(i32),
+    /// プレイヤー単位: 発生源の持ち主の相手は、コストが n 以下のクリーチャーを召喚できない
+    CannotSummon(i32),
 }
 
 #[derive(Clone, Debug)]
@@ -701,6 +713,7 @@ pub enum Why {
     ReplaceChoice,
     Ack,
     KeepOne,
+    PickShield,
 }
 
 impl Why {
@@ -717,6 +730,7 @@ impl Why {
             Why::ReplaceChoice => "replaceChoice",
             Why::Ack => "ack",
             Why::KeepOne => "keepOne",
+            Why::PickShield => "pickShield",
         }
     }
     pub fn parse(s: &str) -> Option<Why> {
@@ -732,6 +746,7 @@ impl Why {
             "replaceChoice" => Why::ReplaceChoice,
             "ack" => Why::Ack,
             "keepOne" => Why::KeepOne,
+            "pickShield" => Why::PickShield,
             _ => return None,
         })
     }

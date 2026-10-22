@@ -37,6 +37,9 @@ describe('H01 煌龍 サッヴァーク(シールドの山・表向き)', () => 
     sim.skipMana();
     sim.s.players[1].battle[0].sick = false;
     sim.do({ type: 'ATTACK', attacker: sim.pid(1, W), target: { kind: 'player' } });
+    // 表向きのシールド(重なった山)は見分けがつくので、攻撃側がどれを割るか選ぶ
+    expect(sim.pending.why).toBe('pickShield');
+    sim.answer([sim.s.players[0].shield.find((u) => sim.s.cards[u].up)!]);
     sim.drain();
     expect(sim.count(0, 'shield')).toBeLessThanOrEqual(1);
     expect(checkInvariants(sim.s)).toEqual([]);

@@ -1,7 +1,7 @@
 // 効果のインタプリタ(effects 6.5)。フレームは pc と vars(JSON)だけを持ち、再開できる。
 import type { ActDef, Cond, Expr, Selector, StepDef } from './ast';
 import { type CC, evalCond, evalExpr, selectCards, varUids } from './cond';
-import { charsOf, costBase, deckLocked, infoOf } from './derive';
+import { canSummonCard, charsOf, costBase, deckLocked, infoOf } from './derive';
 import type { Instr } from './registry';
 import {
   addShieldFromDeck,
@@ -12,16 +12,18 @@ import {
   emit,
   enterBattle,
   entryReplacement,
+  listens,
   moveCards,
   onSummoned,
   removeZoneCard,
+  resolveBattle,
   setTapped,
   shuffleDeck,
   stabIntoDeck,
 } from './ops';
 import type { Ctx } from './state';
 import { gameHas, nextId, opponentOf, permByPid, rngInt, shuffleInPlace, snapOf } from './state';
-import type { ContEffect, EffectFrame, EffectMod, Ev, InputSpec, ObjRef, PlayerId } from './types';
+import { type ContEffect, type EffectFrame, type EffectMod, type Ev, type InputSpec, isPermanentType, type ObjRef, type PlayerId } from './types';
 
 // ───────────────────────── コンテキスト ─────────────────────────
 
@@ -268,7 +270,7 @@ export function interchangeable(c: Ctx, f: EffectFrame, cand: number[]): boolean
   for (const u of cand) {
     const x = s.cards[u];
     if (x.defId !== a.defId || x.zone !== a.zone || x.owner !== a.owner || x.face !== a.face) return false;
-    if (x.tapped !== a.tapped || x.ex !== a.ex || (x.ex && x.exPid !== a.exPid)) return false;
+    if (x.tapped !== a.tapped || x.ex !== a.ex || (x.ex && x.exPid !== a.exPid) || !!x.up !== !!a.up) return false;
   }
   const refs = referencedIds(c, f);
   if (cand.some((u) => refs.has(u))) return false;
@@ -424,7 +426,7 @@ function playerOf(f: EffectFrame, who: string | undefined): PlayerId {
 /** 創造面(クリーチャー面)のインデックス。呪文のみなら -1 */
 function creatureFace(c: Ctx, uid: number): number {
   const def = c.reg.defs[c.s.cards[uid].defId];
-  return def.faces.findIndex((x) => x.type !== 'spell');
+  return def.faces.findIndex((x) => isPermanentType(x.type));
 }
 function spellFace(c: Ctx, uid: number): number {
   const def = c.reg.defs[c.s.cards[uid].defId];
@@ -438,6 +440,8 @@ function durationOf(c: Ctx, f: EffectFrame, until: string): ContEffect['until'] 
   if (until === 'source') return { kind: 'source', uid: f.source.uid, ep: f.source.ep };
   // 次の、相手のターンの終わりまで(いまが自分のターンなら次のターン、相手のターン中ならその次の相手のターン)
   if (until === 'oppTurnEnd') return { kind: 'untilOppTurnEnd', player: f.controller, afterTurn: s.turn };
+  // 「次の、相手のターンの終わりまで」: 自分のターン中なら次のターン、相手のターン中ならそのターン
+  if (until === 'nextOpponentTurnEnd') return { kind: 'endOfTurn', turn: s.active === f.controller ? s.turn + 1 : s.turn };
   throw new Error('未知の期限: ' + until);
 }
 
@@ -656,9 +660,10 @@ function actPut(c: Ctx, f: EffectFrame, cc: CC, a: any, key: string): void {
       if (topUid === undefined || !evalCond({ ...cc, self: u, it: topUid, itFace: s.cards[topUid].face, evo: true }, face.evolveFrom)) continue;
       onto = s.cards[topUid].pid;
     }
+    if (via === 'summon' && !canSummonCard(c, s.cards[u].owner, u, fi)) continue; // 召喚できない効果を受けている
     const r = enterBattle(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0, ...(batch ? { noReplace: true } : {}), ...(onto !== undefined ? { onto } : {}) }, evs);
-    if (r.moved) entered.push({ uid: u, ep: r.ep });
-    if (r.moved && via === 'summon') onSummoned(c, u);
+    if (r.moved && r.to === 'battle') entered.push({ uid: u, ep: r.ep }); // G城の置換でマナゾーンに置かれたものは、出ていない
+    if (r.moved && r.to === 'battle' && via === 'summon') onSummoned(c, u);
   }
   if (a.as) f.vars[a.as] = entered;
   s.batchNo++;
@@ -757,7 +762,8 @@ function actRevolutionChange(c: Ctx, f: EffectFrame, cc: CC, _a: any, _key: stri
   const evs: Ev[] = [];
   if (rep) applyEntryReplacement(c, uid, rep);
   else enterBattle(c, uid, { to: 'battle', cause: 'revolutionChange', via: 'revolutionChange', face: fi, tapped: true, paid: 0, noReplace: true }, evs);
-  fr.vars.pid = s.cards[uid].pid;
+  // G城の置換でマナゾーンに置かれた時は、入れ替わらない(攻撃していたクリーチャーは手札に戻った後で、攻撃は終わる)
+  if (s.cards[uid].zone === 'battle') fr.vars.pid = s.cards[uid].pid;
   s.batchNo++;
   collectBatch(c, evs);
   s.dirtySba = true;
@@ -773,7 +779,7 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
       mod = { kind: 'cannotUseCost', n: evalExpr(cc, m.n) };
       break;
     case 'cannotSummon':
-      mod = { kind: 'cannotSummon', costLte: evalExpr(cc, m.costLte) };
+      mod = { kind: 'cannotSummon', maxCost: evalExpr(cc, m.maxCost) };
       break;
     case 'cannotCastLte':
       mod = { kind: 'cannotCastLte', n: evalExpr(cc, m.n) };
@@ -811,9 +817,28 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
   s.effects.push({ id: nextId(s), pid: -1, mod, until: durationOf(c, f, a.until), controller: f.controller });
 }
 
-/** 効果によるバトル。a, b は選んだクリーチャー(a が攻撃側扱い) */
+/**
+ * 効果によるバトル。a, b はクリーチャーの変数(a が攻撃側扱い)。どちらかがバトルゾーンにいなければ、バトルは行われない。
+ * 「バトルする時」「バトルの後」の誘発や身代わり(battleProxy)がある対戦は、手続き(battle)で段階を踏む。ない対戦は、その場で解決する
+ */
 function actBattle(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
+  if (!(gameHas(c, 'battleProxy') || listens(c, 'battleStarted') || listens(c, 'afterBattle'))) {
+    const pidOf = (name: string): number | null => {
+      const u = varUids(cc, name)[0];
+      if (u === undefined) return null;
+      const card = s.cards[u];
+      if (card.zone !== 'battle') return null;
+      const pm = permByPid(s, card.pid);
+      return pm && pm.perm.cards[0] === u ? pm.perm.pid : null;
+    };
+    const pa = pidOf(a.a);
+    const pb = pidOf(a.b);
+    if (pa === null || pb === null || pa === pb) return;
+    resolveBattle(c, pa, pb);
+    s.dirtySba = true;
+    return;
+  }
   const as = resolveSel(cc, a.a).filter((u) => s.cards[u].zone === 'battle');
   const bs = resolveSel(cc, a.b).filter((u) => s.cards[u].zone === 'battle');
   if (as.length === 0 || bs.length === 0) return;

@@ -21,15 +21,17 @@ export function errorMessage(e: unknown): string {
 
 import type { Ability, Cond } from './ast';
 
-export type FaceType = 'creature' | 'spell' | 'evolution' | 'smaxEvolution' | 'tamaseed' | 'field' | 'crossgear';
+/** castle = G城(実行すると、表向きのシールドになるカード。クリーチャーでも呪文でもない) */
+export type FaceType = 'creature' | 'spell' | 'evolution' | 'smaxEvolution' | 'tamaseed' | 'field' | 'crossgear' | 'castle';
 
 /** クリーチャーとして扱う種類(進化・S-MAX進化を含む)。タマシード・フィールド・クロスギアは含まない */
 export const isCreatureType = (t: FaceType): boolean => t === 'creature' || t === 'evolution' || t === 'smaxEvolution';
-/** バトルゾーンに出る種類(呪文以外) */
-export const isPermanentType = (t: FaceType): boolean => t !== 'spell';
+/** バトルゾーンに出る種類(呪文・G城以外) */
+export const isPermanentType = (t: FaceType): boolean => t !== 'spell' && t !== 'castle';
 /** 出来事(moved / entered)の kind に使う、カードの種類の区分 */
-export const kindOfType = (t: FaceType): 'spell' | 'creature' | 'tamaseed' | 'field' | 'crossgear' => {
+export const kindOfType = (t: FaceType): 'spell' | 'creature' | 'tamaseed' | 'field' | 'crossgear' | 'castle' => {
   switch (t) {
+    case 'castle':
     case 'spell':
     case 'tamaseed':
     case 'field':
@@ -79,13 +81,13 @@ export interface Card {
   tapped: boolean;
   /** EXライフのシールドか */
   ex: boolean;
+  /** 表向きのシールドか(G城。シールドゾーンにある間だけ true。無ければ裏向き) */
+  up?: boolean;
   exPid: number;
   /** バトルゾーンでの山の識別子(それ以外は -1) */
   pid: number;
   /** 使用中の面(ツインパクト) */
   face: number;
-  /** シールドゾーンで表向きか(表向きのシールド。省略 = 裏向き) */
-  up?: boolean;
   /** 山札に、横向きに刺されているか(終葬 5.S.D.) */
   side?: boolean;
 }
@@ -261,8 +263,8 @@ export type EffectMod =
   | { kind: 'mustBlock' }
   /** プレイヤー単位(ContEffect.pid = -1): 発生源の持ち主の相手は呪文を唱えられない(n があれば、そのコストの呪文だけ) */
   | { kind: 'cannotCast'; n?: number }
-  /** プレイヤー単位: 発生源の持ち主の相手は、コストが costLte 以下のクリーチャーを召喚できない */
-  | { kind: 'cannotSummon'; costLte: number }
+  /** プレイヤー単位: 発生源の持ち主の相手は、コストが maxCost 以下のクリーチャーを召喚できない */
+  | { kind: 'cannotSummon'; maxCost: number }
   /** プレイヤー単位: 発生源の持ち主の相手は、コストが n 以下の呪文を唱えられない */
   | { kind: 'cannotCastLte'; n: number }
   /** プレイヤー単位: 発生源の持ち主の相手の、コストが n のバトルゾーンのカードの能力を無視する */
@@ -413,7 +415,9 @@ export type PendingReason =
   | 'assign'
   | 'replaceChoice'
   | 'ack'
-  | 'keepOne';
+  | 'keepOne'
+  /** 攻撃側が、ブレイクするシールドを選ぶ(見分けのつくシールドがある時だけ。procs の shieldClasses) */
+  | 'pickShield';
 
 export interface Pending {
   id: number;
