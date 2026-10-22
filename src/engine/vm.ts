@@ -593,7 +593,12 @@ function actAssign(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
 function actAddShield(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   const n = a?.n ?? 1;
   const who = playerOf(f, a?.who);
-  for (let i = 0; i < n; i++) addShieldFromDeck(c, who);
+  const added: ObjRef[] = [];
+  for (let i = 0; i < n; i++) {
+    const u = addShieldFromDeck(c, who);
+    if (u !== null) added.push(ref(c, u));
+  }
+  if (a?.as) f.vars[a.as] = added;
 }
 
 function actTap(c: Ctx, _f: EffectFrame, cc: CC, a: any, key: string): void {
@@ -756,6 +761,9 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
       break;
     case 'ignoreAll':
       mod = { kind: 'ignoreAll' };
+      break;
+    case 'startShield':
+      mod = { kind: 'startShield' };
       break;
     case 'owe':
       mod = { kind: 'owe', civ: m.civ, n: m.n };
@@ -1043,6 +1051,47 @@ function actStab(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   stabIntoDeck(c, resolveSel(cc, a.sel), a.depth ?? 4);
 }
 
+/**
+ * ニンジャ・チェンジ: 相手のクリーチャーの攻撃・ブロックの途中で、自分のクリーチャー(sel)を手札に戻し、手札のこのクリーチャーを出す。
+ * 攻撃先・ブロッカーが入れ替わるクリーチャーだったなら、出たクリーチャーがその役を引き継ぐ
+ */
+function actNinjaChange(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const trig = f.trigger;
+  if (!trig || (trig.type !== 'attackDeclared' && trig.type !== 'blocked')) return;
+  const uid = f.source.uid;
+  const card = s.cards[uid];
+  if (card.ep !== f.source.ep || card.zone !== 'hand') return;
+  const old = resolveSel(cc, a.sel)[0];
+  if (old === undefined || s.cards[old].zone !== 'battle') return;
+  const oldPm = permByPid(s, s.cards[old].pid);
+  if (!oldPm || oldPm.owner !== card.owner) return;
+  const fr = [...s.cont].reverse().find((x) => x.kind === 'proc' && x.name === 'attack' && x.vars.pid === trig.attacker);
+  const fi = creatureFace(c, uid);
+  if (fi < 0) return;
+  const wasTapped = oldPm.perm.tapped;
+  const oldPid = oldPm.perm.pid;
+  const res = moveCards(c, [old], { to: 'hand', cause: 'bounce' });
+  if (!res[0]?.moved) return;
+  const evs: Ev[] = [];
+  enterBattle(c, uid, { to: 'battle', cause: 'ninjaChange', via: 'ninjaChange', face: fi, tapped: wasTapped, paid: 0 }, evs);
+  const newPid = s.cards[uid].pid;
+  if (fr && fr.vars.target && fr.vars.target.kind === 'creature' && fr.vars.target.pid === oldPid) fr.vars.target = { kind: 'creature', pid: newPid };
+  s.batchNo++;
+  collectBatch(c, evs);
+  s.dirtySba = true;
+}
+
+/** シールドのカード(sel)に、次の持ち主のターンのはじめまで「S・トリガー」を与える */
+function actGrantShieldTrigger(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone !== 'shield') continue;
+    s.usage[`stg:${u}:${card.ep}`] = s.turn;
+  }
+}
+
 /** クロスギア(gear)を、クリーチャー(to)にクロスする(コストは支払わない) */
 function actCross(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
@@ -1191,6 +1240,8 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['stab', actStab],
   ['rush', actRush],
   ['cross', actCross],
+  ['ninjaChange', actNinjaChange],
+  ['grantShieldTrigger', actGrantShieldTrigger],
   ['win', actWin],
   ['play', actPlay],
   ['useCip', actUseCip],

@@ -83,7 +83,9 @@ export type FeatureName =
   | 'powerAddOthers'
   | 'cannotPlay'
   | 'battleProxy'
-  | 'hostPowerAdd';
+  | 'hostPowerAdd'
+  | 'cannotLeaveOwn'
+  | 'noAttackOnEntry';
 
 export interface Registry {
   db: CardDB;
@@ -183,7 +185,7 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'useCip', 'graveToBottom', 'play', 'win', 'cross', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'useCip', 'graveToBottom', 'play', 'win', 'cross', 'ninjaChange', 'grantShieldTrigger', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
@@ -535,6 +537,8 @@ export function loadRegistry(origDb: CardDB): Registry {
     powerAddOthers: staticOf('powerAddOthers'),
     cannotPlay: staticOf('cannotPlay'),
     hostPowerAdd: staticOf('hostPowerAdd'),
+    cannotLeaveOwn: staticOf('cannotLeaveOwn'),
+    noAttackOnEntry: staticOf('noAttackOnEntry'),
     battleProxy: staticOf('battleProxy'),
     sBack: featureDefs((ab) => ab.kind === 'keyword' && ab.name === 'sBack'),
     enteredFrom: featureDefs((ab) => ab.kind === 'trigger' && (Array.isArray(ab.spec.on) ? ab.spec.on : [ab.spec.on]).some((p) => p.type === 'entered' && p.from !== undefined)),

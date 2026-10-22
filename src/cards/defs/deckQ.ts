@@ -1,7 +1,7 @@
 // デッキQ「地上戦は最強!水自然ジャイアントデッキ」(docs/decks-25oudou.md)の新規カード。
 import type { CardDef } from '../../engine/types';
 import {
-  act, and, blocker, bounce, card, cip, costGte, costLte, creature, destroy, draw, evolution, gStrike, hyperEnergy, ifc, isCreature, justDiver, machFighter, maybe,
+  act, and, blocker, bounce, card, cip, costGte, costLte, creature, draw, evolution, gStrike, hyperEnergy, ifc, isCreature, justDiver, machFighter, maybe,
   mekureido, not, onAttack, oppCreature, race, revolutionChange, select, selectUpTo, spell, sTrigger, staticAb, tBreaker, trig, wBreaker,
 } from '../dsl';
 
@@ -24,7 +24,8 @@ export const DECK_Q: CardDef[] = [
         label: 'ウルトラ・セイバー: 自分のジャイアントが離れる時、かわりにこのクリーチャーを破壊してもよい',
         optional: true,
         match: { type: 'leave', owner: 'self', cond: and(isCreature, giant, not({ isSelf: true })) },
-        apply: { type: 'steps', steps: [destroy('$self')] },
+        // 置換で破壊するクリーチャーには、さらに置換を重ねない(ウルトラ・セイバーどうしの循環を避ける)
+        apply: { type: 'steps', steps: [act({ move: { sel: '$self', to: 'grave', cause: 'destroy', noReplace: true } })] },
       },
     ]),
   ),

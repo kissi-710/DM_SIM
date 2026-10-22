@@ -2,7 +2,7 @@
 // 規約: 入力待ち(ask)は、状態を変更する前に行う。再実行しても二重に変更されない。
 import type { Ability, Pattern, TriggerSpec } from './ast';
 import { evalCond, matchPattern, mkCC } from './cond';
-import { activeStatics, charsLite, deckLocked, infoOf, isIgnored, manaCivs, payNeed } from './derive';
+import { activeStatics, cannotLeave, charsLite, deckLocked, infoOf, isIgnored, manaCivs, payNeed } from './derive';
 import type { Ctx } from './state';
 import { gameHas, nextId, opponentOf, permByPid, shuffleInPlace, snapOf } from './state';
 import {
@@ -880,6 +880,11 @@ function applyLeaveReplacements(c: Ctx, p: Proposal): void {
   const s = c.s;
   const card = s.cards[p.uid];
   if (p.from !== 'battle') return;
+  // 「離れない」(ペトローバ・ハイパー・エン・ゲルス): バトルゾーンを離れる移動はすべて起きない
+  if (p.to !== 'battle' && cannotLeave(c, p.uid)) {
+    p.cancelled = true;
+    return;
+  }
   const pm = permByPid(s, card.pid);
   if (!pm || pm.perm.cards[0] !== p.uid) return;
   if (p.to === 'battle') return;

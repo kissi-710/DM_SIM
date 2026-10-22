@@ -346,18 +346,44 @@ function runTurn(c: Ctx, f: ProcFrame): void {
         delete perm.hyper; // ハイパーモードは、次の自分のターンのはじめまで
       }
       // 「次の自分のターンのはじめまで」の期限切れ(逆転撃の支払い(owe)は、支払いの段階で消す)
-      s.effects = s.effects.filter((e) => !(e.until.kind === 'untilTurnStart' && e.until.player === P && s.turn > e.until.afterTurn && e.mod.kind !== 'owe'));
+      s.effects = s.effects.filter((e) => !(e.until.kind === 'untilTurnStart' && e.until.player === P && s.turn > e.until.afterTurn && e.mod.kind !== 'owe' && e.mod.kind !== 'startShield'));
       emit(c, 'stepStart', { step: 'start', player: P });
       s.batchNo++;
       collectBatch(c, [c.out[c.out.length - 1]]);
-      f.stage = s.effects.some((e) => e.mod.kind === 'owe' && e.controller === P) ? 5 : 1;
+      f.stage = s.effects.some((e) => (e.mod.kind === 'owe' || e.mod.kind === 'startShield') && e.controller === P) ? 5 : 1;
       pushProc(c, 'settle');
       return;
     }
     case 5: {
       // 逆転撃: 次の自分のターンのはじめに、マナを支払う。払えなければ、ゲームに負ける。1回に1つずつ処理する
-      const e = s.effects.find((x) => x.mod.kind === 'owe' && x.controller === P);
-      if (!e || e.mod.kind !== 'owe') {
+      const e = s.effects.find((x) => (x.mod.kind === 'owe' || x.mod.kind === 'startShield') && x.controller === P);
+      if (!e) {
+        f.stage = 1;
+        return;
+      }
+      if (e.mod.kind === 'startShield') {
+        // 次の自分のターンのはじめに、自分のシールドを1つ手札に加える(「S・トリガー」は使えない)。質問は、状態を変更する前に行う
+        const shields = s.players[P].shield;
+        if (shields.length === 0) {
+          s.effects = s.effects.filter((x) => x.id !== e.id);
+          return;
+        }
+        const pick =
+          shields.length === 1
+            ? [shields[0]]
+            : ask<number[]>(c, {
+                player: P,
+                why: 'select',
+                input: { shape: 'pick', candidates: shields.slice(), min: 1, max: 1 },
+                source: null,
+                prompt: '手札に加える自分のシールドを選んでください(「S・トリガー」は使えない)',
+              });
+        s.effects = s.effects.filter((x) => x.id !== e.id);
+        moveCards(c, pick, { to: 'hand', cause: 'effect' });
+        pushProc(c, 'settle');
+        return;
+      }
+      if (e.mod.kind !== 'owe') {
         f.stage = 1;
         return;
       }
@@ -1201,6 +1227,9 @@ export function declaration(c: Ctx, uid: number): { kind: 'shieldTrigger' | 'gSt
   const card = s.cards[uid];
   const def = c.reg.defs[card.defId];
   const cc = mkCC(c, card.owner, { self: uid });
+  // 豪龍の記憶: 「S・トリガー」を与えられたシールド(次の持ち主のターンのはじめまで)
+  const grantedTurn = s.usage[`stg:${uid}:${card.ep}`];
+  const granted = grantedTurn !== undefined && card.zone === 'shield' && s.turn - grantedTurn <= 1;
   // 相手の「自身の S・トリガーを使えない」(バイラス・カースド)
   const stBanned = gameHas(c, 'noOppShieldTrigger') && activeStatics(c, 'noOppShieldTrigger').some((st) => st.controller !== card.owner);
   for (let fi = 0; fi < def.faces.length; fi++) {
@@ -1208,6 +1237,9 @@ export function declaration(c: Ctx, uid: number): { kind: 'shieldTrigger' | 'gSt
     for (const st of stBanned ? [] : info.shieldTriggers) {
       if (st.ability.while && !evalCond(cc, st.ability.while)) continue;
       return { kind: 'shieldTrigger', ref: { defId: card.defId, face: fi, idx: st.idx }, face: fi };
+    }
+    if (granted && !stBanned && def.faces.length > 0 && fi === (def.faces.findIndex((x) => x.type === 'spell') >= 0 ? def.faces.findIndex((x) => x.type === 'spell') : 0)) {
+      return { kind: 'shieldTrigger', ref: { defId: card.defId, face: fi, idx: 0 }, face: fi };
     }
     if (info.gStrike) return { kind: 'gStrike', ref: { defId: card.defId, face: fi, idx: info.gStrike.idx }, face: fi };
   }

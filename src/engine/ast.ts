@@ -233,6 +233,10 @@ export type StaticMod =
   | { type: 'battleProxy'; cond: Cond }
   /** ガードマン: このクリーチャーをタップして、相手クリーチャーの攻撃先を、自分の他のクリーチャーからこのクリーチャーに変更してもよい */
   | { type: 'guardman' }
+  /** 自分のクリーチャー(cond に合うもの)は、離れない */
+  | { type: 'cannotLeaveOwn'; cond: Cond }
+  /** 相手のクリーチャーは、出たターン攻撃できない(スピードアタッカーでも) */
+  | { type: 'noAttackOnEntry' }
   /** このクロスギアをクロスしたクリーチャーのパワーを n 増やす */
   | { type: 'hostPowerAdd'; n: number }
   /** 自分の他のカード(cond に合うもの)のパワーを n 増やす */

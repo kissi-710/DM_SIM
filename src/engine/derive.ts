@@ -329,6 +329,8 @@ function canAttackBase(c: Ctx, perm: Permanent, target: { kind: 'player' } | { k
   if (s.effects.length > 0 && s.effects.some((e) => e.mod.kind === 'cannotAttackAny' && e.controller !== owner)) return false;
   if (costLocked(c, uid)) return false;
   if (perm.tapped) return false;
+  // 「相手のクリーチャーは、出たターン攻撃できない」(聖カオスマントラ)
+  if (perm.enteredTurn === s.turn && gameHas(c, 'noAttackOnEntry') && activeStatics(c, 'noAttackOnEntry').some((st) => st.controller !== owner)) return false;
   if (hasEffect(c, perm.pid, 'cannotAttack')) return false;
   if (hasSelfStatic(c, uid, 'cannotAttack')) return false;
   if (target.kind === 'player' && hasSelfStatic(c, uid, 'cannotAttackPlayer')) return false;
@@ -549,6 +551,20 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
 }
 
 // ───────────────────────── 呪文の制限 ─────────────────────────
+
+/** そのクリーチャーは、離れない効果を受けているか */
+export function cannotLeave(c: Ctx, uid: number): boolean {
+  const card = c.s.cards[uid];
+  if (card.zone !== 'battle') return false;
+  if (c.s.effects.length > 0 && c.s.effects.some((e) => e.pid === card.pid && e.mod.kind === 'cannotLeave')) return true;
+  if (!gameHas(c, 'cannotLeaveOwn')) return false;
+  for (const st of activeStatics(c, 'cannotLeaveOwn')) {
+    const m = st.ability.mod;
+    if (m.type !== 'cannotLeaveOwn' || st.controller !== card.owner) continue;
+    if (evalCond(mkCC(c, st.controller, { self: st.src, it: uid, itFace: card.face }), m.cond)) return true;
+  }
+  return false;
+}
 
 /** クロスのコスト(クロスギアのマナコストをもう一度払う。コスト軽減の効果も受ける)と文明 */
 export function crossCost(c: Ctx, gearUid: number): { cost: number; civs: Civ[] } {
