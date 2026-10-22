@@ -3,6 +3,7 @@ import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode 
 import { charsOf, hasKeyword, powerOf } from '../engine/derive';
 import { mkCtx, permByPid } from '../engine/state';
 import type { GameState } from '../engine/types';
+import { faceTypeLabel } from './typeLabel';
 import { CIV_COLOR, reg, wardOf, type Ward } from './format';
 
 export interface CardProps {
@@ -145,7 +146,7 @@ export function CardView(p: CardProps) {
   const imgStyle: CSSProperties | undefined = def.image
     ? { backgroundImage: `linear-gradient(rgba(10,14,22,0.55), rgba(10,14,22,0.85)), url(${def.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     : undefined;
-  const typeLabel = face.type === 'spell' ? '呪文' : face.type === 'evolution' ? '進化' : face.type === 'smaxEvolution' ? 'S-MAX進化' : 'クリーチャー';
+  const typeLabel = faceTypeLabel(face.type);
   return (
     <div className={cls.join(' ')} title={ward ? `${def.name} — ${wardTitle}` : def.name} {...handlers} style={{ ...imgStyle, ...p.style }}>
       <div className="civbar" style={{ background: civGradient(civs) }} />

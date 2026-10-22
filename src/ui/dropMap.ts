@@ -50,6 +50,12 @@ export function buildDropMap(s: GameState, legal: Action[]): Map<string, Drop[]>
       let label = `${isSpell ? '唱える' : '召喚'}: ${face.name}`;
       if (from === 'mana') label += '(マナゾーンから)';
       if (from === 'grave') label += '(墓地から)';
+      if (a.extra?.alt) {
+        const alt = face.abilities.find((x) => x.kind === 'altCost' && x.id === a.extra!.alt);
+        if (alt && alt.kind === 'altCost') label += `(${alt.label})`;
+      }
+      if (a.extra?.under?.length) label += ` [墓地の${a.extra.under.length}体を下に重ねる]`;
+      if (a.extra?.tapAlt?.length) label += ` [クリーチャー${a.extra.tapAlt.length}体をタップ]`;
       if (a.extra?.onto !== undefined) {
         const pm = [...s.players[0].battle, ...s.players[1].battle].find((p) => p.pid === a.extra!.onto);
         if (pm) label += ` → ${N(pm.cards[0])}の上に重ねる`;
@@ -65,6 +71,17 @@ export function buildDropMap(s: GameState, legal: Action[]): Map<string, Drop[]>
       add(`${from}:${a.uid}`, { dropKey, action: a, label });
       // 進化は、バトルゾーン全体へのドロップでも選べるようにする
       if (a.extra?.onto !== undefined) add(`${from}:${a.uid}`, { dropKey: 'zone:battle', action: a, label });
+    } else if (a.type === 'HYPERIZE') {
+      const pm = [...s.players[0].battle, ...s.players[1].battle].find((p) => p.pid === a.pid);
+      const taps = a.tap.map((pid) => {
+        const t = [...s.players[0].battle, ...s.players[1].battle].find((p) => p.pid === pid);
+        return t ? N(t.cards[0]) : '?';
+      });
+      const name = pm ? N(pm.cards[0]) : 'クリーチャー';
+      add(`pile:${a.pid}`, { dropKey: 'zone:battle', action: a, label: `ハイパー化: ${name}${taps.length ? ` [${taps.join('、')}をタップ]` : ''}` });
+    } else if (a.type === 'CROSS') {
+      const pm = [...s.players[0].battle, ...s.players[1].battle].find((p) => p.pid === a.target);
+      add(`pile:${a.gear}`, { dropKey: `pile:${a.target}`, action: a, label: `クロス → ${pm ? N(pm.cards[0]) : 'クリーチャー'}` });
     } else if (a.type === 'ATTACK') {
       const pid = a.attacker;
       if (a.target.kind === 'player') {
