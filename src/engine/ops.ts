@@ -472,6 +472,7 @@ export function moveCards(c: Ctx, uids: number[], opts: MoveOpts): MoveResult[] 
 
 /** マナゾーンに置かれる時にタップ状態か。多色カード(ツインパクトは両面の和集合)はタップして置く(spec 3.4.1 M-1)。 */
 function entersManaTapped(c: Ctx, uid: number, opts: MoveOpts): boolean {
+  if (gameHas(c, 'oppManaTapped') && activeStatics(c, 'oppManaTapped').some((st) => st.controller !== c.s.cards[uid].owner)) return true; // 相手のカードは、マナゾーンにタップして置かれる(影速 ザ・トリッパー)
   return manaCivs(c, uid).length > 1 || !!opts.tapped;
 }
 

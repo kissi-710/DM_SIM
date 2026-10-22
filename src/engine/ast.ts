@@ -239,6 +239,10 @@ export type StaticMod =
   | { type: 'battleProxy'; cond: Cond }
   /** ガードマン: このクリーチャーをタップして、相手クリーチャーの攻撃先を、自分の他のクリーチャーからこのクリーチャーに変更してもよい */
   | { type: 'guardman' }
+  /** このクリーチャーの攻撃中、相手は「G・ストライク」を使えない */
+  | { type: 'noGStrike' }
+  /** 相手のカードは、マナゾーンにタップして置かれる */
+  | { type: 'oppManaTapped' }
   /** 飛行: 「飛行」を持たないクリーチャーから、攻撃もブロックもされない */
   | { type: 'flying' }
   /** このクリーチャーは、シールドをブレイクできない */
@@ -297,6 +301,8 @@ export interface AltCostSpec {
   reduce?: number;
   /** こうして出したら、このターンの終わりに山札の下に置く。そうしたら、カードを1枚引く(J・O・E) */
   endBottomDraw?: boolean;
+  /** 出すかわりに、自分の超次元ゾーンに置く(パンドラ・シフト) */
+  toHyper?: boolean;
 }
 
 export type { EffectMod };

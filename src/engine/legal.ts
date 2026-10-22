@@ -143,7 +143,7 @@ export function playActionKey(s: GameState, a: Extract<Action, { type: 'PLAY_CAR
 export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extract<Action, { type: 'PLAY_CARD' }>[] {
   const s = c.s;
   const out: Extract<Action, { type: 'PLAY_CARD' }>[] = [];
-  const zones = gameHas(c, 'allowPlayFrom') ? (['hand', 'mana', 'grave', 'deck'] as const) : (['hand', 'mana', 'grave'] as const);
+  const zones = gameHas(c, 'allowPlayFrom') ? (['hand', 'mana', 'grave', 'hyper', 'deck'] as const) : (['hand', 'mana', 'grave', 'hyper'] as const);
   for (const z of zones) {
     // 山札から使えるのは、一番上のカードだけ(「山札の上から召喚してもよい」)
     const list: number[] = z === 'deck' ? s.players[player].deck.slice(0, 1) : s.players[player][z];

@@ -1139,6 +1139,15 @@ function actAllowSummon(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): 
   }
 }
 
+/** クリーチャー(進化の山)の一番上のカードだけを破壊する(下のカードは残る) */
+function actDestroyTop(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    if (s.cards[u].zone !== 'battle') continue;
+    moveCards(c, [u], { to: 'grave', cause: 'destroy', alone: true });
+  }
+}
+
 /** このクリーチャー(発生源)が、相手のシールドを n 個ブレイクする(破天九語) */
 function actBreakOpp(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   const s = c.s;
@@ -1281,6 +1290,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['seal', actSeal],
   ['stab', actStab],
   ['rush', actRush],
+  ['destroyTop', actDestroyTop],
   ['allowSummon', actAllowSummon],
   ['breakOpp', actBreakOpp],
   ['cross', actCross],

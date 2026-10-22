@@ -20,6 +20,7 @@ import {
   faceTypeOf,
   hasKeyword,
   infoOf,
+  isAttacking,
   isUnblockable,
   playerCannotLose,
   manaSources,
@@ -539,6 +540,12 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       const p = v.plan;
       const card = s.cards[uid];
       const owner = card.owner;
+      // パンドラ・シフト: 出すかわりに、超次元ゾーンに置く
+      if (p.kind === 'summon' && p.alt && c.reg.getInfo(card.defId, p.face).altCosts.some((a) => a.id === p.alt && a.cost.toHyper)) {
+        moveCards(c, [uid], { to: 'hyper', cause: 'pandora', noReplace: true });
+        f.stage = 3;
+        return;
+      }
       if (p.kind === 'summon' || p.kind === 'put') {
         const evs: Ev[] = [];
         const via = p.kind === 'summon' ? 'summon' : 'put';
@@ -1237,6 +1244,10 @@ export function declaration(c: Ctx, uid: number): { kind: 'shieldTrigger' | 'gSt
   const granted = grantedTurn !== undefined && card.zone === 'shield' && s.turn - grantedTurn <= 1;
   // 「自分のシールドゾーンから手札に加える呪文すべてに、S・トリガーを与える」(天雷龍姫エリザベス)
   const spellGranted = gameHas(c, 'spellShieldTrigger') && activeStatics(c, 'spellShieldTrigger').some((st) => st.controller === card.owner);
+  // 攻撃中の相手のクリーチャーの「このクリーチャーの攻撃中、相手は G・ストライクを使えない」(覇帝なき侵略 レッドゾーンF)
+  const gBanned =
+    gameHas(c, 'noGStrike') &&
+    activeStatics(c, 'noGStrike').some((st) => st.controller !== card.owner && isAttacking(c, s.cards[st.src].pid));
   // 相手の「自身の S・トリガーを使えない」(バイラス・カースド)
   const stBanned = gameHas(c, 'noOppShieldTrigger') && activeStatics(c, 'noOppShieldTrigger').some((st) => st.controller !== card.owner);
   for (let fi = 0; fi < def.faces.length; fi++) {
@@ -1251,7 +1262,7 @@ export function declaration(c: Ctx, uid: number): { kind: 'shieldTrigger' | 'gSt
     if (granted && !stBanned && def.faces.length > 0 && fi === (def.faces.findIndex((x) => x.type === 'spell') >= 0 ? def.faces.findIndex((x) => x.type === 'spell') : 0)) {
       return { kind: 'shieldTrigger', ref: { defId: card.defId, face: fi, idx: 0 }, face: fi };
     }
-    if (info.gStrike) return { kind: 'gStrike', ref: { defId: card.defId, face: fi, idx: info.gStrike.idx }, face: fi };
+    if (info.gStrike && !gBanned) return { kind: 'gStrike', ref: { defId: card.defId, face: fi, idx: info.gStrike.idx }, face: fi };
   }
   return null;
 }
