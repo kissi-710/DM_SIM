@@ -71,6 +71,10 @@ export type Cond =
   | { hyper: true }
   /** 発生源(バトルゾーンのクリーチャー)が、タップしている(true)・アンタップしている(false) */
   | { selfTapped: boolean }
+  /** $it の持ち主が、能力の処理者(self)・その相手(opponent) */
+  | { ownedBy: 'self' | 'opponent' }
+  /** 変数のカード(進化クリーチャー)が、$it(バトルゾーンのクリーチャー)の上に進化できる(進化元の条件を満たす) */
+  | { baseFor: string }
   /** $it(バトルゾーンのクリーチャー)が、そのキーワードを持つ(「ブロッカー」を持つクリーチャー) */
   | { hasKw: 'blocker' | 'speedAttacker' | 'machFighter' | 'slayer' }
   /** 発生源が、そのターンに別のコスト(altCost の id)を使って出た */
@@ -212,7 +216,9 @@ export type StaticMod =
   /** 相手のクリーチャーが攻撃するなら、可能ならこのクリーチャーを攻撃する */
   | { type: 'attackMeFirst' }
   /** 相手は、自身のターンに1回までしか呪文を唱えられない */
-  | { type: 'oneSpellPerTurn' };
+  | { type: 'oneSpellPerTurn' }
+  /** 自分の他のカード(cond に合うもの)のパワーを n 増やす */
+  | { type: 'powerAddOthers'; n: number; cond: Cond };
 
 export type ReplaceApply =
   | { type: 'changeDest'; to: ZoneName }

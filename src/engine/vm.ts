@@ -415,6 +415,7 @@ function resolveSel(cc: CC, sel: string | Selector): number[] {
 }
 
 function playerOf(f: EffectFrame, who: string | undefined): PlayerId {
+  if (who === 'iter') return (f.vars.$iter as PlayerId | undefined) ?? f.controller; // forPlayers の現在のプレイヤー
   return who === 'opponent' ? opponentOf(f.controller) : f.controller;
 }
 
@@ -591,7 +592,8 @@ function actAssign(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
 
 function actAddShield(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   const n = a?.n ?? 1;
-  for (let i = 0; i < n; i++) addShieldFromDeck(c, f.controller);
+  const who = playerOf(f, a?.who);
+  for (let i = 0; i < n; i++) addShieldFromDeck(c, who);
 }
 
 function actTap(c: Ctx, _f: EffectFrame, cc: CC, a: any, key: string): void {
@@ -622,8 +624,16 @@ function actPut(c: Ctx, f: EffectFrame, cc: CC, a: any, key: string): void {
     const fi = creatureFace(c, u);
     if (fi < 0) continue;
     const face = c.reg.getFace(s.cards[u].defId, fi);
-    if (face.type === 'evolution') continue; // 進化元がないので出せない
-    const r = enterBattle(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0 }, evs);
+    let onto: number | undefined;
+    if (face.type === 'evolution') {
+      // 進化クリーチャーは、進化元(onto: 変数のクリーチャー)の上に出す。進化元の条件を満たさなければ出せない
+      const base = a.onto ? varUids(cc, a.onto, { ignoreEp: true })[0] : undefined;
+      if (base === undefined || s.cards[base].zone !== 'battle' || !face.evolveFrom) continue;
+      const topUid = s.cards[base].pid >= 0 ? permByPid(s, s.cards[base].pid)?.perm.cards[0] : undefined;
+      if (topUid === undefined || !evalCond({ ...cc, self: u, it: topUid, itFace: s.cards[topUid].face, evo: true }, face.evolveFrom)) continue;
+      onto = s.cards[topUid].pid;
+    }
+    const r = enterBattle(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0, ...(onto !== undefined ? { onto } : {}) }, evs);
     if (r.moved) entered.push({ uid: u, ep: r.ep });
     if (r.moved && via === 'summon') onSummoned(c, u);
   }
@@ -1029,6 +1039,15 @@ function actStab(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   stabIntoDeck(c, resolveSel(cc, a.sel), a.depth ?? 4);
 }
 
+/** 自分はゲームに勝つ */
+function actWin(c: Ctx, f: EffectFrame, _cc: CC, _a: any, _key: string): void {
+  const s = c.s;
+  if (s.winner !== null) return;
+  s.winner = f.controller;
+  s.loseReason = '効果による勝利';
+  emit(c, 'gameOver', { winner: f.controller, reason: '効果による勝利' });
+}
+
 /** アビスラッシュ(効果で出したクリーチャー): このターン攻撃でき、ターンの終わりに(ifAttacked なら、攻撃していれば)山札の下に置く */
 function actRush(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
@@ -1109,8 +1128,9 @@ function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   emit(c, a, { owner: f.controller, source: f.source.uid });
 }
 
-function actSetVar(_c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
-  f.vars[a.as] = a.value;
+function actSetVar(_c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  // 値が式(オブジェクト)なら、その場で評価した数を入れる
+  f.vars[a.as] = typeof a.value === 'object' && a.value !== null ? evalExpr(cc, a.value) : a.value;
 }
 
 /** 原始操作の名前 → 実行する関数(act の最初のキーで引く) */
@@ -1151,6 +1171,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['seal', actSeal],
   ['stab', actStab],
   ['rush', actRush],
+  ['win', actWin],
   ['play', actPlay],
   ['useCip', actUseCip],
   ['graveToBottom', actGraveToBottom],

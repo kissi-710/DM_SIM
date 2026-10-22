@@ -173,6 +173,14 @@ export function powerOf(c: Ctx, perm: Permanent): number {
     if (st.ability.while && !evalCond(cc, st.ability.while)) continue;
     p += evalExpr(cc, st.ability.mod.expr);
   }
+  // 自分の他のカードのパワーを増やす(アルカディアス・モモキング)
+  if (gameHas(c, 'powerAddOthers')) {
+    for (const st of activeStatics(c, 'powerAddOthers')) {
+      const m = st.ability.mod;
+      if (m.type !== 'powerAddOthers' || st.controller !== card.owner || st.src === uid) continue;
+      if (evalCond(mkCC(c, card.owner, { self: st.src, it: uid, itFace: card.face }), m.cond)) p += m.n;
+    }
+  }
   // パワーアタッカー: 攻撃中だけ
   if (info.statics.length > 0 && isAttacking(c, perm.pid)) {
     for (const st of info.statics) {

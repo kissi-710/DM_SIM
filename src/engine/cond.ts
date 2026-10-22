@@ -221,6 +221,19 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     for (let i = from; i < s.turnLog.length; i++) if (matchPattern(cc, o.logged.pattern, s.turnLog[i])) n++;
     return n >= min;
   }
+  if ('ownedBy' in o) {
+    if (cc.it == null) return false;
+    return (s.cards[cc.it].owner === cc.controller) === (o.ownedBy === 'self');
+  }
+  if ('baseFor' in o) {
+    if (cc.it == null) return false;
+    const evoUid = varUids(cc, o.baseFor, { ignoreEp: true })[0];
+    if (evoUid === undefined) return false;
+    const evoDef = cc.c.reg.defs[s.cards[evoUid].defId];
+    const evoFace = evoDef.faces.find((x) => x.evolveFrom);
+    if (!evoFace?.evolveFrom) return false;
+    return evalCond({ ...cc, self: evoUid, it: cc.it, itFace: s.cards[cc.it].face, evo: true }, evoFace.evolveFrom);
+  }
   if ('hasKw' in o) {
     const hk = permByPid(s, s.cards[cc.it ?? -1]?.pid ?? -1);
     return cc.it != null && s.cards[cc.it].zone === 'battle' && hk != null && hasKeyword(cc.c, hk.perm, o.hasKw);
