@@ -1,4 +1,4 @@
-// デッキU「ツインパクトの極み!光水自然清永デッキ」(docs/decks-25oudou.md)の新規カード。ツインパクト・マナゾーンの文明・ブレイクの大量化など。
+// デッキU「ツインパクトの極み！光水自然清永デッキ」(docs/decks-25oudou.md)の新規カード。ツインパクト・マナゾーンの文明・ブレイクの大量化など。
 import type { Selector, StepDef } from '../../engine/ast';
 import type { CardDef } from '../../engine/types';
 import {

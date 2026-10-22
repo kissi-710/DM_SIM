@@ -1,4 +1,4 @@
-// デッキY「進化王!闇自然ケンジ・キングダムデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。究極進化・スター進化・墓地から召喚する進化クリーチャーなど。
+// デッキY「進化王！闇自然ケンジ・キングダムデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。究極進化・スター進化・墓地から召喚する進化クリーチャーなど。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';

@@ -1,4 +1,4 @@
-// デッキQ「地上戦は最強!水自然ジャイアントデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。バトルの置き換え・使えないカード・マナゾーンから召喚など。
+// デッキQ「地上戦は最強！水自然ジャイアントデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。バトルの置き換え・使えないカード・マナゾーンから召喚など。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';

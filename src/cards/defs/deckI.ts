@@ -1,4 +1,4 @@
-// デッキI「芸術の3ターンキル!火水マジックデッキ」(docs/decks-25oudou.md)の新規カード。
+// デッキI「芸術の３ターンキル！火水マジックデッキ」(docs/decks-25oudou.md)の新規カード。
 import type { Pattern } from '../../engine/ast';
 import type { CardDef } from '../../engine/types';
 import {

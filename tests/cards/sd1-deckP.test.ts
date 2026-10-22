@@ -1,4 +1,4 @@
-// デッキP「コンボで連鎖!自然単グランセクトデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。W・シンパシー・ガードマン・攻撃できない制限など。
+// デッキP「コンボで連鎖！自然単グランセクトデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。W・シンパシー・ガードマン・攻撃できない制限など。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';

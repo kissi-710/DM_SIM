@@ -1,4 +1,4 @@
-// デッキG「赤白アーマード」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
+// デッキG「輝けボルシャック！火光アーマードデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { powerOf } from '../../src/engine/derive';

@@ -1,4 +1,4 @@
-// デッキF「青黒ハンデス」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
+// デッキF「相手の隙に一撃必殺！水闇手札破壊デッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 

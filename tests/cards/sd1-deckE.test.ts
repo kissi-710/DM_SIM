@@ -1,4 +1,4 @@
-// デッキE「ラッカゴスペル」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
+// デッキE「呪文連打でコンボを目指せゴスペルデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 

@@ -1,4 +1,4 @@
-// デッキN「ジョーの一撃必殺ジョーカーズデッキ」(docs/decks-25oudou.md)の新規カード。
+// デッキN「ジョーの一撃必殺旅路ジョーカーズデッキ」(docs/decks-25oudou.md)の新規カード。
 import type { Ability } from '../../engine/ast';
 import type { CardDef } from '../../engine/types';
 import {

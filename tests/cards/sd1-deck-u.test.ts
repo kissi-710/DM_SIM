@@ -1,4 +1,4 @@
-// デッキU「ツインパクトの極み!光水自然清永デッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。ツインパクト・マナの文明・シールドの大量ブレイクなど。
+// デッキU「ツインパクトの極み！光水自然清永デッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。ツインパクト・マナの文明・シールドの大量ブレイクなど。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';

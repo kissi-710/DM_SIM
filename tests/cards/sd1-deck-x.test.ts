@@ -1,4 +1,4 @@
-// デッキX「墓地を増やせ!火闇自然墓地ソースデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。超無限墓地進化・フシギバース・墓地の枚数でコストを減らすなど。
+// デッキX「墓地を増やせ！火闇自然墓地ソースデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。超無限墓地進化・フシギバース・墓地の枚数でコストを減らすなど。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';

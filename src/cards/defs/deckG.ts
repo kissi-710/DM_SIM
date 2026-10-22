@@ -1,4 +1,4 @@
-// デッキG「輝けボルシャック!火光アーマードデッキ」(docs/decks-25oudou.md)の新規カード。
+// デッキG「輝けボルシャック！火光アーマードデッキ」(docs/decks-25oudou.md)の新規カード。
 import type { CardDef } from '../../engine/types';
 import {
   act, and, blocker, card, cip, costGte, costLte, creature, destroy, draw, evolution, hyperEnergy, nameHas,

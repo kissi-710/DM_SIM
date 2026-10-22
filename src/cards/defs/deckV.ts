@@ -1,4 +1,4 @@
-// デッキV「手札を無くせ!火自然ギャラクシーデッキ」(docs/decks-25oudou.md)の新規カード。G・G・G・G・ゼロ・飛行・クリーチャーをマナとして使うなど。
+// デッキV「手札を無くせ！火自然ギャラクシーデッキ」(docs/decks-25oudou.md)の新規カード。G・G・G・G・ゼロ・飛行・クリーチャーをマナとして使うなど。
 import type { Cond } from '../../engine/ast';
 import type { CardDef } from '../../engine/types';
 import {

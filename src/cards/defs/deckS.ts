@@ -1,4 +1,4 @@
-// デッキS「相手を翻弄せよ!光闇メカ&シノビデッキ」(docs/decks-25oudou.md)の新規カード。ニンジャ・チェンジ・ハイパー化・シールド化・離れないなど。
+// デッキS「相手を翻弄せよ！光闇メカ＆シノビデッキ」(docs/decks-25oudou.md)の新規カード。ニンジャ・チェンジ・ハイパー化・シールド化・離れないなど。
 import type { Cond, Expr, Pattern } from '../../engine/ast';
 import type { CardDef } from '../../engine/types';
 import {

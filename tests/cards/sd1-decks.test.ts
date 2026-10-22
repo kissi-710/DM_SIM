@@ -12,7 +12,7 @@ import listJson from '../../docs/data/dm26sd1-decks.json';
 const reg = loadRegistry(CARD_DB);
 const norm = (s: string) => s.normalize('NFKC').replace(/\s+/g, '').replace(/[「」《》"“”‘’']/g, '').replace(/[〜~]/g, '~').replace(/[!！]/g, '!').replace(/[?？]/g, '?').replace(/♪/g, '');
 
-type DeckList = { name: string; short: string; implemented?: boolean; list: [string, number][] };
+type DeckList = { name: string; implemented?: boolean; list: [string, number][] };
 const official = listJson.decks as unknown as Record<string, DeckList>;
 
 /** デッキID(sd1-c など)→ 文字(C など) */
@@ -89,7 +89,7 @@ describe('25の王道: 全23デッキ(C〜Y)の実装', () => {
 describe('25の王道: 対局', () => {
   const opp = deckCards('maruru');
   for (const p of sd1Presets) {
-    it(`${p.short}: ランダム同士・ルールベース同士で、最後まで(またはターン上限まで)進み、不変条件が保たれる`, () => {
+    it(`${p.name}: ランダム同士・ルールベース同士で、最後まで(またはターン上限まで)進み、不変条件が保たれる`, () => {
       for (const kind of ['random', 'rule'] as const) {
         for (let seed = 1; seed <= 2; seed++) {
           const r = playGameSync(reg, [makeAgent({ kind }), makeAgent({ kind })], {

@@ -1,4 +1,4 @@
-// デッキL「勝太のハンター&カイザー「刃鬼」デッキ」(docs/decks-25oudou.md)の新規カード。
+// デッキL「勝太のハンター＆カイザー「刃鬼」デッキ」(docs/decks-25oudou.md)の新規カード。
 import type { CardDef } from '../../engine/types';
 import {
   act, and, blocker, card, creature, destroy, draw, gStrike, ifc, isCreature, justDiver, machFighter, maybe, mekureido, myCreature, onAttack,

@@ -1,4 +1,4 @@
-// デッキP「コンボで連鎖!自然単グランセクトデッキ」(docs/decks-25oudou.md)の新規カード。
+// デッキP「コンボで連鎖！自然単グランセクトデッキ」(docs/decks-25oudou.md)の新規カード。
 import type { CardDef } from '../../engine/types';
 import {
   act, and, breaker, card, cip, civ, costLte, creature, draw, guardman, ifc, isCreature, machFighter, maybe, onAttack, oppCreature, select, selectUpTo, spell, sTrigger, staticAb,

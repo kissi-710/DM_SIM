@@ -1,4 +1,4 @@
-// デッキC「シールドゼロで鬼札逆転4c邪王門デッキ」(docs/decks-25oudou.md)の新規カード。
+// デッキC「シールドゼロで鬼札逆転４ｃ邪王門デッキ」(docs/decks-25oudou.md)の新規カード。
 import type { CardDef } from '../../engine/types';
 import {
   act, and, anyCiv, blocker, bounce, card, chooseNumber, cip, costGte, costLte, creature, destroy, draw, finalRevolution, ifc, justDiver,

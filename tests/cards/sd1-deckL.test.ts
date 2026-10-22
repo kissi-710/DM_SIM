@@ -1,4 +1,4 @@
-// デッキL「勝太のハンター&カイザー「刃鬼」」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
+// デッキL「勝太のハンター＆カイザー「刃鬼」」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';

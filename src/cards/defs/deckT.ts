@@ -1,4 +1,4 @@
-// デッキT「元祖守りの王道!光自然巨大ゲートデッキ」(docs/decks-25oudou.md)の新規カード。ブロッカーを出す・チャージャー・エスケープ・バラバラエティなど。
+// デッキT「元祖守りの王道！光自然巨大ゲートデッキ」(docs/decks-25oudou.md)の新規カード。ブロッカーを出す・チャージャー・エスケープ・バラバラエティなど。
 import type { Selector, StepDef } from '../../engine/ast';
 import type { CardDef } from '../../engine/types';
 import {

@@ -1,4 +1,4 @@
-// デッキH「5cドラゴン娘」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
+// デッキH「ドラゴン娘の生徒会大集結ドラゴンデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';

@@ -1,4 +1,4 @@
-// デッキI「赤青マジック」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
+// デッキI「芸術の３ターンキル！火水マジックデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 

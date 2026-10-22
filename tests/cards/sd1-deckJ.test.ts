@@ -1,4 +1,4 @@
-// デッキJ「8軸ガチロボ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
+// デッキJ「めくりに命をかけろ！８軸ガチロボデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 

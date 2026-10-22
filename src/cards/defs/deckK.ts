@@ -1,4 +1,4 @@
-// デッキK「エンドレスガチンコバトル!ハチ公デッキ」(docs/decks-25oudou.md)の新規カード。
+// デッキK「エンドレスガチンコバトル！ハチ公デッキ」(docs/decks-25oudou.md)の新規カード。
 import type { CardDef } from '../../engine/types';
 import {
   act, and, card, cip, civ, creature, destroy, draw, evolution, hyperEnergy, ifc, invasion, maybe, nameHas, oppCreature, poweredBreaker,

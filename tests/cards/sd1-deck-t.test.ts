@@ -1,4 +1,4 @@
-// デッキT「元祖守りの王道!光自然巨大ゲートデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。ブロッカーを出す・チャージャー・エスケープ・離れないなど。
+// デッキT「元祖守りの王道！光自然巨大ゲートデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。ブロッカーを出す・チャージャー・エスケープ・離れないなど。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';

@@ -1,4 +1,4 @@
-// デッキJ「めくりに命をかけろ!8軸ガチロボデッキ」(docs/decks-25oudou.md)の新規カード。
+// デッキJ「めくりに命をかけろ！８軸ガチロボデッキ」(docs/decks-25oudou.md)の新規カード。
 import type { CardDef } from '../../engine/types';
 import {
   act, and, blocker, bounce, card, cip, civ, creature, destroy, draw, exLife, ifc, maybe, notEvolution, onAttack, oppCreature, select, selectUpTo,

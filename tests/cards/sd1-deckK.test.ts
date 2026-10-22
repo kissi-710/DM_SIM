@@ -1,4 +1,4 @@
-// デッキK「赤緑ハチ公」の新規カード(docs/decks-25oudou.md)のシナリオテスト。封印・5.S.D.・パワード・ブレイカーなど。
+// デッキK「エンドレスガチンコバトル！ハチ公デッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。封印・5.S.D.・パワード・ブレイカーなど。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { powerOf, breakerCount } from '../../src/engine/derive';

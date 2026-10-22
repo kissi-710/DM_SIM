@@ -22,7 +22,6 @@ export const CARD_DB: CardDB = Object.fromEntries([...CARD_LIST, ...blankDefsFor
 export interface DeckPreset {
   id: string;
   name: string;
-  short: string;
   /** [カードID, 枚数] */
   list: [string, number][];
 }
@@ -30,8 +29,7 @@ export interface DeckPreset {
 export const DECK_PRESETS: DeckPreset[] = [
   {
     id: 'maruru',
-    name: '究極のヨビニオン!水闇自然マルルデッキ',
-    short: 'マルル',
+    name: '究極のヨビニオン！水闇自然マルルデッキ',
     list: [
       ['dmrp01-093', 4], // フェアリー・ライフ
       ['dm23ex2-107', 4], // フェアリー・Re:ライフ
@@ -54,7 +52,6 @@ export const DECK_PRESETS: DeckPreset[] = [
   {
     id: 'interstellar-maruru',
     name: 'インターステラ型マルル',
-    short: 'インターステラ',
     list: [
       ['dm23ex2-107', 4], // フェアリー・Re:ライフ
       ['dmrp01-093', 3], // フェアリー・ライフ
@@ -76,8 +73,7 @@ export const DECK_PRESETS: DeckPreset[] = [
   },
   {
     id: 'zardy',
-    name: '五文明がミラクルする5cザーディデッキ',
-    short: '5cザーディ',
+    name: '五文明がミラクルする５ｃザーディデッキ',
     list: [
       ['dmbd01-015', 4], // フェアリー・ミラクル
       ['dm23bd1-014', 4], // 天災 デドダム
@@ -97,7 +93,6 @@ export const DECK_PRESETS: DeckPreset[] = [
   {
     id: 'lost-maruru',
     name: 'ロスト型水闇自然マルル',
-    short: 'ロストマルル',
     list: [
       ['dm23ex2-107', 4], // フェアリー・Re:ライフ
       ['dmrp01-093', 4], // フェアリー・ライフ
@@ -122,8 +117,7 @@ export const DECK_PRESETS: DeckPreset[] = [
 export const SD1_DECKS: DeckPreset[] = [
   {
     id: 'sd1-c',
-    name: 'シールドゼロで鬼札逆転4c邪王門デッキ',
-    short: '4c邪王門',
+    name: 'シールドゼロで鬼札逆転４ｃ邪王門デッキ',
     list: [
       ['dm26sd1-C01', 2], // ♪立ち上がる 悪魔に天使 堕ちるかな
       ['dm26sd1-C02', 4], // 忍蛇の聖沌 c0br4
@@ -144,7 +138,6 @@ export const SD1_DECKS: DeckPreset[] = [
   {
     id: 'sd1-d',
     name: '目指せ全開ガ・リュミーズ水魔導具デッキ',
-    short: '青魔導具',
     list: [
       ['dm26sd1-D01', 3], // 月下卍壊 ガ・リュミーズ 卍
       ['dm26sd1-D02', 4], // 卍 新世壊 卍
@@ -164,7 +157,6 @@ export const SD1_DECKS: DeckPreset[] = [
   {
     id: 'sd1-e',
     name: '呪文連打でコンボを目指せゴスペルデッキ',
-    short: 'ラッカゴスペル',
     list: [
       ['dm26sd1-E01', 4], // オリオティス・ジャッジ
       ['dm26sd1-E02', 3], // ファイナル・ストップ
@@ -184,8 +176,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-f',
-    name: '相手の隙に一撃必殺!水闇手札破壊デッキ',
-    short: '青黒ハンデス',
+    name: '相手の隙に一撃必殺！水闇手札破壊デッキ',
     list: [
       ['dm26sd1-F01', 2], // Vチャロン
       ['dm26sd1-F02', 4], // 異端流し オニカマス
@@ -203,8 +194,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-g',
-    name: '輝けボルシャック!火光アーマードデッキ',
-    short: '赤白アーマード',
+    name: '輝けボルシャック！火光アーマードデッキ',
     list: [
       ['dm26sd1-G01', 4], // 光鎧龍ホーリーグレイス
       ['dm26sd1-G02', 2], // 超竜ヴァルキリアス
@@ -222,7 +212,6 @@ export const SD1_DECKS: DeckPreset[] = [
   {
     id: 'sd1-h',
     name: 'ドラゴン娘の生徒会大集結ドラゴンデッキ',
-    short: '5cドラゴン娘',
     list: [
       ['dm26sd1-H01', 1], // 煌龍 サッヴァーク
       ['dm26sd1-H02', 3], // サーヴァ・K・ゼオス
@@ -244,8 +233,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-i',
-    name: '芸術の3ターンキル!火水マジックデッキ',
-    short: '赤青マジック',
+    name: '芸術の３ターンキル！火水マジックデッキ',
     list: [
       ['dm26sd1-I01', 4], // AQvibrato
       ['dm26sd1-I02', 4], // アシスター・Mogi林檎
@@ -264,8 +252,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-j',
-    name: 'めくりに命をかけろ!8軸ガチロボデッキ',
-    short: '8軸ガチロボ',
+    name: 'めくりに命をかけろ！８軸ガチロボデッキ',
     list: [
       ['dm26sd1-J01', 4], // ガチャンコ ガチロボ
       ['dm26sd1-J02', 4], // カブトリアル・クーガ / ミステリー・ディザスター
@@ -284,8 +271,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-k',
-    name: 'エンドレスガチンコバトル!ハチ公デッキ',
-    short: '赤緑ハチ公',
+    name: 'エンドレスガチンコバトル！ハチ公デッキ',
     list: [
       ['dm26sd1-K01', 9], // 特攻の忠剣ハチ公
       ['dm26sd1-K02', 1], // 熱き侵略 レッドゾーンZ
@@ -301,8 +287,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-l',
-    name: '勝太のハンター&カイザー「刃鬼」デッキ',
-    short: 'シータ刃鬼',
+    name: '勝太のハンター＆カイザー「刃鬼」デッキ',
     list: [
       ['dm26sd1-L01', 2], // 「合体」の頂 アクア・TITAAANS / 「必殺!ジェット・カスケード・アタック!!」
       ['dm26sd1-H06', 4], // 勝利宣言 鬼丸「覇」
@@ -321,7 +306,6 @@ export const SD1_DECKS: DeckPreset[] = [
   {
     id: 'sd1-m',
     name: 'ウィンの革命チェンジ闇自然アビスデッキ',
-    short: '黒緑アビス',
     list: [
       ['dm26sd1-M01', 1], // 邪幽 ジャガイスト
       ['dm26sd1-M02', 1], // 邪闘 シス
@@ -341,8 +325,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-n',
-    name: 'ジョーの一撃必殺ジョーカーズデッキ',
-    short: '旅路G3',
+    name: 'ジョーの一撃必殺旅路ジョーカーズデッキ',
     list: [
       ['dm26sd1-N01', 4], // ジョギラゴン&ジョニー 〜Jの旅路〜
       ['dm26sd1-N02', 4], // めっちゃ! デンヂャラスG3 / ケッシング・ゼロ
@@ -361,7 +344,6 @@ export const SD1_DECKS: DeckPreset[] = [
   {
     id: 'sd1-o',
     name: 'タマシード戦略の火光水ライオネルデッキ',
-    short: 'ライオネル.Star',
     list: [
       ['dm26sd1-O01', 4], // 「正義星帝」 <ライオネル.Star>
       ['dm26sd1-O02', 3], // MAX・ザ・ジョニー
@@ -378,8 +360,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-p',
-    name: 'コンボで連鎖!自然単グランセクトデッキ',
-    short: '緑単ゲイル',
+    name: 'コンボで連鎖！自然単グランセクトデッキ',
     list: [
       ['dm26sd1-P01', 2], // 水上第九院 シャコガイル
       ['dm26sd1-P02', 4], // 天風のゲイル・ヴェスパー
@@ -397,8 +378,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-q',
-    name: '地上戦は最強!水自然ジャイアントデッキ',
-    short: '青緑ジャイアント',
+    name: '地上戦は最強！水自然ジャイアントデッキ',
     list: [
       ['dm26sd1-Q01', 4], // アシステスト・シネラリア
       ['dm26sd1-I05', 4], // 同期の妖精 / ド浮きの動悸
@@ -418,8 +398,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-r',
-    name: '勝舞の魂クロスせよ!火光サムライデッキ',
-    short: '赤白サムライ',
+    name: '勝舞の魂クロスせよ！火光サムライデッキ',
     list: [
       ['dm26sd1-R01', 4], // 悪魔世界の閃光
       ['dm26sd1-R02', 4], // 戦術の天才 マロク
@@ -437,8 +416,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-s',
-    name: '相手を翻弄せよ!光闇メカ&シノビデッキ',
-    short: '白黒メカ',
+    name: '相手を翻弄せよ！光闇メカ＆シノビデッキ',
     list: [
       ['dm26sd1-S01', 2], // 聖カオスマントラ
       ['dm26sd1-S02', 4], // ヴェネラック-F5
@@ -458,8 +436,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-t',
-    name: '元祖守りの王道!光自然巨大ゲートデッキ',
-    short: '巨大天門',
+    name: '元祖守りの王道！光自然巨大ゲートデッキ',
     list: [
       ['dm26sd1-T01', 4], // 闘門の精霊ウェルキウス
       ['dm26sd1-T02', 4], // 光開の精霊サイフォゲート
@@ -478,8 +455,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-u',
-    name: 'ツインパクトの極み!光水自然清永デッキ',
-    short: 'シータ清永',
+    name: 'ツインパクトの極み！光水自然清永デッキ',
     list: [
       ['dm26sd1-I05', 4], // 同期の妖精 / ド浮きの動悸
       ['dm23rp1-070', 2], // 配球の超人 / 記録的剛球
@@ -497,8 +473,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-v',
-    name: '手札を無くせ!火自然ギャラクシーデッキ',
-    short: '赤緑逆悪襲',
+    name: '手札を無くせ！火自然ギャラクシーデッキ',
     list: [
       ['dm26sd1-V01', 4], // “逆悪襲”ブランド
       ['dm26sd1-V02', 1], // “轟轟轟”ブランド
@@ -516,8 +491,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-w',
-    name: '敵は周回遅れ!火水闇レッドゾーンデッキ',
-    short: 'クローシスバイク',
+    name: '敵は周回遅れ！火水闇レッドゾーンデッキ',
     list: [
       ['dm26sd1-F02', 4], // 異端流し オニカマス
       ['dm26sd1-W01', 4], // 終末の時計 ザ・クロック
@@ -535,8 +509,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-x',
-    name: '墓地を増やせ!火闇自然墓地ソースデッキ',
-    short: 'デアリDOOM',
+    name: '墓地を増やせ！火闇自然墓地ソースデッキ',
     list: [
       ['dm26sd1-X01', 1], // 超神星DOOM・ドラゲリオン
       ['dm26sd1-X02', 2], // 大魔王 ウラギリダムス
@@ -555,8 +528,7 @@ export const SD1_DECKS: DeckPreset[] = [
   },
   {
     id: 'sd1-y',
-    name: '進化王!闇自然ケンジ・キングダムデッキ',
-    short: '黒緑ケンジ',
+    name: '進化王！闇自然ケンジ・キングダムデッキ',
     list: [
       ['dm23bd3-002', 4], // CRYMAX ジャオウガ
       ['dm26sd1-Y01', 4], // 星空に浮かぶニンギョ

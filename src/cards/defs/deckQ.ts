@@ -1,4 +1,4 @@
-// デッキQ「地上戦は最強!水自然ジャイアントデッキ」(docs/decks-25oudou.md)の新規カード。
+// デッキQ「地上戦は最強！水自然ジャイアントデッキ」(docs/decks-25oudou.md)の新規カード。
 import type { CardDef } from '../../engine/types';
 import {
   act, and, blocker, bounce, card, cip, costGte, costLte, creature, draw, evolution, gStrike, hyperEnergy, ifc, isCreature, justDiver, machFighter, maybe,

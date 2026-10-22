@@ -1,4 +1,4 @@
-// デッキR「勝舞の魂クロスせよ!火光サムライデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。クロスギアのジェネレート・クロス・サムライ・メクレイドなど。
+// デッキR「勝舞の魂クロスせよ！火光サムライデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。クロスギアのジェネレート・クロス・サムライ・メクレイドなど。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana, reg } from '../scenario';
 import { CARD_DB, deckCards } from '../../src/cards';

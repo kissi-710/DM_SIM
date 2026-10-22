@@ -1,4 +1,4 @@
-// デッキW「敵は周回遅れ!火水闇レッドゾーンデッキ」(docs/decks-25oudou.md)の新規カード。侵略・超次元ゾーン・パンドラ・シフト・封印など。
+// デッキW「敵は周回遅れ！火水闇レッドゾーンデッキ」(docs/decks-25oudou.md)の新規カード。侵略・超次元ゾーン・パンドラ・シフト・封印など。
 import type { CardDef } from '../../engine/types';
 import {
   act, and, anyCiv, card, cip, civ, creature, destroy, draw, evolution, gStrike, invasion, isCreature, justDiver, maybe, nameHas, oppCreature, race, select,

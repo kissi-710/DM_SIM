@@ -1,4 +1,4 @@
-// デッキS「相手を翻弄せよ!光闇メカ&シノビデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。ニンジャ・チェンジ・ハイパー化・離れない・S・トリガーを与えるなど。
+// デッキS「相手を翻弄せよ！光闇メカ＆シノビデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。ニンジャ・チェンジ・ハイパー化・離れない・S・トリガーを与えるなど。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana, reg } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';

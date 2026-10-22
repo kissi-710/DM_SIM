@@ -1,4 +1,4 @@
-// デッキR「勝舞の魂クロスせよ!火光サムライデッキ」(docs/decks-25oudou.md)の新規カード。クロスギア・サムライ・メクレイドなど。
+// デッキR「勝舞の魂クロスせよ！火光サムライデッキ」(docs/decks-25oudou.md)の新規カード。クロスギア・サムライ・メクレイドなど。
 import type { Ability, Cond, StepDef } from '../../engine/ast';
 import type { CardDef, Face } from '../../engine/types';
 import {

@@ -1,4 +1,4 @@
-// デッキD「青魔導具」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
+// デッキD「目指せ全開ガ・リュミーズ水魔導具デッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 

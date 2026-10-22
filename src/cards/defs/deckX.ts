@@ -1,4 +1,4 @@
-// デッキX「墓地を増やせ!火闇自然墓地ソースデッキ」(docs/decks-25oudou.md)の新規カード。超無限墓地進化・フシギバース・墓地の枚数でコストを減らすなど。
+// デッキX「墓地を増やせ！火闇自然墓地ソースデッキ」(docs/decks-25oudou.md)の新規カード。超無限墓地進化・フシギバース・墓地の枚数でコストを減らすなど。
 import type { Ability, Cond, Expr } from '../../engine/ast';
 import type { CardDef } from '../../engine/types';
 import {

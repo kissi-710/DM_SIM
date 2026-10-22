@@ -19,7 +19,7 @@ const seed = Number(seedArg);
 const rand = mulberry(seed * 7919);
 
 const CIV_JA: Record<string, string> = { light: '光', water: '水', darkness: '闇', fire: '火', nature: '自然' };
-const DECK_JA: Record<string, string> = Object.fromEntries(DECK_PRESETS.map((d) => [d.id, d.short]));
+const DECK_JA: Record<string, string> = Object.fromEntries(DECK_PRESETS.map((d) => [d.id, d.name]));
 
 interface CardView {
   name: string;

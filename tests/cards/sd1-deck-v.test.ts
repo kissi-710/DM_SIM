@@ -1,4 +1,4 @@
-// デッキV「手札を無くせ!火自然ギャラクシーデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。G・G・G・G・ゼロ・飛行・クリーチャーをマナとして使うなど。
+// デッキV「手札を無くせ！火自然ギャラクシーデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。G・G・G・G・ゼロ・飛行・クリーチャーをマナとして使うなど。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';

@@ -1,4 +1,4 @@
-// デッキC「4c邪王門」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
+// デッキC「シールドゼロで鬼札逆転４ｃ邪王門デッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 

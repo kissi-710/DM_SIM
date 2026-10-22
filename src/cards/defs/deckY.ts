@@ -1,4 +1,4 @@
-// デッキY「進化王!闇自然ケンジ・キングダムデッキ」(docs/decks-25oudou.md)の新規カード。究極進化・スター進化・墓地から召喚する進化クリーチャーなど。
+// デッキY「進化王！闇自然ケンジ・キングダムデッキ」(docs/decks-25oudou.md)の新規カード。究極進化・スター進化・墓地から召喚する進化クリーチャーなど。
 import type { Cond, StepDef } from '../../engine/ast';
 import type { CardDef, Face } from '../../engine/types';
 import {

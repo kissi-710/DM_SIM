@@ -1,4 +1,4 @@
-// デッキN「ジョーの一撃必殺ジョーカーズデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。G・ブレイカー・J・O・E・キリフダッシュなど。
+// デッキN「ジョーの一撃必殺旅路ジョーカーズデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。G・ブレイカー・J・O・E・キリフダッシュなど。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana, reg } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';

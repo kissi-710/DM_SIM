@@ -1,4 +1,4 @@
-// デッキF「相手の隙に一撃必殺!水闇手札破壊デッキ」(docs/decks-25oudou.md)の新規カード。
+// デッキF「相手の隙に一撃必殺！水闇手札破壊デッキ」(docs/decks-25oudou.md)の新規カード。
 import type { CardDef } from '../../engine/types';
 import {
   act, and, blocker, bounce, breaker, card, cip, costLte, creature, destroy, draw, hyperMode, hyperize, justDiver, maybe, notEvolution, race,

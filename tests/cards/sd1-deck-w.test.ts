@@ -1,4 +1,4 @@
-// デッキW「敵は周回遅れ!火水闇レッドゾーンデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。侵略・超次元ゾーン・パンドラ・シフト・封印・ターンの残りをとばすなど。
+// デッキW「敵は周回遅れ！火水闇レッドゾーンデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。侵略・超次元ゾーン・パンドラ・シフト・封印・ターンの残りをとばすなど。
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';
