@@ -118,3 +118,48 @@ export function estimateRate(a: RateAcc): { rate: number; ci: [number, number] }
   const s = a.sF + a.sS;
   return { rate: s / n, ci: wilson(s, n) };
 }
+
+/** 試合のターン数(往復。対戦画面の「N ターン目」と同じ数え方)ごとの試合数。範囲を分けた実行は、足し合わせて統合できる */
+export type TurnHist = Record<number, number>;
+
+export interface TurnSummary {
+  n: number;
+  mean: number;
+  median: number;
+  min: number;
+  max: number;
+  /** 標準偏差(標本。n が 1 以下なら 0) */
+  sd: number;
+}
+
+/** エンジンの手番の通し番号(先攻 1・後攻 2・先攻 3…)を、往復のターン数(1・1・2…)にする */
+export const roundOf = (engineTurn: number): number => Math.ceil(engineTurn / 2);
+
+/** ターン数の分布から、平均・中央値・最小・最大・標準偏差を出す(試合が 0 なら null) */
+export function turnSummary(hist: TurnHist): TurnSummary | null {
+  const keys = Object.keys(hist)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const n = keys.reduce((t, k) => t + hist[k], 0);
+  if (n === 0) return null;
+  const mean = keys.reduce((t, k) => t + k * hist[k], 0) / n;
+  const ss = keys.reduce((t, k) => t + hist[k] * (k - mean) ** 2, 0);
+  /** 小さい方から数えて idx 番目(0 始まり)の値 */
+  const nth = (idx: number): number => {
+    let c = 0;
+    for (const k of keys) {
+      c += hist[k];
+      if (idx < c) return k;
+    }
+    return keys[keys.length - 1];
+  };
+  const median = n % 2 === 1 ? nth((n - 1) / 2) : (nth(n / 2 - 1) + nth(n / 2)) / 2;
+  return { n, mean, median, min: keys[0], max: keys[keys.length - 1], sd: n > 1 ? Math.sqrt(ss / (n - 1)) : 0 };
+}
+
+/** 分布を足し合わせる */
+export function addTurnHist(a: TurnHist, b: TurnHist): TurnHist {
+  const out: TurnHist = { ...a };
+  for (const [k, v] of Object.entries(b)) out[Number(k)] = (out[Number(k)] ?? 0) + v;
+  return out;
+}

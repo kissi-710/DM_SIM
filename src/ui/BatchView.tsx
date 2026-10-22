@@ -6,6 +6,7 @@ import { CARD_DB } from '../cards';
 import { INFO_PRESET_LABEL, type InfoPreset } from '../engine/view';
 import { pct } from '../sim/export';
 import type { FirstMode, MatchStats } from '../sim/batch';
+import { turnSummary } from '../sim/stats';
 import type { CardStrength } from '../sim/strength';
 import { allDecks, findDeck } from './decks';
 import { DeckSelect } from './DeckSelect';
@@ -19,6 +20,22 @@ function resolveSeed(raw: string): number {
   const t = raw.trim();
   if (t === '') return Math.floor(Math.random() * 0x7fffffff);
   return Math.floor(Number(t));
+}
+
+/** ターン数(往復。対戦画面の「N ターン目」と同じ数え方)の平均・中央値・最小〜最大・標準偏差 */
+function TurnCells({ s }: { s: MatchStats }) {
+  const t = turnSummary(s.turnHist ?? {});
+  if (!t) return <td colSpan={4}>-</td>;
+  return (
+    <>
+      <td>{t.mean.toFixed(1)}</td>
+      <td>{t.median}</td>
+      <td>
+        {t.min}〜{t.max}
+      </td>
+      <td>{t.sd.toFixed(2)}</td>
+    </>
+  );
 }
 
 function StatsRow({ label, s }: { label: string; s: MatchStats }) {
@@ -40,7 +57,7 @@ function StatsRow({ label, s }: { label: string; s: MatchStats }) {
         {s.winRateAFirst !== null ? pct(s.winRateAFirst) : '-'} / {s.winRateASecond !== null ? pct(s.winRateASecond) : '-'}
       </td>
       <td>{pct(s.firstPlayerWinRate)}</td>
-      <td>{s.avgTurns.toFixed(1)}</td>
+      <TurnCells s={s} />
     </tr>
   );
 }
@@ -263,7 +280,10 @@ export function BatchView() {
                   <th>Aの勝率(95%信頼区間)</th>
                   <th>Aが先攻 / 後攻の時</th>
                   <th>先攻の勝率</th>
-                  <th>平均ターン</th>
+                  <th title="1 試合のターン数。対戦画面の「N ターン目」と同じ数え方(先攻と後攻が 1 回ずつで 1 ターン)">ターン平均(往復)</th>
+                  <th>中央値</th>
+                  <th>最小〜最大</th>
+                  <th>標準偏差</th>
                 </tr>
               </thead>
               <tbody>

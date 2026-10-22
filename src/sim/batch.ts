@@ -5,7 +5,7 @@ import type { Registry } from '../engine/registry';
 import type { CardDB, GameConfig, PlayerId } from '../engine/types';
 import { deriveSeed } from '../engine/prng';
 import { mulberry, playGameSync } from './playGame';
-import { emptyAcc, estimateRate, type RateAcc } from './stats';
+import { emptyAcc, estimateRate, roundOf, turnSummary, type RateAcc, type TurnHist } from './stats';
 
 /** duplicate: 同じシードの対局を、A の席を入れ替えて2回行う(同じデッキ同士なら配られる手札が同一になり、運の差が打ち消される)。games は偶数 */
 export type FirstMode = 'fixed' | 'alternate' | 'random' | 'duplicate';
@@ -38,7 +38,10 @@ export interface MatchStats {
   ci95A: [number, number];
   /** 推定の十分統計量(範囲を分けた実行の統合に使う) */
   acc: RateAcc;
+  /** 1 試合のターン数(往復。対戦画面の「N ターン目」と同じ)の平均 */
   avgTurns: number;
+  /** ターン数(往復)ごとの試合数。中央値・最小・最大・標準偏差は turnSummary(turnHist) で出す */
+  turnHist: TurnHist;
   /** 先攻側の勝率 */
   firstPlayerWinRate: number;
   /** Aが先攻のとき / 後攻のときのAの勝率 */
@@ -77,7 +80,7 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
   let winsA = 0;
   let winsB = 0;
   let draws = 0;
-  let turns = 0;
+  const turnHist: TurnHist = {};
   let firstWins = 0;
   let aFirstGames = 0;
   let aFirstWins = 0;
@@ -109,7 +112,8 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
       first: 0,
       cfg: o.cfg,
     });
-    turns += r.turns;
+    const rounds = roundOf(r.turns);
+    turnHist[rounds] = (turnHist[rounds] ?? 0) + 1;
     const rs = r.reason ?? '不明';
     reasons[rs] = (reasons[rs] ?? 0) + 1;
     const aFirst = aSeat === 0;
@@ -155,7 +159,8 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
     winRateA: est.rate,
     ci95A: est.ci,
     acc,
-    avgTurns: turns / n,
+    avgTurns: turnSummary(turnHist)?.mean ?? 0,
+    turnHist,
     firstPlayerWinRate: firstWins / n,
     winRateAFirst: aFirstGames ? aFirstWins / aFirstGames : null,
     winRateASecond: aSecondGames ? aSecondWins / aSecondGames : null,
@@ -167,13 +172,21 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
   };
 }
 
+/** ターン数(往復)の分布の 1 行: 平均・中央値・最小〜最大・標準偏差 */
+export function formatTurns(s: Pick<MatchStats, 'turnHist'>): string {
+  const t = turnSummary(s.turnHist);
+  if (!t) return '  ターン数(往復): -';
+  return `  ターン数(往復) 平均 ${t.mean.toFixed(1)} / 中央値 ${t.median} / 最小〜最大 ${t.min}〜${t.max} / 標準偏差 ${t.sd.toFixed(2)}`;
+}
+
 export function formatStats(label: string, s: MatchStats): string {
   const pct = (x: number) => (x * 100).toFixed(1) + '%';
   const lines = [
     `■ ${label}`,
     `  試合数 ${s.games} / A勝ち ${s.winsA} / B勝ち ${s.winsB} / 引き分け ${s.draws}`,
     `  Aの勝率 ${pct(s.winRateA)}(95%信頼区間 ${pct(s.ci95A[0])} 〜 ${pct(s.ci95A[1])})`,
-    `  先攻の勝率 ${pct(s.firstPlayerWinRate)} / 平均ターン ${s.avgTurns.toFixed(1)} / ${s.ms}ms`,
+    `  先攻の勝率 ${pct(s.firstPlayerWinRate)} / ${s.ms}ms`,
+    formatTurns(s),
   ];
   if (s.winRateAFirst !== null) lines.push(`  Aが先攻の時 ${pct(s.winRateAFirst)}(${s.gamesAFirst}試合)`);
   if (s.winRateASecond !== null) lines.push(`  Aが後攻の時 ${pct(s.winRateASecond)}(${s.gamesASecond}試合)`);
