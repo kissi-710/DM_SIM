@@ -341,7 +341,7 @@ pub struct PlayModel {
 impl PlayModel {
     pub fn from_json(reg: &Registry, j: &Json) -> Option<PlayModel> {
         let w: Vec<f64> = j.as_arr()?.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect();
-        let mut ids: Vec<(usize, &String)> = reg.ids.iter().enumerate().filter(|(_, id)| id.as_str() != "?" && id.as_str() != "dummy" && !id.starts_with("blank")).collect();
+        let mut ids: Vec<(usize, &String)> = reg.ids.iter().enumerate().filter(|(_, id)| id.as_str() != "?" && id.as_str() != "dummy" && !id.starts_with("blank") && !id.starts_with("dm26sd1-")).collect();
         ids.sort_by(|a, b| a.1.cmp(b.1));
         if w.len() != PL_B_ID + 3 * ids.len() {
             return None;
@@ -445,7 +445,7 @@ fn keep_score(e: Env, uid: i32, me: PlayerId) -> f64 {
     }
     let mut have: Vec<Civ> = Vec::new();
     for &m in &s.players[me as usize].mana {
-        for cv in chars_lite(e, m, -1).civs {
+        for cv in crate::derive::mana_civs(e, m) {
             if !have.contains(cv) {
                 have.push(*cv);
             }
@@ -456,7 +456,7 @@ fn keep_score(e: Env, uid: i32, me: PlayerId) -> f64 {
         if h == uid {
             continue;
         }
-        for cv in chars_lite(e, h, -1).civs {
+        for cv in crate::derive::mana_civs(e, h) {
             if !have.contains(cv) && !need.contains(cv) {
                 need.push(*cv);
             }
@@ -566,6 +566,18 @@ pub fn choose_turn_action(e: Env, legal: &[Action], me: PlayerId) -> usize {
         }
     }
     if let Some(i) = best_play {
+        return i;
+    }
+    // クロスギア(まだどのクリーチャーにもクロスしていないもの)は、クロスする。ハイパー化できるなら、攻撃の前にハイパー化する
+    let mine = &s.players[me as usize].battle;
+    let cross = legal.iter().position(|a| {
+        matches!(a, Action::Cross { gear, target }
+            if mine.iter().any(|x| x.pid == *gear && x.crossed_on.is_none()) && !mine.iter().any(|x| x.crossed_on == Some(*target)))
+    });
+    if let Some(i) = cross {
+        return i;
+    }
+    if let Some(i) = legal.iter().position(|a| matches!(a, Action::Hyperize { .. })) {
         return i;
     }
     // 攻撃の評価
@@ -776,8 +788,13 @@ fn fast_turn_action(e: Env, me: PlayerId) -> Action {
             return plays.swap_remove(best);
         }
     }
-    // 使えるカードが無い: 攻撃(メインでは END_MAIN が先に並ぶが、選択には影響しない)
-    let mut legal = attack_actions(e, me);
+    // 使えるカードが無い: クロス・ハイパー化(メインだけ)と攻撃(メインでは END_MAIN が先に並ぶが、選択には影響しない)
+    let mut legal: Vec<Action> = Vec::new();
+    if s.step == Step::Main {
+        legal.extend(crate::legal::hyperize_actions(e, me));
+        legal.extend(crate::legal::cross_actions(e, me));
+    }
+    legal.extend(attack_actions(e, me));
     legal.push(Action::EndTurn);
     let i = choose_turn_action(e, &legal, me);
     legal.swap_remove(i)

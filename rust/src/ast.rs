@@ -20,6 +20,17 @@ pub enum Expr {
     Sub(Box<Expr>, Box<Expr>),
     Min(Vec<Expr>),
     Max(Vec<Expr>),
+    /// 誘発したイベントの、配列の項目(cards など)の数
+    EvLen(Sym),
+    /// 変数のカードの枚数
+    Len(String),
+    /// 変数のカードがいるバトルゾーンの山の、下に重なっているカードの枚数
+    Under(String),
+    /// セレクタに合うカードの、コストの種類の数
+    Distinct(Rc<Selector>),
+    Mul(Vec<Expr>),
+    /// 変数のカードの、いまのパワー
+    PowerOf(String),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -35,6 +46,12 @@ pub enum SelType {
     Creature,
     Spell,
     Card,
+    /// 呪文以外のバトルゾーンのカード
+    Element,
+    Tamaseed,
+    Field,
+    Crossgear,
+    Castle,
 }
 
 #[derive(Clone, Debug)]
@@ -91,6 +108,23 @@ pub struct Pattern {
     pub controller: Option<Rel>,
     pub winner: Option<Rel>,
     pub attacker_cond: Option<Box<Cond>>,
+    /// beforeBreak など: 攻撃しているのが、この能力の発生源自身
+    pub self_attacker: bool,
+    pub not_via: Option<Sym>,
+    pub target_kind: Option<Sym>,
+    /// 攻撃先が、この能力の発生源自身(クリーチャー)
+    pub target_self: bool,
+    pub broke: Option<bool>,
+    /// クロスギアをクロスしているクリーチャーが攻撃する時
+    pub host_attacker: bool,
+    /// イベントのカード(出た・唱えた・離れたカードなど)が満たす条件
+    pub cond: Option<Box<Cond>>,
+    /// 置換の対象: そのターンの持ち主(own / opponent)
+    pub turn: Option<TurnSel>,
+    pub not_from: Option<Sym>,
+    pub not_to: Option<Sym>,
+    pub by_opponent: bool,
+    pub reason: Option<Sym>,
 }
 
 #[derive(Clone, Debug)]
@@ -116,14 +150,14 @@ pub enum Cond {
     Not(Box<Cond>),
     True,
     TurnOf(Rel),
-    Shields(Range3),
+    Shields { q: Range3, opponent: bool },
     Cmp { l: Expr, op: CmpOp, r: Expr },
     Count { sel: Rc<Selector>, q: Range3 },
     FiveCivs(Rc<Selector>),
     CivsPresent { sel: Rc<Selector>, civs: Vec<Civ> },
     NonEmpty(String),
     NotInBattle,
-    Logged { pattern: Pattern, min: i32 },
+    Logged { pattern: Pattern, min: i32, since: Option<Sym> },
     ZoneIs(Zone),
     /// $it が、能力の発生源のEXライフのシールドか
     ExShield,
@@ -131,7 +165,7 @@ pub enum Cond {
     CivsAll(Vec<Civ>),
     Multicolor(bool),
     Cost(CostQ),
-    Power { lte: Option<i32>, gte: Option<i32> },
+    Power(PowerQ),
     /// $it のパワーが、能力の発生源のパワーより小さい
     PowerLtSelf,
     Type(SelType),
@@ -139,6 +173,38 @@ pub enum Cond {
     Race(String),
     Tapped(bool),
     SameCivAs(String),
+    /// 変数のカード(いまのゾーンの特性で見る)のどれかが where を満たす
+    Some { var: String, where_: Box<Cond> },
+    IsSelf,
+    StUsed,
+    FaceUp,
+    Hyper,
+    Crossed(bool),
+    HostIs(Box<Cond>),
+    HasGear,
+    SelfTapped(bool),
+    OwnedBy(Rel),
+    BaseFor(String),
+    Ultimate(bool),
+    Twin(bool),
+    DistinctCosts(String),
+    HasKw(Sym),
+    AltUsed(String),
+    NameHas(String),
+    HasCip,
+    EventIs(Vec<(Sym, Val)>),
+    AllSame { var: String, where_: Option<Box<Cond>> },
+    OnBase(Box<Cond>),
+    PowerRank { max: bool, of: Rc<Selector> },
+    Unused(String),
+}
+
+#[derive(Clone, Debug)]
+pub struct PowerQ {
+    pub lte: Option<Expr>,
+    pub gte: Option<Expr>,
+    pub lt: Option<Expr>,
+    pub gt: Option<Expr>,
 }
 
 #[derive(Clone, Debug)]
@@ -170,12 +236,14 @@ pub enum UntilKind {
     Source,
     /// 次の、相手のターンの終わりまで
     NextOpponentTurnEnd,
+    /// 次の、相手のターンの終わりまで(いまが自分のターンなら次のターン、相手のターン中ならその次の相手のターン)
+    OppTurnEnd,
 }
 
 #[derive(Clone, Debug)]
 pub enum Act {
     Draw { n: Expr, who: Who },
-    Move { sel: SelOrVar, to: Zone, cause: Sym, pos: Option<bool>, tapped: Option<bool>, as_: Option<Sym> },
+    Move { sel: SelOrVar, to: Zone, cause: Sym, pos: Option<bool>, tapped: Option<bool>, as_: Option<Sym>, no_replace: bool },
     MoveTop { who: Who, n: Expr, to: Zone, cause: Sym, tapped: Option<bool>, as_: Option<Sym> },
     LookTop { who: Who, n: Expr, as_: Sym },
     RevealUntil { who: Who, as_: Sym, rest: Sym, cond: Cond },
@@ -183,12 +251,13 @@ pub enum Act {
     ShuffleBottom { of: String },
     Shuffle { who: Who },
     Assign { items: String, slots: Vec<SlotDef>, as_: Option<Sym> },
-    AddShield { n: i32 },
+    AddShield { n: i32, who: Who, as_: Option<Sym> },
     Tap { sel: SelOrVar },
     Untap { sel: SelOrVar },
-    AddEffect { mods: Vec<EffectMod>, sel: SelOrVar, until: UntilKind },
-    Put { sel: SelOrVar, as_: Option<Sym> },
-    Summon { sel: SelOrVar, as_: Option<Sym> },
+    AddEffect { mods: Vec<ModDef>, sel: SelOrVar, until: UntilKind },
+    /// onto: 進化クリーチャーを出す時の、進化元の変数。no_triggers: 出ることによって起こる効果(「出た時」の能力)を無視する
+    Put { sel: SelOrVar, as_: Option<Sym>, onto: Option<String>, no_triggers: bool },
+    Summon { sel: SelOrVar, as_: Option<Sym>, onto: Option<String>, no_triggers: bool },
     CastFree { sel: SelOrVar, after: Option<Sym> },
     SkipRestOfTurn,
     CopyTrigger,
@@ -199,14 +268,59 @@ pub enum Act {
     Log { ty: Sym },
     /// 効果によるバトル(a と b は変数の参照)
     Battle { a: String, b: String },
-    SetVar { as_: Sym, value: Val },
+    /// 値が式(オブジェクト)なら、その場で評価した数を入れる
+    SetVar { as_: Sym, value: Val, expr: Option<Expr> },
+    MoveBottom { who: Who, n: Expr, to: Zone, cause: Sym, tapped: Option<bool>, as_: Option<Sym> },
+    ShuffleIn { sel: SelOrVar },
+    Bottom { of: String, except: Option<String> },
+    Rush { sel: SelOrVar, if_attacked: bool },
+    UseCip { sel: SelOrVar },
+    GraveToBottom { who: Who },
+    Play { sel: SelOrVar, alt: Option<String> },
+    Win,
+    Cross { gear: SelOrVar, to: SelOrVar },
+    NinjaChange { sel: SelOrVar },
+    GrantShieldTrigger { sel: SelOrVar },
+    BreakOpp { n: i32 },
+    AllowSummon { sel: SelOrVar },
+    DestroyTop { sel: SelOrVar },
+    DropUnder { sel: SelOrVar, n: Option<i32>, deck: bool },
+    SummonOnto { sel: SelOrVar, under: String },
+    ExtraTurn,
+    MarkUsed { key: String },
+    PutUnder { sel: SelOrVar, onto: SelOrVar },
+    TapLock { sel: SelOrVar },
+    BreakShields { n: Option<i32> },
+    Judge { as_: Option<Sym> },
+    StackShield { sel: SelOrVar, onto: SelOrVar },
+    CastSide { sel: SelOrVar },
+    Seal { sel: SelOrVar },
+    Stab { sel: SelOrVar, depth: i32 },
 }
 
 #[derive(Clone, Debug)]
 pub enum PlayerMod {
-    CannotCast,
+    CannotCast(Option<Expr>),
     CannotUseCost(Expr),
     CannotSummon(Expr),
+    CannotCastLte(Expr),
+    IgnoreCost(Expr),
+    IgnoreAll,
+    StartShield,
+    Owe { civ: Civ, n: i32 },
+    OncePerTurnActs,
+    NextSummon { delta: Expr, sa: bool },
+    CannotAttackAny,
+    CannotLose,
+    CannotActCost(Expr),
+}
+
+/// addEffect の継続効果(n が式のものは、その場で評価する)
+#[derive(Clone, Debug)]
+pub enum ModDef {
+    Fixed(EffectMod),
+    PowerAdd(Expr),
+    Breaker(Expr),
 }
 
 #[derive(Clone, Debug)]
@@ -219,6 +333,8 @@ pub struct SelectStep {
     pub random: bool,
     /// 変数に、選んだものを追記する(両者が選んでから一括で処理する時に使う)
     pub append: bool,
+    /// 選んだカードの表記コストの合計がこの値以下になるように、好きな数を選ぶ
+    pub sum_lte: Option<Expr>,
 }
 
 #[derive(Clone, Debug)]
@@ -259,6 +375,8 @@ pub enum KeywordName {
     Invasion,
     Slayer,
     RevolutionChange,
+    PoweredBreaker,
+    SBack,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -282,6 +400,10 @@ pub struct TriggerSpec {
     pub subject: Option<Subject>,
     pub turn: Option<TurnSel>,
     pub nth_this_turn: Option<i32>,
+    /// 自身がバトルゾーンを離れた時にも、その出来事で誘発する(離れる直前の状態を見る)
+    pub look_back: bool,
+    /// 同じ種類・持ち主(・理由)のイベントの、そのターンの n 回目以降
+    pub nth_min: Option<i32>,
     pub limit_per_turn: Option<i32>,
     pub if_: Option<Cond>,
     pub if_at_resolve: Option<Cond>,
@@ -289,7 +411,44 @@ pub struct TriggerSpec {
 
 #[derive(Clone, Debug)]
 pub enum StaticMod {
-    CostDelta { delta: i32, cond: Cond },
+    CostDelta { delta: Expr, cond: Cond, once_per_turn: bool, floor: Option<i32> },
+    PowerAttacker { n: i32 },
+    BurnShields,
+    FirstBattleWins,
+    EnterTappedFirst,
+    UntapLimit { n: i32 },
+    AllowPlayFrom { from: Zone, cond: Option<Cond>, once_per_turn: bool, rush: bool },
+    CannotBeChosen,
+    MustBeChosen,
+    ProtectFromSpells,
+    IgnoreCastBan { cond: Cond },
+    GraveCastToBottom,
+    NoDeckOutLoss,
+    EnterTapped,
+    PowerAddExpr { expr: Expr },
+    Stab5sd,
+    DeckLock,
+    NoOppShieldTrigger,
+    AttackMeFirst,
+    OneSpellPerTurn,
+    CannotAttack,
+    CannotAttackPlayer,
+    CannotPlay { cond: Cond },
+    BattleProxy { cond: Cond },
+    Guardman,
+    CannotSummonAll { cond: Cond },
+    ProtectPlayerFromWeaker,
+    NoGStrike,
+    OppManaTapped,
+    Flying,
+    CannotBreak,
+    TapAsMana,
+    SpellShieldTrigger,
+    ManaAllCivs,
+    CannotLeaveOwn { cond: Cond, except_destroy: bool },
+    NoAttackOnEntry,
+    HostPowerAdd { n: i32 },
+    PowerAddOthers { n: i32, cond: Cond },
     CannotAttackPlayerWhenEntered,
     CannotCast { cond: Cond },
     PowerAdd { n: i32 },
@@ -305,19 +464,47 @@ pub enum StaticMod {
 
 #[derive(Clone, Debug)]
 pub enum ReplaceApply {
-    ChangeDest(Zone),
+    /// 出る時の置換: かわりに、出ない(いまのゾーンに残る)
+    Stay,
+    ChangeDest { to: Zone, then: Option<Vec<StepDef>> },
     CancelTrigger,
     SmaxSacrifice,
+    /// かわりに、この手順を行う
+    Steps(Vec<StepDef>),
+}
+
+#[derive(Clone, Debug)]
+pub struct AltCostSpec {
+    pub from: Option<Vec<Zone>>,
+    pub tap_creatures: Option<i32>,
+    pub pay: Option<i32>,
+    pub discard: Option<(i32, Option<Cond>)>,
+    pub reduce: Option<i32>,
+    pub end_bottom_draw: bool,
+    pub to_hyper: bool,
+    pub grave_evolve: bool,
+    pub fushigi: Option<(i32, i32)>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PlayKind {
+    Summon,
+    Cast,
+    Put,
 }
 
 #[derive(Clone, Debug)]
 pub enum Ability {
     Keyword { name: KeywordName, n: Option<i32>, while_: Option<Cond>, steps: Option<Vec<StepDef>>, attacker: Option<Cond>, label: Option<String> },
-    Trigger { spec: TriggerSpec, optional: bool, steps: Vec<StepDef>, label: Option<String> },
+    Trigger { spec: TriggerSpec, optional: bool, steps: Vec<StepDef>, label: Option<String>, gen: bool },
     Spell { steps: Vec<StepDef> },
     Static { m: StaticMod, while_: Option<Cond> },
     Replace { match_: Pattern, apply: ReplaceApply, optional: bool, while_: Option<Cond>, label: Option<String> },
-    Permission { play_cast: bool, from: Zone, after_bottom: bool },
+    Permission { play: PlayKind, from: Zone, after_bottom: bool, rush: bool },
+    SelfCost { delta: Expr, cond: Option<Cond>, floor: Option<i32> },
+    Hyperize { tap_other: i32 },
+    Shinkalize,
+    AltCost { id: String, label: String, when: Option<Cond>, cost: AltCostSpec },
 }
 
 // ───────────────────────── パーサ ─────────────────────────
@@ -377,6 +564,24 @@ pub fn parse_expr(j: &Json) -> R<Expr> {
     if let Some(v) = j.get("max") {
         return Ok(Expr::Max(v.as_arr().ok_or("max")?.iter().map(parse_expr).collect::<R<_>>()?));
     }
+    if let Some(v) = j.get("mul") {
+        return Ok(Expr::Mul(v.as_arr().ok_or("mul")?.iter().map(parse_expr).collect::<R<_>>()?));
+    }
+    if let Some(v) = j.get("evLen") {
+        return Ok(Expr::EvLen(sym(v.as_str().ok_or("evLen")?)));
+    }
+    if let Some(v) = j.get("len") {
+        return Ok(Expr::Len(v.as_str().ok_or("len")?.to_string()));
+    }
+    if let Some(v) = j.get("under") {
+        return Ok(Expr::Under(v.as_str().ok_or("under")?.to_string()));
+    }
+    if let Some(v) = j.get("distinct") {
+        return Ok(Expr::Distinct(Rc::new(parse_selector(v.get("sel").ok_or("distinct.sel")?)?)));
+    }
+    if let Some(v) = j.get("powerOf") {
+        return Ok(Expr::PowerOf(v.as_str().ok_or("powerOf")?.to_string()));
+    }
     err(format!("未知の式: {}", j))
 }
 
@@ -396,10 +601,7 @@ pub fn parse_selector(j: &Json) -> R<Selector> {
     };
     let ty = match s_of(j, "type") {
         None => None,
-        Some("creature") => Some(SelType::Creature),
-        Some("spell") => Some(SelType::Spell),
-        Some("card") => Some(SelType::Card),
-        Some(t) => return err(format!("未知の type: {}", t)),
+        Some(t) => Some(sel_type_of(t)?),
     };
     let where_ = match j.get("where") {
         Some(w) => Some(parse_cond(w)?),
@@ -415,6 +617,29 @@ pub fn parse_selector(j: &Json) -> R<Selector> {
         except: s_of(j, "except").map(|s| s.to_string()),
         of: s_of(j, "of").map(|s| s.to_string()),
     })
+}
+
+fn sel_type_of(t: &str) -> R<SelType> {
+    Ok(match t {
+        "creature" => SelType::Creature,
+        "spell" => SelType::Spell,
+        "card" => SelType::Card,
+        "element" => SelType::Element,
+        "tamaseed" => SelType::Tamaseed,
+        "field" => SelType::Field,
+        "crossgear" => SelType::Crossgear,
+        "castle" => SelType::Castle,
+        t => return err(format!("未知の type: {}", t)),
+    })
+}
+
+fn turn_of(j: Option<&Json>) -> Option<TurnSel> {
+    match j.and_then(|x| x.as_str()) {
+        Some("own") => Some(TurnSel::Own),
+        Some("opponent") => Some(TurnSel::Opponent),
+        Some("any") => Some(TurnSel::Any),
+        _ => None,
+    }
 }
 
 fn range3(j: &Json) -> Range3 {
@@ -453,6 +678,21 @@ pub fn parse_pattern(j: &Json) -> R<Pattern> {
             Some(c) => Some(Box::new(parse_cond(c)?)),
             None => None,
         },
+        self_attacker: boolf("selfAttacker").unwrap_or(false),
+        not_via: symf("notVia"),
+        target_kind: symf("targetKind"),
+        target_self: boolf("targetSelf").unwrap_or(false),
+        broke: boolf("broke"),
+        host_attacker: boolf("hostAttacker").unwrap_or(false),
+        cond: match j.get("cond") {
+            Some(c) => Some(Box::new(parse_cond(c)?)),
+            None => None,
+        },
+        turn: turn_of(j.get("turn")),
+        not_from: symf("notFrom"),
+        not_to: symf("notTo"),
+        by_opponent: boolf("byOpponent").unwrap_or(false),
+        reason: symf("reason"),
     })
 }
 
@@ -474,7 +714,7 @@ pub fn parse_cond(j: &Json) -> R<Cond> {
         return Ok(Cond::TurnOf(if v.as_str() == Some("self") { Rel::Self_ } else { Rel::Opponent }));
     }
     if let Some(v) = o.get("shields") {
-        return Ok(Cond::Shields(range3(v)));
+        return Ok(Cond::Shields { q: range3(v), opponent: s_of(v, "who") == Some("opponent") });
     }
     if let Some(v) = o.get("cmp") {
         let op = match s_of(v, "op") {
@@ -508,7 +748,7 @@ pub fn parse_cond(j: &Json) -> R<Cond> {
     if let Some(v) = o.get("logged") {
         let pattern = parse_pattern(v.get("pattern").ok_or("logged.pattern")?)?;
         let min = v.get("min").and_then(|x| x.as_i64()).unwrap_or(1) as i32;
-        return Ok(Cond::Logged { pattern, min });
+        return Ok(Cond::Logged { pattern, min, since: s_of(v, "since").map(sym) });
     }
     if o.get("exShield").is_some() {
         return Ok(Cond::ExShield);
@@ -538,13 +778,97 @@ pub fn parse_cond(j: &Json) -> R<Cond> {
         return Ok(Cond::PowerLtSelf);
     }
     if let Some(v) = o.get("power") {
-        return Ok(Cond::Power {
-            lte: v.get("lte").and_then(|x| x.as_i64()).map(|x| x as i32),
-            gte: v.get("gte").and_then(|x| x.as_i64()).map(|x| x as i32),
-        });
+        let e = |k: &str| -> R<Option<Expr>> {
+            match v.get(k) {
+                Some(x) => Ok(Some(parse_expr(x)?)),
+                None => Ok(None),
+            }
+        };
+        return Ok(Cond::Power(PowerQ { lte: e("lte")?, gte: e("gte")?, lt: e("lt")?, gt: e("gt")? }));
     }
     if let Some(v) = o.get("type") {
-        return Ok(Cond::Type(if v.as_str() == Some("creature") { SelType::Creature } else { SelType::Spell }));
+        return Ok(Cond::Type(sel_type_of(v.as_str().unwrap_or(""))?));
+    }
+    if let Some(v) = o.get("some") {
+        return Ok(Cond::Some { var: s_of(v, "var").ok_or("some.var")?.to_string(), where_: Box::new(parse_cond(v.get("where").ok_or("some.where")?)?) });
+    }
+    if o.get("isSelf").is_some() {
+        return Ok(Cond::IsSelf);
+    }
+    if o.get("stUsed").is_some() {
+        return Ok(Cond::StUsed);
+    }
+    if o.get("faceUp").is_some() {
+        return Ok(Cond::FaceUp);
+    }
+    if o.get("hyper").is_some() {
+        return Ok(Cond::Hyper);
+    }
+    if let Some(v) = o.get("crossed") {
+        return Ok(Cond::Crossed(v.as_bool().unwrap_or(true)));
+    }
+    if let Some(v) = o.get("hostIs") {
+        return Ok(Cond::HostIs(Box::new(parse_cond(v)?)));
+    }
+    if o.get("hasGear").is_some() {
+        return Ok(Cond::HasGear);
+    }
+    if let Some(v) = o.get("selfTapped") {
+        return Ok(Cond::SelfTapped(v.as_bool().unwrap_or(true)));
+    }
+    if let Some(v) = o.get("ownedBy") {
+        return Ok(Cond::OwnedBy(rel_of(v).ok_or("ownedBy")?));
+    }
+    if let Some(v) = o.get("baseFor") {
+        return Ok(Cond::BaseFor(v.as_str().ok_or("baseFor")?.to_string()));
+    }
+    if let Some(v) = o.get("ultimate") {
+        return Ok(Cond::Ultimate(v.as_bool().unwrap_or(true)));
+    }
+    if let Some(v) = o.get("twin") {
+        return Ok(Cond::Twin(v.as_bool().unwrap_or(true)));
+    }
+    if let Some(v) = o.get("distinctCosts") {
+        return Ok(Cond::DistinctCosts(v.as_str().ok_or("distinctCosts")?.to_string()));
+    }
+    if let Some(v) = o.get("hasKw") {
+        return Ok(Cond::HasKw(sym(v.as_str().ok_or("hasKw")?)));
+    }
+    if let Some(v) = o.get("altUsed") {
+        return Ok(Cond::AltUsed(v.as_str().ok_or("altUsed")?.to_string()));
+    }
+    if let Some(v) = o.get("nameHas") {
+        return Ok(Cond::NameHas(v.as_str().ok_or("nameHas")?.to_string()));
+    }
+    if o.get("hasCip").is_some() {
+        return Ok(Cond::HasCip);
+    }
+    if let Some(v) = o.get("eventIs") {
+        let mut kv = Vec::new();
+        if let Json::Obj(m) = v {
+            for (k, x) in m {
+                kv.push((sym(k), Val::from_json(x)));
+            }
+        }
+        return Ok(Cond::EventIs(kv));
+    }
+    if let Some(v) = o.get("allSame") {
+        return Ok(Cond::AllSame {
+            var: s_of(v, "var").ok_or("allSame.var")?.to_string(),
+            where_: match v.get("where") {
+                Some(w) => Some(Box::new(parse_cond(w)?)),
+                None => None,
+            },
+        });
+    }
+    if let Some(v) = o.get("onBase") {
+        return Ok(Cond::OnBase(Box::new(parse_cond(v)?)));
+    }
+    if let Some(v) = o.get("powerRank") {
+        return Ok(Cond::PowerRank { max: s_of(v, "which") == Some("max"), of: Rc::new(parse_selector(v.get("of").ok_or("powerRank.of")?)?) });
+    }
+    if let Some(v) = o.get("unused") {
+        return Ok(Cond::Unused(v.as_str().ok_or("unused")?.to_string()));
     }
     if let Some(v) = o.get("evolution") {
         return Ok(Cond::Evolution(v.as_bool().unwrap_or(true)));
@@ -570,15 +894,38 @@ fn sel_or_var(j: &Json) -> R<SelOrVar> {
     }
 }
 
-fn parse_mod(j: &Json) -> R<EffectMod> {
+fn parse_mod(j: &Json) -> R<ModDef> {
+    let fixed = |m: EffectMod| Ok(ModDef::Fixed(m));
     match s_of(j, "kind") {
-        Some("cannotAttack") => Ok(EffectMod::CannotAttack),
-        Some("powerAdd") => Ok(EffectMod::PowerAdd(j.get("n").and_then(|x| x.as_i64()).unwrap_or(0) as i32)),
-        Some("grant") => Ok(EffectMod::Grant(sym(s_of(j, "keyword").ok_or("grant.keyword")?))),
-        Some("cannotBeChosen") => Ok(EffectMod::CannotBeChosen),
-        Some("cannotBeAttacked") => Ok(EffectMod::CannotBeAttacked),
-        Some("mustBlock") => Ok(EffectMod::MustBlock),
+        Some("cannotAttack") => fixed(EffectMod::CannotAttack),
+        Some("powerAdd") => Ok(ModDef::PowerAdd(parse_expr(j.get("n").unwrap_or(&Json::Num(0.0)))?)),
+        Some("grant") => fixed(EffectMod::Grant(sym(s_of(j, "keyword").ok_or("grant.keyword")?))),
+        Some("cannotBeChosen") => fixed(EffectMod::CannotBeChosen),
+        Some("cannotBeAttacked") => fixed(EffectMod::CannotBeAttacked),
+        Some("mustBlock") => fixed(EffectMod::MustBlock),
+        Some("cannotBlock") => fixed(EffectMod::CannotBlock),
+        Some("breaker") => Ok(ModDef::Breaker(parse_expr(j.get("n").ok_or("breaker.n")?)?)),
+        Some("untapAfterAttack") => fixed(EffectMod::UntapAfterAttack),
+        Some("cannotLeave") => fixed(EffectMod::CannotLeave),
         k => err(format!("未知の効果: {:?}", k)),
+    }
+}
+
+fn until_of(a: &Json) -> R<UntilKind> {
+    Ok(match s_of(a, "until") {
+        Some("endOfTurn") => UntilKind::EndOfTurn,
+        Some("nextTurnStart") => UntilKind::NextTurnStart,
+        Some("source") => UntilKind::Source,
+        Some("nextOpponentTurnEnd") => UntilKind::NextOpponentTurnEnd,
+        Some("oppTurnEnd") => UntilKind::OppTurnEnd,
+        u => return err(format!("未知の期限: {:?}", u)),
+    })
+}
+
+fn opt_expr(j: Option<&Json>) -> R<Option<Expr>> {
+    match j {
+        Some(x) => Ok(Some(parse_expr(x)?)),
+        None => Ok(None),
     }
 }
 
@@ -597,7 +944,9 @@ fn parse_act(j: &Json) -> R<Act> {
     Ok(match key {
         "draw" => match a {
             Json::Num(n) => Act::Draw { n: Expr::Num(*n as i64), who: Who::Controller },
-            _ => Act::Draw { n: parse_expr(a.get("n").ok_or("draw.n")?)?, who: who_of(a.get("who")) },
+            // 引く枚数は、数・{ n: 式, who? }・式(例: { count: ... })のどれでもよい
+            _ if a.get("n").is_some() => Act::Draw { n: parse_expr(a.get("n").unwrap())?, who: who_of(a.get("who")) },
+            _ => Act::Draw { n: parse_expr(a)?, who: Who::Controller },
         },
         "move" => Act::Move {
             sel: sel_or_var(a.get("sel").ok_or("move.sel")?)?,
@@ -606,6 +955,7 @@ fn parse_act(j: &Json) -> R<Act> {
             pos: a.get("pos").and_then(|x| x.as_str()).map(|p| p == "top"),
             tapped: a.get("tapped").and_then(|x| x.as_bool()),
             as_: opt_sym(a, "as"),
+            no_replace: a.get("noReplace").and_then(|x| x.as_bool()).unwrap_or(false),
         },
         "moveTop" => Act::MoveTop {
             who: who_of(a.get("who")),
@@ -644,7 +994,7 @@ fn parse_act(j: &Json) -> R<Act> {
                 .collect::<R<Vec<_>>>()?;
             Act::Assign { items: s_of(a, "items").ok_or("assign.items")?.to_string(), slots, as_: opt_sym(a, "as") }
         }
-        "addShield" => Act::AddShield { n: a.get("n").and_then(|x| x.as_i64()).unwrap_or(1) as i32 },
+        "addShield" => Act::AddShield { n: a.get("n").and_then(|x| x.as_i64()).unwrap_or(1) as i32, who: who_of(a.get("who")), as_: opt_sym(a, "as") },
         "tap" => Act::Tap { sel: sel_or_var(a.get("sel").ok_or("tap.sel")?)? },
         "untap" => Act::Untap { sel: sel_or_var(a.get("sel").ok_or("untap.sel")?)? },
         "addEffect" => {
@@ -652,17 +1002,21 @@ fn parse_act(j: &Json) -> R<Act> {
                 Some(m) => m.as_arr().ok_or("mods")?.iter().map(parse_mod).collect::<R<Vec<_>>>()?,
                 None => vec![parse_mod(a.get("mod").ok_or("addEffect.mod")?)?],
             };
-            let until = match s_of(a, "until") {
-                Some("endOfTurn") => UntilKind::EndOfTurn,
-                Some("nextTurnStart") => UntilKind::NextTurnStart,
-                Some("source") => UntilKind::Source,
-                Some("nextOpponentTurnEnd") => UntilKind::NextOpponentTurnEnd,
-                u => return err(format!("未知の期限: {:?}", u)),
-            };
+            let until = until_of(a)?;
             Act::AddEffect { mods, sel: sel_or_var(a.get("sel").ok_or("addEffect.sel")?)?, until }
         }
-        "put" => Act::Put { sel: sel_or_var(a.get("sel").ok_or("put.sel")?)?, as_: opt_sym(a, "as") },
-        "summon" => Act::Summon { sel: sel_or_var(a.get("sel").ok_or("summon.sel")?)?, as_: opt_sym(a, "as") },
+        "put" => Act::Put {
+            sel: sel_or_var(a.get("sel").ok_or("put.sel")?)?,
+            as_: opt_sym(a, "as"),
+            onto: s_of(a, "onto").map(|s| s.to_string()),
+            no_triggers: a.get("noTriggers").and_then(|x| x.as_bool()).unwrap_or(false),
+        },
+        "summon" => Act::Summon {
+            sel: sel_or_var(a.get("sel").ok_or("summon.sel")?)?,
+            as_: opt_sym(a, "as"),
+            onto: s_of(a, "onto").map(|s| s.to_string()),
+            no_triggers: a.get("noTriggers").and_then(|x| x.as_bool()).unwrap_or(false),
+        },
         "castFree" => Act::CastFree { sel: sel_or_var(a.get("sel").ok_or("castFree.sel")?)?, after: opt_sym(a, "after") },
         "skipRestOfTurn" => Act::SkipRestOfTurn,
         "copyTrigger" => Act::CopyTrigger,
@@ -673,21 +1027,62 @@ fn parse_act(j: &Json) -> R<Act> {
         "playerEffect" => {
             let m = a.get("mod").ok_or("playerEffect.mod")?;
             let pm = match s_of(m, "kind") {
-                Some("cannotCast") => PlayerMod::CannotCast,
+                Some("cannotCast") => PlayerMod::CannotCast(opt_expr(m.get("n"))?),
                 Some("cannotUseCost") => PlayerMod::CannotUseCost(parse_expr(m.get("n").ok_or("cannotUseCost.n")?)?),
                 Some("cannotSummon") => PlayerMod::CannotSummon(parse_expr(m.get("maxCost").ok_or("cannotSummon.maxCost")?)?),
+                Some("cannotCastLte") => PlayerMod::CannotCastLte(parse_expr(m.get("n").ok_or("cannotCastLte.n")?)?),
+                Some("ignoreCost") => PlayerMod::IgnoreCost(parse_expr(m.get("n").ok_or("ignoreCost.n")?)?),
+                Some("ignoreAll") => PlayerMod::IgnoreAll,
+                Some("startShield") => PlayerMod::StartShield,
+                Some("owe") => PlayerMod::Owe { civ: civ_of(s_of(m, "civ").ok_or("owe.civ")?)?, n: m.get("n").and_then(|x| x.as_i64()).unwrap_or(0) as i32 },
+                Some("oncePerTurnActs") => PlayerMod::OncePerTurnActs,
+                Some("nextSummon") => PlayerMod::NextSummon { delta: parse_expr(m.get("delta").ok_or("nextSummon.delta")?)?, sa: m.get("sa").and_then(|x| x.as_bool()).unwrap_or(false) },
+                Some("cannotAttackAny") => PlayerMod::CannotAttackAny,
+                Some("cannotLose") => PlayerMod::CannotLose,
+                Some("cannotActCost") => PlayerMod::CannotActCost(parse_expr(m.get("n").ok_or("cannotActCost.n")?)?),
                 k => return err(format!("未知のプレイヤー効果: {:?}", k)),
             };
-            let until = match s_of(a, "until") {
-                Some("endOfTurn") => UntilKind::EndOfTurn,
-                Some("nextTurnStart") => UntilKind::NextTurnStart,
-                Some("source") => UntilKind::Source,
-                Some("nextOpponentTurnEnd") => UntilKind::NextOpponentTurnEnd,
-                u => return err(format!("未知の期限: {:?}", u)),
-            };
+            let until = until_of(a)?;
             Act::PlayerEffect { m: pm, until }
         }
-        "setVar" => Act::SetVar { as_: opt_sym(a, "as").ok_or("setVar.as")?, value: Val::from_json(a.get("value").unwrap_or(&Json::Null)) },
+        "setVar" => {
+            let v = a.get("value").unwrap_or(&Json::Null);
+            let expr = if matches!(v, Json::Obj(_)) { Some(parse_expr(v)?) } else { None };
+            Act::SetVar { as_: opt_sym(a, "as").ok_or("setVar.as")?, value: Val::from_json(v), expr }
+        }
+        "moveBottom" => Act::MoveBottom {
+            who: who_of(a.get("who")),
+            n: parse_expr(a.get("n").ok_or("moveBottom.n")?)?,
+            to: zone_of(s_of(a, "to").ok_or("moveBottom.to")?)?,
+            cause: cause_of(a),
+            tapped: a.get("tapped").and_then(|x| x.as_bool()),
+            as_: opt_sym(a, "as"),
+        },
+        "shuffleIn" => Act::ShuffleIn { sel: sel_or_var(a.get("sel").ok_or("shuffleIn.sel")?)? },
+        "bottom" => Act::Bottom { of: s_of(a, "of").ok_or("bottom.of")?.to_string(), except: s_of(a, "except").map(|s| s.to_string()) },
+        "rush" => Act::Rush { sel: sel_or_var(a.get("sel").ok_or("rush.sel")?)?, if_attacked: a.get("ifAttacked").and_then(|x| x.as_bool()).unwrap_or(false) },
+        "useCip" => Act::UseCip { sel: sel_or_var(a.get("sel").ok_or("useCip.sel")?)? },
+        "graveToBottom" => Act::GraveToBottom { who: who_of(a.get("who")) },
+        "play" => Act::Play { sel: sel_or_var(a.get("sel").ok_or("play.sel")?)?, alt: s_of(a, "alt").map(|s| s.to_string()) },
+        "win" => Act::Win,
+        "cross" => Act::Cross { gear: sel_or_var(a.get("gear").ok_or("cross.gear")?)?, to: sel_or_var(a.get("to").ok_or("cross.to")?)? },
+        "ninjaChange" => Act::NinjaChange { sel: sel_or_var(a.get("sel").ok_or("ninjaChange.sel")?)? },
+        "grantShieldTrigger" => Act::GrantShieldTrigger { sel: sel_or_var(a.get("sel").ok_or("grantShieldTrigger.sel")?)? },
+        "breakOpp" => Act::BreakOpp { n: a.get("n").and_then(|x| x.as_i64()).unwrap_or(1) as i32 },
+        "allowSummon" => Act::AllowSummon { sel: sel_or_var(a.get("sel").ok_or("allowSummon.sel")?)? },
+        "destroyTop" => Act::DestroyTop { sel: sel_or_var(a.get("sel").ok_or("destroyTop.sel")?)? },
+        "dropUnder" => Act::DropUnder { sel: sel_or_var(a.get("sel").ok_or("dropUnder.sel")?)?, n: a.get("n").and_then(|x| x.as_i64()).map(|n| n as i32), deck: s_of(a, "to") == Some("deck") },
+        "summonOnto" => Act::SummonOnto { sel: sel_or_var(a.get("sel").ok_or("summonOnto.sel")?)?, under: s_of(a, "under").ok_or("summonOnto.under")?.to_string() },
+        "extraTurn" => Act::ExtraTurn,
+        "markUsed" => Act::MarkUsed { key: s_of(a, "key").ok_or("markUsed.key")?.to_string() },
+        "putUnder" => Act::PutUnder { sel: sel_or_var(a.get("sel").ok_or("putUnder.sel")?)?, onto: sel_or_var(a.get("onto").ok_or("putUnder.onto")?)? },
+        "tapLock" => Act::TapLock { sel: sel_or_var(a.get("sel").ok_or("tapLock.sel")?)? },
+        "breakShields" => Act::BreakShields { n: a.get("n").and_then(|x| x.as_i64()).map(|n| n as i32) },
+        "judge" => Act::Judge { as_: opt_sym(a, "as") },
+        "stackShield" => Act::StackShield { sel: sel_or_var(a.get("sel").ok_or("stackShield.sel")?)?, onto: sel_or_var(a.get("onto").ok_or("stackShield.onto")?)? },
+        "castSide" => Act::CastSide { sel: sel_or_var(a.get("sel").ok_or("castSide.sel")?)? },
+        "seal" => Act::Seal { sel: sel_or_var(a.get("sel").ok_or("seal.sel")?)? },
+        "stab" => Act::Stab { sel: sel_or_var(a.get("sel").ok_or("stab.sel")?)?, depth: a.get("depth").and_then(|x| x.as_i64()).unwrap_or(4) as i32 },
         k => return err(format!("未対応の原始操作: {}", k)),
     })
 }
@@ -721,6 +1116,7 @@ fn parse_step(j: &Json) -> R<StepDef> {
             },
             random: j.get("random").and_then(|x| x.as_bool()).unwrap_or(false),
             append: j.get("append").and_then(|x| x.as_bool()).unwrap_or(false),
+            sum_lte: opt_expr(j.get("sumLte"))?,
         }),
         "may" => StepDef::May { then: opt_steps(j.get("then"))?, else_: opt_steps(j.get("else"))? },
         "if" => StepDef::If { cond: parse_cond(j.get("cond").ok_or("if.cond")?)?, then: opt_steps(j.get("then"))?, else_: opt_steps(j.get("else"))? },
@@ -770,6 +1166,8 @@ fn keyword_of(s: &str) -> R<KeywordName> {
         "invasion" => KeywordName::Invasion,
         "slayer" => KeywordName::Slayer,
         "revolutionChange" => KeywordName::RevolutionChange,
+        "poweredBreaker" => KeywordName::PoweredBreaker,
+        "sBack" => KeywordName::SBack,
         k => return err(format!("未知のキーワード: {}", k)),
     })
 }
@@ -824,6 +1222,8 @@ pub fn parse_ability(j: &Json) -> R<Ability> {
                     subject,
                     turn,
                     nth_this_turn: spec.get("nthThisTurn").and_then(|x| x.as_i64()).map(|x| x as i32),
+                    look_back: spec.get("lookBack").and_then(|x| x.as_bool()).unwrap_or(false),
+                    nth_min: spec.get("nthMin").and_then(|x| x.as_i64()).map(|x| x as i32),
                     limit_per_turn: spec.get("limit").and_then(|l| l.get("perTurn")).and_then(|x| x.as_i64()).map(|x| x as i32),
                     if_: opt_cond(spec, "if")?,
                     if_at_resolve: opt_cond(spec, "ifAtResolve")?,
@@ -831,13 +1231,64 @@ pub fn parse_ability(j: &Json) -> R<Ability> {
                 optional: j.get("optional").and_then(|x| x.as_bool()).unwrap_or(false),
                 steps: opt_steps(j.get("steps"))?,
                 label: s_of(j, "label").map(|s| s.to_string()),
+                gen: j.get("gen").and_then(|x| x.as_bool()).unwrap_or(false),
             }
         }
         "spell" => Ability::Spell { steps: opt_steps(j.get("steps"))? },
         "static" => {
             let m = j.get("mod").ok_or("static.mod")?;
             let sm = match s_of(m, "type") {
-                Some("costDelta") => StaticMod::CostDelta { delta: m.get("delta").and_then(|x| x.as_i64()).unwrap_or(0) as i32, cond: parse_cond(m.get("cond").ok_or("costDelta.cond")?)? },
+                Some("costDelta") => StaticMod::CostDelta {
+                    delta: parse_expr(m.get("delta").unwrap_or(&Json::Num(0.0)))?,
+                    cond: parse_cond(m.get("cond").ok_or("costDelta.cond")?)?,
+                    once_per_turn: m.get("oncePerTurn").and_then(|x| x.as_bool()).unwrap_or(false),
+                    floor: m.get("floor").and_then(|x| x.as_i64()).map(|x| x as i32),
+                },
+                Some("powerAttacker") => StaticMod::PowerAttacker { n: m.get("n").and_then(|x| x.as_i64()).unwrap_or(0) as i32 },
+                Some("burnShields") => StaticMod::BurnShields,
+                Some("firstBattleWins") => StaticMod::FirstBattleWins,
+                Some("enterTappedFirst") => StaticMod::EnterTappedFirst,
+                Some("untapLimit") => StaticMod::UntapLimit { n: m.get("n").and_then(|x| x.as_i64()).unwrap_or(0) as i32 },
+                Some("allowPlayFrom") => StaticMod::AllowPlayFrom {
+                    from: zone_of(s_of(m, "from").ok_or("allowPlayFrom.from")?)?,
+                    cond: opt_cond(m, "cond")?,
+                    once_per_turn: m.get("oncePerTurn").and_then(|x| x.as_bool()).unwrap_or(false),
+                    rush: m.get("rush").and_then(|x| x.as_bool()).unwrap_or(false),
+                },
+                Some("cannotBeChosen") => StaticMod::CannotBeChosen,
+                Some("mustBeChosen") => StaticMod::MustBeChosen,
+                Some("protectFromSpells") => StaticMod::ProtectFromSpells,
+                Some("ignoreCastBan") => StaticMod::IgnoreCastBan { cond: parse_cond(m.get("cond").ok_or("ignoreCastBan.cond")?)? },
+                Some("graveCastToBottom") => StaticMod::GraveCastToBottom,
+                Some("noDeckOutLoss") => StaticMod::NoDeckOutLoss,
+                Some("enterTapped") => StaticMod::EnterTapped,
+                Some("powerAddExpr") => StaticMod::PowerAddExpr { expr: parse_expr(m.get("expr").ok_or("powerAddExpr.expr")?)? },
+                Some("stab5sd") => StaticMod::Stab5sd,
+                Some("deckLock") => StaticMod::DeckLock,
+                Some("noOppShieldTrigger") => StaticMod::NoOppShieldTrigger,
+                Some("attackMeFirst") => StaticMod::AttackMeFirst,
+                Some("oneSpellPerTurn") => StaticMod::OneSpellPerTurn,
+                Some("cannotAttack") => StaticMod::CannotAttack,
+                Some("cannotAttackPlayer") => StaticMod::CannotAttackPlayer,
+                Some("cannotPlay") => StaticMod::CannotPlay { cond: parse_cond(m.get("cond").ok_or("cannotPlay.cond")?)? },
+                Some("battleProxy") => StaticMod::BattleProxy { cond: parse_cond(m.get("cond").ok_or("battleProxy.cond")?)? },
+                Some("guardman") => StaticMod::Guardman,
+                Some("cannotSummonAll") => StaticMod::CannotSummonAll { cond: parse_cond(m.get("cond").ok_or("cannotSummonAll.cond")?)? },
+                Some("protectPlayerFromWeaker") => StaticMod::ProtectPlayerFromWeaker,
+                Some("noGStrike") => StaticMod::NoGStrike,
+                Some("oppManaTapped") => StaticMod::OppManaTapped,
+                Some("flying") => StaticMod::Flying,
+                Some("cannotBreak") => StaticMod::CannotBreak,
+                Some("tapAsMana") => StaticMod::TapAsMana,
+                Some("spellShieldTrigger") => StaticMod::SpellShieldTrigger,
+                Some("manaAllCivs") => StaticMod::ManaAllCivs,
+                Some("cannotLeaveOwn") => StaticMod::CannotLeaveOwn {
+                    cond: parse_cond(m.get("cond").ok_or("cannotLeaveOwn.cond")?)?,
+                    except_destroy: m.get("exceptDestroy").and_then(|x| x.as_bool()).unwrap_or(false),
+                },
+                Some("noAttackOnEntry") => StaticMod::NoAttackOnEntry,
+                Some("hostPowerAdd") => StaticMod::HostPowerAdd { n: m.get("n").and_then(|x| x.as_i64()).unwrap_or(0) as i32 },
+                Some("powerAddOthers") => StaticMod::PowerAddOthers { n: m.get("n").and_then(|x| x.as_i64()).unwrap_or(0) as i32, cond: parse_cond(m.get("cond").ok_or("powerAddOthers.cond")?)? },
                 Some("cannotAttackPlayerWhenEntered") => StaticMod::CannotAttackPlayerWhenEntered,
                 Some("cannotCast") => StaticMod::CannotCast { cond: parse_cond(m.get("cond").ok_or("cannotCast.cond")?)? },
                 Some("powerAdd") => StaticMod::PowerAdd { n: m.get("n").and_then(|x| x.as_i64()).unwrap_or(0) as i32 },
@@ -855,7 +1306,15 @@ pub fn parse_ability(j: &Json) -> R<Ability> {
         "replace" => {
             let ap = j.get("apply").ok_or("replace.apply")?;
             let apply = match s_of(ap, "type") {
-                Some("changeDest") => ReplaceApply::ChangeDest(zone_of(s_of(ap, "to").ok_or("changeDest.to")?)?),
+                Some("changeDest") => ReplaceApply::ChangeDest {
+                    to: zone_of(s_of(ap, "to").ok_or("changeDest.to")?)?,
+                    then: match ap.get("then") {
+                        Some(t) => Some(parse_steps(t)?),
+                        None => None,
+                    },
+                },
+                Some("stay") => ReplaceApply::Stay,
+                Some("steps") => ReplaceApply::Steps(opt_steps(ap.get("steps"))?),
                 Some("cancelTrigger") => ReplaceApply::CancelTrigger,
                 Some("smaxSacrifice") => ReplaceApply::SmaxSacrifice,
                 t => return err(format!("未知の置換: {:?}", t)),
@@ -869,10 +1328,47 @@ pub fn parse_ability(j: &Json) -> R<Ability> {
             }
         }
         "permission" => Ability::Permission {
-            play_cast: s_of(j, "play") == Some("cast"),
+            play: match s_of(j, "play") {
+                Some("cast") => PlayKind::Cast,
+                Some("put") => PlayKind::Put,
+                _ => PlayKind::Summon,
+            },
             from: zone_of(s_of(j, "from").ok_or("permission.from")?)?,
             after_bottom: s_of(j, "after") == Some("deckBottom"),
+            rush: j.get("rush").and_then(|x| x.as_bool()).unwrap_or(false),
         },
+        "selfCost" => Ability::SelfCost {
+            delta: parse_expr(j.get("delta").ok_or("selfCost.delta")?)?,
+            cond: opt_cond(j, "cond")?,
+            floor: j.get("floor").and_then(|x| x.as_i64()).map(|x| x as i32),
+        },
+        "hyperize" => Ability::Hyperize { tap_other: j.get("tapOther").and_then(|x| x.as_i64()).unwrap_or(1) as i32 },
+        "shinkalize" => Ability::Shinkalize,
+        "altCost" => {
+            let c = j.get("cost").ok_or("altCost.cost")?;
+            Ability::AltCost {
+                id: s_of(j, "id").ok_or("altCost.id")?.to_string(),
+                label: s_of(j, "label").unwrap_or("").to_string(),
+                when: opt_cond(j, "when")?,
+                cost: AltCostSpec {
+                    from: match c.get("from") {
+                        Some(f) => Some(f.as_arr().ok_or("altCost.from")?.iter().map(|z| zone_of(z.as_str().unwrap_or(""))).collect::<R<Vec<_>>>()?),
+                        None => None,
+                    },
+                    tap_creatures: c.get("tapCreatures").and_then(|x| x.as_i64()).map(|x| x as i32),
+                    pay: c.get("pay").and_then(|x| x.as_i64()).map(|x| x as i32),
+                    discard: match c.get("discard") {
+                        Some(d) => Some((d.get("n").and_then(|x| x.as_i64()).unwrap_or(1) as i32, opt_cond(d, "where")?)),
+                        None => None,
+                    },
+                    reduce: c.get("reduce").and_then(|x| x.as_i64()).map(|x| x as i32),
+                    end_bottom_draw: c.get("endBottomDraw").and_then(|x| x.as_bool()).unwrap_or(false),
+                    to_hyper: c.get("toHyper").and_then(|x| x.as_bool()).unwrap_or(false),
+                    grave_evolve: c.get("graveEvolve").and_then(|x| x.as_bool()).unwrap_or(false),
+                    fushigi: c.get("fushigi").map(|f| (f.get("base").and_then(|x| x.as_i64()).unwrap_or(0) as i32, f.get("min").and_then(|x| x.as_i64()).unwrap_or(0) as i32)),
+                },
+            }
+        }
         k => return err(format!("未知の能力: {}", k)),
     })
 }

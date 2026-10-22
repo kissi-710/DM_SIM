@@ -3,7 +3,9 @@
 use crate::ast::*;
 use crate::cond::*;
 use crate::ops::*;
-use crate::registry::Instr;
+use crate::derive::{can_summon_card, cost_base, deck_locked, snap_of};
+use crate::state::{target_from_val, target_to_val};
+use crate::registry::{Feat, Instr};
 use crate::types::*;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -20,6 +22,7 @@ fn cc_of<'a>(e: Env<'a>, f: &'a EffectFrame) -> CC<'a> {
         it_face: -1,
         iter,
         event: f.trigger.as_deref(),
+        evo: false,
     }
 }
 
@@ -39,17 +42,18 @@ fn resolve_sel(cc: &CC, sel: &SelOrVar) -> Vec<i32> {
 }
 
 fn player_of(f: &EffectFrame, who: Who) -> PlayerId {
-    if who == Who::Opponent {
-        opp(f.controller)
-    } else {
-        f.controller
+    match who {
+        Who::Opponent => opp(f.controller),
+        // forPlayers の現在のプレイヤー
+        Who::Iter => var_get(&f.vars, s::ITER).and_then(|v| v.as_int()).map_or(f.controller, |n| n as u8),
+        Who::Controller => f.controller,
     }
 }
 
 /// 創造面(クリーチャー面)のインデックス。呪文のみなら -1
 fn creature_face(c: &Ctx, uid: i32) -> i32 {
     let def = &c.reg.defs[c.s.cards[uid as usize].def as usize];
-    def.faces.iter().position(|x| x.ty.is_creature()).map_or(-1, |i| i as i32)
+    def.faces.iter().position(|x| x.ty.is_permanent()).map_or(-1, |i| i as i32)
 }
 
 fn spell_face(c: &Ctx, uid: i32) -> i32 {
@@ -108,7 +112,7 @@ fn run_effect_inner(c: &mut Ctx, f: &mut EffectFrame) -> Res<bool> {
                         NeedInput {
                             player: f.controller,
                             why: Why::May,
-                            input: Some(InputSpec::Pick { candidates, min: 0, max: max as i32 }),
+                            input: Some(InputSpec::Pick { candidates, min: 0, max: max as i32, sum: None }),
                             source: Some(f.source),
                         },
                     )?;
@@ -260,10 +264,12 @@ struct SelInfo {
     min: i64,
     max: i64,
     chooser: PlayerId,
+    /// コストの合計の上限つきで好きな数を選ぶ時の上限
+    sum_max: Option<i64>,
 }
 
 fn select_info(c: &Ctx, f: &EffectFrame, st: &SelectStep) -> SelInfo {
-    let (cand, min0, max0) = {
+    let (cand, min0, max0, sum_max) = {
         let cc = cc_of(c.env(), f);
         let cand = match &st.from {
             SelOrVar::Var(name) => var_uids(&cc, name, false),
@@ -271,16 +277,22 @@ fn select_info(c: &Ctx, f: &EffectFrame, st: &SelectStep) -> SelInfo {
         };
         let min0 = st.min.as_ref().map_or(1, |e| eval_expr(&cc, e));
         let max0 = st.max.as_ref().map_or(1, |e| eval_expr(&cc, e));
-        (cand, min0, max0)
+        let sum_max = st.sum_lte.as_ref().map(|e| eval_expr(&cc, e));
+        (cand, min0, max0, sum_max)
     };
     let chooser: PlayerId = match st.who {
         Who::Opponent => opp(f.controller),
         Who::Iter => var_get(&f.vars, s::ITER).and_then(|v| v.as_int()).map_or(f.controller, |n| n as u8),
         Who::Controller => f.controller,
     };
+    if sum_max.is_some() {
+        // コストの合計の上限つきで、好きな数を選ぶ
+        let n = cand.len() as i64;
+        return SelInfo { cand, min: 0, max: n, chooser, sum_max };
+    }
     let max = max0.min(cand.len() as i64);
     let min = min0.min(max);
-    SelInfo { cand, min, max, chooser }
+    SelInfo { cand, min, max, chooser, sum_max: None }
 }
 
 /// 選んだカードを変数に束ね、ログ用の chosen を出す(select と、may に統合した選択で共通)
@@ -440,10 +452,27 @@ pub fn interchangeable(c: &Ctx, f: &EffectFrame, cand: &[i32]) -> bool {
 }
 
 fn exec_select(c: &mut Ctx, f: &mut EffectFrame, st: &SelectStep) -> Res<()> {
-    let SelInfo { cand, min, max, chooser } = select_info(c, f, st);
+    let SelInfo { cand, min, max, chooser, sum_max } = select_info(c, f, st);
     let n = cand.len() as i64;
     let picked: Vec<i32>;
-    if max == 0 {
+    if let Some(sm) = sum_max {
+        // 合計に収まる組み合わせが1通り(何も選ばない)しかなければ、聞かない
+        let costs: Vec<i32> = cand.iter().map(|&u| cost_base(c.env(), u)).collect();
+        if costs.iter().all(|&x| (x as i64) > sm) {
+            picked = vec![];
+        } else {
+            let ans = ask(
+                c,
+                NeedInput {
+                    player: chooser,
+                    why: Why::Select,
+                    input: Some(InputSpec::Pick { candidates: cand.clone(), min: 0, max: n as i32, sum: Some((sm as i32, costs)) }),
+                    source: Some(f.source),
+                },
+            )?;
+            picked = ans.to_i32s();
+        }
+    } else if max == 0 {
         picked = vec![];
     } else if st.random {
         let mut pool = cand.clone();
@@ -464,7 +493,7 @@ fn exec_select(c: &mut Ctx, f: &mut EffectFrame, st: &SelectStep) -> Res<()> {
             NeedInput {
                 player: chooser,
                 why: Why::Select,
-                input: Some(InputSpec::Pick { candidates: cand.clone(), min: min as i32, max: max as i32 }),
+                input: Some(InputSpec::Pick { candidates: cand.clone(), min: min as i32, max: max as i32, sum: None }),
                 source: Some(f.source),
             },
         )?;
@@ -490,7 +519,7 @@ enum MayPlan {
 fn inert_target(act: &Act) -> Option<(&SelOrVar, Option<Sym>)> {
     match act {
         Act::Move { sel, as_, .. } => Some((sel, *as_)),
-        Act::Put { sel, as_ } | Act::Summon { sel, as_ } => Some((sel, *as_)),
+        Act::Put { sel, as_, .. } | Act::Summon { sel, as_, .. } => Some((sel, *as_)),
         Act::Tap { sel } | Act::Untap { sel } => Some((sel, None)),
         Act::AddEffect { sel, .. } | Act::CastFree { sel, .. } => Some((sel, None)),
         _ => None,
@@ -578,6 +607,8 @@ fn duration_of(c: &Ctx, f: &EffectFrame, until: UntilKind) -> Duration {
         UntilKind::EndOfTurn => Duration::EndOfTurn { turn: c.s.turn },
         UntilKind::NextTurnStart => Duration::UntilTurnStart { player: f.controller, after_turn: c.s.turn },
         UntilKind::Source => Duration::Source { uid: f.source.uid, ep: f.source.ep },
+        // 次の、相手のターンの終わりまで(いまが自分のターンなら次のターン、相手のターン中ならその次の相手のターン)
+        UntilKind::OppTurnEnd => Duration::UntilOppTurnEnd { player: f.controller, after_turn: c.s.turn },
         // 「次の、相手のターンの終わりまで」: 自分のターン中なら次のターン、相手のターン中ならそのターン
         UntilKind::NextOpponentTurnEnd => Duration::EndOfTurn { turn: if c.s.active == f.controller { c.s.turn + 1 } else { c.s.turn } },
     }
@@ -603,7 +634,7 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             draw_cards(c, p, n)?;
             Ok(())
         }
-        Act::Move { sel, to, cause, pos, tapped, as_ } => {
+        Act::Move { sel, to, cause, pos, tapped, as_, no_replace } => {
             let uids = {
                 let cc = cc_of(c.env(), f);
                 resolve_sel(&cc, sel)
@@ -611,6 +642,8 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             let mut o = MoveOpts::new(*to, *cause);
             o.pos = *pos;
             o.tapped = tapped.unwrap_or(false);
+            o.by = Some(f.controller);
+            o.no_replace = *no_replace;
             let res = move_cards(c, &uids, &o)?;
             if let Some(a) = as_ {
                 let refs: Vec<ObjRef> = res.iter().filter(|r| r.moved && r.to == *to).map(|r| ObjRef { uid: r.uid, ep: r.ep }).collect();
@@ -640,6 +673,10 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
                 let cc = cc_of(c.env(), f);
                 eval_expr(&cc, n)
             } as usize;
+            if deck_locked(c.env(), p) {
+                var_set(&mut f.vars, *as_, Val::refs(&[])); // 山札を見れない(5.S.D.)
+                return Ok(());
+            }
             let top: Vec<i32> = c.s.players[p as usize].deck.iter().take(n).copied().collect();
             let refs = refs_of(c, &top);
             var_set(&mut f.vars, *as_, Val::refs(&refs));
@@ -761,9 +798,16 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             }
             Ok(())
         }
-        Act::AddShield { n } => {
+        Act::AddShield { n, who, as_ } => {
+            let p = player_of(f, *who);
+            let mut added: Vec<ObjRef> = Vec::new();
             for _ in 0..*n {
-                add_shield_from_deck(c, f.controller)?;
+                if let Some(u) = add_shield_from_deck(c, p)? {
+                    added.push(obj_ref(c, u));
+                }
+            }
+            if let Some(a) = as_ {
+                var_set(&mut f.vars, *a, Val::refs(&added));
             }
             Ok(())
         }
@@ -779,9 +823,18 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             Ok(())
         }
         Act::AddEffect { mods, sel, until } => {
-            let targets = {
+            // mod の n が式なら、その場で評価した数にする(「自分の墓地のクリーチャー1体につき-1000」など)
+            let (targets, mods): (Vec<i32>, Vec<EffectMod>) = {
                 let cc = cc_of(c.env(), f);
-                resolve_sel(&cc, sel)
+                let ms: Vec<EffectMod> = mods
+                    .iter()
+                    .map(|m| match m {
+                        ModDef::Fixed(x) => x.clone(),
+                        ModDef::PowerAdd(e) => EffectMod::PowerAdd(eval_expr(&cc, e) as i32),
+                        ModDef::Breaker(e) => EffectMod::Breaker(eval_expr(&cc, e) as i32),
+                    })
+                    .collect();
+                (resolve_sel(&cc, sel), ms)
             };
             for u in targets {
                 let (zone, pid) = {
@@ -791,7 +844,7 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
                 if zone != Zone::Battle {
                     continue;
                 }
-                for m in mods {
+                for m in &mods {
                     let id = c.s.next_id();
                     let until = duration_of(c, f, *until);
                     c.s.effects.push(ContEffect { id, pid, m: m.clone(), until, controller: f.controller });
@@ -800,7 +853,7 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             c.s.dirty_sba = true;
             Ok(())
         }
-        Act::Put { sel, as_ } | Act::Summon { sel, as_ } => {
+        Act::Put { sel, as_, onto, no_triggers } | Act::Summon { sel, as_, onto, no_triggers } => {
             let via = if matches!(act, Act::Summon { .. }) { s::SUMMON } else { s::EFFECT };
             let uids = {
                 let cc = cc_of(c.env(), f);
@@ -808,35 +861,93 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             };
             let mut evs: Vec<Rc<Ev>> = Vec::new();
             let mut entered: Vec<ObjRef> = Vec::new();
+            // 複数を同時に出す時、出る時の置換の質問は、最初の1枚を出す前にまとめて行う(質問は、状態を変更する前に行うため)
+            let mut reps: Vec<(i32, EntryRep)> = Vec::new();
+            let batch = uids.len() > 1 && game_has(c.env(), Feat::EntryReplace);
+            if batch {
+                for &u in &uids {
+                    let fi = creature_face(c, u);
+                    if fi < 0 {
+                        continue;
+                    }
+                    let mut o = MoveOpts::new(Zone::Battle, via);
+                    o.via = Some(via);
+                    o.face = Some(fi);
+                    o.paid = Some(0);
+                    if let Some(rep) = entry_replacement(c, u, &o, fi, via)? {
+                        reps.push((u, rep));
+                    }
+                }
+            }
             for u in uids {
                 let fi = creature_face(c, u);
                 if fi < 0 {
                     continue;
                 }
-                let (face_ty, face_cost) = {
-                    let fc = c.reg.face(c.s.cards[u as usize].def, fi);
-                    (fc.ty, fc.cost)
-                };
-                if face_ty == FaceType::Evolution {
-                    continue; // 進化元がないので出せない
+                let face_ty = c.reg.face(c.s.cards[u as usize].def, fi).ty;
+                if let Some(pos) = reps.iter().position(|(x, _)| *x == u) {
+                    let (_, rep) = reps.remove(pos);
+                    apply_entry_replacement(c, u, &rep)?;
+                    continue;
                 }
-                if matches!(act, Act::Summon { .. }) && !crate::derive::can_summon(c.env(), c.s.cards[u as usize].owner, face_cost) {
+                let mut onto_pid: Option<i32> = None;
+                if face_ty == FaceType::Evolution {
+                    // 進化クリーチャーは、進化元(onto: 変数のクリーチャー)の上に出す。進化元の条件を満たさなければ出せない
+                    let ok = {
+                        let cc = cc_of(c.env(), f);
+                        let base = onto.as_ref().and_then(|name| var_uids(&cc, name, true).first().copied());
+                        let ef = c.reg.face(c.s.cards[u as usize].def, fi).evolve_from.as_ref();
+                        match (base, ef) {
+                            (Some(b), Some(ef)) if c.s.cards[b as usize].zone == Zone::Battle => {
+                                let top = if c.s.cards[b as usize].pid >= 0 { c.s.perm(c.s.cards[b as usize].pid).map(|p| p.cards[0]) } else { None };
+                                match top {
+                                    Some(tu) => {
+                                        let sub = CC { e: cc.e, controller: cc.controller, self_: Some(u), self_snap: cc.self_snap, vars: cc.vars, it: Some(tu), it_face: c.s.cards[tu as usize].face, iter: cc.iter, event: cc.event, evo: true };
+                                        if eval_cond(&sub, ef) {
+                                            Some(c.s.cards[tu as usize].pid)
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                    None => None,
+                                }
+                            }
+                            _ => None,
+                        }
+                    };
+                    match ok {
+                        Some(p) => onto_pid = Some(p),
+                        None => continue,
+                    }
+                }
+                if via == s::SUMMON && !can_summon_card(c.env(), c.s.cards[u as usize].owner, u, fi) {
                     continue; // 召喚できない効果を受けている
                 }
                 let mut o = MoveOpts::new(Zone::Battle, via);
                 o.via = Some(via);
                 o.face = Some(fi);
                 o.paid = Some(0);
+                o.no_replace = batch;
+                o.onto = onto_pid;
                 let r = enter_battle(c, u, &o, &mut evs)?;
-                if r.to == Zone::Battle {
+                if r.moved && r.to == Zone::Battle {
                     entered.push(ObjRef { uid: u, ep: r.ep }); // G城の置換でマナゾーンに置かれたものは、出ていない
+                    if via == s::SUMMON {
+                        on_summoned(c, u);
+                    }
                 }
             }
             if let Some(a) = as_ {
                 var_set(&mut f.vars, *a, Val::refs(&entered));
             }
             c.s.batch_no += 1;
-            collect_batch(c, &evs);
+            // noTriggers: 出ることによって起こる効果(「出た時」の能力)はすべて無視する
+            if *no_triggers {
+                let kept: Vec<Rc<Ev>> = evs.iter().filter(|e| e.ty != s::ENTERED).cloned().collect();
+                collect_batch(c, &kept);
+            } else {
+                collect_batch(c, &evs);
+            }
             c.s.dirty_sba = true;
             Ok(())
         }
@@ -981,17 +1092,24 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             if fi < 0 {
                 return Ok(());
             }
-            let res = move_cards(c, &[a_card], &MoveOpts::new(Zone::Hand, s::REVOLUTION_CHANGE))?;
-            if !res.first().map_or(false, |r| r.moved) {
-                return Ok(()); // 置換されて離れなかった(EXライフなど): 入れ替わらない
-            }
-            let mut evs: Vec<Rc<Ev>> = Vec::new();
             let mut o = MoveOpts::new(Zone::Battle, s::REVOLUTION_CHANGE);
             o.via = Some(s::REVOLUTION_CHANGE);
             o.face = Some(fi);
             o.tapped = true;
             o.paid = Some(0);
-            enter_battle(c, uid, &o, &mut evs)?;
+            // 出る時の置換の質問は、状態を変更する前(手札に戻す前)に行う
+            let rep = if game_has(c.env(), Feat::EntryReplace) { entry_replacement(c, uid, &o, fi, s::REVOLUTION_CHANGE)? } else { None };
+            let res = move_cards(c, &[a_card], &MoveOpts::new(Zone::Hand, s::REVOLUTION_CHANGE))?;
+            if !res.first().map_or(false, |r| r.moved) {
+                return Ok(()); // 置換されて離れなかった(EXライフなど): 入れ替わらない
+            }
+            let mut evs: Vec<Rc<Ev>> = Vec::new();
+            if let Some(rep) = rep {
+                apply_entry_replacement(c, uid, &rep)?;
+            } else {
+                o.no_replace = true;
+                enter_battle(c, uid, &o, &mut evs)?;
+            }
             // G城の置換でマナゾーンに置かれた時は、入れ替わらない(攻撃していたクリーチャーは手札に戻った後で、攻撃は終わる)
             if c.s.cards[uid as usize].zone == Zone::Battle {
                 let new_pid = c.s.cards[uid as usize].pid;
@@ -1006,15 +1124,22 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
         }
         Act::PlayerEffect { m, until } => {
             // プレイヤー単位の継続効果(pid = -1)。「相手は〜できない」
-            let em = match m {
-                PlayerMod::CannotCast => EffectMod::CannotCast,
-                PlayerMod::CannotUseCost(x) => {
-                    let cc = cc_of(c.env(), f);
-                    EffectMod::CannotUseCost(eval_expr(&cc, x) as i32)
-                }
-                PlayerMod::CannotSummon(x) => {
-                    let cc = cc_of(c.env(), f);
-                    EffectMod::CannotSummon(eval_expr(&cc, x) as i32)
+            let em = {
+                let cc = cc_of(c.env(), f);
+                match m {
+                    PlayerMod::CannotCast(n) => EffectMod::CannotCast(n.as_ref().map(|x| eval_expr(&cc, x) as i32)),
+                    PlayerMod::CannotUseCost(x) => EffectMod::CannotUseCost(eval_expr(&cc, x) as i32),
+                    PlayerMod::CannotSummon(x) => EffectMod::CannotSummon(eval_expr(&cc, x) as i32),
+                    PlayerMod::CannotCastLte(x) => EffectMod::CannotCastLte(eval_expr(&cc, x) as i32),
+                    PlayerMod::IgnoreCost(x) => EffectMod::IgnoreCost(eval_expr(&cc, x) as i32),
+                    PlayerMod::IgnoreAll => EffectMod::IgnoreAll,
+                    PlayerMod::StartShield => EffectMod::StartShield,
+                    PlayerMod::Owe { civ, n } => EffectMod::Owe { civ: *civ, n: *n },
+                    PlayerMod::OncePerTurnActs => EffectMod::OncePerTurnActs,
+                    PlayerMod::NextSummon { delta, sa } => EffectMod::NextSummon { delta: eval_expr(&cc, delta) as i32, sa: *sa },
+                    PlayerMod::CannotAttackAny => EffectMod::CannotAttackAny,
+                    PlayerMod::CannotLose => EffectMod::CannotLose,
+                    PlayerMod::CannotActCost(x) => EffectMod::CannotActCost(eval_expr(&cc, x) as i32),
                 }
             };
             let id = c.s.next_id();
@@ -1023,30 +1148,855 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             Ok(())
         }
         Act::Battle { a, b } => {
-            // 効果によるバトル: a と b(どちらも変数の参照)のクリーチャーをバトルさせる。どちらかがバトルゾーンにいなければ何も起きない
-            let (pa, pb) = {
-                let cc = cc_of(c.env(), f);
-                let pid_of = |name: &str| -> Option<i32> {
-                    let u = *var_uids(&cc, name, false).first()?;
-                    let card = &c.s.cards[u as usize];
-                    if card.zone != Zone::Battle {
-                        return None;
-                    }
-                    let pm = c.s.perm(card.pid)?;
-                    if pm.cards[0] == u {
-                        Some(pm.pid)
-                    } else {
-                        None
-                    }
+            // 効果によるバトル: a と b(どちらも変数の参照)のクリーチャーをバトルさせる。どちらかがバトルゾーンにいなければ何も起きない。
+            // 「バトルする時」「バトルの後」の誘発や身代わり(battleProxy)がある対戦は、手続き(battle)で段階を踏む。ない対戦は、その場で解決する
+            let staged = game_has(c.env(), Feat::BattleProxy) || listens(c, s::BATTLE_STARTED) || listens(c, s::AFTER_BATTLE);
+            if !staged {
+                let (pa, pb) = {
+                    let cc = cc_of(c.env(), f);
+                    let pid_of = |name: &str| -> Option<i32> {
+                        let u = *var_uids(&cc, name, false).first()?;
+                        let card = &c.s.cards[u as usize];
+                        if card.zone != Zone::Battle {
+                            return None;
+                        }
+                        let pm = c.s.perm(card.pid)?;
+                        if pm.cards[0] == u {
+                            Some(pm.pid)
+                        } else {
+                            None
+                        }
+                    };
+                    (pid_of(a), pid_of(b))
                 };
-                (pid_of(a), pid_of(b))
+                if let (Some(x), Some(y)) = (pa, pb) {
+                    if x != y {
+                        resolve_battle(c, x, y)?;
+                        c.s.dirty_sba = true;
+                    }
+                }
+                return Ok(());
+            }
+            let (as_, bs) = {
+                let cc = cc_of(c.env(), f);
+                (var_uids(&cc, a, false), var_uids(&cc, b, false))
             };
-            if let (Some(x), Some(y)) = (pa, pb) {
-                if x != y {
-                    resolve_battle(c, x, y)?;
-                    c.s.dirty_sba = true;
+            let as_: Vec<i32> = as_.into_iter().filter(|&u| c.s.cards[u as usize].zone == Zone::Battle).collect();
+            let bs: Vec<i32> = bs.into_iter().filter(|&u| c.s.cards[u as usize].zone == Zone::Battle).collect();
+            if as_.is_empty() || bs.is_empty() {
+                return Ok(());
+            }
+            let id = c.s.next_id();
+            let vars: Vars = vec![(sym("a"), Val::Int(c.s.cards[as_[0] as usize].pid as i64)), (sym("d"), Val::Int(c.s.cards[bs[0] as usize].pid as i64))];
+            c.s.cont.push(Frame::Proc(ProcFrame { id, caused_by: c.cause, name: ProcName::Battle, stage: 0, vars }));
+            Ok(())
+        }
+        Act::MoveBottom { who, n, to, cause, tapped, as_ } => {
+            let p = player_of(f, *who);
+            let n = {
+                let cc = cc_of(c.env(), f);
+                eval_expr(&cc, n)
+            } as usize;
+            let deck = &c.s.players[p as usize].deck;
+            let bottom: Vec<i32> = deck[deck.len().saturating_sub(n)..].to_vec();
+            let mut o = MoveOpts::new(*to, *cause);
+            o.tapped = tapped.unwrap_or(false);
+            let res = move_cards(c, &bottom, &o)?;
+            if let Some(a) = as_ {
+                let refs: Vec<ObjRef> = res.iter().filter(|r| r.moved).map(|r| ObjRef { uid: r.uid, ep: r.ep }).collect();
+                var_set(&mut f.vars, *a, Val::refs(&refs));
+            }
+            Ok(())
+        }
+        Act::ShuffleIn { sel } => {
+            // 山札に加えてシャッフルする(それぞれの持ち主の山札に)
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel)
+            };
+            if uids.is_empty() {
+                return Ok(());
+            }
+            let mut owners: Vec<PlayerId> = Vec::new();
+            for &u in &uids {
+                let o = c.s.cards[u as usize].owner;
+                if !owners.contains(&o) {
+                    owners.push(o);
                 }
             }
+            let mut o = MoveOpts::new(Zone::Deck, s::EFFECT);
+            o.pos = Some(true);
+            move_cards(c, &uids, &o)?;
+            for p in owners {
+                shuffle_deck(c, p);
+            }
+            Ok(())
+        }
+        Act::Bottom { of, except } => {
+            // 山札の下に、いまの並びのまま置く(「好きな順序で山札の下に置く」。並びは変えない)
+            let (skip, all) = {
+                let cc = cc_of(c.env(), f);
+                (except.as_ref().map_or(vec![], |e| var_uids(&cc, e, true)), var_uids(&cc, of, true))
+            };
+            let uids: Vec<i32> = all.into_iter().filter(|u| c.s.cards[*u as usize].zone == Zone::Deck && !skip.contains(u)).collect();
+            if uids.is_empty() {
+                return Ok(());
+            }
+            let owner = c.s.cards[uids[0] as usize].owner;
+            if deck_locked(c.env(), owner) {
+                return Ok(()); // 山札の順序を変えられない(5.S.D.)
+            }
+            for &u in &uids {
+                let deck = &mut c.s.players[owner as usize].deck;
+                if let Some(i) = deck.iter().position(|x| *x == u) {
+                    deck.remove(i);
+                }
+            }
+            for &u in &uids {
+                c.s.players[owner as usize].deck.push(u);
+                c.s.cards[u as usize].ep += 1;
+            }
+            Ok(())
+        }
+        Act::SummonOnto { sel, under } => {
+            // 無月の門など: このカードを、選んだカードの上に重ねて召喚する(コストは支払わない)
+            let (uid, under_u) = {
+                let cc = cc_of(c.env(), f);
+                (resolve_sel(&cc, sel).first().copied(), var_uids(&cc, under, false))
+            };
+            let uid = match uid {
+                Some(u) => u,
+                None => return Ok(()),
+            };
+            let zone = c.s.cards[uid as usize].zone;
+            if zone != Zone::Hand && zone != Zone::Grave {
+                return Ok(());
+            }
+            let fi = creature_face(c, uid);
+            if fi < 0 {
+                return Ok(());
+            }
+            let under_u: Vec<i32> = under_u.into_iter().filter(|&u| u != uid).collect();
+            let mut evs: Vec<Rc<Ev>> = Vec::new();
+            let mut o = MoveOpts::new(Zone::Battle, s::SUMMON);
+            o.via = Some(s::SUMMON);
+            o.face = Some(fi);
+            o.paid = Some(0);
+            o.free = true;
+            o.under = Some(under_u);
+            o.from = Some(zone);
+            enter_battle(c, uid, &o, &mut evs)?;
+            c.s.batch_no += 1;
+            collect_batch(c, &evs);
+            c.s.dirty_sba = true;
+            Ok(())
+        }
+        Act::ExtraTurn => {
+            // 「このターンの後に自分のターンを追加する」
+            c.s.extra_turns.get_or_insert_with(Vec::new).push(f.controller);
+            emit(c, sym("extraTurn"), vec![(s::BY, Val::Int(f.controller as i64)), (s::SOURCE, Val::Int(f.source.uid as i64))]);
+            Ok(())
+        }
+        Act::MarkUsed { key } => {
+            // ゲーム中に1度の能力を使った印(cond の unused で調べる)
+            c.s.usage_set(&UKey::Other(format!("once:{}:{}", f.source.uid, key)), 1);
+            Ok(())
+        }
+        Act::PutUnder { sel, onto } => {
+            // カードを、バトルゾーンの山(フィールドなど)の下に置く。sel = 置くカード、onto = 山の一番上のカード
+            let (base, uids) = {
+                let cc = cc_of(c.env(), f);
+                (resolve_sel(&cc, onto).first().copied(), resolve_sel(&cc, sel))
+            };
+            let base = match base {
+                Some(b) if c.s.cards[b as usize].zone == Zone::Battle => b,
+                _ => return Ok(()),
+            };
+            let perm_pid = match c.s.perm(c.s.cards[base as usize].pid) {
+                Some(p) => p.pid,
+                None => return Ok(()),
+            };
+            for u in uids {
+                if c.s.cards[u as usize].zone == Zone::Battle {
+                    continue;
+                }
+                let from = c.s.cards[u as usize].zone;
+                let snap = Rc::new(snap_of(c.env(), u));
+                let owner = c.s.cards[u as usize].owner;
+                remove_zone_card(c, u);
+                {
+                    let card = &mut c.s.cards[u as usize];
+                    card.zone = Zone::Battle;
+                    card.ep += 1;
+                    card.pid = perm_pid;
+                    card.tapped = false;
+                    card.face = 0;
+                }
+                if let Some((po, pi)) = c.s.perm_by_pid(perm_pid) {
+                    c.s.players[po as usize].battle[pi].cards.push(u);
+                }
+                emit(
+                    c,
+                    s::MOVED,
+                    vec![
+                        (s::CARD, Val::Int(u as i64)),
+                        (s::OWNER, Val::Int(owner as i64)),
+                        (s::FROM, Val::zone(from)),
+                        (s::TO, Val::zone(Zone::Battle)),
+                        (s::CAUSE, Val::Str(sym("putUnder"))),
+                        (s::KIND, Val::Str(s::SPELL)),
+                        (s::EX, Val::Bool(false)),
+                        (s::LKI, Val::Snap(snap)),
+                        (s::UNDERNEATH, Val::Bool(true)),
+                    ],
+                );
+            }
+            c.s.dirty_sba = true;
+            Ok(())
+        }
+        Act::TapLock { sel } => {
+            // タップして、次の持ち主のターンのはじめにアンタップしない(クリーチャー・マナのカード)
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel)
+            };
+            if uids.is_empty() {
+                return Ok(());
+            }
+            let mut pids: Vec<i32> = Vec::new();
+            let mut mana: Vec<i32> = Vec::new();
+            let mut owners: Vec<PlayerId> = Vec::new();
+            for &u in &uids {
+                let (owner, zone, pid) = {
+                    let card = &c.s.cards[u as usize];
+                    (card.owner, card.zone, card.pid)
+                };
+                if !owners.contains(&owner) {
+                    owners.push(owner);
+                }
+                set_tapped(c, u, true);
+                if zone == Zone::Battle {
+                    pids.push(pid);
+                } else if zone == Zone::Mana {
+                    mana.push(u);
+                }
+            }
+            for owner in owners {
+                let ps: Vec<i32> = pids.iter().copied().filter(|&p| c.s.perm_by_pid(p).map_or(false, |(po, _)| po == owner)).collect();
+                let ms: Vec<i32> = mana.iter().copied().filter(|&u| c.s.cards[u as usize].owner == owner).collect();
+                let id = c.s.next_id();
+                let turn = c.s.turn;
+                c.s.effects.push(ContEffect { id, pid: -1, m: EffectMod::NoUntap { pids: ps, uids: ms }, until: Duration::UntilTurnStart { player: owner, after_turn: turn }, controller: f.controller });
+            }
+            c.s.dirty_sba = true;
+            Ok(())
+        }
+        Act::BreakShields { n } => {
+            // 自分のシールドをすべて、ブレイクする(S・トリガーも使える。終極宣言)。n があれば、そのぶんだけ
+            let me = f.controller;
+            let have = c.s.players[me as usize].shield.len();
+            let n = n.map_or(have, |x| (x.max(0) as usize).min(have));
+            if n == 0 {
+                return Ok(());
+            }
+            let pid = c.s.cards[f.source.uid as usize].pid;
+            let id = c.s.next_id();
+            let vars: Vars = vec![(s::PID, Val::Int(pid as i64)), (s::OWNER, Val::Int(opp(me) as i64)), (s::N, Val::Int(n as i64))];
+            c.s.cont.push(Frame::Proc(ProcFrame { id, caused_by: c.cause, name: ProcName::Break, stage: 0, vars }));
+            Ok(())
+        }
+        Act::Judge { as_ } => {
+            // ガチンコ・ジャッジ: 各プレイヤーは、自身の山札の上から1枚目を表向きにし、それを一番下に置く。
+            // そのカードのコストが相手以上であれば、自分の勝ち。勝った時、変数 as に自分の公開したカードを入れる(負けたら空)
+            let me = f.controller;
+            let o = opp(me);
+            let um = c.s.players[me as usize].deck.first().copied();
+            let uo = c.s.players[o as usize].deck.first().copied();
+            let cm = um.map_or(-1, |u| cost_base(c.env(), u));
+            let co = uo.map_or(-1, |u| cost_base(c.env(), u));
+            let shown: Vec<i32> = [um, uo].iter().filter_map(|x| *x).collect();
+            if !shown.is_empty() {
+                emit(c, s::REVEALED, vec![(s::CARDS, Val::ints(&shown)), (s::TO, Val::Str(s::ALL)), (s::FROM, Val::zone(Zone::Deck))]);
+            }
+            for &u in &shown {
+                let owner = c.s.cards[u as usize].owner as usize;
+                let deck = &mut c.s.players[owner].deck;
+                if let Some(i) = deck.iter().position(|x| *x == u) {
+                    deck.remove(i);
+                }
+                deck.push(u);
+                c.s.cards[u as usize].ep += 1;
+            }
+            if let Some(a) = as_ {
+                let won = cm >= co && um.is_some();
+                let refs: Vec<ObjRef> = if won { vec![obj_ref(c, um.unwrap())] } else { vec![] };
+                var_set(&mut f.vars, *a, Val::refs(&refs));
+            }
+            Ok(())
+        }
+        Act::StackShield { sel, onto } => {
+            // カードを、表向きでシールド1つの上に置く(重ねる)。重ねても、シールドの枚数は変わらない
+            let (uid, base) = {
+                let cc = cc_of(c.env(), f);
+                (resolve_sel(&cc, sel).first().copied(), resolve_sel(&cc, onto).first().copied())
+            };
+            let (uid, base) = match (uid, base) {
+                (Some(u), Some(b)) => (u, b),
+                _ => return Ok(()),
+            };
+            let (bz, bowner) = {
+                let bc = &c.s.cards[base as usize];
+                (bc.zone, bc.owner)
+            };
+            let (uowner, from) = {
+                let cd = &c.s.cards[uid as usize];
+                (cd.owner, cd.zone)
+            };
+            if bz != Zone::Shield || uowner != bowner || uid == base {
+                return Ok(());
+            }
+            let i = match c.s.players[bowner as usize].shield.iter().position(|x| *x == base) {
+                Some(i) => i,
+                None => return Ok(()),
+            };
+            if from == Zone::Shield {
+                return Ok(()); // シールドのカードどうしを重ねることは、いまのカードにはない
+            }
+            let snap = Rc::new(snap_of(c.env(), uid));
+            // 下のカードたち(元の山の分も含む)
+            let mut under: Vec<i32> = vec![base];
+            {
+                let piles = c.s.piles.get_or_insert_with(Vec::new);
+                if let Some(pi) = piles.iter().position(|(k, _)| *k == base) {
+                    let (_, rest) = piles.remove(pi);
+                    under.extend(rest);
+                }
+            }
+            remove_zone_card(c, uid);
+            {
+                let card = &mut c.s.cards[uid as usize];
+                card.zone = Zone::Shield;
+                card.ep += 1;
+                card.pid = -1;
+                card.tapped = false;
+                card.face = 0;
+                card.up = true;
+            }
+            c.s.players[bowner as usize].shield[i] = uid;
+            {
+                let piles = c.s.piles.get_or_insert_with(Vec::new);
+                piles.push((uid, under));
+                piles.sort_by_key(|(k, _)| *k);
+            }
+            emit(
+                c,
+                s::MOVED,
+                vec![
+                    (s::CARD, Val::Int(uid as i64)),
+                    (s::OWNER, Val::Int(uowner as i64)),
+                    (s::FROM, Val::zone(from)),
+                    (s::TO, Val::zone(Zone::Shield)),
+                    (s::CAUSE, Val::Str(sym("stackShield"))),
+                    (s::KIND, Val::Str(s::CREATURE)),
+                    (s::EX, Val::Bool(false)),
+                    (s::LKI, Val::Snap(snap)),
+                ],
+            );
+            c.s.dirty_sba = true;
+            Ok(())
+        }
+        Act::CastSide { sel } => {
+            // バトルゾーンに置いたまま、ツインパクトの呪文側を、コストを支払わずに唱える。カードは動かない。呪文を唱えた時の能力は誘発する
+            let uid = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel).first().copied()
+            };
+            let uid = match uid {
+                Some(u) => u,
+                None => return Ok(()),
+            };
+            let (zone, owner, def, ep) = {
+                let card = &c.s.cards[uid as usize];
+                (card.zone, card.owner, card.def, card.ep)
+            };
+            if zone != Zone::Battle {
+                return Ok(());
+            }
+            let fi = spell_face(c, uid);
+            if fi < 0 {
+                return Ok(());
+            }
+            let spell_idx = match c.reg.info(def, fi).spell {
+                Some(i) => i,
+                None => return Ok(()),
+            };
+            let ev = emit(
+                c,
+                s::CAST,
+                vec![
+                    (s::CARD, Val::Int(uid as i64)),
+                    (s::OWNER, Val::Int(owner as i64)),
+                    (s::FREE, Val::Bool(true)),
+                    (s::PAID, Val::Int(0)),
+                    (s::COST, Val::Int(0)),
+                    (s::FACE, Val::Int(fi as i64)),
+                    (s::FROM, Val::zone(Zone::Battle)),
+                ],
+            );
+            c.s.batch_no += 1;
+            collect_batch(c, &[ev.clone()]);
+            let id = c.s.next_id();
+            let lki = Rc::new(snap_of(c.env(), uid));
+            c.s.cont.push(Frame::Effect(EffectFrame {
+                id,
+                caused_by: Some(ev.id),
+                ability: AbilityRef { def, face: fi as u8, idx: spell_idx },
+                source: ObjRef { uid, ep },
+                lki,
+                controller: owner,
+                pc: 0,
+                vars: vec![],
+                trigger: Some(ev),
+                no_optional: false,
+            }));
+            Ok(())
+        }
+        Act::Seal { sel } => {
+            // 封印を付ける: 持ち主の山札の上から1枚を、裏向きで、そのクリーチャーの上に置く
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel)
+            };
+            for u in uids {
+                let (zone, pid, owner) = {
+                    let card = &c.s.cards[u as usize];
+                    (card.zone, card.pid, card.owner)
+                };
+                if zone != Zone::Battle {
+                    continue;
+                }
+                let perm_pid = match c.s.perm(pid) {
+                    Some(p) => p.pid,
+                    None => continue,
+                };
+                let d = match c.s.players[owner as usize].deck.first().copied() {
+                    Some(d) => d,
+                    None => continue,
+                };
+                let snap = Rc::new(snap_of(c.env(), d));
+                remove_zone_card(c, d);
+                let downer = c.s.cards[d as usize].owner;
+                {
+                    let dc = &mut c.s.cards[d as usize];
+                    dc.zone = Zone::Battle;
+                    dc.ep += 1;
+                    dc.pid = perm_pid;
+                    dc.face = 0;
+                    dc.tapped = false;
+                }
+                if let Some((po, pi)) = c.s.perm_by_pid(perm_pid) {
+                    c.s.players[po as usize].battle[pi].seals.push(d);
+                }
+                c.s.sealed = true;
+                emit(
+                    c,
+                    s::MOVED,
+                    vec![
+                        (s::CARD, Val::Int(d as i64)),
+                        (s::OWNER, Val::Int(downer as i64)),
+                        (s::FROM, Val::zone(Zone::Deck)),
+                        (s::TO, Val::zone(Zone::Battle)),
+                        (s::CAUSE, Val::Str(sym("seal"))),
+                        (s::KIND, Val::Str(s::CREATURE)),
+                        (s::EX, Val::Bool(false)),
+                        (s::LKI, Val::Snap(snap)),
+                        (s::UNDERNEATH, Val::Bool(true)),
+                    ],
+                );
+            }
+            c.s.dirty_sba = true;
+            Ok(())
+        }
+        Act::Stab { sel, depth } => {
+            // 持ち主の山札の上から depth 枚目の位置に、横向きに刺す
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel)
+            };
+            stab_into_deck(c, &uids, *depth);
+            Ok(())
+        }
+        Act::NinjaChange { sel } => {
+            // ニンジャ・チェンジ: 相手のクリーチャーの攻撃・ブロックの途中で、自分のクリーチャー(sel)を手札に戻し、手札のこのクリーチャーを出す。
+            // 攻撃先・ブロッカーが入れ替わるクリーチャーだったなら、出たクリーチャーがその役を引き継ぐ
+            let trig = match &f.trigger {
+                Some(t) if t.ty == s::ATTACK_DECLARED || t.ty == s::BLOCKED => t.clone(),
+                _ => return Ok(()),
+            };
+            let uid = f.source.uid;
+            let (cep, czone, cowner) = {
+                let card = &c.s.cards[uid as usize];
+                (card.ep, card.zone, card.owner)
+            };
+            if cep != f.source.ep || czone != Zone::Hand {
+                return Ok(());
+            }
+            let old = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel).first().copied()
+            };
+            let old = match old {
+                Some(o) if c.s.cards[o as usize].zone == Zone::Battle => o,
+                _ => return Ok(()),
+            };
+            let (old_pid, was_tapped) = match c.s.perm_by_pid(c.s.cards[old as usize].pid) {
+                Some((po, pi)) if po == cowner => {
+                    let pm = &c.s.players[po as usize].battle[pi];
+                    (pm.pid, pm.tapped)
+                }
+                _ => return Ok(()),
+            };
+            let attacker = trig.int(s::ATTACKER).unwrap_or(-1) as i32;
+            let fr_idx = c.s.cont.iter().rposition(|x| matches!(x, Frame::Proc(p) if p.name == ProcName::Attack && var_get(&p.vars, s::PID).and_then(|v| v.as_i32()) == Some(attacker)));
+            let fi = creature_face(c, uid);
+            if fi < 0 {
+                return Ok(());
+            }
+            let nj = sym("ninjaChange");
+            let mut o = MoveOpts::new(Zone::Battle, nj);
+            o.via = Some(nj);
+            o.face = Some(fi);
+            o.tapped = was_tapped;
+            o.paid = Some(0);
+            let rep = if game_has(c.env(), Feat::EntryReplace) { entry_replacement(c, uid, &o, fi, nj)? } else { None };
+            let res = move_cards(c, &[old], &MoveOpts::new(Zone::Hand, s::BOUNCE))?;
+            if !res.first().map_or(false, |r| r.moved) {
+                return Ok(());
+            }
+            let mut evs: Vec<Rc<Ev>> = Vec::new();
+            if let Some(rep) = rep {
+                apply_entry_replacement(c, uid, &rep)?;
+            } else {
+                o.no_replace = true;
+                enter_battle(c, uid, &o, &mut evs)?;
+            }
+            let new_pid = c.s.cards[uid as usize].pid;
+            if let Some(i) = fr_idx {
+                if let Frame::Proc(p) = &mut c.s.cont[i] {
+                    let is_old = var_get(&p.vars, s::TARGET).and_then(target_from_val) == Some(crate::state::Target::Creature(old_pid));
+                    if is_old {
+                        var_set(&mut p.vars, s::TARGET, target_to_val(&crate::state::Target::Creature(new_pid)));
+                    }
+                }
+            }
+            c.s.batch_no += 1;
+            collect_batch(c, &evs);
+            c.s.dirty_sba = true;
+            Ok(())
+        }
+        Act::GrantShieldTrigger { sel } => {
+            // シールドのカード(sel)に、次の持ち主のターンのはじめまで「S・トリガー」を与える
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel)
+            };
+            for u in uids {
+                let (zone, ep) = {
+                    let card = &c.s.cards[u as usize];
+                    (card.zone, card.ep)
+                };
+                if zone != Zone::Shield {
+                    continue;
+                }
+                let turn = c.s.turn as i64;
+                c.s.usage_set(&UKey::Other(format!("stg:{}:{}", u, ep)), turn);
+            }
+            Ok(())
+        }
+        Act::Cross { gear, to } => {
+            // クロスギア(gear)を、クリーチャー(to)にクロスする(コストは支払わない)
+            let (gu, hu) = {
+                let cc = cc_of(c.env(), f);
+                let g = match gear {
+                    SelOrVar::Var(n) => var_uids(&cc, n, true),
+                    SelOrVar::Sel(sl) => select_cards(&cc, sl),
+                };
+                let h = match to {
+                    SelOrVar::Var(n) => var_uids(&cc, n, true),
+                    SelOrVar::Sel(sl) => select_cards(&cc, sl),
+                };
+                (g.first().copied(), h.first().copied())
+            };
+            let (gu, hu) = match (gu, hu) {
+                (Some(g), Some(h)) => (g, h),
+                _ => return Ok(()),
+            };
+            let gp = if c.s.cards[gu as usize].zone == Zone::Battle { c.s.perm_by_pid(c.s.cards[gu as usize].pid) } else { None };
+            let hp = if c.s.cards[hu as usize].zone == Zone::Battle { c.s.perm_by_pid(c.s.cards[hu as usize].pid) } else { None };
+            let ((go, gi), (ho, hi)) = match (gp, hp) {
+                (Some(g), Some(h)) => (g, h),
+                _ => return Ok(()),
+            };
+            let host_pid = c.s.players[ho as usize].battle[hi].pid;
+            let host_top = c.s.players[ho as usize].battle[hi].cards[0];
+            if go != ho || c.s.players[go as usize].battle[gi].crossed_on == Some(host_pid) {
+                return Ok(());
+            }
+            c.s.players[go as usize].battle[gi].crossed_on = Some(host_pid);
+            let ev = emit(
+                c,
+                sym("crossed"),
+                vec![
+                    (s::CARD, Val::Int(gu as i64)),
+                    (s::OWNER, Val::Int(go as i64)),
+                    (sym("host"), Val::Int(host_top as i64)),
+                    (sym("hostPid"), Val::Int(host_pid as i64)),
+                    (s::FREE, Val::Bool(true)),
+                ],
+            );
+            collect_batch(c, &[ev]);
+            Ok(())
+        }
+        Act::AllowSummon { sel } => {
+            // そのカード(マナゾーン)を、このターン、マナゾーンから召喚してもよい(コストは支払う)
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel)
+            };
+            for u in uids {
+                let (zone, ep) = {
+                    let card = &c.s.cards[u as usize];
+                    (card.zone, card.ep)
+                };
+                if zone == Zone::Mana {
+                    let turn = c.s.turn as i64;
+                    c.s.usage_set(&UKey::Other(format!("pm:{}:{}", u, ep)), turn);
+                }
+            }
+            Ok(())
+        }
+        Act::DropUnder { sel, n, deck } => {
+            // クリーチャー(進化の山)の下にあるカードを、n 枚(省略 = すべて)、墓地(または山札の下)に置く
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel)
+            };
+            for u in uids {
+                let (zone, pid) = {
+                    let card = &c.s.cards[u as usize];
+                    (card.zone, card.pid)
+                };
+                if zone != Zone::Battle {
+                    continue;
+                }
+                let (po, pi) = match c.s.perm_by_pid(pid) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                if c.s.players[po as usize].battle[pi].cards[0] != u {
+                    continue;
+                }
+                let len = c.s.players[po as usize].battle[pi].cards.len();
+                let k = n.map_or(len.saturating_sub(1), |x| (x.max(0) as usize).min(len.saturating_sub(1)));
+                for _ in 0..k {
+                    let uc = match c.s.players[po as usize].battle[pi].cards.pop() {
+                        Some(x) => x,
+                        None => break,
+                    };
+                    if uc == u {
+                        break;
+                    }
+                    let snap = Rc::new(snap_of(c.env(), uc));
+                    let uowner = c.s.cards[uc as usize].owner;
+                    let dest = if *deck { Zone::Deck } else { Zone::Grave };
+                    {
+                        let ucard = &mut c.s.cards[uc as usize];
+                        ucard.zone = dest;
+                        ucard.ep += 1;
+                        ucard.pid = -1;
+                        ucard.tapped = false;
+                        ucard.face = 0;
+                    }
+                    if *deck {
+                        c.s.players[uowner as usize].deck.push(uc);
+                    } else {
+                        c.s.players[uowner as usize].grave.push(uc);
+                    }
+                    emit(
+                        c,
+                        s::MOVED,
+                        vec![
+                            (s::CARD, Val::Int(uc as i64)),
+                            (s::OWNER, Val::Int(uowner as i64)),
+                            (s::FROM, Val::zone(Zone::Battle)),
+                            (s::TO, Val::zone(dest)),
+                            (s::CAUSE, Val::Str(sym("trashUnder"))),
+                            (s::KIND, Val::Str(s::CREATURE)),
+                            (s::EX, Val::Bool(false)),
+                            (s::LKI, Val::Snap(snap)),
+                            (s::UNDERNEATH, Val::Bool(true)),
+                        ],
+                    );
+                }
+            }
+            c.s.dirty_sba = true;
+            Ok(())
+        }
+        Act::DestroyTop { sel } => {
+            // クリーチャー(進化の山)の一番上のカードだけを破壊する(下のカードは残る)
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel)
+            };
+            for u in uids {
+                if c.s.cards[u as usize].zone != Zone::Battle {
+                    continue;
+                }
+                let mut o = MoveOpts::new(Zone::Grave, s::DESTROY);
+                o.alone = true;
+                move_cards(c, &[u], &o)?;
+            }
+            Ok(())
+        }
+        Act::BreakOpp { n } => {
+            // このクリーチャー(発生源)が、相手のシールドを n 個ブレイクする(破天九語)
+            let me = f.controller;
+            let have = c.s.players[opp(me) as usize].shield.len();
+            let k = (*n).min(have as i32);
+            if k <= 0 {
+                return Ok(());
+            }
+            let pid = c.s.cards[f.source.uid as usize].pid;
+            let id = c.s.next_id();
+            let vars: Vars = vec![(s::PID, Val::Int(pid as i64)), (s::OWNER, Val::Int(me as i64)), (s::N, Val::Int(k as i64))];
+            c.s.cont.push(Frame::Proc(ProcFrame { id, caused_by: c.cause, name: ProcName::Break, stage: 0, vars }));
+            Ok(())
+        }
+        Act::Win => {
+            // 自分はゲームに勝つ
+            if c.s.winner != Winner::None {
+                return Ok(());
+            }
+            c.s.winner = Winner::P(f.controller);
+            c.s.lose_reason = Some("効果による勝利".to_string());
+            emit(c, s::GAME_OVER, vec![(s::WINNER, Val::Int(f.controller as i64)), (s::REASON, Val::Str(sym("効果による勝利")))]);
+            Ok(())
+        }
+        Act::Rush { sel, if_attacked } => {
+            // アビスラッシュ(効果で出したクリーチャー): このターン攻撃でき、ターンの終わりに(ifAttacked なら、攻撃していれば)山札の下に置く
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel)
+            };
+            for u in uids {
+                let (zone, pid) = {
+                    let card = &c.s.cards[u as usize];
+                    (card.zone, card.pid)
+                };
+                if zone != Zone::Battle {
+                    continue;
+                }
+                let turn = c.s.turn;
+                if let Some((po, pi)) = c.s.perm_by_pid(pid) {
+                    let pm = &mut c.s.players[po as usize].battle[pi];
+                    pm.rush = Some(turn);
+                    if *if_attacked {
+                        pm.rush_if_attacked = true;
+                    }
+                }
+            }
+            Ok(())
+        }
+        Act::Play { sel, alt } => {
+            // そのカードを、別のコスト(alt)で使う(キリフダッシュ)。払えなければ何も起きない
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel)
+            };
+            for u in uids {
+                let fi = creature_face(c, u);
+                if fi < 0 {
+                    continue;
+                }
+                let (ep, zone) = {
+                    let card = &c.s.cards[u as usize];
+                    (card.ep, card.zone)
+                };
+                let id = c.s.next_id();
+                let extra = match alt {
+                    Some(a) => Val::Obj(Rc::new(vec![(sym("alt"), Val::Str(sym(a)))])),
+                    None => Val::Null,
+                };
+                let mut vars: Vars = vec![
+                    (s::UID, Val::Int(u as i64)),
+                    (s::EP, Val::Int(ep as i64)),
+                    (s::FROM, Val::zone(zone)),
+                    (s::FACE, Val::Int(fi as i64)),
+                    (s::FREE, Val::Bool(false)),
+                ];
+                if alt.is_some() {
+                    vars.push((s::EXTRA, extra));
+                }
+                vars.push((s::AFTER, Val::Null));
+                vars.push((s::SETTLE, Val::Bool(false)));
+                vars.push((sym("soft"), Val::Bool(true)));
+                c.s.cont.push(Frame::Proc(ProcFrame { id, caused_by: c.cause, name: ProcName::Play, stage: 0, vars }));
+            }
+            Ok(())
+        }
+        Act::UseCip { sel } => {
+            // そのカードの「このクリーチャーが出た時」で始まる能力を1つ使う(どのゾーンのカードでもよい。最初の1つ)
+            // 捨てたばかりのカードなど、直前に動いたカードも指せるように、世代は見ない
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                match sel {
+                    SelOrVar::Var(n) => var_uids(&cc, n, true),
+                    SelOrVar::Sel(sl) => select_cards(&cc, sl),
+                }
+            };
+            for u in uids {
+                let (def, owner) = {
+                    let card = &c.s.cards[u as usize];
+                    (card.def, card.owner)
+                };
+                let nfaces = c.reg.defs[def as usize].faces.len();
+                for fi in 0..nfaces {
+                    let found = {
+                        let face = &c.reg.defs[def as usize].faces[fi];
+                        if !face.has_races && face.ty == FaceType::Spell {
+                            continue;
+                        }
+                        c.reg.info(def, fi as i32).triggers.iter().copied().find(|&ti| match &face.abilities[ti as usize] {
+                            Ability::Trigger { spec, gen, .. } => {
+                                !*gen && spec.subject == Some(Subject::Self_) && spec.on.len() == 1 && spec.on[0].ty == s::ENTERED
+                            }
+                            _ => false,
+                        })
+                    };
+                    let ti = match found {
+                        Some(x) => x,
+                        None => continue,
+                    };
+                    let evid = c.s.next_id();
+                    let ev = Rc::new(Ev { id: evid, caused_by: None, ty: s::ENTERED, turn: c.s.turn, f: vec![(s::CARD, Val::Int(u as i64)), (s::OWNER, Val::Int(owner as i64))] });
+                    let src = obj_ref(c, u);
+                    push_effect(c, AbilityRef { def, face: fi as u8, idx: ti }, src, f.controller, Some(ev), true);
+                    break;
+                }
+            }
+            Ok(())
+        }
+        Act::GraveToBottom { who } => {
+            // プレイヤーの墓地をシャッフルして、山札の下に置く
+            let p = player_of(f, *who);
+            let mut uids: Vec<i32> = c.s.players[p as usize].grave.clone();
+            if uids.is_empty() {
+                return Ok(());
+            }
+            shuffle_in_place(&mut c.s, &mut uids);
+            let mut o = MoveOpts::new(Zone::Deck, s::EFFECT);
+            o.pos = Some(false);
+            move_cards(c, &uids, &o)?;
             Ok(())
         }
         Act::Log { ty } => {
@@ -1054,8 +2004,15 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             emit(c, *ty, vec![(s::OWNER, Val::Int(f.controller as i64)), (s::SOURCE, Val::Int(f.source.uid as i64))]);
             Ok(())
         }
-        Act::SetVar { as_, value } => {
-            var_set(&mut f.vars, *as_, value.clone());
+        Act::SetVar { as_, value, expr } => {
+            let v = match expr {
+                Some(x) => {
+                    let cc = cc_of(c.env(), f);
+                    Val::Int(eval_expr(&cc, x))
+                }
+                None => value.clone(),
+            };
+            var_set(&mut f.vars, *as_, v);
             Ok(())
         }
     }
