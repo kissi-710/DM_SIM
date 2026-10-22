@@ -793,7 +793,9 @@ function actShuffleIn(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): vo
 /** 山札の下に、いまの並びのまま置く(「好きな順序で山札の下に置く」。並びは変えない) */
 function actBottom(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
-  const uids = varUids(cc, a.of, { ignoreEp: true }).filter((u) => s.cards[u].zone === 'deck');
+  // except: 山札の下に置かないカード(メクレイドで選んだカードなど)
+  const skip = a.except ? varUids(cc, a.except, { ignoreEp: true }) : [];
+  const uids = varUids(cc, a.of, { ignoreEp: true }).filter((u) => s.cards[u].zone === 'deck' && !skip.includes(u));
   if (uids.length === 0) return;
   const owner = s.cards[uids[0]].owner;
   if (deckLocked(c, owner)) return; // 山札の順序を変えられない(5.S.D.)

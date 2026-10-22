@@ -180,5 +180,18 @@ export const nameHas = (s: string): Cond => ({ nameHas: s });
 
 /** このカードをデッキに何枚入れてもよい */
 export const unlimited = (def: CardDef): CardDef => ({ ...def, unlimited: true });
+/**
+ * メクレイドX: 山札の上から3枚を見る。指定の種族でコストX以下のカードを1枚、コストを支払わずに使ってもよい(クリーチャーは召喚、呪文は唱える)。
+ * 残りは山札の下に置く(順序は今のまま)。W・メクレイドは、これを2回行う(times = 2)
+ */
+export const mekureido = (raceName: string, x: number, times = 1): StepDef[] => {
+  const body: StepDef[] = [
+    act({ lookTop: { n: 3, as: '$mk' } }),
+    selectUpTo('$mc', { zone: 'deck', owner: 'self', of: '$mk', where: and(race(raceName), costLte(x)) }, 1, { prompt: `コストを支払わずに使う、${raceName}のコスト${x}以下のカードを選んでください(使わなくてもよい)` }),
+    act({ bottom: { of: '$mk', except: '$mc' } }),
+    ifc({ nonEmpty: '$mc' }, [ifc({ some: { var: '$mc', where: { type: 'creature' } } }, [act({ summon: { sel: '$mc' } })], [act({ castFree: { sel: '$mc' } })])]),
+  ];
+  return times === 1 ? body : [{ op: 'repeat', times, body }];
+};
 /** パワード・ブレイカー(パワー n ごとに、シールドをもう1つブレイクする) */
 export const poweredBreaker = (n = 6000): Ability => kw('poweredBreaker', { n });

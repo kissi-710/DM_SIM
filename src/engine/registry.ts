@@ -74,7 +74,9 @@ export type FeatureName =
   | 'mustBeChosen'
   | 'firstBattleWins'
   | 'enterTapped'
-  | 'allowPlayFrom';
+  | 'allowPlayFrom'
+  | 'noOppShieldTrigger'
+  | 'attackMeFirst';
 
 export interface Registry {
   db: CardDB;
@@ -179,7 +181,7 @@ const KNOWN_ACTS = new Set([
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame', 'onBase', 'powerRank',
+  'turnOf', 'zoneIs', 'exShield', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'selfTapped', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame', 'onBase', 'powerRank',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
@@ -520,6 +522,8 @@ export function loadRegistry(origDb: CardDB): Registry {
     firstBattleWins: staticOf('firstBattleWins'),
     enterTapped: staticOf('enterTappedFirst', 'enterTapped'),
     allowPlayFrom: staticOf('allowPlayFrom'),
+    noOppShieldTrigger: staticOf('noOppShieldTrigger'),
+    attackMeFirst: staticOf('attackMeFirst'),
   };
   // program() の高速な引き当て: 定義ID → (面・能力・任意なし) の配列。文字列キーを毎回作らない
   const progFast = new Map<string, (Program | undefined)[]>();

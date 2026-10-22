@@ -1078,9 +1078,11 @@ export function declaration(c: Ctx, uid: number): { kind: 'shieldTrigger' | 'gSt
   const card = s.cards[uid];
   const def = c.reg.defs[card.defId];
   const cc = mkCC(c, card.owner, { self: uid });
+  // 相手の「自身の S・トリガーを使えない」(バイラス・カースド)
+  const stBanned = gameHas(c, 'noOppShieldTrigger') && activeStatics(c, 'noOppShieldTrigger').some((st) => st.controller !== card.owner);
   for (let fi = 0; fi < def.faces.length; fi++) {
     const info = c.reg.getInfo(card.defId, fi);
-    for (const st of info.shieldTriggers) {
+    for (const st of stBanned ? [] : info.shieldTriggers) {
       if (st.ability.while && !evalCond(cc, st.ability.while)) continue;
       return { kind: 'shieldTrigger', ref: { defId: card.defId, face: fi, idx: st.idx }, face: fi };
     }

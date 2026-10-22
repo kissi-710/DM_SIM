@@ -221,6 +221,11 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     for (let i = from; i < s.turnLog.length; i++) if (matchPattern(cc, o.logged.pattern, s.turnLog[i])) n++;
     return n >= min;
   }
+  if ('selfTapped' in o) {
+    if (cc.self == null) return false;
+    const sp = permByPid(s, s.cards[cc.self].pid);
+    return sp !== null && sp !== undefined && s.cards[cc.self].zone === 'battle' && sp.perm.tapped === o.selfTapped;
+  }
   if ('zoneIs' in o) {
     return cc.it != null && s.cards[cc.it].zone === o.zoneIs;
   }

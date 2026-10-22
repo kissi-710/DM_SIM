@@ -69,6 +69,8 @@ export type Cond =
   | { faceUp: true }
   /** 発生源が、ハイパーモード中 */
   | { hyper: true }
+  /** 発生源(バトルゾーンのクリーチャー)が、タップしている(true)・アンタップしている(false) */
+  | { selfTapped: boolean }
   /** 発生源が、そのターンに別のコスト(altCost の id)を使って出た */
   | { altUsed: string }
   /** $it のカード名が、指定の文字列を含む */
@@ -200,7 +202,11 @@ export type StaticMod =
   /** このクリーチャーがシールドをブレイクする時、相手はそのシールドを手札に加えるかわりに、自身の山札の上から4枚目の位置に横向きに刺す(5.S.D.) */
   | { type: 'stab5sd' }
   /** 相手は、自身の山札を見れず、順序を変えられない */
-  | { type: 'deckLock' };
+  | { type: 'deckLock' }
+  /** 相手は、自身の「S・トリガー」を使えない(G・ストライクは使える) */
+  | { type: 'noOppShieldTrigger' }
+  /** 相手のクリーチャーが攻撃するなら、可能ならこのクリーチャーを攻撃する */
+  | { type: 'attackMeFirst' };
 
 export type ReplaceApply =
   | { type: 'changeDest'; to: ZoneName }

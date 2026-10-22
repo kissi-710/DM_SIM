@@ -283,6 +283,20 @@ export function isSick(c: Ctx, perm: Permanent): boolean {
 }
 
 export function canAttack(c: Ctx, perm: Permanent, target: { kind: 'player' } | { kind: 'creature'; pid: number }): boolean {
+  if (!canAttackBase(c, perm, target)) return false;
+  // 「相手のクリーチャーが攻撃するなら、可能ならこのクリーチャーを攻撃する」(バイラス・カースド)
+  if (gameHas(c, 'attackMeFirst')) {
+    const owner = c.s.cards[perm.cards[0]].owner;
+    const forced = activeStatics(c, 'attackMeFirst').filter((st) => st.controller !== owner);
+    if (forced.length > 0) {
+      const pids = forced.map((st) => c.s.cards[st.src].pid).filter((pid) => canAttackBase(c, perm, { kind: 'creature', pid }));
+      if (pids.length > 0) return target.kind === 'creature' && pids.includes(target.pid);
+    }
+  }
+  return true;
+}
+
+function canAttackBase(c: Ctx, perm: Permanent, target: { kind: 'player' } | { kind: 'creature'; pid: number }): boolean {
   const s = c.s;
   const uid = perm.cards[0];
   if (!isCreatureType(faceTypeOf(c, uid))) return false; // タマシード・フィールド・クロスギアは攻撃できない
