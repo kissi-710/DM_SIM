@@ -135,6 +135,13 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
     return best;
   }
 
+  // クロスギア(まだどのクリーチャーにもクロスしていないもの)は、クロスする。ハイパー化できるなら、攻撃の前にハイパー化する
+  const gearPids = new Set(view.players[me].battle.filter((x) => x.crossedOn === undefined).map((x) => x.pid));
+  const cross = legal.find((a) => a.type === 'CROSS' && gearPids.has(a.gear) && !view.players[me].battle.some((x) => x.crossedOn === a.target));
+  if (cross) return cross;
+  const hyperize = legal.find((a) => a.type === 'HYPERIZE');
+  if (hyperize) return hyperize;
+
   const attacks = byType('ATTACK') as Extract<Action, { type: 'ATTACK' }>[];
   if (attacks.length > 0) {
     const oppBlockers = view.players[opp].battle.filter((p) => canBlock(c, p));
