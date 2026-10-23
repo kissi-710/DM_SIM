@@ -622,6 +622,21 @@ fn run_turn(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                         None
                     }
                 });
+                // ニンジャ・ストライク: 相手のターンに出たシノビ(そのターンの終わりに、山札の下に置く)
+                if found.is_none() {
+                    let o = opp(p);
+                    let ninja = c.s.players[o as usize].battle.iter().find(|x| x.ninja_bottom == Some(turn) && !done.contains(&x.pid)).map(|x| (x.pid, x.cards[0]));
+                    if let Some((pid, top)) = ninja {
+                        let mut mo = MoveOpts::new(Zone::Deck, s::EFFECT);
+                        mo.pos = Some(false);
+                        move_cards(c, &[top], &mo)?;
+                        let mut nd = done.clone();
+                        nd.push(pid);
+                        var_set(&mut f.vars, sym("bottomDone"), Val::ints(&nd));
+                        push_proc(c, ProcName::Settle, vec![]);
+                        return Ok(());
+                    }
+                }
                 if let Some((pid, top, end_bottom)) = found {
                     let mut o = MoveOpts::new(Zone::Deck, s::EFFECT);
                     o.pos = Some(false);

@@ -353,6 +353,7 @@ fn perm_from_json(j: &Json) -> R<Perm> {
     p.rush_if_attacked = j.get("rushIfAttacked").and_then(|x| x.as_bool()).unwrap_or(false);
     p.crossed_on = j.get("crossedOn").and_then(|x| x.as_i64()).map(|n| n as i32);
     p.end_bottom = j.get("endBottom").and_then(|x| x.as_i64()).map(|n| n as i32);
+    p.ninja_bottom = j.get("ninjaBottom").and_then(|x| x.as_i64()).map(|n| n as i32);
     Ok(p)
 }
 
@@ -663,6 +664,9 @@ pub fn state_to_json(reg: &Registry, s: &State) -> Json {
                                     }
                                     if let Some(x) = b.end_bottom {
                                         v.push(("endBottom", Json::int(x as i64)));
+                                    }
+                                    if let Some(x) = b.ninja_bottom {
+                                        v.push(("ninjaBottom", Json::int(x as i64)));
                                     }
                                     Json::obj(v)
                                 })

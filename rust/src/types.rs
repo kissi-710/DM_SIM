@@ -521,11 +521,13 @@ pub struct Perm {
     pub crossed_on: Option<i32>,
     /// J・O・E: このターンの終わりに山札の下に置き、そうしたらカードを1枚引く(そのターン)
     pub end_bottom: Option<i32>,
+    /// ニンジャ・ストライク: そのターンの終わりに、山札の下に置く(カードは引かない)
+    pub ninja_bottom: Option<i32>,
 }
 
 impl Perm {
     pub fn new(pid: i32, cards: Vec<i32>, tapped: bool, sick: bool, entered_turn: i32) -> Perm {
-        Perm { pid, cards, tapped, sick, entered_turn, hyper: false, seals: Vec::new(), rush: None, rush_if_attacked: false, crossed_on: None, end_bottom: None }
+        Perm { pid, cards, tapped, sick, entered_turn, hyper: false, seals: Vec::new(), rush: None, rush_if_attacked: false, crossed_on: None, end_bottom: None, ninja_bottom: None }
     }
 }
 

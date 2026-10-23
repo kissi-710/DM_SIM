@@ -113,6 +113,8 @@ export interface Permanent {
   crossedOn?: number;
   /** J・O・E: このターンの終わりに山札の下に置き、そうしたらカードを1枚引く(値は、そのターン) */
   endBottom?: number;
+  /** ニンジャ・ストライク: そのターンの終わりに、山札の一番下に置く(カードは引かない。値は、そのターン) */
+  ninjaBottom?: number;
 }
 
 export interface PlayerZones {

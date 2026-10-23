@@ -37,6 +37,9 @@ function faceIdxOf(card: Card, def: CardDef): number {
   return (card.zone === 'battle' || card.zone === 'limbo') && def.faces[card.face] ? card.face : 0;
 }
 
+/** 「パワーは∞」を、状態に入れられる大きな数で表す(比べるだけ) */
+const INFINITE_POWER = 999999999;
+
 /** カードの特性(パワーを計算しない軽量版)。power は面の基本パワー。コスト・面・文明・種類・種族だけを使う呼び出しはこちらを使う */
 export function charsLite(c: Ctx, uid: number, hint: number = -1): Chars {
   const card = c.s.cards[uid];
@@ -47,7 +50,9 @@ export function charsLite(c: Ctx, uid: number, hint: number = -1): Chars {
   else idx = hint >= 0 && def.faces[hint] ? hint : 0;
   const face = def.faces[idx];
   const civs = inPlay || hint >= 0 ? face.civs : unionCivs(def.faces);
-  return { face, faceIdx: idx, civs, cost: face.cost, power: face.power ?? 0, type: face.tamaseedUnless ? dynamicType(c, uid, face) : face.type, races: face.races ?? [] };
+  // 「このカードが山札で表向きになっている間、パワーは∞」(カツムゲン): 山札のカードのパワーを見るのは、表向きにした時だけ
+  const power = card.zone === 'deck' && face.abilities.some((a) => a.kind === 'static' && a.mod.type === 'infinitePowerInBattle') ? INFINITE_POWER : face.power ?? 0;
+  return { face, faceIdx: idx, civs, cost: face.cost, power, type: face.tamaseedUnless ? dynamicType(c, uid, face) : face.type, races: face.races ?? [] };
 }
 
 /** カードの特性。hint=-1 のとき、場以外のカードは面0(文明は全面の和集合)で見る。power は、バトルゾーンの一番上のカードなら継続効果を含む */

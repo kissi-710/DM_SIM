@@ -171,6 +171,28 @@ function expandFace(face: Face): Face {
         },
         steps: [{ op: 'act', act: { revolutionChange: {} } }],
       });
+    } else if (a.name === 'ninjaStrike') {
+      // 攻撃またはブロックの両方で誘発する。「この攻撃中に自分がニンジャ・ストライクを使っていなければ」(マナゾーンに n 枚以上ある時)
+      const n = a.n ?? 0;
+      for (const on of [{ type: 'attackDeclared', owner: 'opponent' }, { type: 'blocked', owner: 'opponent' }] as TriggerSpec['on'][]) {
+        out.push({
+          kind: 'trigger',
+          label: `ニンジャ・ストライク${n}`,
+          gen: true,
+          optional: true,
+          spec: {
+            on,
+            watch: ['hand'],
+            subject: 'any',
+            if: { all: [{ count: { zone: 'mana', owner: 'self' }, gte: n }, { not: { logged: { pattern: { type: 'ninjaStrike' }, since: 'attackDeclared' } } }] },
+          },
+          steps: [
+            { op: 'act', act: { log: 'ninjaStrike' } },
+            { op: 'act', act: { summon: { sel: '$self', as: '$ns' } } },
+            { op: 'act', act: { bottomAtEnd: { sel: '$ns' } } },
+          ],
+        });
+      }
     } else if (a.name === 'invasion') {
       const spec: TriggerSpec = {
         on: { type: 'attackDeclared', attackerCond: a.attacker, owner: 'self' },
@@ -195,7 +217,7 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'useCip', 'graveToBottom', 'play', 'win', 'cross', 'ninjaChange', 'grantShieldTrigger', 'breakOpp', 'allowSummon', 'destroyTop', 'dropUnder', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'bottomAtEnd', 'useCip', 'graveToBottom', 'play', 'win', 'cross', 'ninjaChange', 'grantShieldTrigger', 'breakOpp', 'allowSummon', 'destroyTop', 'dropUnder', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
@@ -205,7 +227,7 @@ const KNOWN_COND = new Set([
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
   'blocker', 'breaker', 'shieldTrigger', 'gStrike', 'speedAttacker', 'machFighter', 'exLife', 'justDiver',
-  'sympathy', 'hyperEnergy', 'yobinion', 'invasion', 'slayer', 'revolutionChange', 'poweredBreaker', 'sBack',
+  'sympathy', 'hyperEnergy', 'yobinion', 'invasion', 'ninjaStrike', 'slayer', 'revolutionChange', 'poweredBreaker', 'sBack',
 ]);
 
 /** 条件(カードデータの JSON)の検査。形がまだ信用できない入力なので、型は緩く受ける */

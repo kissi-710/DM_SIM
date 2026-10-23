@@ -65,7 +65,9 @@ pub fn chars_lite<'a>(e: Env<'a>, uid: i32, hint: i32) -> Chars<'a> {
     let face = &def.faces[idx];
     let civs: &[Civ] = if in_play || hint >= 0 { &face.civs } else { &def.union_civs };
     let ty = if face.tamaseed_unless.is_some() { dynamic_type(e, uid, face) } else { face.ty };
-    Chars { face, face_idx: idx as i32, civs, cost: face.cost, power: face.power.unwrap_or(0), ty, races: &face.races }
+    // 「このカードが山札で表向きになっている間、パワーは∞」(カツムゲン): 山札のカードのパワーを見るのは、表向きにした時だけ
+    let power = if card.zone == Zone::Deck && face.abilities.iter().any(|a| matches!(a, Ability::Static { m: StaticMod::InfinitePowerInBattle, .. })) { 999_999_999 } else { face.power.unwrap_or(0) };
+    Chars { face, face_idx: idx as i32, civs, cost: face.cost, power, ty, races: &face.races }
 }
 
 thread_local! {

@@ -1891,6 +1891,27 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             emit(c, s::GAME_OVER, vec![(s::WINNER, Val::Int(f.controller as i64)), (s::REASON, Val::Str(sym("効果による勝利")))]);
             Ok(())
         }
+        Act::BottomAtEnd { sel } => {
+            // ニンジャ・ストライク: そのターンの終わりに、山札の一番下に置く
+            let uids = {
+                let cc = cc_of(c.env(), f);
+                resolve_sel(&cc, sel)
+            };
+            for u in uids {
+                let (zone, pid) = {
+                    let card = &c.s.cards[u as usize];
+                    (card.zone, card.pid)
+                };
+                if zone != Zone::Battle {
+                    continue;
+                }
+                let turn = c.s.turn;
+                if let Some((po, pi)) = c.s.perm_by_pid(pid) {
+                    c.s.players[po as usize].battle[pi].ninja_bottom = Some(turn);
+                }
+            }
+            Ok(())
+        }
         Act::Rush { sel, if_attacked } => {
             // アビスラッシュ(効果で出したクリーチャー): このターン攻撃でき、ターンの終わりに(ifAttacked なら、攻撃していれば)山札の下に置く
             let uids = {

@@ -1238,6 +1238,17 @@ function actRush(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   }
 }
 
+/** ニンジャ・ストライク: そのターンの終わりに、山札の一番下に置く(カードは引かない) */
+function actBottomAtEnd(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone !== 'battle') continue;
+    const pm = permByPid(s, card.pid);
+    if (pm) pm.perm.ninjaBottom = s.turn;
+  }
+}
+
 /** そのカードを、別のコスト(alt)で使う(キリフダッシュ)。払えなければ何も起きない */
 function actPlay(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
@@ -1348,6 +1359,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['seal', actSeal],
   ['stab', actStab],
   ['rush', actRush],
+  ['bottomAtEnd', actBottomAtEnd],
   ['dropUnder', actDropUnder],
   ['destroyTop', actDestroyTop],
   ['allowSummon', actAllowSummon],

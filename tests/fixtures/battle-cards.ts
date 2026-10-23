@@ -94,6 +94,8 @@ export const BATTLE_TEST_CARDS: CardDef[] = [
     ],
     { power: 6000 },
   ),
+  // ニンジャ・ストライク3(相手の攻撃またはブロックの時、マナが3枚以上なら、手札から無料で召喚。ターンの終わりに山札の下)
+  card('tn-ninja', 'Tシノビ', [{ kind: 'keyword', name: 'ninjaStrike', n: 3 }], { cost: 6, power: 2000, civs: ['water'], races: ['シノビ'] }),
   // G城(実行すると表向きのシールドになる)。表向きでシールドに置かれた時、山札の上1枚をタップしてマナに置く。表向きの間、相手の召喚以外の出現をマナに置換
   {
     id: 'tc-castle',

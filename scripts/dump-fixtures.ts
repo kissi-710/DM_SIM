@@ -137,9 +137,9 @@ for (const [seed, k] of [
 }
 // 効果によるバトル・バトル時の無限パワー・踏み倒しへのバトル・多色が出た時・タップして出る・召喚封じ・G城(表向きのシールド・マナへの置換)を、Rust 版と突き合わせる
 const DECK_B1 = [
-  ...rep(4, 'tc-castle'), ...rep(4, 'tb-fighter'), ...rep(3, 'tb-inf'), ...rep(3, 'tb-slayer'), ...rep(3, 'tb-big'), ...rep(3, 'tb-mid'),
-  ...rep(3, 'tb-small'), ...rep(3, 'tb-watch'), ...rep(2, 'tb-multi'), ...rep(3, 'tb-two'), ...rep(3, 'tb-fire'), ...rep(2, 'tb-tapin'),
-  ...rep(2, 'tb-lock'), ...rep(2, 'tb-sweep'),
+  ...rep(4, 'tc-castle'), ...rep(2, 'tb-fighter'), ...rep(3, 'tb-inf'), ...rep(3, 'tb-slayer'), ...rep(3, 'tb-big'), ...rep(3, 'tb-mid'),
+  ...rep(1, 'tb-small'), ...rep(3, 'tb-watch'), ...rep(2, 'tb-multi'), ...rep(3, 'tb-two'), ...rep(3, 'tb-fire'), ...rep(2, 'tb-tapin'),
+  ...rep(2, 'tb-lock'), ...rep(2, 'tb-sweep'), ...rep(4, 'tn-ninja'),
 ];
 for (const [seed, k] of [
   [41, ['random', 'random']],

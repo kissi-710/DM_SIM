@@ -1,6 +1,6 @@
 // カード効果の再監査(docs/card-audit.md M12-24)で見つけた、既存のカード(A・B・インターステラなど)の誤りを固定するテスト。
 import { describe, expect, it } from 'vitest';
-import { battlePower, costOf, powerOf } from '../../src/engine/derive';
+import { battlePower, charsOf, costOf, powerOf } from '../../src/engine/derive';
 import { mkCtx } from '../../src/engine/state';
 import { Sim, mana, reg } from '../scenario';
 
@@ -43,5 +43,14 @@ describe('SSS級天災 デッドダムド: 墓地に置くのは破壊ではな�
     sim.drain();
     expect(sim.has(1, 'grave', W)).toBe(true);
     expect(sim.evs('moved').some((e) => e.cause === 'destroy' && sim.s.cards[e.card].owner === 1)).toBe(false);
+  });
+});
+
+describe('V頂神話 カツムゲン: 山札で表向きになっている間、パワーは∞', () => {
+  it('山札にある時のパワーは∞(「パワー〇〇以下」を満たさない)。手札では 13000', () => {
+    const sim = new Sim({ p0: { hand: ['V頂神話 カツムゲン'], deck: ['V頂神話 カツムゲン', N] } });
+    const c = mkCtx(sim.s, reg);
+    expect(charsOf(c, sim.uid(0, 'deck', 'V頂神話 カツムゲン')).power).toBeGreaterThan(900000000);
+    expect(charsOf(c, sim.uid(0, 'hand', 'V頂神話 カツムゲン')).power).toBe(13000);
   });
 });

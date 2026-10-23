@@ -480,6 +480,14 @@ function runTurn(c: Ctx, f: ProcFrame): void {
           if (x.rush === s.turn) return !(x.rushIfAttacked && !s.turnLog.some((e) => e.type === 'attackDeclared' && e.attacker === x.pid));
           return x.endBottom === s.turn;
         });
+        // ニンジャ・ストライク: 相手のターンに出たシノビ(そのターンの終わりに、山札の下に置く)
+        const ninja = perm ? undefined : s.players[opponentOf(P)].battle.find((x) => x.ninjaBottom === s.turn && !done.includes(x.pid));
+        if (ninja) {
+          moveCards(c, [ninja.cards[0]], { to: 'deck', cause: 'effect', pos: 'bottom' });
+          f.vars.bottomDone = [...done, ninja.pid];
+          pushProc(c, 'settle');
+          return;
+        }
         if (perm) {
           const moved = moveCards(c, [perm.cards[0]], { to: 'deck', cause: 'effect', pos: 'bottom' });
           f.vars.bottomDone = [...done, perm.pid];
