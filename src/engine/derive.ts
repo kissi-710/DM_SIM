@@ -262,7 +262,14 @@ export function battlePower(c: Ctx, perm: Permanent): number {
     if (st.ability.while && !evalCond(mkCC(c, c.s.cards[uid].owner, { self: uid }), st.ability.while)) continue;
     return Infinity;
   }
-  return powerOf(c, perm);
+  // 「バトル中、パワーを+n する」(ふだんのパワーには入らない)
+  let add = 0;
+  for (const st of infoOf(c, uid).statics) {
+    if (st.ability.mod.type !== 'powerAddInBattle') continue;
+    if (st.ability.while && !evalCond(mkCC(c, c.s.cards[uid].owner, { self: uid }), st.ability.while)) continue;
+    add += st.ability.mod.n;
+  }
+  return powerOf(c, perm) + add;
 }
 
 
@@ -493,7 +500,11 @@ export function costOf(c: Ctx, uid: number, faceIdx: number, opts: CostOpts = {}
   if (opts.free) return 0;
   let cost = face.cost;
   const info = c.reg.getInfo(card.defId, faceIdx);
-  if (info.sympathy) cost -= s.players[card.owner].mana.length;
+  if (info.sympathy) {
+    // 「ただしコストは0以下にはならない」(軽減が働いた時だけ。マナが0枚なら軽減されない)
+    const before = cost;
+    cost = Math.max(cost - s.players[card.owner].mana.length, Math.min(before, 1));
+  }
   if (info.hyperEnergy && opts.taps?.length) {
     // 「ただしコストは0以下にはならない」(軽減が働いた時だけ。元が0なら0のまま)
     const before = cost;

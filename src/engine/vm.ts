@@ -95,7 +95,7 @@ export function runEffect(c: Ctx, f: EffectFrame): boolean {
         source: f.source,
         prompt: `${sourceName(c, f)}: ${q}`,
       });
-      f.pc = ans ? f.pc + 1 : ins.no;
+      f.pc = ans === true ? f.pc + 1 : ins.no;
       return false;
     }
     case 'jmp':

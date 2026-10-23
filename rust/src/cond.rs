@@ -282,7 +282,7 @@ pub fn eval_cond(cc: &CC, cond: &Cond) -> bool {
         Cond::FiveCivs(sel) => {
             let mut set: Vec<Civ> = Vec::new();
             for u in select_cards(cc, sel) {
-                for civ in chars_lite(cc.e, u, -1).civs.iter() {
+                for civ in mana_civs(cc.e, u).iter() {
                     if !set.contains(civ) {
                         set.push(*civ);
                     }
@@ -293,7 +293,7 @@ pub fn eval_cond(cc: &CC, cond: &Cond) -> bool {
         Cond::CivsPresent { sel, civs } => {
             let mut set: Vec<Civ> = Vec::new();
             for u in select_cards(cc, sel) {
-                for civ in chars_lite(cc.e, u, -1).civs.iter() {
+                for civ in mana_civs(cc.e, u).iter() {
                     if !set.contains(civ) {
                         set.push(*civ);
                     }

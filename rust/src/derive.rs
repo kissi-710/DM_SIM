@@ -366,8 +366,20 @@ pub fn battle_power(e: Env, perm: &Perm) -> i64 {
     let uid = perm.cards[0];
     let card = &e.s.cards[uid as usize];
     let info = info_of(e, uid);
+    let mut add: i64 = 0;
     if !info.statics.is_empty() {
         let face = e.reg.face(card.def, chars_lite(e, uid, -1).face_idx);
+        // 「バトル中、パワーを+n する」(ふだんのパワーには入らない)
+        for &si in &info.statics {
+            if let Ability::Static { m: StaticMod::PowerAddInBattle { n }, while_ } = &face.abilities[si as usize] {
+                if let Some(w) = while_ {
+                    if !eval_cond(&CC::new(e, card.owner).with_self(uid), w) {
+                        continue;
+                    }
+                }
+                add += *n as i64;
+            }
+        }
         for &si in &info.statics {
             if let Ability::Static { m: StaticMod::InfinitePowerInBattle, while_ } = &face.abilities[si as usize] {
                 if let Some(w) = while_ {
@@ -379,7 +391,7 @@ pub fn battle_power(e: Env, perm: &Perm) -> i64 {
             }
         }
     }
-    power_of(e, perm) as i64
+    power_of(e, perm) as i64 + add
 }
 
 /// プレイヤーの表向きのシールド(G城)が持つ常在型能力のうち、pred に合うものがあるか
@@ -831,7 +843,9 @@ pub fn cost_of_once(e: Env, uid: i32, face_idx: i32, taps: &[i32], free: bool, o
     let mut cost = face.cost;
     let info = e.reg.info(card.def, face_idx);
     if info.sympathy {
-        cost -= s.players[card.owner as usize].mana.len() as i32;
+        // 「ただしコストは0以下にはならない」(軽減が働いた時だけ。マナが0枚なら軽減されない)
+        let before = cost;
+        cost = (cost - s.players[card.owner as usize].mana.len() as i32).max(before.min(1));
     }
     if info.hyper_energy && !taps.is_empty() {
         // 「ただしコストは0以下にはならない」(軽減が働いた時だけ。元が0なら0のまま)

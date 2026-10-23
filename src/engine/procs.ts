@@ -672,7 +672,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
                 source: { uid, ep: card.ep },
                 prompt: `${c.reg.defs[card.defId].name}: ${a.label ?? '墓地に置くかわりに置き換えますか?'}`,
               });
-              if (!yes) continue;
+              if (yes !== true) continue;
             }
             dest = a.apply.to;
             break;
@@ -718,7 +718,7 @@ function afterCastReplacement(c: Ctx, uid: number, faceIdx: number): boolean {
             source: { uid: src, ep: sc.ep },
             prompt: `${c.reg.defs[sc.defId].name}: ${a.label ?? '墓地に置くかわりに置き換えますか?'}`,
           });
-          if (!yes) continue;
+          if (yes !== true) continue;
         }
         const ev: Ev = { id: nextId(s), causedBy: null, type: 'afterCast', turn: s.turn, card: uid, owner: card.owner };
         s.cont.push({
@@ -1192,7 +1192,7 @@ function runBreak(c: Ctx, f: ProcFrame): void {
             source: { uid: back, ep: s.cards[back].ep },
             prompt: `S・バック: 《${c.reg.defs[s.cards[u].defId].name}》を捨てて、手札の《${c.reg.defs[s.cards[back].defId].name}》をコストを支払わずに唱えますか?`,
           });
-          if (yes) sbacks.push({ u, back });
+          if (yes === true) sbacks.push({ u, back });
         }
       }
       // 宣言がすべて終わってから、手札に加える(112.3a)

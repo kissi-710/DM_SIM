@@ -262,7 +262,7 @@
         "abilities": [
           { "kind": "keyword", "name": "breaker", "n": 2 },
           { "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" }, "steps": [{ "op": "act", "act": { "draw": 2 } }] },
-          { "kind": "static", "mod": { "type": "costDelta", "delta": -4, "cond": { "all": [{ "type": "creature" }, { "cost": { "gte": 10 } }] } } },
+          { "kind": "static", "mod": { "type": "costDelta", "delta": -4, "cond": { "all": [{ "type": "creature" }, { "cost": { "gte": 10 } }] }, "floor": 1 } },
           { "kind": "static", "mod": { "type": "cannotAttackPlayerWhenEntered" } },
           {
             "kind": "trigger", "optional": true, "label": "相手のターン終了時の無料召喚",
@@ -511,7 +511,7 @@
           { "kind": "keyword", "name": "blocker" },
           { "kind": "keyword", "name": "speedAttacker" },
           { "kind": "keyword", "name": "shieldTrigger", "while": { "shields": { "lte": 2 } } },
-          { "kind": "static", "mod": { "type": "powerAdd", "n": 10000 }, "while": { "shields": { "eq": 0 } } },
+          { "kind": "static", "mod": { "type": "powerAddInBattle", "n": 10000 }, "while": { "shields": { "eq": 0 } } },
           {
             "kind": "trigger", "spec": { "on": { "type": "entered" }, "subject": "self" },
             "steps": [
@@ -567,7 +567,7 @@
             "kind": "spell",
             "steps": [
               {
-                "op": "modes", "pick": 2, "repeat": true, "allIf": { "fiveCivs": { "zone": "battle", "owner": "self", "type": "creature" } },
+                "op": "modes", "pick": 2, "repeat": true, "allIf": { "fiveCivs": { "zone": "battle", "owner": "self", "type": "element" } },
                 "options": [
                   { "label": "山札の上1枚をシールドにする", "steps": [{ "op": "act", "act": { "addShield": { "n": 1 } } }] },
                   { "label": "カードを2枚引く", "steps": [{ "op": "act", "act": { "draw": 2 } }] },
@@ -581,7 +581,7 @@
                   {
                     "label": "相手のコスト6以下のエレメントを破壊する",
                     "steps": [
-                      { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "creature", "chooseable": true, "where": { "cost": { "lte": 6 } } }, "min": 1, "max": 1 },
+                      { "op": "select", "as": "$t", "from": { "zone": "battle", "owner": "opponent", "type": "element", "chooseable": true, "where": { "cost": { "lte": 6 } } }, "min": 1, "max": 1 },
                       { "op": "act", "act": { "move": { "sel": "$t", "to": "grave", "cause": "destroy" } } }
                     ]
                   },
@@ -675,7 +675,7 @@
             "kind": "spell",
             "steps": [
               {
-                "op": "modes", "pick": 1, "allIf": { "civsPresent": { "sel": { "zone": "battle", "owner": "self", "type": "creature" }, "civs": ["water", "darkness"] } },
+                "op": "modes", "pick": 1, "allIf": { "civsPresent": { "sel": { "zone": "battle", "owner": "self", "type": "element", "where": { "any": [{ "type": "creature" }, { "type": "tamaseed" }] } }, "civs": ["water", "darkness"] } },
                 "options": [
                   {
                     "label": "カードを3枚引き、その後自分の手札を1枚捨てる",
@@ -800,7 +800,7 @@
               {
                 "op": "modes", "pick": 1,
                 "options": [
-                  { "label": "破壊する", "steps": [{ "op": "act", "act": { "move": { "sel": "$t", "to": "grave", "cause": "destroy" } } }] },
+                  { "label": "持ち主の墓地に置く", "steps": [{ "op": "act", "act": { "move": { "sel": "$t", "to": "grave", "cause": "effect" } } }] },
                   { "label": "マナゾーンに置く", "steps": [{ "op": "act", "act": { "move": { "sel": "$t", "to": "mana", "cause": "manaPlace" } } }] },
                   { "label": "手札に戻す", "steps": [{ "op": "act", "act": { "move": { "sel": "$t", "to": "hand", "cause": "bounce" } } }] }
                 ]

@@ -413,6 +413,8 @@ pub struct TriggerSpec {
 pub enum StaticMod {
     CostDelta { delta: Expr, cond: Cond, once_per_turn: bool, floor: Option<i32> },
     PowerAttacker { n: i32 },
+    /// バトル中だけ、パワーを n 増やす(王道の革命 ドギラゴンの革命0)
+    PowerAddInBattle { n: i32 },
     BurnShields,
     FirstBattleWins,
     EnterTappedFirst,
@@ -1251,6 +1253,7 @@ pub fn parse_ability(j: &Json) -> R<Ability> {
                     floor: m.get("floor").and_then(|x| x.as_i64()).map(|x| x as i32),
                 },
                 Some("powerAttacker") => StaticMod::PowerAttacker { n: m.get("n").and_then(|x| x.as_i64()).unwrap_or(0) as i32 },
+                Some("powerAddInBattle") => StaticMod::PowerAddInBattle { n: m.get("n").and_then(|x| x.as_i64()).unwrap_or(0) as i32 },
                 Some("burnShields") => StaticMod::BurnShields,
                 Some("firstBattleWins") => StaticMod::FirstBattleWins,
                 Some("enterTappedFirst") => StaticMod::EnterTappedFirst,
