@@ -1,10 +1,10 @@
 // エンジンの入口: 初期化・step(reducer)・実行ループ(design 5)。
 import { loadRegistry, type Registry } from './registry';
-import { defaultPlayFace } from './derive';
+import { crossCost, defaultPlayFace, payNeed, planPayment } from './derive';
 import { runSba, pushProc, runProc } from './procs';
-import { collectBatch, emit, moveCards } from './ops';
+import { collectBatch, emit, moveCards, setTapped } from './ops';
 import { legalActions, validateAction } from './legal';
-import { cloneState, hashSeed, mkCtx, nextId, rngNext, shuffleInPlace, type Ctx } from './state';
+import { cloneState, hashSeed, mkCtx, nextId, permByPid, rngNext, shuffleInPlace, type Ctx } from './state';
 import { runEffect } from './vm';
 import {
   type Action,
@@ -49,7 +49,7 @@ export function checkDeck(db: CardDB | Registry, deck: string[], strict = true):
   if (strict) {
     if (deck.length !== 40) errors.push(`デッキは40枚です(現在 ${deck.length} 枚)`);
     for (const [id, n] of count) {
-      if (n > 4 && id !== 'dummy') errors.push(`${reg.defs[id]?.name ?? id} は4枚までです(現在 ${n} 枚)`);
+      if (n > 4 && id !== 'dummy' && !reg.defs[id]?.unlimited) errors.push(`${reg.defs[id]?.name ?? id} は4枚までです(現在 ${n} 枚)`);
     }
   } else if (deck.length < 11) {
     errors.push('デッキは11枚以上必要です(シールド5+手札5+ドロー)');
@@ -191,6 +191,36 @@ function applyTurnAction(c: Ctx, a: Exclude<Action, { type: 'ANSWER' }>): void {
       s.step = 'attack';
       pushProc(c, 'settle');
       pushProc(c, 'attack', { pid: a.attacker, target: a.target });
+      return;
+    }
+    case 'CROSS': {
+      // クロス: クロスギアのコストをもう一度マナで払い、自分のクリーチャーにクロスする
+      pushProc(c, 'settle');
+      const gp = permByPid(s, a.gear);
+      const tp = permByPid(s, a.target);
+      if (!gp || !tp) return;
+      const gu = gp.perm.cards[0];
+      const { cost, civs } = crossCost(c, gu);
+      const pay = planPayment(c, gp.owner, civs, payNeed(cost, civs.length));
+      if (!pay) return;
+      for (const u of pay) setTapped(c, u, true);
+      gp.perm.crossedOn = tp.perm.pid;
+      emit(c, 'crossed', { card: gu, owner: gp.owner, host: tp.perm.cards[0], hostPid: tp.perm.pid });
+      collectBatch(c, [c.out[c.out.length - 1]]);
+      return;
+    }
+    case 'HYPERIZE': {
+      // ハイパー化: 他のクリーチャーをタップして、ハイパーモードを解放する
+      pushProc(c, 'settle');
+      const pm = permByPid(s, a.pid);
+      if (!pm) return;
+      for (const t of a.tap) {
+        const tp = permByPid(s, t);
+        if (tp) setTapped(c, tp.perm.cards[0], true);
+      }
+      pm.perm.hyper = true;
+      emit(c, 'hyperized', { card: pm.perm.cards[0], owner: pm.owner, pid: pm.perm.pid });
+      collectBatch(c, [c.out[c.out.length - 1]]);
       return;
     }
   }

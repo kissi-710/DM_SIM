@@ -3,10 +3,10 @@
 // 前提: npm run build:wasm 済み。ずれた局面は scratch/survey/case-<試合>-<手>.json に書き出す(git の管理外)。
 // 差分テスト(npm run test:rust)のフィクスチャは固定の少数の試合なので、まれなずれは、これで探す。
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { CARD_DB, CARD_LIST, DECK_PRESETS, deckCards } from '../src/cards';
+import { CARD_DB, CARD_LIST, DECK_PRESETS, TS_ONLY_CARD_IDS, deckCards } from '../src/cards';
 import { loadRegistry } from '../src/engine/registry';
 import { createGame, legalActions, step } from '../src/engine/engine';
-import { DmEngine } from '../src/wasm/dmEngine';
+import { DmEngine, rustRegistryJson } from '../src/wasm/dmEngine';
 import { evalRound, setNativeRounds, type SearchEnv } from '../src/ai/mcts';
 import { makeAgent } from '../src/ai';
 import { mulberry } from '../src/engine/prng';
@@ -15,9 +15,9 @@ import type { Action } from '../src/engine/types';
 
 mkdirSync('scratch/survey', { recursive: true });
 const reg = loadRegistry(CARD_DB);
-const eng = DmEngine.createSync(readFileSync('src/wasm/dmsim.wasm'), JSON.stringify(reg.defs));
+const eng = DmEngine.createSync(readFileSync('src/wasm/dmsim.wasm'), rustRegistryJson(reg.defs));
 const native = eng.asNativeRounds();
-const pool = CARD_LIST.map((c) => c.id).filter((id) => id !== 'dummy' && id !== '?' && !reg.defs[id].faces.some((f) => f.type === 'evolution' || f.type === 'smaxEvolution'));
+const pool = CARD_LIST.map((c) => c.id).filter((id) => id !== 'dummy' && id !== '?' && !TS_ONLY_CARD_IDS.includes(id) && !reg.defs[id].faces.some((f) => f.type === 'evolution' || f.type === 'smaxEvolution'));
 const rnd = mulberry(Number(process.argv[3] ?? 1));
 const randomDeck = (): string[] => {
   const d: string[] = [];
@@ -30,7 +30,8 @@ const randomDeck = (): string[] => {
   }
   return d;
 };
-const presets = DECK_PRESETS.map((p) => deckCards(p.id));
+// Rust 版が持たないカード(25の王道の新規カード)を含むデッキは除く
+const presets = DECK_PRESETS.filter((p) => !p.list.some(([id]) => TS_ONLY_CARD_IDS.includes(id))).map((p) => deckCards(p.id));
 const N = Number(process.argv[2] ?? 60);
 const agents = [makeAgent({ kind: 'rule' }), makeAgent({ kind: 'random' })];
 let checked = 0, diffs = 0, errs = 0, rustErr = 0;

@@ -10,6 +10,7 @@ import { determinize } from './determinize';
 import { choosePlayLearned } from './l1learn';
 import { L1_DEFAULT, withL1, type L1Params } from './l1params';
 import { evaluate, RULE_WEIGHTS, type EvalWeights } from './eval';
+import { chooseShieldPick, SHIELD_W, type ShieldPickWeights } from './shieldPick';
 import { spellNeedsOpponentCreature } from './spellTargets';
 import type { Agent, AgentCtx } from './types';
 
@@ -23,6 +24,8 @@ export interface RuleOpts {
   onError?: (error: unknown, action: Action) => void;
   /** 優先度・しきい値の調整値(既定は L1_DEFAULT。自己対戦での調整・比較用) */
   params?: Partial<L1Params>;
+  /** 割るシールドの得点の重み(既定は SHIELD_W。比較実験用。プレイアウトでは使わない) */
+  shield?: Partial<ShieldPickWeights>;
 }
 
 /**
@@ -135,6 +138,13 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
     return best;
   }
 
+  // クロスギア(まだどのクリーチャーにもクロスしていないもの)は、クロスする。ハイパー化できるなら、攻撃の前にハイパー化する
+  const gearPids = new Set(view.players[me].battle.filter((x) => x.crossedOn === undefined).map((x) => x.pid));
+  const cross = legal.find((a) => a.type === 'CROSS' && gearPids.has(a.gear) && !view.players[me].battle.some((x) => x.crossedOn === a.target));
+  if (cross) return cross;
+  const hyperize = legal.find((a) => a.type === 'HYPERIZE');
+  if (hyperize) return hyperize;
+
   const attacks = byType('ATTACK') as Extract<Action, { type: 'ATTACK' }>[];
   if (attacks.length > 0) {
     const oppBlockers = view.players[opp].battle.filter((p) => canBlock(c, p));
@@ -201,6 +211,7 @@ export function chooseTurnAction(view: GameState, legal: Action[], ctx: Pick<Age
 function chooseAnswer(view: GameState, legalAll: Action[], ctx: AgentCtx, o: RuleOpts, w: EvalWeights): Action {
   let legal = legalAll;
   if (legal.length === 1) return legal[0];
+  if (view.pending!.why === 'pickShield') return chooseShieldPick(view, legal, ctx.reg, o.shield ? { ...SHIELD_W, ...o.shield } : SHIELD_W);
   const me = view.pending!.player;
   // 任意効果の「使うか + 対象」の1問(0枚 = 使わない)。評価関数は1手先の盤面の差しか見ず、使う/使わないの得失を
   // 見分けられない(従来の「使いますか?」も、はいの評価が同点で乱数まかせだった)ので、従来どおり半々で使い、

@@ -8,7 +8,7 @@ import { PairedTree, setNativePairedRound, setNativeTree } from '../ai/tree';
 import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import { errorMessage, type Action } from '../engine/types';
-import { DmEngine } from '../wasm/dmEngine';
+import { DmEngine, rustRegistryJson } from '../wasm/dmEngine';
 
 export type AiWorkerIn =
   | { id: number; req: DecideReq }
@@ -35,7 +35,7 @@ const nativeReady: Promise<boolean> = (async () => {
   const url = Object.values(wasmUrls)[0];
   if (!url) return false;
   const bytes = await (await fetch(url)).arrayBuffer();
-  const eng = await DmEngine.create(bytes, JSON.stringify(reg.defs));
+  const eng = await DmEngine.create(bytes, rustRegistryJson(reg.defs));
   setNativeRounds(eng.asNativeRounds());
   setNativeTree(eng.asNativeTree());
   setNativePairedRound(eng.asNativePairedRound());

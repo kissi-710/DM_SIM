@@ -7,6 +7,7 @@
 //  3. 「演出」設定は 通常 / 高速 / オフ の3段階。高速は長さを半分(約2倍の速さ)にし、オフはオーバーレイ・CSS アニメーション・待ち時間の上乗せのすべてを無効にする。
 import type { Ev, GameState, ZoneName } from '../engine/types';
 import { cardName, reg } from './format';
+import { faceTypeLabel } from './typeLabel';
 import { loadJson, saveJson } from './util';
 
 // ───────────────────────── 設定 ─────────────────────────
@@ -141,7 +142,7 @@ export function revealOf(defId: string | undefined): FxReveal | undefined {
     }
   }
   const f = def.faces[fi];
-  const type = f.type === 'spell' ? '呪文' : f.type === 'castle' ? 'G城' : f.type === 'evolution' ? '進化' : f.type === 'smaxEvolution' ? 'S-MAX進化' : 'クリーチャー';
+  const type = faceTypeLabel(f.type);
   return { name: f.name ?? def.name, civs: f.civs, cost: String(f.cost), power: f.power, type, text: def.text ?? '' };
 }
 

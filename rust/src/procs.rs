@@ -555,9 +555,18 @@ fn run_play(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
 
 // ───────────────────────── 攻撃 ─────────────────────────
 
-/// そのイベントの種類を監視する能力が、カードのどこかにあるか(なければ、イベントを発行しない)
+/// そのイベントの種類を監視する能力が、対局のデッキのカードにあるか(なければ、イベントを発行しない)。
+/// TS 版(ops.ts の listens)と同じ: デッキが分からない状態では、カードDB全体で調べる
 fn has_listener(c: &Ctx, ty: Sym) -> bool {
-    c.reg.trig_by_def.get(ty.0 as usize).map_or(false, |o| o.is_some())
+    let by_def = match c.reg.trig_by_def.get(ty.0 as usize) {
+        Some(Some(v)) => v,
+        _ => return false,
+    };
+    let ids = &c.s.deck_ids;
+    if ids.len() < 2 || ids[0].is_empty() || ids[1].is_empty() {
+        return true;
+    }
+    ids.iter().any(|l| l.iter().any(|&d| by_def.get(d as usize).map_or(false, |r| !r.is_empty())))
 }
 
 fn run_attack(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
@@ -809,12 +818,21 @@ fn run_break(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
                 return pop_frame(c, f.id);
             }
             let n = (vi(&f.vars, s::N) as usize).min(shields.len());
-            // どのシールドを割るかは攻撃側が選ぶが、裏向きなので無作為に扱う(spec 3.7)
-            let mut pool = shields;
             let mut broken: Vec<i32> = Vec::new();
-            while broken.len() < n {
-                let i = c.s.rng_int(pool.len());
-                broken.push(pool.remove(i));
+            if n < shields.len() && shield_classes(&c.s, &shields).len() >= 2 {
+                // 見分けのつくシールド(EXライフなど)があり、全部は割れない: どれを割るかは攻撃側が選ぶ(509.3)
+                let ans = ask(
+                    c,
+                    NeedInput { player: attacker_owner, why: Why::PickShield, input: Some(InputSpec::Pick { candidates: shields.clone(), min: n as i32, max: n as i32 }), source: None },
+                )?;
+                broken = ans.to_i32s();
+            } else {
+                // 見分けがつかない(全部が裏向きで同じ扱い)ので、無作為に扱う(spec 3.7)
+                let mut pool = shields;
+                while broken.len() < n {
+                    let i = c.s.rng_int(pool.len());
+                    broken.push(pool.remove(i));
+                }
             }
             var_set(&mut f.vars, s::BROKEN, Val::ints(&broken));
             // 「ブレイクする前に」の誘発は、ブレイクするシールドを選んだ後、ブレイクする前に解決する(総合ルール 509.3 / 509.4)。
@@ -915,6 +933,50 @@ fn run_break(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
         2 => pop_frame(c, f.id),
         _ => Ok(()),
     }
+}
+
+/// シールドを「攻撃側から見て見分けがつくか」で分けた組(シールドゾーンの並びの順。procs.ts の shieldClasses)。
+/// 裏向きのシールドはどれも同じ扱い(組 -1)。見分けがつくのは、EXライフのシールド(紐づくクリーチャーごとに組が分かれる)と、
+/// 表向きのシールド(G城。同じ札ごとに組が分かれる。キーは -2 - 定義番号)。
+pub fn shield_classes(s: &State, shields: &[i32]) -> Vec<Vec<i32>> {
+    let mut groups: Vec<(i32, Vec<i32>)> = Vec::new();
+    for &u in shields {
+        let card = &s.cards[u as usize];
+        let key = if card.up {
+            -2 - card.def as i32
+        } else if card.ex {
+            card.ex_pid
+        } else {
+            -1
+        };
+        match groups.iter_mut().find(|g| g.0 == key) {
+            Some(g) => g.1.push(u),
+            None => groups.push((key, vec![u])),
+        }
+    }
+    groups.into_iter().map(|g| g.1).collect()
+}
+
+/// ブレイクするシールドの選び方を、見分けがつく違いごとに1つずつ(procs.ts の shieldPickChoices)。
+pub fn shield_pick_choices(s: &State, shields: &[i32], n: usize) -> Vec<Vec<i32>> {
+    let classes = shield_classes(s, shields);
+    let mut out: Vec<Vec<i32>> = Vec::new();
+    fn go(classes: &[Vec<i32>], i: usize, left: usize, cur: &mut Vec<i32>, out: &mut Vec<Vec<i32>>) {
+        if i == classes.len() {
+            if left == 0 {
+                out.push(cur.clone());
+            }
+            return;
+        }
+        for k in 0..=classes[i].len().min(left) {
+            let len = cur.len();
+            cur.extend_from_slice(&classes[i][..k]);
+            go(classes, i + 1, left - k, cur, out);
+            cur.truncate(len);
+        }
+    }
+    go(&classes, 0, n, &mut Vec::new(), &mut out);
+    out
 }
 
 #[derive(Clone, Copy)]

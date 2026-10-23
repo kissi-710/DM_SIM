@@ -3,7 +3,7 @@
 // 内容: 展開済みのカード定義(registry.defs)と、数試合の「状態 → 合法手 → 行動」の列。
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { CARD_DB, deckCards } from '../src/cards';
+import { CARD_DB, TS_ONLY_CARD_IDS, deckCards } from '../src/cards';
 import { makeRuleBased } from '../src/ai/rulebased';
 import { randomAgent } from '../src/ai/random';
 import type { Agent } from '../src/ai/types';
@@ -20,8 +20,10 @@ import { BATTLE_TEST_CARDS } from '../tests/fixtures/battle-cards';
 
 const out = process.argv[2] ?? 'rust/fixtures/games.json';
 // 攻撃まわりのイベント(バトルする時・バトルの後・ブレイクする前に)・呪文の置換・使用宣言を試すテスト用のカードも入れる
+// Rust 版が持たないカード(25の王道の新規カード)は、正解データに入れない
+const RUST_DB = Object.fromEntries(Object.entries(CARD_DB).filter(([id]) => !TS_ONLY_CARD_IDS.includes(id)));
 // 効果によるバトル・無限パワー・タップして出る・召喚封じ・G城のテスト用のカードも入れる
-const reg = loadRegistry({ ...CARD_DB, ...Object.fromEntries([...ATTACK_TEST_CARDS, ...BATTLE_TEST_CARDS].map((c) => [c.id, c])) });
+const reg = loadRegistry({ ...RUST_DB, ...Object.fromEntries([...ATTACK_TEST_CARDS, ...BATTLE_TEST_CARDS].map((c) => [c.id, c])) });
 const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 
 interface Rec {

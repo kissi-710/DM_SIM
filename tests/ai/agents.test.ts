@@ -245,6 +245,32 @@ describe('rolloutPick(プレイアウト用の方針)', () => {
   });
 });
 
+describe('ブレイクするシールドの選択(pickShield)をAIが決める', () => {
+  const pendingShield = () => {
+    const s = buildState({
+      p0: { battle: ['終末縫合王 ザ=キラー・キーナリー'], mana: mana(3) },
+      p1: { battle: [{ c: '龍風混成 ザーディクリカ', ex: true }], shield: 4 },
+    });
+    const r = step(s, { type: 'ATTACK', attacker: s.players[0].battle[0].pid, target: { kind: 'player' } }, reg);
+    expect(r.state.pending?.why).toBe('pickShield');
+    return r.state;
+  };
+  it('どのAIも、合法手(候補の中の n 枚)を返す。探索(MCTS)も根の手として比べられる', () => {
+    const s = pendingShield();
+    const legal = legalActions(s, reg);
+    expect(legal.length).toBe(2);
+    for (const kind of ['random', 'rule', 'mcts'] as const) {
+      const a = decide(CARD_DB, { state: s, spec: kind === 'mcts' ? { kind, iterations: 40 } : { kind }, seed: 3 });
+      expect(legal).toContainEqual(a);
+    }
+  });
+  it('プレイアウトの方針も合法手を返す', () => {
+    const s = pendingShield();
+    const legal = legalActions(s, reg);
+    for (let seed = 1; seed <= 10; seed++) expect(legal).toContainEqual(rolloutPick(s, legal, reg, mulberry(seed)));
+  });
+});
+
 describe('decide(1回の意思決定)', () => {
   it('入力待ちでない状態は例外', () => {
     const s = { ...fresh(), pending: null };

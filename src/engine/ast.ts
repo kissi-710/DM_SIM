@@ -7,16 +7,27 @@ export type Expr =
   | { var: string }
   | { count: Selector }
   | { costOf: string }
+  /** 誘発したイベントの、配列の項目(cards など)の数。「各ブレイクの前に」で、ブレイクする枚数だけ繰り返す時に使う */
+  | { evLen: string }
+  /** 変数のカードの枚数 */
+  | { len: string }
+  /** 変数のカードがいるバトルゾーンの山の、下に重なっているカードの枚数(フィールドの下など) */
+  | { under: string }
+  /** セレクタに合うカードの、コストの種類の数(「コストが異なるクリーチャー1体につき」) */
+  | { distinct: { sel: Selector; by: 'cost' } }
   | { add: Expr[] }
   | { sub: [Expr, Expr] }
   | { min: Expr[] }
-  | { max: Expr[] };
+  | { max: Expr[] }
+  | { mul: Expr[] }
+  /** 変数のカードの、いまのパワー */
+  | { powerOf: string };
 
 export interface Selector {
   zone: ZoneName | ZoneName[];
   /** 能力の処理者から見た持ち主。'iter' は forPlayers の現在のプレイヤー */
   owner?: 'self' | 'opponent' | 'any' | 'iter';
-  type?: 'creature' | 'spell' | 'card';
+  type?: 'creature' | 'spell' | 'card' | 'element' | 'tamaseed' | 'field' | 'crossgear';
   where?: Cond;
   /** 「選ぶ」対象か(ジャストダイバー等の判定を行う) */
   chooseable?: boolean;
@@ -36,10 +47,10 @@ export type Cond =
   | { civsAll: Civ[] }
   | { multicolor: boolean }
   | { cost: { eq?: Expr; lt?: Expr; lte?: Expr; gt?: Expr; gte?: Expr } }
-  | { power: { lte?: number; gte?: number } }
+  | { power: { lte?: Expr; gte?: Expr; lt?: Expr; gt?: Expr } }
   /** $it のパワーが、能力の発生源(self)のパワーより小さい(プチョヘンザのファイナル革命) */
   | { powerLtSelf: true }
-  | { type: 'creature' | 'spell' }
+  | { type: 'creature' | 'spell' | 'element' | 'tamaseed' | 'field' | 'crossgear' | 'castle' }
   | { evolution: boolean }
   | { race: string }
   | { tapped: boolean }
@@ -48,10 +59,56 @@ export type Cond =
   | { count: Selector; gte?: number; lte?: number; eq?: number }
   | { fiveCivs: Selector }
   | { civsPresent: { sel: Selector; civs: Civ[] } }
-  | { logged: { pattern: { [k: string]: any }; min?: number } }
-  | { shields: { lte?: number; eq?: number; gte?: number } }
+  | { logged: { pattern: { [k: string]: any }; min?: number; /** 指定の種類のイベントのうち、最後のものより後だけを数える(攻撃ごと、など) */ since?: string } }
+  | { shields: { lte?: number; eq?: number; gte?: number; who?: 'self' | 'opponent' } }
   | { notInBattle: boolean }
   | { nonEmpty: string }
+  /** 変数のカード(いまのゾーンの特性で見る)のどれかが where を満たす */
+  | { some: { var: string; where: Cond } }
+  /** $it が、能力の発生源自身 */
+  | { isSelf: true }
+  /** 誘発したイベント(出た・唱えた)が、S・トリガーとして使われたもの */
+  | { stUsed: true }
+  /** $it が、シールドゾーンで表向き */
+  | { faceUp: true }
+  /** 発生源が、ハイパーモード中 */
+  | { hyper: true }
+  /** 発生源(クロスギア)が、クリーチャーにクロスされている(true)・されていない(false) */
+  | { crossed: boolean }
+  /** 発生源(クロスギア)がクロスしているクリーチャーが、cond を満たす */
+  | { hostIs: Cond }
+  /** 発生源(クリーチャー)に、クロスギアがクロスされている */
+  | { hasGear: true }
+  /** 発生源(バトルゾーンのクリーチャー)が、タップしている(true)・アンタップしている(false) */
+  | { selfTapped: boolean }
+  /** $it の持ち主が、能力の処理者(self)・その相手(opponent) */
+  | { ownedBy: 'self' | 'opponent' }
+  /** 変数のカード(進化クリーチャー)が、$it(バトルゾーンのクリーチャー)の上に進化できる(進化元の条件を満たす) */
+  | { baseFor: string }
+  /** $it が、究極進化クリーチャーである */
+  | { ultimate: true }
+  /** $it が、ツインパクトカード(面が2つ)である */
+  | { twin: true }
+  /** 変数のカードのコストが、すべて異なる(2枚以上) */
+  | { distinctCosts: string }
+  /** $it(バトルゾーンのクリーチャー)が、そのキーワードを持つ(「ブロッカー」を持つクリーチャー) */
+  | { hasKw: 'blocker' | 'speedAttacker' | 'machFighter' | 'slayer' }
+  /** 発生源が、そのターンに別のコスト(altCost の id)を使って出た */
+  | { altUsed: string }
+  /** $it のカード名が、指定の文字列を含む */
+  | { nameHas: string }
+  /** $it の(使う面の)能力に、「このクリーチャーが出た時」で始まる能力がある */
+  | { hasCip: true }
+  /** 誘発したイベントの項目が、指定の値と等しい(例: paid: 0 = マナを支払わずに出た) */
+  | { eventIs: { [k: string]: string | number | boolean } }
+  /** 変数のカードがすべて where を満たし、コストがすべて同じ(1枚以上) */
+  | { allSame: { var: string; where?: Cond } }
+  /** 誘発したイベント(重なった時)で、$it の下にあった(重ねられた)クリーチャーが where を満たす */
+  | { onBase: Cond }
+  /** $it のパワーが、セレクタに合うカードの中で、一番大きい(max)・小さい(min) */
+  | { powerRank: { which: 'max' | 'min'; of: Selector } }
+  /** ゲーム中に1度の能力(key)を、まだ使っていない */
+  | { unused: string }
   | { turnOf: 'self' | 'opponent' }
   | { zoneIs: ZoneName }
   /** $it が、能力の発生源(EXライフを持つクリーチャー)のEXライフのシールドか */
@@ -72,6 +129,8 @@ export type StepDef =
       random?: boolean;
       /** 変数に、選んだものを追記する(既にあれば、その後ろに足す)。両者が選んでから一括で処理する時に使う */
       append?: boolean;
+      /** 選んだカードの表記コストの合計がこの値以下になるように、好きな数を選ぶ(min は 0 になる) */
+      sumLte?: Expr;
       prompt?: string;
     }
   | { op: 'may'; then: StepDef[]; else?: StepDef[]; prompt?: string }
@@ -97,6 +156,13 @@ export interface TriggerSpec {
   subject?: 'self' | 'other' | 'any';
   turn?: 'own' | 'opponent' | 'any';
   nthThisTurn?: number;
+  /**
+   * 自身がバトルゾーンを離れた時にも、その出来事で誘発する(離れる直前の状態を見る。総合ルール 603.5c・603.5d)。
+   * 過去の状態を見られるのは、その能力を持つカード自身だけ。他のクリーチャーが同時に離れても、誘発は自身の分の1回
+   */
+  lookBack?: boolean;
+  /** 同じ種類・持ち主(・理由)のイベントの、そのターンの n 回目以降 */
+  nthMin?: number;
   limit?: { perTurn: number };
   if?: Cond;
   ifAtResolve?: Cond;
@@ -116,13 +182,39 @@ export type KeywordName =
   | 'yobinion'
   | 'invasion'
   | 'slayer'
-  | 'revolutionChange';
+  | 'revolutionChange'
+  /** パワード・ブレイカー: パワー n ごとに、シールドをもう1つブレイクする */
+  | 'poweredBreaker'
+  /** S・バック: attacker(条件)に合うカードが、自分のシールドゾーンから手札に加わる時、それを捨てて、手札のこの呪文をコストを支払わずに唱えてもよい */
+  | 'sBack';
 
 export type StaticMod =
-  | { type: 'costDelta'; delta: number; cond: Cond }
+  | { type: 'costDelta'; delta: Expr; cond: Cond; /** 各ターンに1度だけ(発生源ごと)。使うと、そのターンはもう働かない */ oncePerTurn?: boolean; /** これを適用した後のコストの下限(「ただしコストは0以下にならない」= 1) */ floor?: number }
+  /** 攻撃中、このクリーチャーのパワーを n 増やす(パワーアタッカー) */
+  | { type: 'powerAttacker'; n: number }
+  /** このクリーチャーがシールドをブレイクする時、相手はそのシールドを手札に加えるかわりに墓地に置く */
+  | { type: 'burnShields' }
+  /** 各ターン、はじめて自分のクリーチャーがバトルする時、そのクリーチャーはそのバトルに勝つ */
+  | { type: 'firstBattleWins' }
+  /** 各ターン、はじめて出る相手のクリーチャーは、タップして出る */
+  | { type: 'enterTappedFirst' }
+  /** 相手のターンのはじめに、相手は自身のマナゾーンのカードを n 枚までしかアンタップできない */
+  | { type: 'untapLimit'; n: number }
+  /** 自分のターン中、cond に合う自分のカードを from のゾーンから召喚してもよい(コストは支払う)。oncePerTurn なら「1体」(発生源ごとに各ターン1度) */
+  | { type: 'allowPlayFrom'; from: ZoneName; cond?: Cond; oncePerTurn?: boolean; /** アビスラッシュを与える(墓地から召喚すると、そのターン攻撃でき、ターンの終わりに山札の下に置かれる) */ rush?: boolean }
+  /** このクリーチャーは、相手に選ばれない(攻撃・ブロックはされる) */
+  | { type: 'cannotBeChosen' }
+  /** 相手がクリーチャーを選ぶなら、可能ならこのクリーチャーを選ばなければならない */
+  | { type: 'mustBeChosen' }
+  /** このクリーチャーは、呪文によって相手に選ばれない */
+  | { type: 'protectFromSpells' }
+  /** 自分は、呪文を唱えられなくする効果を無視して、cond に合う呪文を唱えてもよい */
+  | { type: 'ignoreCastBan'; cond: Cond }
   | { type: 'cannotAttackPlayerWhenEntered' }
   | { type: 'cannotCast'; cond: Cond }
   | { type: 'powerAdd'; n: number }
+  /** 自分の墓地から呪文を唱えた後、墓地のかわりに山札の下に置く */
+  | { type: 'graveCastToBottom' }
   /** バトルする時、パワーは無限として扱う(カツムゲン) */
   | { type: 'infinitePowerInBattle' }
   /** 相手の、cond に合うクリーチャーは、タップして出る(プチョヘンザ)。cond の $it = 出るクリーチャー */
@@ -130,19 +222,105 @@ export type StaticMod =
   /** シールドゾーンに表向きである間(G城)、相手のクリーチャーが召喚以外の方法で出る時、かわりにマナゾーンに置く */
   | { type: 'nonSummonEntryToMana' }
   /** 自分のクリーチャー(cond に合うもの)すべてにキーワードを与える。unblockable = ブロックされない */
-  | { type: 'grantKeyword'; keyword: 'speedAttacker' | 'machFighter' | 'slayer' | 'unblockable'; cond: Cond };
+  | { type: 'grantKeyword'; keyword: 'speedAttacker' | 'machFighter' | 'slayer' | 'unblockable' | 'blocker' | 'cannotBeAttacked'; cond: Cond }
+  /** 自分は、山札が0枚でもゲームに負けない */
+  | { type: 'noDeckOutLoss' }
+  /** 相手のクリーチャーは、タップして出る */
+  | { type: 'enterTapped' }
+  /** このクリーチャーのパワーを、式の値だけ増やす(「〜1体につき+3000」など。評価は、このクリーチャーから見る) */
+  | { type: 'powerAddExpr'; expr: Expr }
+  /** このクリーチャーがシールドをブレイクする時、相手はそのシールドを手札に加えるかわりに、自身の山札の上から4枚目の位置に横向きに刺す(5.S.D.) */
+  | { type: 'stab5sd' }
+  /** 相手は、自身の山札を見れず、順序を変えられない */
+  | { type: 'deckLock' }
+  /** 相手は、自身の「S・トリガー」を使えない(G・ストライクは使える) */
+  | { type: 'noOppShieldTrigger' }
+  /** 相手のクリーチャーが攻撃するなら、可能ならこのクリーチャーを攻撃する */
+  | { type: 'attackMeFirst' }
+  /** 相手は、自身のターンに1回までしか呪文を唱えられない */
+  | { type: 'oneSpellPerTurn' }
+  /** このクリーチャーは攻撃できない */
+  | { type: 'cannotAttack' }
+  /** このクリーチャーは、相手プレイヤーを攻撃できない */
+  | { type: 'cannotAttackPlayer' }
+  /** 相手は、cond に合うカード(クリーチャーでないカードなど)を使えない(召喚・唱える・出すのすべて) */
+  | { type: 'cannotPlay'; cond: Cond }
+  /** 自分の他のクリーチャー(cond に合うもの)が相手のクリーチャーとバトルする時、かわりにこのクリーチャーにバトルさせてもよい */
+  | { type: 'battleProxy'; cond: Cond }
+  /** ガードマン: このクリーチャーをタップして、相手クリーチャーの攻撃先を、自分の他のクリーチャーからこのクリーチャーに変更してもよい */
+  | { type: 'guardman' }
+  /** すべてのプレイヤーは、cond に合うクリーチャーを召喚できない */
+  | { type: 'cannotSummonAll'; cond: Cond }
+  /** 自分(プレイヤー)は、このクリーチャーよりパワーが小さいクリーチャーに攻撃されない */
+  | { type: 'protectPlayerFromWeaker' }
+  /** このクリーチャーの攻撃中、相手は「G・ストライク」を使えない */
+  | { type: 'noGStrike' }
+  /** 相手のカードは、マナゾーンにタップして置かれる */
+  | { type: 'oppManaTapped' }
+  /** 飛行: 「飛行」を持たないクリーチャーから、攻撃もブロックもされない */
+  | { type: 'flying' }
+  /** このクリーチャーは、シールドをブレイクできない */
+  | { type: 'cannotBreak' }
+  /** このクリーチャーを、自分のマナゾーンにあり、すべての文明を持つかのようにタップしてもよい(マナの支払いに使える) */
+  | { type: 'tapAsMana' }
+  /** 自分のシールドゾーンから手札に加える呪文すべてに、「S・トリガー」を与える */
+  | { type: 'spellShieldTrigger' }
+  /** 自分のマナゾーンにあるカードは、すべての文明を持つ */
+  | { type: 'manaAllCivs' }
+  /** 自分のクリーチャー(cond に合うもの)は、離れない */
+  | { type: 'cannotLeaveOwn'; cond: Cond; /** 破壊されて離れるのは防がない(バラバラエティ) */ exceptDestroy?: boolean }
+  /** 相手のクリーチャーは、出たターン攻撃できない(スピードアタッカーでも) */
+  | { type: 'noAttackOnEntry' }
+  /** このクロスギアをクロスしたクリーチャーのパワーを n 増やす */
+  | { type: 'hostPowerAdd'; n: number }
+  /** 自分の他のカード(cond に合うもの)のパワーを n 増やす */
+  | { type: 'powerAddOthers'; n: number; cond: Cond };
 
 export type ReplaceApply =
-  | { type: 'changeDest'; to: ZoneName }
+  /** 出る時の置換: かわりに、出ない(いまのゾーンに残る) */
+  | { type: 'stay' }
+  | { type: 'changeDest'; to: ZoneName; /** 置いた後に、置換の持ち主が行う手順(「その後、自分はこのクリーチャーをマナゾーンに置く」など。出る時の置換のみ) */ then?: StepDef[] }
   | { type: 'cancelTrigger' }
-  | { type: 'smaxSacrifice' };
+  | { type: 'smaxSacrifice' }
+  /** かわりに、この手順を行う(出来事は起きない)。ゲームに負ける時の置換などで使う */
+  | { type: 'steps'; steps: StepDef[] };
 
 export type Ability =
   | { kind: 'keyword'; name: KeywordName; n?: number; while?: Cond; steps?: StepDef[]; attacker?: Cond; label?: string }
-  | { kind: 'trigger'; spec: TriggerSpec; optional?: boolean; steps: StepDef[]; label?: string }
+  | { kind: 'trigger'; spec: TriggerSpec; optional?: boolean; steps: StepDef[]; label?: string; /** キーワードから展開した誘発型能力(「出た時」で始まる能力に数えない) */ gen?: boolean }
   | { kind: 'spell'; steps: StepDef[] }
   | { kind: 'static'; mod: StaticMod; while?: Cond }
   | { kind: 'replace'; match: Pattern; apply: ReplaceApply; optional?: boolean; while?: Cond; label?: string }
-  | { kind: 'permission'; play: 'summon' | 'cast'; from: ZoneName; after?: 'deckBottom' };
+  | { kind: 'permission'; play: 'summon' | 'cast' | 'put'; from: ZoneName; after?: 'deckBottom'; /** アビスラッシュ */ rush?: boolean }
+  /** このカード自身を使うコストの増減(delta は負で軽減。cond を満たす時だけ。評価は、このカードを使う人から見る。floor: これを下回らない) */
+  | { kind: 'selfCost'; delta: Expr; cond?: Cond; floor?: number }
+  /** ハイパー化: 自分のメインステップ中に、自分の他のクリーチャーを tapOther 体タップして、ハイパーモードを解放できる(次の自分のターンのはじめまで) */
+  | { kind: 'hyperize'; tapOther: number }
+  /** シンカライズ: このタマシードがクリーチャーであるかのように、この上に進化クリーチャーを置ける */
+  | { kind: 'shinkalize' }
+  /** マナを払うかわりの、別のコスト(PlayExtra.alt で選ぶ)。手札から使う時 */
+  | { kind: 'altCost'; id: string; label: string; when?: Cond; cost: AltCostSpec };
+
+/** 別のコスト(マナを払うかわりに行う)。discard を持たなければ、何も払わない */
+export interface AltCostSpec {
+  /** この別のコストで使えるゾーン(省略 = 手札) */
+  from?: ZoneName[];
+  /** 自分のクリーチャーを n 体タップする(ムゲンクライム) */
+  tapCreatures?: number;
+  /** マナを、コストのかわりに n 払う(このカードの文明を満たす。ムゲンクライム) */
+  pay?: number;
+  /** 手札から(このカード以外の)where に合うカードを n 枚捨てる */
+  discard?: { n: number; where?: Cond };
+  /** マナは払うが、コストを n 少なくする(指定すると、マナを払うかわりにはならない) */
+  reduce?: number;
+  /** こうして出したら、このターンの終わりに山札の下に置く。そうしたら、カードを1枚引く(J・O・E) */
+  endBottomDraw?: boolean;
+  /** 出すかわりに、自分の超次元ゾーンに置く(パンドラ・シフト) */
+  toHyper?: boolean;
+  /** 超無限墓地進化: 自分の墓地のクリーチャーを1体以上選び、その上に重ねて出す。選んだ数だけコストを少なくする(1未満にならない) */
+  graveEvolve?: boolean;
+  /** フシギバース: 自分のクリーチャーを1体タップしてマナゾーンに置き、base からそのコストを引いた数(min 未満にならない)を支払う */
+  fushigi?: { base: number; min: number };
+}
 
 export type { EffectMod };

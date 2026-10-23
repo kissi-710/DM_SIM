@@ -1,5 +1,5 @@
 // 状態の複製・乱数・ゾーン操作の下請け。
-import type { Registry } from './registry';
+import type { FeatureName, Registry } from './registry';
 import type { Card, Civ, Ev, Frame, GameState, Permanent, PlayerId, PlayerZones, Snap } from './types';
 
 // ───────────────────────── 実行コンテキスト ─────────────────────────
@@ -16,6 +16,30 @@ export interface Ctx {
   seq0: number;
   /** 現在の因果の元(イベントID or フレームID) */
   cause: number | null;
+}
+
+const featureCache = new WeakMap<object, Map<string, boolean>>();
+
+/**
+ * この対局のデッキに、その機能(置換・静的能力など)を持つカードがあるか。なければ、その機能を探す処理を省く。
+ * カードDB全体ではなく、対局のデッキで調べる(デッキが分からない状態では、カードDBに1枚でもあれば true)。
+ */
+export function gameHas(c: Ctx, feature: FeatureName): boolean {
+  const set = c.reg.features[feature];
+  if (set.size === 0) return false;
+  const ids = c.s.deckIds;
+  if (ids[0].length === 0 || ids[1].length === 0) return true;
+  let m = featureCache.get(ids);
+  if (!m) {
+    m = new Map();
+    featureCache.set(ids, m);
+  }
+  let hit = m.get(feature);
+  if (hit === undefined) {
+    hit = ids.some((list) => list.some((d) => set.has(d)));
+    m.set(feature, hit);
+  }
+  return hit;
 }
 
 export function mkCtx(s: GameState, reg: Registry, out: Ev[] = []): Ctx {
@@ -69,9 +93,10 @@ export function cloneJson<T>(v: T): T {
 
 /** カードの複製。フィールドを1つずつ書く(スプレッドの約2倍速い。Card にフィールドを足したら、ここも足す。型検査が漏れを知らせる) */
 function cloneCard(c: Card): Card {
-  const o: Card = { defId: c.defId, owner: c.owner, zone: c.zone, ep: c.ep, tapped: c.tapped, ex: c.ex, exPid: c.exPid, pid: c.pid, face: c.face };
-  if (c.up) o.up = true; // 表向きのシールド(G城)。ふつうは無い
-  return o;
+  const n: Card = { defId: c.defId, owner: c.owner, zone: c.zone, ep: c.ep, tapped: c.tapped, ex: c.ex, exPid: c.exPid, pid: c.pid, face: c.face };
+  if (c.up) n.up = true;
+  if (c.side) n.side = true;
+  return n;
 }
 
 function clonePlayer(p: PlayerZones): PlayerZones {
@@ -82,7 +107,7 @@ function clonePlayer(p: PlayerZones): PlayerZones {
     shield: p.shield.slice(),
     grave: p.grave.slice(),
     hyper: p.hyper.slice(),
-    battle: p.battle.map((b) => ({ ...b, cards: b.cards.slice() })),
+    battle: p.battle.map((b) => ({ ...b, cards: b.cards.slice(), ...(b.seals ? { seals: b.seals.slice() } : {}) })),
   };
 }
 
@@ -104,6 +129,9 @@ export function cloneState(s: GameState): GameState {
     usage: { ...s.usage },
     rans: s.rans.slice(),
     breaking: s.breaking.slice(),
+    ...(s.extraTurns ? { extraTurns: s.extraTurns.slice() } : {}),
+    ...(s.pendingLoss ? { pendingLoss: s.pendingLoss.slice() } : {}),
+    ...(s.piles ? { piles: Object.fromEntries(Object.entries(s.piles).map(([k, v]) => [k, v.slice()])) } : {}),
     deckIds: s.deckIds,
     cfg: s.cfg,
     ...(s.knownDeck ? { knownDeck: [s.knownDeck[0].map((g) => g.slice()), s.knownDeck[1].map((g) => g.slice())] as GameState['knownDeck'] } : {}),

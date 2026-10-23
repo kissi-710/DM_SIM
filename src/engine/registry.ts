@@ -1,5 +1,5 @@
 // カードDBの検証・正規化・索引化・能力のコンパイル(spec 4.3 / effects 4.3, 6)。
-import type { Ability, ActDef, Cond, StepDef, TriggerSpec } from './ast';
+import type { Ability, ActDef, Cond, Expr, StepDef, TriggerSpec } from './ast';
 import { type AbilityRef, type CardDB, type CardDef, type Face, isCreatureType } from './types';
 
 // ───────────────────────── 命令(バイトコード) ─────────────────────────
@@ -41,6 +41,14 @@ export interface FaceInfo {
   shieldTriggers: { ability: Extract<Ability, { kind: 'keyword' }>; idx: number }[];
   gStrike: { ability: Extract<Ability, { kind: 'keyword' }>; idx: number } | null;
   breakers: { n: number; while?: Cond }[];
+  selfCosts: { delta: Expr; cond?: Cond; floor?: number }[];
+  altCosts: Extract<Ability, { kind: 'altCost' }>[];
+  /** ハイパー化の、タップする他のクリーチャーの数(なければ null) */
+  hyperize: number | null;
+  /** パワード・ブレイカー: パワー n ごとにシールドをもう1つブレイクする(なければ null) */
+  poweredBreaker: number | null;
+  /** シンカライズを持つか */
+  shinkalize: boolean;
   statics: { ability: Extract<Ability, { kind: 'static' }>; idx: number }[];
   replaces: { ability: Extract<Ability, { kind: 'replace' }>; idx: number }[];
   permissions: Extract<Ability, { kind: 'permission' }>[];
@@ -48,6 +56,45 @@ export interface FaceInfo {
   spell: { ability: Extract<Ability, { kind: 'spell' }>; idx: number } | null;
   hasTriggerOrStatic: boolean;
 }
+
+/** 能力を無視されているカードの FaceInfo(何の能力も持たない) */
+export const EMPTY_FACE_INFO: FaceInfo = {
+  blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false, slayer: false,
+  sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], altCosts: [], hyperize: null, poweredBreaker: null, shinkalize: false, statics: [],
+  replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
+};
+
+export type FeatureName =
+  | 'entryReplace'
+  | 'afterCast'
+  | 'moveReplace'
+  | 'leaveReplace'
+  | 'handReplace'
+  | 'drawEmpty'
+  | 'mustBeChosen'
+  | 'firstBattleWins'
+  | 'enterTapped'
+  | 'allowPlayFrom'
+  | 'noOppShieldTrigger'
+  | 'attackMeFirst'
+  | 'sBack'
+  | 'enteredFrom'
+  | 'oneSpellPerTurn'
+  | 'powerAddOthers'
+  | 'cannotPlay'
+  | 'battleProxy'
+  | 'hostPowerAdd'
+  | 'stUsed'
+  | 'cannotLeaveOwn'
+  | 'noAttackOnEntry'
+  | 'spellShieldTrigger'
+  | 'manaAllCivs'
+  | 'tapAsMana'
+  | 'flying'
+  | 'noGStrike'
+  | 'oppManaTapped'
+  | 'cannotSummonAll'
+  | 'protectPlayerFromWeaker';
 
 export interface Registry {
   db: CardDB;
@@ -57,6 +104,11 @@ export interface Registry {
   /** イベント種類 → 定義ID → その定義の誘発能力(trigIndex の定義別の索引。collect が全カードを走査する時に使う) */
   trigByDef: Map<string, Map<string, TrigRef[]>>;
   progs: Map<string, Program>;
+  /**
+   * 機能ごとの「その機能を持つカードの定義ID」。置換・静的能力などを探すかどうかの判定(gameHas)に使う。
+   * 持つカードが1枚もなければ、探さない
+   */
+  features: Record<FeatureName, Set<string>>;
   getFace(defId: string, face: number): Face;
   getInfo(defId: string, face: number): FaceInfo;
   program(ref: AbilityRef, noOptional?: boolean): Program;
@@ -74,6 +126,7 @@ function expandFace(face: Face): Face {
       out.push({
         kind: 'trigger',
         label: 'ヨビニオン',
+        gen: true,
         optional: true,
         spec: { on: { type: 'entered', via: 'summon' }, subject: 'self' },
         steps: [
@@ -95,6 +148,7 @@ function expandFace(face: Face): Face {
       out.push({
         kind: 'trigger',
         label: 'ジャストダイバー',
+        gen: true,
         spec: { on: { type: 'entered' }, subject: 'self' },
         steps: [
           {
@@ -107,6 +161,7 @@ function expandFace(face: Face): Face {
       out.push({
         kind: 'trigger',
         label: a.label ?? '革命チェンジ',
+        gen: true,
         optional: true,
         spec: {
           on: { type: 'attackDeclared', attackerCond: a.attacker, owner: 'self' },
@@ -126,6 +181,7 @@ function expandFace(face: Face): Face {
       out.push({
         kind: 'trigger',
         label: a.label ?? '侵略',
+        gen: true,
         optional: true,
         spec,
         steps: [{ op: 'act', act: { invade: {} } }],
@@ -138,17 +194,17 @@ function expandFace(face: Face): Face {
 const KNOWN_ACTS = new Set([
   'draw', 'move', 'lookTop', 'revealUntil', 'shuffleBottom', 'assign', 'addShield', 'tap', 'untap',
   'addEffect', 'put', 'summon', 'castFree', 'skipRestOfTurn', 'copyTrigger', 'reveal', 'invade', 'shuffle',
-  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle',
+  'setVar', 'moveTop', 'revolutionChange', 'playerEffect', 'log', 'battle', 'shuffleIn', 'bottom', 'moveBottom', 'rush', 'useCip', 'graveToBottom', 'play', 'win', 'cross', 'ninjaChange', 'grantShieldTrigger', 'breakOpp', 'allowSummon', 'destroyTop', 'dropUnder', 'summonOnto', 'extraTurn', 'markUsed', 'putUnder', 'tapLock', 'breakShields', 'judge', 'stackShield', 'castSide', 'seal', 'stab',
 ]);
 const KNOWN_COND = new Set([
   'all', 'any', 'not', 'civ', 'civsAll', 'multicolor', 'cost', 'power', 'type', 'evolution', 'race', 'tapped',
   'sameCivAs', 'cmp', 'count', 'fiveCivs', 'civsPresent', 'logged', 'shields', 'notInBattle', 'nonEmpty',
-  'turnOf', 'zoneIs', 'exShield', 'powerLtSelf', 'true',
+  'turnOf', 'zoneIs', 'exShield', 'powerLtSelf', 'true', 'some', 'isSelf', 'stUsed', 'unused', 'faceUp', 'hyper', 'selfTapped', 'ultimate', 'twin', 'distinctCosts', 'crossed', 'hostIs', 'hasGear', 'hasKw', 'ownedBy', 'baseFor', 'altUsed', 'nameHas', 'hasCip', 'eventIs', 'allSame', 'onBase', 'powerRank',
 ]);
 const KNOWN_CUSTOM = new Set<string>([]);
 const KNOWN_KEYWORD = new Set([
   'blocker', 'breaker', 'shieldTrigger', 'gStrike', 'speedAttacker', 'machFighter', 'exLife', 'justDiver',
-  'sympathy', 'hyperEnergy', 'yobinion', 'invasion', 'slayer', 'revolutionChange',
+  'sympathy', 'hyperEnergy', 'yobinion', 'invasion', 'slayer', 'revolutionChange', 'poweredBreaker', 'sBack',
 ]);
 
 /** 条件(カードデータの JSON)の検査。形がまだ信用できない入力なので、型は緩く受ける */
@@ -217,9 +273,9 @@ export function validateCardDb(db: CardDB): string[] {
     if (!def.faces?.length) errs.push(`${w0}: faces がありません`);
     def.faces?.forEach((f, fi) => {
       const w = `${w0}面${fi}(${f.name})`;
-      if (!['creature', 'spell', 'evolution', 'smaxEvolution', 'castle'].includes(f.type)) errs.push(`${w}: 未知の種類 ${f.type}`);
+      if (!['creature', 'spell', 'evolution', 'smaxEvolution', 'tamaseed', 'field', 'crossgear', 'castle'].includes(f.type)) errs.push(`${w}: 未知の種類 ${f.type}`);
       if (typeof f.cost !== 'number') errs.push(`${w}: cost がありません`);
-      if (!f.civs?.length) errs.push(`${w}: civs がありません`);
+      if (!Array.isArray(f.civs)) errs.push(`${w}: civs がありません`); // 無色は空の配列
       if (isCreatureType(f.type) && typeof f.power !== 'number') errs.push(`${w}: power がありません`);
       if (f.type === 'evolution' && !f.evolveFrom) errs.push(`${w}: 進化には evolveFrom が必要です`);
       f.abilities?.forEach((a, ai) => {
@@ -236,9 +292,15 @@ export function validateCardDb(db: CardDB): string[] {
           case 'spell':
             checkSteps(a.steps, wa, errs);
             break;
-          case 'static':
           case 'replace':
+            if (a.apply.type === 'steps') checkSteps(a.apply.steps, wa, errs);
+            break;
+          case 'static':
           case 'permission':
+          case 'selfCost':
+          case 'altCost':
+          case 'hyperize':
+          case 'shinkalize':
             break;
           default:
             errs.push(`${wa}: 未知の能力 kind '${(a as { kind?: unknown }).kind}'`);
@@ -353,6 +415,8 @@ function abilitySteps(a: Ability): StepDef[] {
       return a.steps;
     case 'keyword':
       return a.steps ?? [];
+    case 'replace':
+      return a.apply.type === 'steps' ? a.apply.steps : a.apply.type === 'changeDest' ? a.apply.then ?? [] : [];
     default:
       return [];
   }
@@ -383,7 +447,7 @@ export function loadRegistry(origDb: CardDB): Registry {
     info[id] = faces.map((f, fi) => {
       const fi_: FaceInfo = {
         blocker: false, breaker: 1, speedAttacker: false, machFighter: false, exLife: false, justDiver: false, slayer: false,
-        sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], statics: [],
+        sympathy: false, hyperEnergy: false, shieldTriggers: [], gStrike: null, breakers: [], selfCosts: [], altCosts: [], hyperize: null, poweredBreaker: null, shinkalize: false, statics: [],
         replaces: [], permissions: [], triggers: [], spell: null, hasTriggerOrStatic: false,
       };
       f.abilities.forEach((a, idx) => {
@@ -400,6 +464,7 @@ export function loadRegistry(origDb: CardDB): Registry {
             else if (a.name === 'slayer') fi_.slayer = true;
             else if (a.name === 'sympathy') fi_.sympathy = true;
             else if (a.name === 'hyperEnergy') fi_.hyperEnergy = true;
+            else if (a.name === 'poweredBreaker') fi_.poweredBreaker = a.n ?? 6000;
             else if (a.name === 'shieldTrigger') fi_.shieldTriggers.push({ ability: a, idx });
             else if (a.name === 'gStrike') fi_.gStrike = { ability: a, idx };
             break;
@@ -408,10 +473,11 @@ export function loadRegistry(origDb: CardDB): Registry {
             fi_.triggers.push(ref);
             fi_.hasTriggerOrStatic = true;
             const ons = Array.isArray(a.spec.on) ? a.spec.on : [a.spec.on];
-            for (const on of ons) {
-              const l = trigIndex.get(on.type) ?? [];
+            // 同じ種類のイベントを複数のパターンで聞く能力も、その種類の索引には1回だけ載せる(二重に誘発しない)
+            for (const type of new Set(ons.map((on) => on.type))) {
+              const l = trigIndex.get(type) ?? [];
               l.push(ref);
-              trigIndex.set(on.type, l);
+              trigIndex.set(type, l);
             }
             break;
           }
@@ -425,6 +491,18 @@ export function loadRegistry(origDb: CardDB): Registry {
             break;
           case 'permission':
             fi_.permissions.push(a);
+            break;
+          case 'selfCost':
+            fi_.selfCosts.push({ delta: a.delta, cond: a.cond, floor: a.floor });
+            break;
+          case 'altCost':
+            fi_.altCosts.push(a);
+            break;
+          case 'hyperize':
+            fi_.hyperize = a.tapOther;
+            break;
+          case 'shinkalize':
+            fi_.shinkalize = true;
             break;
           case 'spell':
             fi_.spell = { ability: a, idx };
@@ -447,6 +525,42 @@ export function loadRegistry(origDb: CardDB): Registry {
   }
 
   const progs = new Map<string, Program>();
+  const featureDefs = (pred: (ab: Ability) => boolean): Set<string> =>
+    new Set(Object.values(defs).filter((d) => d.faces.some((f) => f.abilities.some(pred))).map((d) => d.id));
+  const replaceOf = (type: string) => featureDefs((ab) => ab.kind === 'replace' && ab.match.type === type);
+  const staticOf = (...types: string[]) => featureDefs((ab) => ab.kind === 'static' && types.includes(ab.mod.type));
+  const features: Record<FeatureName, Set<string>> = {
+    entryReplace: replaceOf('enter'),
+    afterCast: replaceOf('afterCast'),
+    moveReplace: replaceOf('move'),
+    leaveReplace: replaceOf('leave'),
+    handReplace: featureDefs((ab) => ab.kind === 'replace' && ab.match.type === 'moved' && ab.match.from === 'hand'),
+    drawEmpty: replaceOf('drawEmpty'),
+    mustBeChosen: staticOf('mustBeChosen'),
+    firstBattleWins: staticOf('firstBattleWins'),
+    enterTapped: staticOf('enterTappedFirst', 'enterTapped'),
+    allowPlayFrom: staticOf('allowPlayFrom'),
+    noOppShieldTrigger: staticOf('noOppShieldTrigger'),
+    attackMeFirst: staticOf('attackMeFirst'),
+    oneSpellPerTurn: staticOf('oneSpellPerTurn'),
+    powerAddOthers: staticOf('powerAddOthers'),
+    cannotPlay: staticOf('cannotPlay'),
+    hostPowerAdd: staticOf('hostPowerAdd'),
+    stUsed: featureDefs((ab) => JSON.stringify(ab).includes('"stUsed"')),
+    cannotLeaveOwn: staticOf('cannotLeaveOwn'),
+    noAttackOnEntry: staticOf('noAttackOnEntry'),
+    spellShieldTrigger: staticOf('spellShieldTrigger'),
+    manaAllCivs: staticOf('manaAllCivs'),
+    tapAsMana: staticOf('tapAsMana'),
+    flying: staticOf('flying'),
+    noGStrike: staticOf('noGStrike'),
+    cannotSummonAll: staticOf('cannotSummonAll'),
+    protectPlayerFromWeaker: staticOf('protectPlayerFromWeaker'),
+    oppManaTapped: staticOf('oppManaTapped'),
+    battleProxy: staticOf('battleProxy'),
+    sBack: featureDefs((ab) => ab.kind === 'keyword' && ab.name === 'sBack'),
+    enteredFrom: featureDefs((ab) => ab.kind === 'trigger' && (Array.isArray(ab.spec.on) ? ab.spec.on : [ab.spec.on]).some((p) => p.type === 'entered' && p.from !== undefined)),
+  };
   // program() の高速な引き当て: 定義ID → (面・能力・任意なし) の配列。文字列キーを毎回作らない
   const progFast = new Map<string, (Program | undefined)[]>();
   const reg: Registry = {
@@ -456,6 +570,7 @@ export function loadRegistry(origDb: CardDB): Registry {
     trigIndex,
     trigByDef,
     progs,
+    features,
     getFace(defId, face) {
       const d = defs[defId];
       if (!d) throw new Error(`未知のカード: ${defId}`);

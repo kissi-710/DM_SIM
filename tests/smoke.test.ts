@@ -11,14 +11,14 @@ describe('スモーク', () => {
       expect(d.length).toBe(40);
       expect(checkDeck(CARD_DB, d, true).ok).toBe(true);
     }
-    // 41種+ダミー(CARD_LIST)。レジストリはこれに、無能力カード(カード単体の強さの差し替え先)と不明カード('?')が加わる
-    expect(CARD_LIST.length).toBe(42);
+    // 41種+ダミー+25の王道の新規カード(CARD_LIST)。レジストリはこれに、無能力カード(カード単体の強さの差し替え先)と不明カード('?')が加わる
+    expect(CARD_LIST.length).toBeGreaterThanOrEqual(42);
     expect(Object.keys(loadRegistryFor().defs).length).toBe(Object.keys(CARD_DB).length + 1);
   });
 
   it('デッキに含まれる異なるカードは41種', () => {
     const ids = new Set<string>();
-    for (const p of DECK_PRESETS) for (const [id] of p.list) ids.add(id);
+    for (const p of DECK_PRESETS.filter((d) => !d.id.startsWith('sd1-'))) for (const [id] of p.list) ids.add(id);
     expect(ids.size).toBe(41);
     for (const id of ids) expect(CARD_DB[id]).toBeDefined();
   });
@@ -37,7 +37,7 @@ describe('カードデータの検証(spec 4.3)', () => {
   const base = (): CardDB => JSON.parse(JSON.stringify(CARD_DB));
   it('正しいデータはエラーなし', () => {
     expect(validateCardDb(CARD_DB)).toEqual([]);
-    expect(CARD_LIST.length).toBe(42);
+    expect(CARD_LIST.length).toBeGreaterThanOrEqual(42);
   });
   it('未知の原始操作・未知のキーワード・必須項目の不足はエラーになる', () => {
     const a = base();

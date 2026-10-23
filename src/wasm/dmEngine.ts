@@ -1,6 +1,7 @@
 // Rust 版エンジン(WASM)の薄いラッパー。ラウンドの評価(evalRound)を、TS 版と同じ入力・同じ結果で高速に行う。
 // 境界は C ABI(rust/src/ffi.rs)。JSON は UTF-8 でリニアメモリに書き、結果は f64 の配列で読む。
-import type { NativeRounds, SearchEnv } from '../ai/mcts';
+import { setNativeSkipCards, type NativeRounds, type SearchEnv } from '../ai/mcts';
+import { TS_ONLY_CARD_IDS } from '../cards';
 import type { NativePairedRound, NativeTree, TreeOpts, TreeStats } from '../ai/tree';
 
 interface Exports {
@@ -15,6 +16,16 @@ interface Exports {
   dm_tree_begin(c: number, maxDepth: number): number;
   dm_tree_run(base: number, target: number, outVisits: number, outSums: number): number;
   dm_tree_round(seed: number, alive: number, nAlive: number, out: number): number;
+}
+
+/**
+ * Rust 版に渡すカード定義の JSON。Rust 版が持たないカード(TS_ONLY_CARD_IDS)は除き、
+ * それらを含む対局の探索は TS 版で評価するように、mcts に登録する。
+ */
+export function rustRegistryJson(defs: Record<string, unknown>): string {
+  setNativeSkipCards(TS_ONLY_CARD_IDS);
+  const skip = new Set(TS_ONLY_CARD_IDS);
+  return JSON.stringify(Object.fromEntries(Object.entries(defs).filter(([id]) => !skip.has(id))));
 }
 
 const enc = new TextEncoder();

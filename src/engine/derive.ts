@@ -1,10 +1,10 @@
 // 派生ビュー: コスト・パワー・文明・能力・攻撃可否など(effects 7)。状態を書き換えない。
 import type { Ability, Cond, StaticMod } from './ast';
-import { evalCond, mkCC } from './cond';
-import type { FaceInfo } from './registry';
+import { evalCond, evalExpr, mkCC } from './cond';
+import { EMPTY_FACE_INFO, type FaceInfo } from './registry';
 import type { Ctx } from './state';
-import { opponentOf, permByPid } from './state';
-import { type Card, type CardDef, type Civ, type ContEffect, type Face, type FaceType, isCreatureType, type PlayerId, type Permanent } from './types';
+import { gameHas, opponentOf, permByPid } from './state';
+import { type Card, type CardDef, type Civ, type ContEffect, type Face, type FaceType, isCreatureType, type PlayerId, type Permanent, type ZoneName } from './types';
 
 export interface Chars {
   face: Face;
@@ -83,7 +83,37 @@ export function faceTypeOf(c: Ctx, uid: number): FaceType {
 
 export function infoOf(c: Ctx, uid: number): FaceInfo {
   const card = c.s.cards[uid];
+  if (card.zone === 'battle' && (c.s.effects.length > 0 || c.s.sealed) && isIgnored(c, uid)) return EMPTY_FACE_INFO;
   return c.reg.getInfo(card.defId, faceIdxOf(card, c.reg.defs[card.defId]));
+}
+
+/** 封印されているか(封印されているクリーチャーは、能力を失い、攻撃もブロックもできない) */
+export function isSealed(c: Ctx, uid: number): boolean {
+  const card = c.s.cards[uid];
+  if (!c.s.sealed || card.zone !== 'battle') return false;
+  const pm = permByPid(c.s, card.pid);
+  return !!pm && (pm.perm.seals?.length ?? 0) > 0;
+}
+
+/** 相手は、自身の山札を見れず、順序を変えられない(5.S.D.) */
+export function deckLocked(c: Ctx, p: PlayerId): boolean {
+  return activeStatics(c, 'deckLock').some((st) => st.controller !== p);
+}
+
+/**
+ * バトルゾーンのカードが、能力を無視されているか(「そのコストの相手のエレメントの能力を無視する」)。
+ * 継続効果(プレイヤー単位の ignoreCost)の発生源の持ち主の相手のカードで、表記コストが一致するものが対象。
+ */
+export function isIgnored(c: Ctx, uid: number): boolean {
+  const card = c.s.cards[uid];
+  if (c.s.sealed && isSealed(c, uid)) return true;
+  for (const e of c.s.effects) {
+    if (e.controller === card.owner) continue;
+    if (e.mod.kind === 'ignoreAll') return true;
+    if (e.mod.kind !== 'ignoreCost') continue;
+    if (costBase(c, uid) === e.mod.n) return true;
+  }
+  return false;
 }
 
 // ───────────────────────── 継続効果 ─────────────────────────
@@ -147,16 +177,63 @@ export function powerOf(c: Ctx, perm: Permanent): number {
   const def = c.reg.defs[card.defId];
   const face = def.faces[card.face] ?? def.faces[0];
   let p = face.power ?? 0;
-  const info = c.reg.getInfo(card.defId, card.face);
+  const info = infoOf(c, uid);
   for (const st of info.statics) {
     if (st.ability.mod.type !== 'powerAdd') continue;
     if (st.ability.while && !evalCond(mkCC(c, card.owner, { self: uid }), st.ability.while)) continue;
     p += st.ability.mod.n;
   }
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'powerAdd') p += e.mod.n;
+  // 式で増減するパワー(「コストが異なるクリーチャー1体につき+3000」など)
+  for (const st of info.statics) {
+    if (st.ability.mod.type !== 'powerAddExpr') continue;
+    const cc = mkCC(c, card.owner, { self: uid });
+    if (st.ability.while && !evalCond(cc, st.ability.while)) continue;
+    p += evalExpr(cc, st.ability.mod.expr);
+  }
+  // このクロスギアをクロスしたクリーチャーのパワーを増やす(竜装 ゴウソク・タキオンアーマー)
+  if (gameHas(c, 'hostPowerAdd')) {
+    for (const g of c.s.players[card.owner].battle) {
+      if (g.crossedOn !== perm.pid) continue;
+      for (const st of infoOf(c, g.cards[0]).statics) {
+        const m = st.ability.mod;
+        if (m.type !== 'hostPowerAdd') continue;
+        if (st.ability.while && !evalCond(mkCC(c, card.owner, { self: g.cards[0] }), st.ability.while)) continue;
+        p += m.n;
+      }
+    }
+  }
+  // 自分の他のカードのパワーを増やす(アルカディアス・モモキング)
+  if (gameHas(c, 'powerAddOthers')) {
+    for (const st of activeStatics(c, 'powerAddOthers')) {
+      const m = st.ability.mod;
+      if (m.type !== 'powerAddOthers' || st.controller !== card.owner || st.src === uid) continue;
+      if (evalCond(mkCC(c, card.owner, { self: st.src, it: uid, itFace: card.face }), m.cond)) p += m.n;
+    }
+  }
+  // パワーアタッカー: 攻撃中だけ
+  if (info.statics.length > 0 && isAttacking(c, perm.pid)) {
+    for (const st of info.statics) {
+      if (st.ability.mod.type !== 'powerAttacker') continue;
+      if (st.ability.while && !evalCond(mkCC(c, card.owner, { self: uid }), st.ability.while)) continue;
+      p += st.ability.mod.n;
+    }
+  }
   return p;
 }
 
+/** その山のクリーチャーが、いま攻撃中か(攻撃の手続きが終わっていない) */
+export function isAttacking(c: Ctx, pid: number): boolean {
+  for (const f of c.s.cont) if (f.kind === 'proc' && f.name === 'attack' && f.vars.pid === pid) return true;
+  return false;
+}
+
+/** そのプレイヤーが、ゲームに負けない効果を受けているか */
+export function playerCannotLose(c: Ctx, p: PlayerId): boolean {
+  return c.s.effects.some((e) => e.mod.kind === 'cannotLose' && e.controller === p);
+}
+
+export type KwName = 'blocker' | 'speedAttacker' | 'machFighter' | 'shieldTrigger' | 'justDiver' | 'exLife' | 'slayer' | 'unblockable' | 'cannotBeAttacked';
 /** バトルの時のパワー(カツムゲン: 無限)。無限は Infinity で表す(比べるだけで、状態には入れない) */
 export function battlePower(c: Ctx, perm: Permanent): number {
   const uid = perm.cards[0];
@@ -168,7 +245,6 @@ export function battlePower(c: Ctx, perm: Permanent): number {
   return powerOf(c, perm);
 }
 
-export type KwName = 'blocker' | 'speedAttacker' | 'machFighter' | 'shieldTrigger' | 'justDiver' | 'exLife' | 'slayer' | 'unblockable';
 
 export function hasKeyword(c: Ctx, perm: Permanent, kw: KwName): boolean {
   const uid = perm.cards[0];
@@ -199,26 +275,38 @@ function grantedByStatic(c: Ctx, perm: Permanent, kw: KwName): boolean {
 
 export function breakerCount(c: Ctx, perm: Permanent): number {
   const uid = perm.cards[0];
+  if (hasSelfStatic(c, uid, 'cannotBreak')) return 0; // シールドをブレイクできない
   const info = infoOf(c, uid);
   let n = 1;
   for (const b of info.breakers) {
     if (b.while && !evalCond(mkCC(c, c.s.cards[uid].owner, { self: uid }), b.while)) continue;
     n = Math.max(n, b.n);
   }
+  // パワード・ブレイカー: パワー n ごとに、シールドをもう1つ(1 + パワー / n)
+  if (info.poweredBreaker) n = Math.max(n, 1 + Math.floor(powerOf(c, perm) / info.poweredBreaker));
+  for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'breaker') n = Math.max(n, e.mod.n);
   return n;
 }
 
 // ───────────────────────── 攻撃・ブロック・選択 ─────────────────────────
 
-export function canBeChosen(c: Ctx, perm: Permanent, by: PlayerId): boolean {
+export function canBeChosen(c: Ctx, perm: Permanent, by: PlayerId, source?: number | null): boolean {
   const owner = c.s.cards[perm.cards[0]].owner;
   if (owner === by) return true;
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'cannotBeChosen') return false;
+  const info = infoOf(c, perm.cards[0]);
+  if (info.statics.length > 0) {
+    if (info.statics.some((st) => st.ability.mod.type === 'cannotBeChosen')) return false;
+    // 「呪文によって相手に選ばれない」: 選ぶ効果の発生源が呪文の時
+    if (source != null && faceTypeOf(c, source) === 'spell' && info.statics.some((st) => st.ability.mod.type === 'protectFromSpells')) return false;
+  }
   return true;
 }
 
 export function canBeAttacked(c: Ctx, perm: Permanent): boolean {
   for (const e of c.s.effects) if (e.pid === perm.pid && e.mod.kind === 'cannotBeAttacked') return false;
+  // 場の常在型能力で、攻撃されなくなっている(ガチャンコ ガチロボ)
+  if (grantedByStatic(c, perm, 'cannotBeAttacked')) return false;
   return true;
 }
 
@@ -242,16 +330,40 @@ function playerAttackBlockedByEntry(c: Ctx, perm: Permanent, owner: PlayerId): b
  */
 export function isSick(c: Ctx, perm: Permanent): boolean {
   if (!perm.sick) return false;
+  if (perm.rush === c.s.turn) return false; // アビスラッシュ: そのターン、プレイヤーを攻撃できる
   const t = faceTypeOf(c, perm.cards[0]);
   return t !== 'evolution' && t !== 'smaxEvolution';
 }
 
 export function canAttack(c: Ctx, perm: Permanent, target: { kind: 'player' } | { kind: 'creature'; pid: number }): boolean {
+  if (!canAttackBase(c, perm, target)) return false;
+  // 「相手のクリーチャーが攻撃するなら、可能ならこのクリーチャーを攻撃する」(バイラス・カースド)
+  if (gameHas(c, 'attackMeFirst')) {
+    const owner = c.s.cards[perm.cards[0]].owner;
+    const forced = activeStatics(c, 'attackMeFirst').filter((st) => st.controller !== owner);
+    if (forced.length > 0) {
+      const pids = forced.map((st) => c.s.cards[st.src].pid).filter((pid) => canAttackBase(c, perm, { kind: 'creature', pid }));
+      if (pids.length > 0) return target.kind === 'creature' && pids.includes(target.pid);
+    }
+  }
+  return true;
+}
+
+function canAttackBase(c: Ctx, perm: Permanent, target: { kind: 'player' } | { kind: 'creature'; pid: number }): boolean {
   const s = c.s;
   const uid = perm.cards[0];
+  if (!isCreatureType(faceTypeOf(c, uid))) return false; // タマシード・フィールド・クロスギアは攻撃できない
   const owner = s.cards[uid].owner;
+  if (s.sealed && isSealed(c, uid)) return false;
+  if (actsLimited(c, owner)) return false;
+  if (s.effects.length > 0 && s.effects.some((e) => e.mod.kind === 'cannotAttackAny' && e.controller !== owner)) return false;
+  if (costLocked(c, uid)) return false;
   if (perm.tapped) return false;
+  // 「相手のクリーチャーは、出たターン攻撃できない」(聖カオスマントラ)
+  if (perm.enteredTurn === s.turn && gameHas(c, 'noAttackOnEntry') && activeStatics(c, 'noAttackOnEntry').some((st) => st.controller !== owner)) return false;
   if (hasEffect(c, perm.pid, 'cannotAttack')) return false;
+  if (hasSelfStatic(c, uid, 'cannotAttack')) return false;
+  if (target.kind === 'player' && hasSelfStatic(c, uid, 'cannotAttackPlayer')) return false;
   const speed = hasKeyword(c, perm, 'speedAttacker');
   const mach = hasKeyword(c, perm, 'machFighter');
   const sick = isSick(c, perm);
@@ -259,11 +371,22 @@ export function canAttack(c: Ctx, perm: Permanent, target: { kind: 'player' } | 
   if (target.kind === 'player') {
     if (sick && !speed) return false; // マッハファイターは出たターン、プレイヤーを攻撃できない
     if (playerAttackBlockedByEntry(c, perm, owner)) return false;
+    // 「自分は、このクリーチャーよりパワーが小さいクリーチャーに攻撃されない」(大樹王 ギガンディダノス)
+    if (gameHas(c, 'protectPlayerFromWeaker')) {
+      const atkPower = powerOf(c, perm);
+      for (const st of activeStatics(c, 'protectPlayerFromWeaker')) {
+        if (st.controller === owner) continue;
+        const sp = permByPid(s, s.cards[st.src].pid);
+        if (sp && atkPower < powerOf(c, sp.perm)) return false;
+      }
+    }
     return true;
   }
   const tp = permByPid(s, target.pid);
   if (!tp || tp.owner === owner) return false;
   if (!canBeAttacked(c, tp.perm)) return false;
+  // 飛行: 飛行を持たないクリーチャーからは、攻撃されない
+  if (gameHas(c, 'flying') && hasSelfStatic(c, tp.perm.cards[0], 'flying') && !hasSelfStatic(c, uid, 'flying')) return false;
   if (tp.perm.tapped) return true;
   // アンタップ状態のクリーチャーは、出たターンのマッハファイターだけが攻撃できる
   return sick && mach;
@@ -274,8 +397,53 @@ export function isUnblockable(c: Ctx, attacker: Permanent): boolean {
   return hasKeyword(c, attacker, 'unblockable');
 }
 
+/** 「各ターン1度までしか、クリーチャーで攻撃もブロックもできない」の制限で、もう動けないか */
+function actsLimited(c: Ctx, player: PlayerId): boolean {
+  if (!c.s.effects.some((e) => e.mod.kind === 'oncePerTurnActs' && e.controller !== player)) return false;
+  let n = 0;
+  for (const ev of c.s.turnLog) if ((ev.type === 'attackDeclared' || ev.type === 'blocked') && ev.owner === player) n++;
+  return n >= 1;
+}
+
+/** 「表記コストが n のクリーチャーは、攻撃もブロックもできない」(♪やせ蛙)に当たるか */
+function costLocked(c: Ctx, uid: number): boolean {
+  const effs = c.s.effects;
+  if (effs.length === 0) return false;
+  const owner = c.s.cards[uid].owner;
+  for (const e of effs) if (e.mod.kind === 'cannotActCost' && e.controller !== owner && costBase(c, uid) === e.mod.n) return true;
+  return false;
+}
+
+/** そのカード自身が持つ常在型能力(while を満たしているもの)に、この種類があるか */
+export function hasSelfStatic(c: Ctx, uid: number, type: StaticMod['type']): boolean {
+  const statics = infoOf(c, uid).statics;
+  if (statics.length === 0) return false;
+  for (const st of statics) {
+    if (st.ability.mod.type !== type) continue;
+    if (st.ability.while && !evalCond(mkCC(c, c.s.cards[uid].owner, { self: uid }), st.ability.while)) continue;
+    return true;
+  }
+  return false;
+}
+
+/** ガードマン: 攻撃先が自分のクリーチャーの時に、ブロッカーのかわりにその攻撃先を変更できるか */
+export function canGuard(c: Ctx, perm: Permanent): boolean {
+  if (perm.tapped) return false;
+  if (c.s.sealed && isSealed(c, perm.cards[0])) return false;
+  if (costLocked(c, perm.cards[0])) return false;
+  if (hasEffect(c, perm.pid, 'cannotBlock')) return false;
+  if (actsLimited(c, c.s.cards[perm.cards[0]].owner)) return false;
+  if (!isCreatureType(faceTypeOf(c, perm.cards[0]))) return false;
+  return hasSelfStatic(c, perm.cards[0], 'guardman');
+}
+
 export function canBlock(c: Ctx, perm: Permanent): boolean {
   if (perm.tapped) return false;
+  if (c.s.sealed && isSealed(c, perm.cards[0])) return false;
+  if (costLocked(c, perm.cards[0])) return false;
+  if (hasEffect(c, perm.pid, 'cannotBlock')) return false;
+  if (actsLimited(c, c.s.cards[perm.cards[0]].owner)) return false;
+  if (!isCreatureType(faceTypeOf(c, perm.cards[0]))) return false;
   return hasKeyword(c, perm, 'blocker');
 }
 
@@ -289,6 +457,8 @@ export function mustBlock(c: Ctx, perm: Permanent): boolean {
 export interface CostOpts {
   taps?: number[];
   free?: boolean;
+  /** 「各ターンに1度」の軽減を使った発生源を、ここに集める(使ったと記録するのは、実際に使う側) */
+  once?: number[];
 }
 
 /** 召喚・詠唱するカードの最終コスト(0未満にならない)。 */
@@ -302,12 +472,29 @@ export function costOf(c: Ctx, uid: number, faceIdx: number, opts: CostOpts = {}
   const info = c.reg.getInfo(card.defId, faceIdx);
   if (info.sympathy) cost -= s.players[card.owner].mana.length;
   if (info.hyperEnergy && opts.taps?.length) cost -= 2 * opts.taps.length;
+  if (info.selfCosts.length > 0) {
+    const cc = mkCC(c, card.owner, { self: uid });
+    for (const sc of info.selfCosts) {
+      if (sc.cond && !evalCond(cc, sc.cond)) continue;
+      cost += evalExpr(cc, sc.delta);
+      if (sc.floor !== undefined && cost < sc.floor) cost = sc.floor;
+    }
+  }
+  // 「このターン、次に召喚する自分のクリーチャーのコストを少なくする」
+  if (s.effects.length > 0 && isCreatureType(face.type)) {
+    for (const e of s.effects) if (e.mod.kind === 'nextSummon' && e.controller === card.owner) cost += e.mod.delta;
+  }
   for (const st of activeStatics(c, 'costDelta')) {
     if (st.controller !== card.owner) continue;
     const mod = st.ability.mod;
     if (mod.type !== 'costDelta') continue;
+    if (mod.oncePerTurn && s.usage['cd:' + st.src] === s.turn) continue;
     const cc = mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx });
-    if (evalCond(cc, mod.cond as Cond)) cost += mod.delta;
+    if (evalCond(cc, mod.cond as Cond)) {
+      cost += typeof mod.delta === 'number' ? mod.delta : evalExpr(cc, mod.delta);
+      if (mod.floor !== undefined && cost < mod.floor) cost = mod.floor;
+      if (mod.oncePerTurn) opts.once?.push(st.src);
+    }
   }
   return Math.max(0, cost);
 }
@@ -321,8 +508,31 @@ export function payNeed(cost: number, civCount: number): number {
   return Math.max(cost, civCount, 0);
 }
 
+const ALL_CIVS: Civ[] = ['light', 'water', 'darkness', 'fire', 'nature'];
+
+/** マナの支払いに使える、アンタップのカード(マナゾーンのカードと、「タップしてマナとして使える」クリーチャー) */
+export function manaSources(c: Ctx, player: PlayerId, exclude: number[] = []): number[] {
+  const s = c.s;
+  const out = s.players[player].mana.filter((u) => !s.cards[u].tapped && !exclude.includes(u));
+  if (gameHas(c, 'tapAsMana')) {
+    for (const perm of s.players[player].battle) {
+      const u = perm.cards[0];
+      if (!perm.tapped && !exclude.includes(u) && hasSelfStatic(c, u, 'tapAsMana')) out.push(u);
+    }
+  }
+  return out;
+}
+
+/** マナの支払いに使う時の文明(「すべての文明を持つかのように」使えるクリーチャーは、すべて) */
+export function sourceCivs(c: Ctx, uid: number): Civ[] {
+  if (c.s.cards[uid].zone === 'battle') return ALL_CIVS;
+  return manaCivs(c, uid);
+}
+
 export function manaCivs(c: Ctx, uid: number): Civ[] {
   const card = c.s.cards[uid];
+  // 「自分のマナゾーンにあるカードは、すべての文明を持つ」(怪盗妖精カサブランカ)
+  if (card.zone === 'mana' && gameHas(c, 'manaAllCivs') && activeStatics(c, 'manaAllCivs').some((st) => st.controller === card.owner)) return ALL_CIVS;
   const def = c.reg.defs[card.defId];
   return card.zone === 'battle' || card.zone === 'limbo' ? def.faces[faceIdxOf(card, def)].civs : unionCivs(def.faces);
 }
@@ -333,9 +543,8 @@ export function manaCivs(c: Ctx, uid: number): Civ[] {
  * 払えなければ null。
  */
 export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number, exclude: number[] = [], keepFor: number[] = []): number[] | null {
-  const s = c.s;
   if (need <= 0) return [];
-  const avail = s.players[player].mana.filter((u) => !s.cards[u].tapped && !exclude.includes(u));
+  const avail = manaSources(c, player, exclude);
   if (avail.length < need) return null;
   // 価値(残したいほど高い)
   const want: Record<string, number> = {};
@@ -343,7 +552,7 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
   const mc = new Map<number, Civ[]>();
   const value = new Map<number, number>();
   for (const u of avail) {
-    const cs = manaCivs(c, u);
+    const cs = sourceCivs(c, u);
     mc.set(u, cs);
     let v = 0.01 * cs.length;
     for (const cv of cs) v += want[cv] ?? 0;
@@ -406,10 +615,60 @@ export function planPayment(c: Ctx, player: PlayerId, civs: Civ[], need: number,
 
 // ───────────────────────── 呪文の制限 ─────────────────────────
 
+/** そのクリーチャーは、離れない効果を受けているか */
+export function cannotLeave(c: Ctx, uid: number, cause?: string): boolean {
+  const card = c.s.cards[uid];
+  if (card.zone !== 'battle') return false;
+  if (c.s.effects.length > 0 && c.s.effects.some((e) => e.pid === card.pid && e.mod.kind === 'cannotLeave')) return true;
+  if (!gameHas(c, 'cannotLeaveOwn')) return false;
+  for (const st of activeStatics(c, 'cannotLeaveOwn')) {
+    const m = st.ability.mod;
+    if (m.type !== 'cannotLeaveOwn' || st.controller !== card.owner) continue;
+    if (m.exceptDestroy && cause === 'destroy') continue;
+    if (evalCond(mkCC(c, st.controller, { self: st.src, it: uid, itFace: card.face }), m.cond)) return true;
+  }
+  return false;
+}
+
+/** クロスのコスト(クロスギアのマナコストをもう一度払う。コスト軽減の効果も受ける)と文明 */
+export function crossCost(c: Ctx, gearUid: number): { cost: number; civs: Civ[] } {
+  const card = c.s.cards[gearUid];
+  const def = c.reg.defs[card.defId];
+  const fi = faceIdxOf(card, def);
+  return { cost: costOf(c, gearUid, fi), civs: def.faces[fi].civs };
+}
+
+/** 「相手は、〜のカードを使えない」(超球の超人)に当たらないか。召喚・唱える・出すのすべてに働く */
+export function canPlayCard(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
+  if (!gameHas(c, 'cannotPlay')) return true;
+  for (const st of activeStatics(c, 'cannotPlay')) {
+    if (st.controller === player) continue;
+    const mod = st.ability.mod;
+    if (mod.type !== 'cannotPlay') continue;
+    if (evalCond(mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx }), mod.cond)) return false;
+  }
+  return true;
+}
+
 /** プレイヤーがこの呪文(面)を唱えられるか(ドルファディロムの制限など) */
 export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
-  // 「次の自分のターンのはじめまで、相手は呪文を唱えられない」(XXDDZ)
-  for (const e of c.s.effects) if (e.mod.kind === 'cannotCast' && e.controller !== player) return false;
+  // 「相手は、自身のターンに1回までしか呪文を唱えられない」(ジョギラゴン&ジョニー)
+  if (gameHas(c, 'oneSpellPerTurn') && c.s.active === player && activeStatics(c, 'oneSpellPerTurn').some((st) => st.controller !== player)) {
+    if (c.s.turnLog.some((e) => e.type === 'cast' && e.owner === player)) return false;
+  }
+  // 「呪文を唱えられなくする効果を無視して、〜を唱えてもよい」(卍 新世壊 卍)
+  for (const st of activeStatics(c, 'ignoreCastBan')) {
+    if (st.controller !== player || st.ability.mod.type !== 'ignoreCastBan') continue;
+    if (evalCond(mkCC(c, player, { self: st.src, it: uid, itFace: faceIdx }), st.ability.mod.cond)) return true;
+  }
+  // 「次の自分のターンのはじめまで、相手は呪文を唱えられない」(XXDDZ)。n があれば、そのコストの呪文だけ
+  if (c.s.effects.length > 0) {
+    const cost = c.reg.defs[c.s.cards[uid].defId].faces[faceIdx]?.cost ?? 0;
+    for (const e of c.s.effects) {
+      if (e.mod.kind === 'cannotCast' && e.controller !== player && (e.mod.n === undefined || e.mod.n === cost)) return false;
+      if (e.mod.kind === 'cannotCastLte' && e.controller !== player && cost <= e.mod.n) return false;
+    }
+  }
   for (const st of activeStatics(c, 'cannotCast')) {
     if (st.controller === player) continue; // 「相手は〜できない」
     const mod = st.ability.mod;
@@ -418,6 +677,42 @@ export function canCast(c: Ctx, player: PlayerId, uid: number, faceIdx: number):
     if (evalCond(cc, mod.cond as Cond)) return false;
   }
   return true;
+}
+
+/**
+ * 「自分のターン中、〜を from のゾーンから召喚してもよい」(allowPlayFrom)で、このカードを from から召喚できる発生源。なければ null。
+ * 発生源ごとに「1体」(oncePerTurn)なら、そのターンに使っていないものだけ。
+ */
+export function grantedPlayFrom(c: Ctx, player: PlayerId, uid: number, faceIdx: number, from: ZoneName): number | null {
+  // 冒険妖精ポレキチ: このターン、そのクリーチャーをマナゾーンから召喚してもよい
+  if (from === 'mana' && c.s.active === player && c.s.usage[`pm:${uid}:${c.s.cards[uid].ep}`] === c.s.turn) return uid;
+  if (c.s.active !== player || !gameHas(c, 'allowPlayFrom')) return null;
+  if (from === 'deck' && c.s.players[player].deck[0] !== uid) return null; // 山札から召喚できるのは、一番上のカードだけ
+  for (const st of activeStatics(c, 'allowPlayFrom')) {
+    const mod = st.ability.mod;
+    if (st.controller !== player || mod.type !== 'allowPlayFrom' || mod.from !== from) continue;
+    if (mod.oncePerTurn && c.s.usage['gp:' + st.src] === c.s.turn) continue;
+    if (mod.cond && !evalCond(mkCC(c, player, { self: st.src, it: uid, itFace: faceIdx }), mod.cond)) continue;
+    return st.src;
+  }
+  return null;
+}
+
+/** allowPlayFrom の発生源が、アビスラッシュを与えているか */
+export function grantsRush(c: Ctx, src: number): boolean {
+  return infoOf(c, src).statics.some((st) => st.ability.mod.type === 'allowPlayFrom' && !!st.ability.mod.rush);
+}
+
+/** そのカードを召喚してよいか(「すべてのプレイヤーは、パワー5000以下のクリーチャーを召喚できない」と、召喚封じ(canSummon)) */
+export function canSummonCard(c: Ctx, player: PlayerId, uid: number, faceIdx: number): boolean {
+  // 「すべてのプレイヤーは、パワー5000以下のクリーチャーを召喚できない」(暴走龍 5000GT)
+  if (gameHas(c, 'cannotSummonAll')) {
+    for (const st of activeStatics(c, 'cannotSummonAll')) {
+      const m = st.ability.mod;
+      if (m.type === 'cannotSummonAll' && evalCond(mkCC(c, st.controller, { self: st.src, it: uid, itFace: faceIdx }), m.cond)) return false;
+    }
+  }
+  return canSummon(c, player, c.reg.defs[c.s.cards[uid].defId].faces[faceIdx]?.cost ?? 0);
 }
 
 /** 「相手はコストが maxCost 以下のクリーチャーを召喚できない」(ミラダンテXII のファイナル革命)に当たらないか */

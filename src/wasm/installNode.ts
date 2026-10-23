@@ -8,7 +8,7 @@ import { CARD_DB } from '../cards';
 import { setNativeRounds } from '../ai/mcts';
 import { setNativePairedRound, setNativeTree } from '../ai/tree';
 import { loadRegistry } from '../engine/registry';
-import { DmEngine } from './dmEngine';
+import { DmEngine, rustRegistryJson } from './dmEngine';
 
 let installed = false;
 
@@ -23,7 +23,7 @@ export function installNativeFromEnv(): boolean {
   if (!existsSync(path)) return false;
   try {
     const reg = loadRegistry(CARD_DB);
-    const eng = DmEngine.createSync(readFileSync(path), JSON.stringify(reg.defs));
+    const eng = DmEngine.createSync(readFileSync(path), rustRegistryJson(reg.defs));
     setNativeRounds(eng.asNativeRounds());
     setNativeTree(eng.asNativeTree());
     setNativePairedRound(eng.asNativePairedRound());

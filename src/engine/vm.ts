@@ -1,23 +1,29 @@
 // 効果のインタプリタ(effects 6.5)。フレームは pc と vars(JSON)だけを持ち、再開できる。
 import type { ActDef, Cond, Expr, Selector, StepDef } from './ast';
 import { type CC, evalCond, evalExpr, selectCards, varUids } from './cond';
-import { canSummon, charsOf, infoOf } from './derive';
+import { canSummonCard, charsOf, costBase, deckLocked, infoOf } from './derive';
 import type { Instr } from './registry';
 import {
   addShieldFromDeck,
+  applyEntryReplacement,
   ask,
   collectBatch,
   drawCards,
   emit,
   enterBattle,
+  entryReplacement,
+  listens,
   moveCards,
+  onSummoned,
+  removeZoneCard,
   resolveBattle,
   setTapped,
   shuffleDeck,
+  stabIntoDeck,
 } from './ops';
 import type { Ctx } from './state';
-import { nextId, opponentOf, permByPid, rngInt, shuffleInPlace, snapOf } from './state';
-import { type ContEffect, type EffectFrame, type EffectMod, type Ev, type InputSpec, isCreatureType, type ObjRef, type PlayerId } from './types';
+import { gameHas, nextId, opponentOf, permByPid, rngInt, shuffleInPlace, snapOf } from './state';
+import { type ContEffect, type EffectFrame, type EffectMod, type Ev, type InputSpec, isPermanentType, type ObjRef, type PlayerId } from './types';
 
 // ───────────────────────── コンテキスト ─────────────────────────
 
@@ -182,11 +188,15 @@ export function runEffect(c: Ctx, f: EffectFrame): boolean {
 type SelectStep = Extract<StepDef, { op: 'select' }>;
 
 /** select の候補・選ぶ枚数(上限・下限は候補の数に丸めた後)・選ぶ人 */
-function selectInfo(cc: CC, f: EffectFrame, st: SelectStep): { cand: number[]; min: number; max: number; chooser: PlayerId } {
+function selectInfo(cc: CC, f: EffectFrame, st: SelectStep): { cand: number[]; min: number; max: number; chooser: PlayerId; sumMax?: number } {
   const from = st.from;
   const cand = from && 'var' in from && !('zone' in from) ? varUids(cc, from.var) : selectCards(cc, from as Selector);
   const chooser: PlayerId =
     st.who === 'opponent' ? opponentOf(f.controller) : st.who === 'iter' ? (f.vars.$iter ?? f.controller) : f.controller;
+  if (st.sumLte !== undefined) {
+    // コストの合計の上限つきで、好きな数を選ぶ
+    return { cand, min: 0, max: cand.length, chooser, sumMax: evalExpr(cc, st.sumLte) };
+  }
   const min0 = st.min === undefined ? 1 : evalExpr(cc, st.min);
   const max0 = st.max === undefined ? 1 : evalExpr(cc, st.max);
   const max = Math.min(max0, cand.length);
@@ -278,10 +288,22 @@ export function interchangeable(c: Ctx, f: EffectFrame, cand: number[]): boolean
 }
 
 function execSelect(c: Ctx, f: EffectFrame, cc: CC, st: SelectStep): void {
-  const { cand, min, max, chooser } = selectInfo(cc, f, st);
+  const { cand, min, max, chooser, sumMax } = selectInfo(cc, f, st);
   const n = cand.length;
   let picked: number[];
-  if (max === 0) picked = [];
+  if (sumMax !== undefined) {
+    // 合計に収まる組み合わせが1通り(何も選ばない)しかなければ、聞かない
+    const costs = cand.map((u) => costBase(c, u));
+    if (costs.every((x) => x > sumMax)) picked = [];
+    else
+      picked = ask<number[]>(c, {
+        player: chooser,
+        why: 'select',
+        input: { shape: 'pick', candidates: cand, min: 0, max: n, sum: { max: sumMax, costs } },
+        source: f.source,
+        prompt: st.prompt ?? `${sourceName(c, f)}: コストの合計が ${sumMax} 以下になるように選んでください`,
+      });
+  } else if (max === 0) picked = [];
   else if (st.random) {
     const pool = cand.slice();
     picked = [];
@@ -397,13 +419,14 @@ function resolveSel(cc: CC, sel: string | Selector): number[] {
 }
 
 function playerOf(f: EffectFrame, who: string | undefined): PlayerId {
+  if (who === 'iter') return (f.vars.$iter as PlayerId | undefined) ?? f.controller; // forPlayers の現在のプレイヤー
   return who === 'opponent' ? opponentOf(f.controller) : f.controller;
 }
 
 /** 創造面(クリーチャー面)のインデックス。呪文のみなら -1 */
 function creatureFace(c: Ctx, uid: number): number {
   const def = c.reg.defs[c.s.cards[uid].defId];
-  return def.faces.findIndex((x) => isCreatureType(x.type));
+  return def.faces.findIndex((x) => isPermanentType(x.type));
 }
 function spellFace(c: Ctx, uid: number): number {
   const def = c.reg.defs[c.s.cards[uid].defId];
@@ -415,20 +438,23 @@ function durationOf(c: Ctx, f: EffectFrame, until: string): ContEffect['until'] 
   if (until === 'endOfTurn') return { kind: 'endOfTurn', turn: s.turn };
   if (until === 'nextTurnStart') return { kind: 'untilTurnStart', player: f.controller, afterTurn: s.turn };
   if (until === 'source') return { kind: 'source', uid: f.source.uid, ep: f.source.ep };
+  // 次の、相手のターンの終わりまで(いまが自分のターンなら次のターン、相手のターン中ならその次の相手のターン)
+  if (until === 'oppTurnEnd') return { kind: 'untilOppTurnEnd', player: f.controller, afterTurn: s.turn };
   // 「次の、相手のターンの終わりまで」: 自分のターン中なら次のターン、相手のターン中ならそのターン
   if (until === 'nextOpponentTurnEnd') return { kind: 'endOfTurn', turn: s.active === f.controller ? s.turn + 1 : s.turn };
   throw new Error('未知の期限: ' + until);
 }
 
 function actDraw(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
-  const n = typeof a === 'number' ? a : evalExpr(cc, a.n);
+  // 引く枚数は、数・{ n: 式, who? }・式(例: { count: ... })のどれでもよい
+  const n = typeof a === 'number' ? a : 'n' in a ? evalExpr(cc, a.n) : evalExpr(cc, a);
   const who = playerOf(f, typeof a === 'object' ? a.who : undefined);
   drawCards(c, who, n);
 }
 
 function actMove(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
   const uids = resolveSel(cc, a.sel);
-  const res = moveCards(c, uids, { to: a.to, cause: a.cause ?? 'effect', pos: a.pos, tapped: a.tapped });
+  const res = moveCards(c, uids, { to: a.to, cause: a.cause ?? 'effect', pos: a.pos, tapped: a.tapped, by: f.controller, ...(a.noReplace ? { noReplace: true } : {}) });
   if (a.as) {
     f.vars[a.as] = res.filter((r) => r.moved && r.to === a.to).map((r) => ({ uid: r.uid, ep: r.ep }));
   }
@@ -443,10 +469,24 @@ function actMoveTop(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void 
   if (a.as) f.vars[a.as] = res.filter((r) => r.moved).map((r) => ({ uid: r.uid, ep: r.ep }));
 }
 
+function actMoveBottom(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const who = playerOf(f, a.who);
+  const n = evalExpr(cc, a.n);
+  const deck = s.players[who].deck;
+  const bottom = deck.slice(Math.max(0, deck.length - n));
+  const res = moveCards(c, bottom, { to: a.to, cause: a.cause ?? 'effect', tapped: a.tapped });
+  if (a.as) f.vars[a.as] = res.filter((r) => r.moved).map((r) => ({ uid: r.uid, ep: r.ep }));
+}
+
 function actLookTop(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
   const who = playerOf(f, a.who);
   const n = evalExpr(cc, a.n);
+  if (deckLocked(c, who)) {
+    f.vars[a.as] = []; // 山札を見れない(5.S.D.)
+    return;
+  }
   const top = s.players[who].deck.slice(0, n);
   f.vars[a.as] = top.map((u) => ref(c, u));
   // この能力で見たカード。後の選択肢(modes)で、選ぶ人に見せる(マルル: 見てから選ぶ)
@@ -558,7 +598,13 @@ function actAssign(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
 
 function actAddShield(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   const n = a?.n ?? 1;
-  for (let i = 0; i < n; i++) addShieldFromDeck(c, f.controller);
+  const who = playerOf(f, a?.who);
+  const added: ObjRef[] = [];
+  for (let i = 0; i < n; i++) {
+    const u = addShieldFromDeck(c, who);
+    if (u !== null) added.push(ref(c, u));
+  }
+  if (a?.as) f.vars[a.as] = added;
 }
 
 function actTap(c: Ctx, _f: EffectFrame, cc: CC, a: any, key: string): void {
@@ -567,7 +613,8 @@ function actTap(c: Ctx, _f: EffectFrame, cc: CC, a: any, key: string): void {
 
 function actAddEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
-  const mods: EffectMod[] = a.mods ?? [a.mod];
+  // mod の n が式(オブジェクト)なら、その場で評価した数にする(「自分の墓地のクリーチャー1体につき-1000」など)
+  const mods: EffectMod[] = (a.mods ?? [a.mod]).map((m: any) => (m && typeof m.n === 'object' ? { ...m, n: evalExpr(cc, m.n) } : m));
   const targets = resolveSel(cc, a.sel);
   for (const u of targets) {
     const card = s.cards[u];
@@ -585,18 +632,43 @@ function actPut(c: Ctx, f: EffectFrame, cc: CC, a: any, key: string): void {
   const via = key === 'summon' ? 'summon' : 'effect';
   const evs: Ev[] = [];
   const entered: ObjRef[] = [];
+  // 複数を同時に出す時、出る時の置換の質問は、最初の1枚を出す前にまとめて行う(質問は、状態を変更する前に行うため)
+  const reps = new Map<number, NonNullable<ReturnType<typeof entryReplacement>>>();
+  const batch = uids.length > 1 && gameHas(c, 'entryReplace');
+  if (batch) {
+    for (const u of uids) {
+      const fi = creatureFace(c, u);
+      if (fi < 0) continue;
+      const rep = entryReplacement(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0 }, fi, via);
+      if (rep) reps.set(u, rep);
+    }
+  }
   for (const u of uids) {
     const fi = creatureFace(c, u);
     if (fi < 0) continue;
     const face = c.reg.getFace(s.cards[u].defId, fi);
-    if (face.type === 'evolution') continue; // 進化元がないので出せない
-    if (key === 'summon' && !canSummon(c, s.cards[u].owner, face.cost)) continue; // 召喚できない効果を受けている
-    const r = enterBattle(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0 }, evs);
-    if (r.to === 'battle') entered.push({ uid: u, ep: r.ep }); // G城の置換でマナゾーンに置かれたものは、出ていない
+    if (reps.has(u)) {
+      applyEntryReplacement(c, u, reps.get(u)!);
+      continue;
+    }
+    let onto: number | undefined;
+    if (face.type === 'evolution') {
+      // 進化クリーチャーは、進化元(onto: 変数のクリーチャー)の上に出す。進化元の条件を満たさなければ出せない
+      const base = a.onto ? varUids(cc, a.onto, { ignoreEp: true })[0] : undefined;
+      if (base === undefined || s.cards[base].zone !== 'battle' || !face.evolveFrom) continue;
+      const topUid = s.cards[base].pid >= 0 ? permByPid(s, s.cards[base].pid)?.perm.cards[0] : undefined;
+      if (topUid === undefined || !evalCond({ ...cc, self: u, it: topUid, itFace: s.cards[topUid].face, evo: true }, face.evolveFrom)) continue;
+      onto = s.cards[topUid].pid;
+    }
+    if (via === 'summon' && !canSummonCard(c, s.cards[u].owner, u, fi)) continue; // 召喚できない効果を受けている
+    const r = enterBattle(c, u, { to: 'battle', cause: via, via, face: fi, paid: 0, ...(batch ? { noReplace: true } : {}), ...(onto !== undefined ? { onto } : {}) }, evs);
+    if (r.moved && r.to === 'battle') entered.push({ uid: u, ep: r.ep }); // G城の置換でマナゾーンに置かれたものは、出ていない
+    if (r.moved && r.to === 'battle' && via === 'summon') onSummoned(c, u);
   }
   if (a.as) f.vars[a.as] = entered;
   s.batchNo++;
-  collectBatch(c, evs);
+  // noTriggers: 出ることによって起こる効果(「出た時」の能力)はすべて無視する
+  collectBatch(c, a.noTriggers ? evs.filter((e) => e.type !== 'entered') : evs);
   s.dirtySba = true;
 }
 
@@ -683,10 +755,13 @@ function actRevolutionChange(c: Ctx, f: EffectFrame, cc: CC, _a: any, _key: stri
   if (!fr) return;
   const fi = creatureFace(c, uid);
   if (fi < 0) return;
+  // 出る時の置換の質問は、状態を変更する前(手札に戻す前)に行う
+  const rep = gameHas(c, 'entryReplace') ? entryReplacement(c, uid, { to: 'battle', cause: 'revolutionChange', via: 'revolutionChange', face: fi, tapped: true, paid: 0 }, fi, 'revolutionChange') : null;
   const res = moveCards(c, [trig.card], { to: 'hand', cause: 'revolutionChange' });
   if (!res[0]?.moved) return; // 置換されて離れなかった(EXライフなど): 入れ替わらない
   const evs: Ev[] = [];
-  enterBattle(c, uid, { to: 'battle', cause: 'revolutionChange', via: 'revolutionChange', face: fi, tapped: true, paid: 0 }, evs);
+  if (rep) applyEntryReplacement(c, uid, rep);
+  else enterBattle(c, uid, { to: 'battle', cause: 'revolutionChange', via: 'revolutionChange', face: fi, tapped: true, paid: 0, noReplace: true }, evs);
   // G城の置換でマナゾーンに置かれた時は、入れ替わらない(攻撃していたクリーチャーは手札に戻った後で、攻撃は終わる)
   if (s.cards[uid].zone === 'battle') fr.vars.pid = s.cards[uid].pid;
   s.batchNo++;
@@ -698,34 +773,527 @@ function actPlayerEffect(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): 
   const s = c.s;
   // プレイヤー単位の継続効果(pid = -1)。「相手は〜できない」
   const m = a.mod;
-  const mod: EffectMod =
-    m.kind === 'cannotUseCost'
-      ? { kind: 'cannotUseCost', n: evalExpr(cc, m.n) }
-      : m.kind === 'cannotSummon'
-        ? { kind: 'cannotSummon', maxCost: evalExpr(cc, m.maxCost) }
-        : { kind: 'cannotCast' };
+  let mod: EffectMod;
+  switch (m.kind) {
+    case 'cannotUseCost':
+      mod = { kind: 'cannotUseCost', n: evalExpr(cc, m.n) };
+      break;
+    case 'cannotSummon':
+      mod = { kind: 'cannotSummon', maxCost: evalExpr(cc, m.maxCost) };
+      break;
+    case 'cannotCastLte':
+      mod = { kind: 'cannotCastLte', n: evalExpr(cc, m.n) };
+      break;
+    case 'ignoreCost':
+      mod = { kind: 'ignoreCost', n: evalExpr(cc, m.n) };
+      break;
+    case 'ignoreAll':
+      mod = { kind: 'ignoreAll' };
+      break;
+    case 'startShield':
+      mod = { kind: 'startShield' };
+      break;
+    case 'owe':
+      mod = { kind: 'owe', civ: m.civ, n: m.n };
+      break;
+    case 'oncePerTurnActs':
+      mod = { kind: 'oncePerTurnActs' };
+      break;
+    case 'nextSummon':
+      mod = { kind: 'nextSummon', delta: evalExpr(cc, m.delta), sa: !!m.sa };
+      break;
+    case 'cannotAttackAny':
+      mod = { kind: 'cannotAttackAny' };
+      break;
+    case 'cannotLose':
+      mod = { kind: 'cannotLose' };
+      break;
+    case 'cannotActCost':
+      mod = { kind: 'cannotActCost', n: evalExpr(cc, m.n) };
+      break;
+    default:
+      mod = m.n === undefined ? { kind: 'cannotCast' } : { kind: 'cannotCast', n: evalExpr(cc, m.n) };
+  }
   s.effects.push({ id: nextId(s), pid: -1, mod, until: durationOf(c, f, a.until), controller: f.controller });
 }
 
 /**
- * 効果によるバトル: a と b(どちらも変数の参照)のクリーチャーをバトルさせる。
- * どちらかがバトルゾーンにいなければ、何も起きない(バトルは行われない)。
+ * 効果によるバトル。a, b はクリーチャーの変数(a が攻撃側扱い)。どちらかがバトルゾーンにいなければ、バトルは行われない。
+ * 「バトルする時」「バトルの後」の誘発や身代わり(battleProxy)がある対戦は、手続き(battle)で段階を踏む。ない対戦は、その場で解決する
  */
 function actBattle(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
-  const pidOf = (name: string): number | null => {
-    const u = varUids(cc, name)[0];
-    if (u === undefined) return null;
-    const card = s.cards[u];
-    if (card.zone !== 'battle') return null;
-    const pm = permByPid(s, card.pid);
-    return pm && pm.perm.cards[0] === u ? pm.perm.pid : null;
-  };
-  const pa = pidOf(a.a);
-  const pb = pidOf(a.b);
-  if (pa === null || pb === null || pa === pb) return;
-  resolveBattle(c, pa, pb);
+  if (!(gameHas(c, 'battleProxy') || listens(c, 'battleStarted') || listens(c, 'afterBattle'))) {
+    const pidOf = (name: string): number | null => {
+      const u = varUids(cc, name)[0];
+      if (u === undefined) return null;
+      const card = s.cards[u];
+      if (card.zone !== 'battle') return null;
+      const pm = permByPid(s, card.pid);
+      return pm && pm.perm.cards[0] === u ? pm.perm.pid : null;
+    };
+    const pa = pidOf(a.a);
+    const pb = pidOf(a.b);
+    if (pa === null || pb === null || pa === pb) return;
+    resolveBattle(c, pa, pb);
+    s.dirtySba = true;
+    return;
+  }
+  const as = resolveSel(cc, a.a).filter((u) => s.cards[u].zone === 'battle');
+  const bs = resolveSel(cc, a.b).filter((u) => s.cards[u].zone === 'battle');
+  if (as.length === 0 || bs.length === 0) return;
+  s.cont.push({
+    kind: 'proc',
+    id: nextId(s),
+    causedBy: c.cause,
+    name: 'battle',
+    stage: 0,
+    vars: { a: s.cards[as[0]].pid, d: s.cards[bs[0]].pid },
+  });
+}
+
+/** 山札に加えてシャッフルする(それぞれの持ち主の山札に) */
+function actShuffleIn(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const uids = resolveSel(cc, a.sel);
+  if (uids.length === 0) return;
+  const owners = new Set<PlayerId>(uids.map((u) => s.cards[u].owner));
+  moveCards(c, uids, { to: 'deck', cause: 'effect', pos: 'top' });
+  for (const p of owners) shuffleDeck(c, p);
+}
+
+/** 山札の下に、いまの並びのまま置く(「好きな順序で山札の下に置く」。並びは変えない) */
+function actBottom(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  // except: 山札の下に置かないカード(メクレイドで選んだカードなど)
+  const skip = a.except ? varUids(cc, a.except, { ignoreEp: true }) : [];
+  const uids = varUids(cc, a.of, { ignoreEp: true }).filter((u) => s.cards[u].zone === 'deck' && !skip.includes(u));
+  if (uids.length === 0) return;
+  const owner = s.cards[uids[0]].owner;
+  if (deckLocked(c, owner)) return; // 山札の順序を変えられない(5.S.D.)
+  const deck = s.players[owner].deck;
+  for (const u of uids) deck.splice(deck.indexOf(u), 1);
+  for (const u of uids) {
+    deck.push(u);
+    s.cards[u].ep++;
+  }
+}
+
+/** 無月の門など: このカードを、選んだカードの上に重ねて召喚する(コストは支払わない)。sel = 手札・墓地のカード、under = 下になるカード */
+function actSummonOnto(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const uid = resolveSel(cc, a.sel)[0];
+  if (uid === undefined) return;
+  const card = s.cards[uid];
+  if (card.zone !== 'hand' && card.zone !== 'grave') return;
+  const fi = creatureFace(c, uid);
+  if (fi < 0) return;
+  const under = varUids(cc, a.under).filter((u) => u !== uid);
+  const evs: Ev[] = [];
+  enterBattle(c, uid, { to: 'battle', cause: 'summon', via: 'summon', face: fi, paid: 0, free: true, under, from: card.zone }, evs);
+  s.batchNo++;
+  collectBatch(c, evs);
   s.dirtySba = true;
+}
+
+/** 「このターンの後に自分のターンを追加する」 */
+function actExtraTurn(c: Ctx, f: EffectFrame, _cc: CC, _a: any, _key: string): void {
+  const s = c.s;
+  s.extraTurns = [...(s.extraTurns ?? []), f.controller];
+  emit(c, 'extraTurn', { by: f.controller, source: f.source.uid });
+}
+
+/** ゲーム中に1度の能力を使った印(cond の unused で調べる) */
+function actMarkUsed(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
+  c.s.usage['once:' + f.source.uid + ':' + a.key] = 1;
+}
+
+/** カードを、バトルゾーンの山(フィールドなど)の下に置く。sel = 置くカード、onto = 山の一番上のカード */
+function actPutUnder(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const base = resolveSel(cc, a.onto)[0];
+  if (base === undefined || s.cards[base].zone !== 'battle') return;
+  const pm = permByPid(s, s.cards[base].pid);
+  if (!pm) return;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone === 'battle') continue;
+    const from = card.zone;
+    const snap = snapOf(c, u);
+    removeZoneCard(c, u);
+    card.zone = 'battle';
+    card.ep++;
+    card.pid = pm.perm.pid;
+    card.tapped = false;
+    card.face = 0;
+    pm.perm.cards.push(u);
+    emit(c, 'moved', { card: u, owner: card.owner, from, to: 'battle', cause: 'putUnder', kind: 'spell', ex: false, lki: snap, underneath: true });
+  }
+  s.dirtySba = true;
+}
+
+/** タップして、次の持ち主のターンのはじめにアンタップしない(クリーチャー・マナのカード) */
+function actTapLock(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const uids = resolveSel(cc, a.sel);
+  if (uids.length === 0) return;
+  const pids: number[] = [];
+  const mana: number[] = [];
+  const owners = new Set<PlayerId>();
+  for (const u of uids) {
+    const card = s.cards[u];
+    owners.add(card.owner);
+    setTapped(c, u, true);
+    if (card.zone === 'battle') pids.push(card.pid);
+    else if (card.zone === 'mana') mana.push(u);
+  }
+  for (const owner of owners) {
+    const mine = (u: number) => s.cards[u].owner === owner;
+    s.effects.push({
+      id: nextId(s),
+      pid: -1,
+      mod: { kind: 'noUntap', pids: pids.filter((p) => permByPid(s, p)?.owner === owner), uids: mana.filter(mine) },
+      until: { kind: 'untilTurnStart', player: owner, afterTurn: s.turn },
+      controller: f.controller,
+    });
+  }
+  s.dirtySba = true;
+}
+
+/** 自分のシールドをすべて、ブレイクする(S・トリガーも使える。終極宣言) */
+function actBreakShields(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const me = f.controller;
+  // n があれば、そのぶんだけ(なければすべて)
+  const n = Math.min(a?.n ?? Infinity, s.players[me].shield.length);
+  if (n === 0) return;
+  s.cont.push({
+    kind: 'proc',
+    id: nextId(s),
+    causedBy: c.cause,
+    name: 'break',
+    stage: 0,
+    vars: { pid: s.cards[f.source.uid].pid, owner: opponentOf(me), n },
+  });
+}
+
+/**
+ * ガチンコ・ジャッジ: 各プレイヤーは、自身の山札の上から1枚目を表向きにし、それを一番下に置く。
+ * そのカードのコストが相手以上であれば、自分の勝ち。勝った時、変数 as に自分の公開したカードを入れる(負けたら空)
+ */
+function actJudge(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const me = f.controller;
+  const opp = opponentOf(me);
+  const um = s.players[me].deck[0];
+  const uo = s.players[opp].deck[0];
+  const cm = um === undefined ? -1 : costBase(c, um);
+  const co = uo === undefined ? -1 : costBase(c, uo);
+  const shown = [um, uo].filter((u): u is number => u !== undefined);
+  if (shown.length > 0) emit(c, 'revealed', { cards: shown, to: 'all', from: 'deck' });
+  for (const u of shown) {
+    const owner = s.cards[u].owner;
+    const deck = s.players[owner].deck;
+    deck.splice(deck.indexOf(u), 1);
+    deck.push(u);
+    s.cards[u].ep++;
+  }
+  if (a?.as) f.vars[a.as] = cm >= co && um !== undefined ? [ref(c, um)] : [];
+}
+
+/**
+ * カードを、表向きでシールド1つの上に置く(重ねる)。sel = 置くカード(どのゾーンでもよい。持ち主のシールドに置く)、onto = 下になるシールド
+ * 重ねても、シールドの枚数は変わらない(シールド1つの上に置く)
+ */
+function actStackShield(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const uid = resolveSel(cc, a.sel)[0];
+  const base = resolveSel(cc, a.onto)[0];
+  if (uid === undefined || base === undefined) return;
+  const bc = s.cards[base];
+  const card = s.cards[uid];
+  if (bc.zone !== 'shield' || card.owner !== bc.owner || uid === base) return;
+  const list = s.players[bc.owner].shield;
+  const i = list.indexOf(base);
+  if (i < 0) return;
+  const from = card.zone;
+  if (from === 'shield') return; // シールドのカードどうしを重ねることは、いまのカードにはない
+  const snap = snapOf(c, uid);
+  // 下のカードたち(元の山の分も含む)
+  const piles = (s.piles ??= {});
+  const under = [base, ...(piles[base] ?? [])];
+  delete piles[base];
+  removeZoneCard(c, uid);
+  card.zone = 'shield';
+  card.ep++;
+  card.pid = -1;
+  card.tapped = false;
+  card.face = 0;
+  card.up = true;
+  list[i] = uid;
+  piles[uid] = under;
+  emit(c, 'moved', { card: uid, owner: card.owner, from, to: 'shield', cause: 'stackShield', kind: 'creature', ex: false, lki: snap });
+  s.dirtySba = true;
+}
+
+/**
+ * バトルゾーンに置いたまま、ツインパクトの呪文側を、コストを支払わずに唱える(マジック・フレンド・バースト・スマッシュ・バーストなど)。
+ * カードは動かない。呪文を唱えた時の能力は誘発する
+ */
+function actCastSide(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const uid = resolveSel(cc, a.sel)[0];
+  if (uid === undefined) return;
+  const card = s.cards[uid];
+  if (card.zone !== 'battle') return;
+  const fi = spellFace(c, uid);
+  if (fi < 0) return;
+  const info = c.reg.getInfo(card.defId, fi);
+  if (!info.spell) return;
+  const ev = emit(c, 'cast', { card: uid, owner: card.owner, free: true, paid: 0, cost: 0, face: fi, from: 'battle' });
+  s.batchNo++;
+  collectBatch(c, [ev]);
+  s.cont.push({
+    kind: 'effect',
+    id: nextId(s),
+    causedBy: ev.id,
+    ability: { defId: card.defId, face: fi, idx: info.spell.idx },
+    source: { uid, ep: card.ep },
+    lki: snapOf(c, uid),
+    controller: card.owner,
+    pc: 0,
+    vars: {},
+    trigger: ev,
+  });
+}
+
+/** 封印を付ける: 持ち主の山札の上から1枚を、裏向きで、そのクリーチャーの上に置く */
+function actSeal(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone !== 'battle') continue;
+    const pm = permByPid(s, card.pid);
+    if (!pm) continue;
+    const deck = s.players[card.owner].deck;
+    const d = deck[0];
+    if (d === undefined) continue;
+    const snap = snapOf(c, d);
+    removeZoneCard(c, d);
+    const dc = s.cards[d];
+    dc.zone = 'battle';
+    dc.ep++;
+    dc.pid = pm.perm.pid;
+    dc.face = 0;
+    dc.tapped = false;
+    (pm.perm.seals ??= []).push(d);
+    s.sealed = true;
+    emit(c, 'moved', { card: d, owner: dc.owner, from: 'deck', to: 'battle', cause: 'seal', kind: 'creature', ex: false, lki: snap, underneath: true });
+  }
+  s.dirtySba = true;
+}
+
+/** 持ち主の山札の上から depth 枚目の位置に、横向きに刺す */
+function actStab(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  stabIntoDeck(c, resolveSel(cc, a.sel), a.depth ?? 4);
+}
+
+/**
+ * ニンジャ・チェンジ: 相手のクリーチャーの攻撃・ブロックの途中で、自分のクリーチャー(sel)を手札に戻し、手札のこのクリーチャーを出す。
+ * 攻撃先・ブロッカーが入れ替わるクリーチャーだったなら、出たクリーチャーがその役を引き継ぐ
+ */
+function actNinjaChange(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const trig = f.trigger;
+  if (!trig || (trig.type !== 'attackDeclared' && trig.type !== 'blocked')) return;
+  const uid = f.source.uid;
+  const card = s.cards[uid];
+  if (card.ep !== f.source.ep || card.zone !== 'hand') return;
+  const old = resolveSel(cc, a.sel)[0];
+  if (old === undefined || s.cards[old].zone !== 'battle') return;
+  const oldPm = permByPid(s, s.cards[old].pid);
+  if (!oldPm || oldPm.owner !== card.owner) return;
+  const fr = [...s.cont].reverse().find((x) => x.kind === 'proc' && x.name === 'attack' && x.vars.pid === trig.attacker);
+  const fi = creatureFace(c, uid);
+  if (fi < 0) return;
+  const wasTapped = oldPm.perm.tapped;
+  const oldPid = oldPm.perm.pid;
+  const rep = gameHas(c, 'entryReplace') ? entryReplacement(c, uid, { to: 'battle', cause: 'ninjaChange', via: 'ninjaChange', face: fi, tapped: wasTapped, paid: 0 }, fi, 'ninjaChange') : null;
+  const res = moveCards(c, [old], { to: 'hand', cause: 'bounce' });
+  if (!res[0]?.moved) return;
+  const evs: Ev[] = [];
+  if (rep) applyEntryReplacement(c, uid, rep);
+  else enterBattle(c, uid, { to: 'battle', cause: 'ninjaChange', via: 'ninjaChange', face: fi, tapped: wasTapped, paid: 0, noReplace: true }, evs);
+  const newPid = s.cards[uid].pid;
+  if (fr && fr.vars.target && fr.vars.target.kind === 'creature' && fr.vars.target.pid === oldPid) fr.vars.target = { kind: 'creature', pid: newPid };
+  s.batchNo++;
+  collectBatch(c, evs);
+  s.dirtySba = true;
+}
+
+/** シールドのカード(sel)に、次の持ち主のターンのはじめまで「S・トリガー」を与える */
+function actGrantShieldTrigger(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone !== 'shield') continue;
+    s.usage[`stg:${u}:${card.ep}`] = s.turn;
+  }
+}
+
+/** クロスギア(gear)を、クリーチャー(to)にクロスする(コストは支払わない) */
+function actCross(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const gu = (typeof a.gear === 'string' ? varUids(cc, a.gear, { ignoreEp: true }) : resolveSel(cc, a.gear))[0];
+  const hu = (typeof a.to === 'string' ? varUids(cc, a.to, { ignoreEp: true }) : resolveSel(cc, a.to))[0];
+  if (gu === undefined || hu === undefined) return;
+  const gp = s.cards[gu].zone === 'battle' ? permByPid(s, s.cards[gu].pid) : null;
+  const hp = s.cards[hu].zone === 'battle' ? permByPid(s, s.cards[hu].pid) : null;
+  if (!gp || !hp || gp.owner !== hp.owner || gp.perm.crossedOn === hp.perm.pid) return;
+  gp.perm.crossedOn = hp.perm.pid;
+  emit(c, 'crossed', { card: gu, owner: gp.owner, host: hp.perm.cards[0], hostPid: hp.perm.pid, free: true });
+  collectBatch(c, [c.out[c.out.length - 1]]);
+  void f;
+}
+
+/** そのカード(マナゾーン)を、このターン、マナゾーンから召喚してもよい(コストは支払う) */
+function actAllowSummon(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone === 'mana') s.usage[`pm:${u}:${card.ep}`] = s.turn;
+  }
+}
+
+/** クリーチャー(進化の山)の下にあるカードを、n 枚(省略 = すべて)、墓地(または山札の下)に置く */
+function actDropUnder(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone !== 'battle') continue;
+    const pm = permByPid(s, card.pid);
+    if (!pm || pm.perm.cards[0] !== u) continue;
+    const n = Math.min(a.n ?? Infinity, pm.perm.cards.length - 1);
+    for (let i = 0; i < n; i++) {
+      const uc = pm.perm.cards.pop();
+      if (uc === undefined || uc === u) break;
+      const ucard = s.cards[uc];
+      const snap = snapOf(c, uc);
+      ucard.zone = a.to === 'deck' ? 'deck' : 'grave';
+      ucard.ep++;
+      ucard.pid = -1;
+      ucard.tapped = false;
+      ucard.face = 0;
+      const own = s.players[ucard.owner];
+      if (a.to === 'deck') own.deck.push(uc);
+      else own.grave.push(uc);
+      emit(c, 'moved', { card: uc, owner: ucard.owner, from: 'battle', to: ucard.zone, cause: 'trashUnder', kind: 'creature', ex: false, lki: snap, underneath: true });
+    }
+  }
+  s.dirtySba = true;
+}
+
+/** クリーチャー(進化の山)の一番上のカードだけを破壊する(下のカードは残る) */
+function actDestroyTop(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    if (s.cards[u].zone !== 'battle') continue;
+    moveCards(c, [u], { to: 'grave', cause: 'destroy', alone: true });
+  }
+}
+
+/** このクリーチャー(発生源)が、相手のシールドを n 個ブレイクする(破天九語) */
+function actBreakOpp(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const me = f.controller;
+  const opp = opponentOf(me);
+  const n = Math.min(a?.n ?? 1, s.players[opp].shield.length);
+  if (n <= 0) return;
+  s.cont.push({ kind: 'proc', id: nextId(s), causedBy: c.cause, name: 'break', stage: 0, vars: { pid: s.cards[f.source.uid].pid, owner: me, n } });
+}
+
+/** 自分はゲームに勝つ */
+function actWin(c: Ctx, f: EffectFrame, _cc: CC, _a: any, _key: string): void {
+  const s = c.s;
+  if (s.winner !== null) return;
+  s.winner = f.controller;
+  s.loseReason = '効果による勝利';
+  emit(c, 'gameOver', { winner: f.controller, reason: '効果による勝利' });
+}
+
+/** アビスラッシュ(効果で出したクリーチャー): このターン攻撃でき、ターンの終わりに(ifAttacked なら、攻撃していれば)山札の下に置く */
+function actRush(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    if (card.zone !== 'battle') continue;
+    const pm = permByPid(s, card.pid);
+    if (!pm) continue;
+    pm.perm.rush = s.turn;
+    if (a.ifAttacked) pm.perm.rushIfAttacked = true;
+  }
+}
+
+/** そのカードを、別のコスト(alt)で使う(キリフダッシュ)。払えなければ何も起きない */
+function actPlay(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  for (const u of resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    const fi = creatureFace(c, u);
+    if (fi < 0) continue;
+    s.cont.push({
+      kind: 'proc',
+      id: nextId(s),
+      causedBy: c.cause,
+      name: 'play',
+      stage: 0,
+      vars: { uid: u, ep: card.ep, from: card.zone, face: fi, free: false, extra: a.alt !== undefined ? { alt: a.alt } : undefined, after: null, settle: false, soft: true },
+    });
+  }
+}
+
+/** そのカードの「このクリーチャーが出た時」で始まる能力を1つ使う(どのゾーンのカードでもよい。最初の1つ) */
+function actUseCip(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  // 捨てたばかりのカードなど、直前に動いたカードも指せるように、世代は見ない
+  for (const u of typeof a.sel === 'string' ? varUids(cc, a.sel, { ignoreEp: true }) : resolveSel(cc, a.sel)) {
+    const card = s.cards[u];
+    const def = c.reg.defs[card.defId];
+    for (let fi = 0; fi < def.faces.length; fi++) {
+      if (!def.faces[fi].races && def.faces[fi].type === 'spell') continue;
+      const t = c.reg.getInfo(card.defId, fi).triggers.find((r) => {
+        if (r.ability.gen || r.ability.spec.subject !== 'self') return false;
+        const on = Array.isArray(r.ability.spec.on) ? r.ability.spec.on : [r.ability.spec.on];
+        return on.length === 1 && on[0].type === 'entered';
+      });
+      if (!t) continue;
+      const ev: Ev = { id: nextId(s), causedBy: null, type: 'entered', turn: s.turn, card: u, owner: card.owner };
+      s.cont.push({
+        kind: 'effect',
+        id: nextId(s),
+        causedBy: c.cause,
+        ability: { defId: card.defId, face: fi, idx: t.idx },
+        source: ref(c, u),
+        lki: snapOf(c, u),
+        controller: f.controller,
+        pc: 0,
+        vars: {},
+        trigger: ev,
+        noOptional: true,
+      });
+      break;
+    }
+  }
+}
+
+/** プレイヤーの墓地をシャッフルして、山札の下に置く */
+function actGraveToBottom(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
+  const s = c.s;
+  const who = playerOf(f, a?.who);
+  const uids = s.players[who].grave.slice();
+  if (uids.length === 0) return;
+  shuffleInPlace(s, uids);
+  moveCards(c, uids, { to: 'deck', cause: 'effect', pos: 'bottom' });
 }
 
 function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
@@ -733,8 +1301,9 @@ function actLog(c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
   emit(c, a, { owner: f.controller, source: f.source.uid });
 }
 
-function actSetVar(_c: Ctx, f: EffectFrame, _cc: CC, a: any, _key: string): void {
-  f.vars[a.as] = a.value;
+function actSetVar(_c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
+  // 値が式(オブジェクト)なら、その場で評価した数を入れる
+  f.vars[a.as] = typeof a.value === 'object' && a.value !== null ? evalExpr(cc, a.value) : a.value;
 }
 
 /** 原始操作の名前 → 実行する関数(act の最初のキーで引く) */
@@ -742,6 +1311,7 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['draw', actDraw],
   ['move', actMove],
   ['moveTop', actMoveTop],
+  ['moveBottom', actMoveBottom],
   ['lookTop', actLookTop],
   ['revealUntil', actRevealUntil],
   ['reveal', actReveal],
@@ -761,6 +1331,31 @@ const ACT_HANDLERS = new Map<string, (c: Ctx, f: EffectFrame, cc: CC, a: any, ke
   ['revolutionChange', actRevolutionChange],
   ['playerEffect', actPlayerEffect],
   ['battle', actBattle],
+  ['shuffleIn', actShuffleIn],
+  ['bottom', actBottom],
+  ['summonOnto', actSummonOnto],
+  ['extraTurn', actExtraTurn],
+  ['markUsed', actMarkUsed],
+  ['putUnder', actPutUnder],
+  ['tapLock', actTapLock],
+  ['breakShields', actBreakShields],
+  ['judge', actJudge],
+  ['castSide', actCastSide],
+  ['seal', actSeal],
+  ['stab', actStab],
+  ['rush', actRush],
+  ['dropUnder', actDropUnder],
+  ['destroyTop', actDestroyTop],
+  ['allowSummon', actAllowSummon],
+  ['breakOpp', actBreakOpp],
+  ['cross', actCross],
+  ['ninjaChange', actNinjaChange],
+  ['grantShieldTrigger', actGrantShieldTrigger],
+  ['win', actWin],
+  ['play', actPlay],
+  ['useCip', actUseCip],
+  ['graveToBottom', actGraveToBottom],
+  ['stackShield', actStackShield],
   ['log', actLog],
   ['setVar', actSetVar],
 ]);

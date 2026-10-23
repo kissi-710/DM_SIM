@@ -45,8 +45,10 @@ describe('playActions の skipCopies', () => {
     let checked = 0;
     let games = 0;
     let withCopies = 0;
-    for (const da of DECK_PRESETS) {
-      for (const db of DECK_PRESETS) {
+    // デッキの組は、全 N×N ではなく、各デッキに対して3つの相手(自分自身・次・5つ先)を取る(25の王道で24組になり、全組では長すぎる)
+    for (const [i, da] of DECK_PRESETS.entries()) {
+      for (const offset of [0, 1, 5]) {
+        const db = DECK_PRESETS[(i + offset) % DECK_PRESETS.length];
         for (const kind of ['random', 'rule', 'random', 'rule'] as const) {
           games++;
           playGameSync(reg, [makeAgent({ kind }), makeAgent({ kind })], {

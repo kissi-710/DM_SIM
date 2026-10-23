@@ -189,13 +189,13 @@ export function recentFeed(s: GameState, evs: Ev[], me: number | null, max = 3):
 // ───────────────────────── 非公開のカード ─────────────────────────
 
 /**
- * 本人にも見えないカードか。シールドゾーンのカードは、持ち主にも見えない(ブレイクされて手札に加わる途中のカードを除く)。
+ * 本人にも見えないカードか。シールドゾーンのカードは、持ち主にも見えない(ブレイクされて手札に加わる途中のカードと、表向きのシールド=G城を除く)。
  * 質問の選択肢に出ても、裏向きのまま選ぶ(ジャオウガの「シールドを3枚残す」など)。engine/view.ts の toPlayerView と同じ規則
  */
 export function isConcealed(s: GameState, uid: number): boolean {
   const c = s.cards[uid];
   if (!c) return true;
-  return c.defId === '?' || (c.zone === 'shield' && !s.breaking.includes(uid));
+  return c.defId === '?' || (c.zone === 'shield' && !c.up && !s.breaking.includes(uid));
 }
 
 // ───────────────────────── 触れない状態(ジャストダイバーなど) ─────────────────────────

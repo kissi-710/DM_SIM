@@ -31,7 +31,9 @@ describe('validateCardDb(カードデータの検証)', () => {
   it('面の必須項目: 種類・cost・civs・power', () => {
     expect(errs(card({ face: { type: 'monster' } }))).toContain('未知の種類');
     expect(errs(card({ face: { cost: undefined } }))).toContain('cost');
-    expect(errs(card({ face: { civs: [] } }))).toContain('civs');
+    expect(errs(card({ face: { civs: undefined } }))).toContain('civs');
+    // 無色は、空の配列
+    expect(errs(card({ face: { civs: [] } }))).toBe('');
     expect(errs(card({ face: { power: undefined } }))).toContain('power');
     // 呪文は power 不要
     expect(errs(card({ face: { type: 'spell', power: undefined } }))).toBe('');
@@ -79,7 +81,7 @@ describe('validateCardDb(カードデータの検証)', () => {
     expect(errs(cond({ any: [{ not: { weird: 1 } }] }))).toContain('weird');
   });
   it('複数のカードのエラーをまとめて返す', () => {
-    const r = validateCardDb({ a: card({ id: 'a', name: '' }), b: card({ id: 'b', face: { civs: [] } }) });
+    const r = validateCardDb({ a: card({ id: 'a', name: '' }), b: card({ id: 'b', face: { civs: undefined } }) });
     expect(r.length).toBeGreaterThanOrEqual(2);
     expect(r.join()).toContain('[a]');
     expect(r.join()).toContain('[b]');

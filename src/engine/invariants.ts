@@ -30,6 +30,22 @@ export function checkInvariants(s: GameState): string[] {
         if (c.pid !== perm.pid) errs.push(`カード${u}の pid が違う`);
         if (c.owner !== p) errs.push(`カード${u}の持ち主が違う(battle)`);
       }
+      // 封印(山の上に置かれた裏向きのカード)
+      for (const u of perm.seals ?? []) {
+        put(u, `${p}:battle-seal`);
+        const c = s.cards[u];
+        if (c.zone !== 'battle') errs.push(`封印のカード${u}の zone が battle でない`);
+        if (c.pid !== perm.pid) errs.push(`封印のカード${u}の pid が違う`);
+      }
+    }
+  }
+  // 重ねて置かれたシールド(山)の、下のカード
+  for (const [top, under] of Object.entries(s.piles ?? {})) {
+    const t = s.cards[Number(top)];
+    if (!t || t.zone !== 'shield') errs.push(`シールドの山の一番上 ${top} がシールドゾーンにない`);
+    for (const u of under) {
+      put(u, `${s.cards[u]?.owner}:shield-under`);
+      if (s.cards[u]?.zone !== 'shield') errs.push(`山の下のカード${u}の zone が shield でない`);
     }
   }
   for (const u of s.limbo) {

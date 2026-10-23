@@ -1,11 +1,11 @@
 // 合法手の列挙と検証(design 5 / effects 12)。
-import { canAttack, charsOf, costBase, costOf, defaultPlayFace, isSick } from './derive';
+import { canAttack, charsOf, costBase, costOf, crossCost, defaultPlayFace, faceTypeOf, grantedPlayFrom, infoOf, isSick, payNeed, planPayment } from './derive';
 import { evalCond, mkCC } from './cond';
-import { planPlay } from './procs';
+import { planPlay, shieldPickChoices } from './procs';
 import type { Registry } from './registry';
 import type { Ctx } from './state';
-import { mkCtx, opponentOf } from './state';
-import type { Action, AnswerValue, GameState, InputSpec, Pending, PlayerId, PlayExtra } from './types';
+import { gameHas, mkCtx, opponentOf } from './state';
+import { type Action, type AnswerValue, type GameState, type InputSpec, isCreatureType, type Pending, type PlayerId, type PlayExtra } from './types';
 
 export const ENUM_LIMIT = 200;
 
@@ -20,6 +20,11 @@ export function legalActions(s: GameState, reg: Registry): Action[] {
   const c = mkCtx(s, reg);
   const p = s.pending;
   if (p.why === 'turnAction') return turnActions(c, p.player);
+  // ブレイクするシールド: 見分けのつく違いごとに1つ(どれを選んでも同じ裏向きのシールドは、探索の分岐に数えない)。
+  // 人間は UI で好きなシールドを選べる(validateAnswer は候補の中の n 枚なら通す)
+  if (p.why === 'pickShield' && p.input?.shape === 'pick') {
+    return shieldPickChoices(s, p.input.candidates, p.input.min).map((value) => ({ type: 'ANSWER', id: p.id, value }));
+  }
   return enumerateAnswers(p).map((value) => ({ type: 'ANSWER', id: p.id, value }));
 }
 
@@ -66,11 +71,49 @@ function turnActions(c: Ctx, player: PlayerId): Action[] {
   }
   if (s.step === 'main') {
     for (const a of playActions(c, player, true)) add(a, playActionKey(s, a));
+    for (const a of hyperizeActions(c, player)) add(a);
+    for (const a of crossActions(c, player)) add(a);
     add({ type: 'END_MAIN' });
   }
   if (s.step === 'main' || s.step === 'attack') {
     for (const a of attackActions(c, player)) add(a);
     add({ type: 'END_TURN' });
+  }
+  return out;
+}
+
+/** クロスできるクロスギアとクリーチャーの組(クロスギアのコストをもう一度、マナで払えるもの) */
+export function crossActions(c: Ctx, player: PlayerId): Extract<Action, { type: 'CROSS' }>[] {
+  const s = c.s;
+  const out: Extract<Action, { type: 'CROSS' }>[] = [];
+  const mine = s.players[player].battle;
+  const gears = mine.filter((p) => faceTypeOf(c, p.cards[0]) === 'crossgear');
+  if (gears.length === 0) return out;
+  const hosts = mine.filter((p) => isCreatureType(faceTypeOf(c, p.cards[0])));
+  for (const g of gears) {
+    const { cost, civs } = crossCost(c, g.cards[0]);
+    if (!planPayment(c, player, civs, payNeed(cost, civs.length))) continue;
+    for (const h of hosts) if (g.crossedOn !== h.pid) out.push({ type: 'CROSS', gear: g.pid, target: h.pid });
+  }
+  return out;
+}
+
+/** ハイパー化できるクリーチャーと、タップする他のクリーチャーの組(ハイパーモード中でないもの) */
+export function hyperizeActions(c: Ctx, player: PlayerId): Extract<Action, { type: 'HYPERIZE' }>[] {
+  const out: Extract<Action, { type: 'HYPERIZE' }>[] = [];
+  const mine = c.s.players[player].battle;
+  for (const perm of mine) {
+    if (perm.hyper) continue;
+    const need = infoOf(c, perm.cards[0]).hyperize;
+    if (need === null || need < 0) continue;
+    const others = mine.filter((p) => p !== perm && !p.tapped && isCreatureType(faceTypeOf(c, p.cards[0])));
+    if (need === 0) {
+      out.push({ type: 'HYPERIZE', pid: perm.pid, tap: [] });
+      continue;
+    }
+    // need = 1 が通常。2体以上なら、組み合わせの先頭だけ(まれ)
+    if (need === 1) for (const o of others) out.push({ type: 'HYPERIZE', pid: perm.pid, tap: [o.pid] });
+    else if (others.length >= need) out.push({ type: 'HYPERIZE', pid: perm.pid, tap: others.slice(0, need).map((p) => p.pid) });
   }
   return out;
 }
@@ -105,9 +148,10 @@ export function playActionKey(s: GameState, a: Extract<Action, { type: 'PLAY_CAR
 export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extract<Action, { type: 'PLAY_CARD' }>[] {
   const s = c.s;
   const out: Extract<Action, { type: 'PLAY_CARD' }>[] = [];
-  const zones = ['hand', 'mana', 'grave'] as const;
+  const zones = gameHas(c, 'allowPlayFrom') ? (['hand', 'mana', 'grave', 'hyper', 'deck'] as const) : (['hand', 'mana', 'grave', 'hyper'] as const);
   for (const z of zones) {
-    const list: number[] = s.players[player][z];
+    // 山札から使えるのは、一番上のカードだけ(「山札の上から召喚してもよい」)
+    const list: number[] = z === 'deck' ? s.players[player].deck.slice(0, 1) : s.players[player][z];
     const seenDefs = skipCopies && z === 'hand' ? new Set<string>() : null;
     for (const uid of list) {
       if (seenDefs) {
@@ -119,7 +163,13 @@ export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extra
       for (let fi = 0; fi < def.faces.length; fi++) {
         const face = def.faces[fi];
         const info = c.reg.getInfo(def.id, fi);
-        if (z !== 'hand' && !info.permissions.some((p) => p.from === z && p.play === (face.type === 'spell' ? 'cast' : 'summon'))) continue;
+        if (
+          z !== 'hand' &&
+          !info.permissions.some((p) => p.from === z && p.play === (face.type === 'spell' ? 'cast' : isCreatureType(face.type) ? 'summon' : 'put')) &&
+          !(isCreatureType(face.type) && grantedPlayFrom(c, player, uid, fi, z) !== null) &&
+          !info.altCosts.some((ab) => ab.cost.from?.includes(z))
+        )
+          continue;
         for (const extra of extraVariants(c, player, uid, fi)) {
           const plan = planPlay(c, player, uid, z, fi, extra, false);
           if (plan.ok) out.push({ type: 'PLAY_CARD', uid, from: z, face: fi, extra });
@@ -133,13 +183,33 @@ export function playActions(c: Ctx, player: PlayerId, skipCopies = false): Extra
 function extraVariants(c: Ctx, player: PlayerId, uid: number, fi: number): (PlayExtra | undefined)[] {
   const s = c.s;
   const def = c.reg.defs[s.cards[uid].defId];
+  const info = c.reg.getInfo(def.id, fi);
+  // 別のコスト(マナを払うかわりに、手札を捨てる・マナを払わない)は、別の使い方として並べる。使えるかは、呼び出し側が planPlay で調べる
+  const alts: PlayExtra[] = [];
+  for (const ab of info.altCosts) {
+    if (ab.cost.graveEvolve) {
+      // 超無限墓地進化: 墓地のクリーチャーを、コストの大きいものから k 体(1 ≤ k)
+      const g = s.players[s.cards[uid].owner].grave.filter((u) => isCreatureType(faceTypeOf(c, u))).sort((a, b) => costBase(c, b) - costBase(c, a));
+      for (let k = 1; k <= Math.min(g.length, 8); k++) alts.push({ alt: ab.id, under: g.slice(0, k) });
+    } else if (ab.cost.fushigi) {
+      // フシギバース: タップしてマナゾーンに置く自分のクリーチャーごと
+      for (const p of s.players[s.cards[uid].owner].battle) if (!p.tapped && isCreatureType(faceTypeOf(c, p.cards[0]))) alts.push({ alt: ab.id, tapAlt: [p.pid] });
+    } else alts.push({ alt: ab.id });
+  }
+  if (alts.length > 0) return [...extraVariantsBase(c, player, uid, fi), ...alts];
+  return extraVariantsBase(c, player, uid, fi);
+}
+
+function extraVariantsBase(c: Ctx, player: PlayerId, uid: number, fi: number): (PlayExtra | undefined)[] {
+  const s = c.s;
+  const def = c.reg.defs[s.cards[uid].defId];
   const face = def.faces[fi];
   const info = c.reg.getInfo(def.id, fi);
   const bases: (number | undefined)[] = [];
   if (face.type === 'evolution') {
     for (const perm of s.players[player].battle) {
       const top = perm.cards[0];
-      const cc = mkCC(c, player, { self: uid, it: top, itFace: s.cards[top].face });
+      const cc = mkCC(c, player, { self: uid, it: top, itFace: s.cards[top].face, evo: true });
       if (face.evolveFrom && evalCond(cc, face.evolveFrom)) bases.push(perm.pid);
     }
   } else bases.push(undefined);
@@ -178,20 +248,22 @@ function extraVariants(c: Ctx, player: PlayerId, uid: number, fi: number): (Play
 
 // ───────────────────────── 回答の列挙・検証 ─────────────────────────
 
-function combos(items: number[], min: number, max: number, limit: number): number[][] {
+function combos(items: number[], min: number, max: number, limit: number, sum?: { max: number; costs: number[] }): number[][] {
   const res: number[][] = [];
-  const go = (start: number, cur: number[]) => {
+  const go = (start: number, cur: number[], total: number) => {
     if (res.length >= limit) return;
     if (cur.length >= min && cur.length <= max) res.push(cur.slice());
     if (cur.length >= max) return;
     for (let i = start; i < items.length; i++) {
+      const t = total + (sum ? sum.costs[i] : 0);
+      if (sum && t > sum.max) continue;
       cur.push(items[i]);
-      go(i + 1, cur);
+      go(i + 1, cur, t);
       cur.pop();
       if (res.length >= limit) return;
     }
   };
-  go(0, []);
+  go(0, [], 0);
   return res;
 }
 
@@ -223,7 +295,7 @@ function enumerateRaw(p: Pending, limit: number): AnswerValue[] {
   if (!inp) return [];
   switch (inp.shape) {
     case 'pick':
-      return combos(inp.candidates, inp.min, inp.max, limit);
+      return combos(inp.candidates, inp.min, inp.max, limit, inp.sum);
     case 'yesno':
       return [true, false];
     case 'order':
@@ -294,6 +366,7 @@ export function validateAnswer(p: Pending, v: AnswerValue): string | null {
       if (a.length < inp.min || a.length > inp.max) return `${inp.min}〜${inp.max}個選んでください`;
       if (new Set(a).size !== a.length) return '重複しています';
       if (!a.every((x) => inp.candidates.includes(x))) return '候補にないものを選んでいます';
+      if (inp.sum && a.reduce((t, x) => t + inp.sum!.costs[inp.candidates.indexOf(x)], 0) > inp.sum.max) return `コストの合計は ${inp.sum.max} 以下にしてください`;
       return null;
     }
     case 'yesno':
@@ -376,6 +449,25 @@ export function validateAction(s: GameState, reg: Registry, a: Action): string |
       const pm = s.players[player].battle.find((x) => x.pid === a.attacker);
       if (!pm) return '攻撃できるクリーチャーではありません';
       return canAttack(c, pm, a.target) ? null : 'その対象は攻撃できません';
+    }
+    case 'CROSS': {
+      if (s.step !== 'main') return '今はクロスできません';
+      return crossActions(c, player).some((x) => x.gear === a.gear && x.target === a.target) ? null : 'クロスできません';
+    }
+    case 'HYPERIZE': {
+      if (s.step !== 'main') return '今はハイパー化できません';
+      const ok = hyperizeActions(c, player).some((x) => x.pid === a.pid && x.tap.length === a.tap.length && x.tap.every((t) => a.tap.includes(t)));
+      if (ok) return null;
+      // 組み合わせは、先頭だけを列挙している。タップする他のクリーチャーが条件に合えば通す
+      const pm = s.players[player].battle.find((x) => x.pid === a.pid);
+      if (!pm || pm.hyper) return 'ハイパー化できません';
+      const need = infoOf(c, pm.cards[0]).hyperize;
+      if (need === null || a.tap.length !== need || new Set(a.tap).size !== a.tap.length) return 'ハイパー化できません';
+      for (const t of a.tap) {
+        const tp = s.players[player].battle.find((x) => x.pid === t);
+        if (!tp || tp === pm || tp.tapped || !isCreatureType(faceTypeOf(c, tp.cards[0]))) return 'タップできないクリーチャーです';
+      }
+      return null;
     }
   }
 }

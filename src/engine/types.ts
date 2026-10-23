@@ -22,10 +22,25 @@ export function errorMessage(e: unknown): string {
 import type { Ability, Cond } from './ast';
 
 /** castle = G城(実行すると、表向きのシールドになるカード。クリーチャーでも呪文でもない) */
-export type FaceType = 'creature' | 'spell' | 'evolution' | 'smaxEvolution' | 'castle';
+export type FaceType = 'creature' | 'spell' | 'evolution' | 'smaxEvolution' | 'tamaseed' | 'field' | 'crossgear' | 'castle';
 
-/** クリーチャーとして出る種類か(呪文でも城でもない) */
+/** クリーチャーとして扱う種類(進化・S-MAX進化を含む)。タマシード・フィールド・クロスギアは含まない */
 export const isCreatureType = (t: FaceType): boolean => t === 'creature' || t === 'evolution' || t === 'smaxEvolution';
+/** バトルゾーンに出る種類(呪文・G城以外) */
+export const isPermanentType = (t: FaceType): boolean => t !== 'spell' && t !== 'castle';
+/** 出来事(moved / entered)の kind に使う、カードの種類の区分 */
+export const kindOfType = (t: FaceType): 'spell' | 'creature' | 'tamaseed' | 'field' | 'crossgear' | 'castle' => {
+  switch (t) {
+    case 'castle':
+    case 'spell':
+    case 'tamaseed':
+    case 'field':
+    case 'crossgear':
+      return t;
+    default:
+      return 'creature';
+  }
+};
 
 export interface Face {
   name: string;
@@ -37,6 +52,10 @@ export interface Face {
   abilities: Ability[];
   /** 進化元の条件(type=evolution)。$it = 重ねる対象 */
   evolveFrom?: Cond;
+  /** スター進化(離れる時、かわりに一番上のカードだけが離れる) */
+  star?: boolean;
+  /** 究極進化(究極進化MAX の進化元の条件「究極進化クリーチャー」に使う) */
+  ultimate?: boolean;
 }
 
 export interface CardDef {
@@ -45,6 +64,8 @@ export interface CardDef {
   faces: Face[]; // ツインパクトは2面(0=クリーチャー面, 1=呪文面)
   text?: string;
   image?: string | null;
+  /** このカードをデッキに何枚入れてもよい(特攻の忠剣ハチ公) */
+  unlimited?: boolean;
 }
 export type CardDB = Record<string, CardDef>;
 
@@ -67,6 +88,8 @@ export interface Card {
   pid: number;
   /** 使用中の面(ツインパクト) */
   face: number;
+  /** 山札に、横向きに刺されているか(終葬 5.S.D.) */
+  side?: boolean;
 }
 
 export interface Permanent {
@@ -76,6 +99,18 @@ export interface Permanent {
   tapped: boolean;
   sick: boolean;
   enteredTurn: number;
+  /** ハイパーモード中か(次の持ち主のターンのはじめまで) */
+  hyper?: boolean;
+  /** 封印(裏向きで、この山の上に置かれたカードの uid)。封印されているクリーチャーは無視される(能力を失い、攻撃もブロックもできない) */
+  seals?: number[];
+  /** アビスラッシュ: このターン、召喚酔いせずに攻撃でき、ターンの終わりに山札の下に置かれる(値は、そのターン) */
+  rush?: number;
+  /** アビスラッシュの、攻撃していた時だけ山札の下に置く(ジャガイストの効果で出した場合) */
+  rushIfAttacked?: boolean;
+  /** クロスギア: クロスしているクリーチャーの山(pid)。そのクリーチャーが場を離れたら、クロスは外れたものとして扱う */
+  crossedOn?: number;
+  /** J・O・E: このターンの終わりに山札の下に置き、そうしたらカードを1枚引く(値は、そのターン) */
+  endBottom?: number;
 }
 
 export interface PlayerZones {
@@ -167,7 +202,7 @@ export interface EffectFrame {
   label?: string;
 }
 
-export type ProcName = 'turn' | 'play' | 'attack' | 'break' | 'settle' | 'sba';
+export type ProcName = 'turn' | 'play' | 'attack' | 'break' | 'settle' | 'sba' | 'battle';
 export interface ProcFrame {
   kind: 'proc';
   id: number;
@@ -197,6 +232,8 @@ export interface PoolEntry {
 export type Duration =
   | { kind: 'endOfTurn'; turn: number }
   | { kind: 'untilTurnStart'; player: PlayerId; afterTurn: number }
+  /** 次の、相手(player の相手)のターンの終わりまで: afterTurn より後で、player 以外のターンが終わる時に失効する */
+  | { kind: 'untilOppTurnEnd'; player: PlayerId; afterTurn: number }
   | { kind: 'source'; uid: number; ep: number };
 
 export type EffectMod =
@@ -205,14 +242,43 @@ export type EffectMod =
   | { kind: 'grant'; keyword: string }
   | { kind: 'cannotBeChosen' }
   | { kind: 'cannotBeAttacked' }
+  | { kind: 'cannotBlock' }
+  /** 攻撃クリーチャーの山: ブレイクするシールドの数を、少なくとも n にする(このターン) */
+  | { kind: 'breaker'; n: number }
+  /** 攻撃クリーチャーの山: 最初の攻撃の終わりに、アンタップする */
+  | { kind: 'untapAfterAttack' }
+  /** プレイヤー単位: 発生源の持ち主の相手の、表記コストが n のクリーチャーは、攻撃もブロックもできない */
+  | { kind: 'cannotActCost'; n: number }
+  /** プレイヤー単位: 発生源の持ち主の相手は、クリーチャーで攻撃できない */
+  | { kind: 'cannotAttackAny' }
+  /** プレイヤー単位: 発生源の持ち主は、ゲームに負けない */
+  | { kind: 'cannotLose' }
+  /** プレイヤー単位: 指定のクリーチャーの山(pids)・マナのカード(uids)は、次の持ち主のターンのはじめにアンタップしない */
+  | { kind: 'noUntap'; pids: number[]; uids: number[] }
+  /** プレイヤー単位: 発生源の持ち主が次に召喚するクリーチャーのコストを delta 増減する(次に召喚すると消える)。sa ならスピードアタッカーを与える */
+  | { kind: 'nextSummon'; delta: number; sa: boolean }
+  /** プレイヤー単位: 発生源の持ち主の相手は、各ターン1度までしか、クリーチャーで攻撃もブロックもできない */
+  | { kind: 'oncePerTurnActs' }
   /** ブロックを強制する(攻撃された時、ブロッカーとして選ばなければならない。総合ルール 507.1b) */
   | { kind: 'mustBlock' }
-  /** プレイヤー単位(ContEffect.pid = -1): 発生源の持ち主の相手は呪文を唱えられない */
-  | { kind: 'cannotCast' }
-  /** プレイヤー単位: 発生源の持ち主の相手は、コストが n のカードを実行できない */
-  | { kind: 'cannotUseCost'; n: number }
+  /** プレイヤー単位(ContEffect.pid = -1): 発生源の持ち主の相手は呪文を唱えられない(n があれば、そのコストの呪文だけ) */
+  | { kind: 'cannotCast'; n?: number }
   /** プレイヤー単位: 発生源の持ち主の相手は、コストが maxCost 以下のクリーチャーを召喚できない */
-  | { kind: 'cannotSummon'; maxCost: number };
+  | { kind: 'cannotSummon'; maxCost: number }
+  /** プレイヤー単位: 発生源の持ち主の相手は、コストが n 以下の呪文を唱えられない */
+  | { kind: 'cannotCastLte'; n: number }
+  /** プレイヤー単位: 発生源の持ち主の相手の、コストが n のバトルゾーンのカードの能力を無視する */
+  | { kind: 'ignoreCost'; n: number }
+  /** プレイヤー単位: 発生源の持ち主の相手の、クリーチャーすべての能力を無視する */
+  | { kind: 'ignoreAll' }
+  /** このクリーチャー(pid)は、離れない */
+  | { kind: 'cannotLeave' }
+  /** プレイヤー単位: 発生源の持ち主は、次の自分のターンのはじめに、自分のシールドを1つ手札に加える(「S・トリガー」は使えない) */
+  | { kind: 'startShield' }
+  /** プレイヤー単位: 発生源の持ち主は、次の自分のターンのはじめに civ を含む n 枚のマナを支払う。払えなければゲームに負ける(逆転撃) */
+  | { kind: 'owe'; civ: Civ; n: number }
+  /** プレイヤー単位: 発生源の持ち主の相手は、コストが n のカードを実行できない */
+  | { kind: 'cannotUseCost'; n: number };
 
 export interface ContEffect {
   id: number;
@@ -247,6 +313,19 @@ export interface GameState {
   winner: PlayerId | 'draw' | null;
   loseReason: string | null;
   skipTurn: boolean;
+  /** 「このターンの後に自分のターンを追加する」の予約(先頭から順に、追加のターンを行うプレイヤー) */
+  extraTurns?: PlayerId[];
+  /** 追加のターンの後に、本来の順番で次に行うプレイヤー */
+  resume?: PlayerId;
+  /** 封印がいちど付けられたか(能力の無視の判定を省くための印) */
+  sealed?: boolean;
+  /** ゲームに負ける手続きを待っているプレイヤー(山札の横向きのカードを手札に加えた、など) */
+  pendingLoss?: PlayerId[];
+  /**
+   * シールドの山(カードを重ねて置かれたシールド): 一番上のカードの uid → その下に重なっているカードの uid(上から順)。
+   * 重なっているカードは zone が 'shield' だが、players[].shield には載らない(シールド1つ = 山1つ)。
+   */
+  piles?: Record<number, number[]>;
   manaCharged: boolean;
   /** 直近のブレイクで割られているシールド(革命2の枚数判定) */
   breaking: number[];
@@ -291,6 +370,14 @@ export interface PlayExtra {
   tap?: number[];
   /** 手動支払い(マナのuid) */
   pay?: number[];
+  /** マナを払うかわりの別のコスト(altCost の id) */
+  alt?: string;
+  /** 別のコストで捨てる手札(uid)。省略すると、候補の先頭から */
+  discard?: number[];
+  /** 別のコストでタップする自分のクリーチャーの山(pid)。省略すると、アンタップしているものの先頭から */
+  tapAlt?: number[];
+  /** 超無限墓地進化で、下に重ねる自分の墓地のクリーチャー(uid) */
+  under?: number[];
 }
 
 export type Action =
@@ -300,12 +387,16 @@ export type Action =
   | { type: 'ATTACK'; attacker: number; target: AttackTarget }
   | { type: 'END_MAIN' }
   | { type: 'END_TURN' }
+  /** ハイパー化(自分のメインステップ中。pid = ハイパー化するクリーチャーの山、tap = タップする他のクリーチャーの山) */
+  | { type: 'HYPERIZE'; pid: number; tap: number[] }
+  /** クロス(自分のメインステップ中。gear = クロスギアの山、target = クロスするクリーチャーの山。クロスギアのコストをもう一度支払う) */
+  | { type: 'CROSS'; gear: number; target: number }
   | { type: 'ANSWER'; id: number; value: AnswerValue };
 
 export type AnswerValue = number[] | Record<string, number[]> | boolean | number | true;
 
 export type InputSpec =
-  | { shape: 'pick'; candidates: number[]; min: number; max: number }
+  | { shape: 'pick'; candidates: number[]; min: number; max: number; /** コストの合計の上限(costs は candidates と同じ並び) */ sum?: { max: number; costs: number[] } }
   | { shape: 'assign'; items: number[]; slots: { id: string; to: ZoneName; count: number; label: string }[] }
   | { shape: 'option'; options: string[]; pick: number; repeat: boolean; allIf: boolean; /** 選ぶ前に見たカード(山札の上など)。選ぶ人には中身が見える */ seen?: number[] }
   | { shape: 'yesno' }
@@ -324,7 +415,9 @@ export type PendingReason =
   | 'assign'
   | 'replaceChoice'
   | 'ack'
-  | 'keepOne';
+  | 'keepOne'
+  /** 攻撃側が、ブレイクするシールドを選ぶ(見分けのつくシールドがある時だけ。procs の shieldClasses) */
+  | 'pickShield';
 
 export interface Pending {
   id: number;

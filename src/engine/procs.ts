@@ -1,21 +1,31 @@
 // 手続きフレーム: ターン進行・プレイ・攻撃・シールドブレイク・チェックポイント・状況起因処理
 // (effects 5, 9, 10)。各ステージは「質問 → 変更」の順で書き、再実行しても二重に変更されない。
-import type { Pattern } from './ast';
+import type { Ability, Pattern } from './ast';
 import { evalCond, mkCC } from './cond';
 import {
+  activeStatics,
   breakerCount,
   canAttack,
   canBlock,
+  cannotLeave,
+  canGuard,
+  hasSelfStatic,
+  canPlayCard,
   canCast,
-  canSummon,
+  canSummonCard,
   canUseCost,
   costBase,
+  grantedPlayFrom,
+  grantsRush,
   costOf,
   faceTypeOf,
   hasKeyword,
   infoOf,
+  isAttacking,
   isUnblockable,
-  manaCivs,
+  playerCannotLose,
+  manaSources,
+  sourceCivs,
   mustBlock,
   payNeed,
   planPayment,
@@ -27,25 +37,31 @@ import {
   drawCards,
   emit,
   enterBattle,
+  listens,
   moveCards,
+  onSummoned,
   resolveBattle,
   setTapped,
   smaxVictims,
+  stabIntoDeck,
 } from './ops';
 import type { Ctx } from './state';
-import { nextId, opponentOf, permByPid, rngInt, snapOf } from './state';
+import { gameHas, nextId, opponentOf, permByPid, rngInt, snapOf } from './state';
 import type {
   AbilityRef,
   Civ,
   EffectFrame,
   Ev,
+  GameState,
   PlayExtra,
+  Permanent,
   PlayerId,
   PoolEntry,
   ProcFrame,
   ProcName,
   ZoneName,
 } from './types';
+import { isCreatureType } from './types';
 
 // ───────────────────────── フレームの積み方 ─────────────────────────
 
@@ -67,7 +83,7 @@ export interface PlayPlan {
   ok: boolean;
   err?: string;
   face: number;
-  kind: 'summon' | 'cast' | 'castle';
+  kind: 'summon' | 'cast' | 'put' | 'castle';
   cost: number;
   need: number;
   civs: Civ[];
@@ -75,6 +91,21 @@ export interface PlayPlan {
   after: 'deckBottom' | null;
   taps: number[];
   onto?: number;
+  /** 別のコストで捨てる手札 */
+  discard?: number[];
+  alt?: string;
+  /** 使った「各ターンに1度」のコスト軽減の発生源 */
+  once?: number[];
+  /** 他のカードの許可(allowPlayFrom)で使う時の、その発生源 */
+  grant?: number;
+  /** 別のコストでタップする自分のクリーチャーの山 */
+  tapAlt?: number[];
+  /** アビスラッシュで召喚する(墓地から) */
+  rush?: boolean;
+  /** 超無限墓地進化で、下に重ねるカード */
+  under?: number[];
+  /** フシギバースで、マナゾーンに置くクリーチャー */
+  toMana?: number[];
 }
 
 export function planPlay(
@@ -95,29 +126,103 @@ export function planPlay(
   const face = def.faces[faceIdx];
   if (!face) return fail('面がありません');
   const info = c.reg.getInfo(card.defId, faceIdx);
-  const kind = face.type === 'spell' ? 'cast' : face.type === 'castle' ? 'castle' : 'summon';
+  const kind = face.type === 'spell' ? 'cast' : face.type === 'castle' ? 'castle' : isCreatureType(face.type) ? 'summon' : 'put';
   let after: 'deckBottom' | null = null;
+  let grantSrc: number | null = null;
+  let rush = false;
+  const altAb = extra?.alt !== undefined ? info.altCosts.find((a) => a.id === extra.alt) : undefined;
   if (from !== 'hand' && !free) {
     const perm = info.permissions.find((p) => p.from === from && p.play === kind);
-    if (!perm) return fail('そのゾーンからはプレイできません');
-    after = perm.after ?? null;
+    // 別のコストで、そのゾーンから使える(ムゲンクライムなど)
+    if (!perm && altAb?.cost.from?.includes(from)) {
+      after = null;
+    } else if (!perm) {
+      // 他のカードの「自分のターン中、〜を from から召喚してもよい」
+      grantSrc = kind === 'summon' ? grantedPlayFrom(c, player, uid, faceIdx, from) : null;
+      if (grantSrc === null) return fail('そのゾーンからはプレイできません');
+      rush = grantsRush(c, grantSrc);
+    } else {
+      after = perm.after ?? null;
+      rush = !!perm.rush;
+    }
   } else if (from !== 'hand' && free) {
     const perm = info.permissions.find((p) => p.from === from && p.play === kind);
     after = perm?.after ?? null;
+    rush = !!perm?.rush;
   }
   if (kind === 'cast' && !canCast(c, player, uid, faceIdx)) return fail('この呪文は唱えられません');
+  if (kind === 'summon' && !canSummonCard(c, player, uid, faceIdx)) return fail('このクリーチャーは召喚できません');
   if (!canUseCost(c, player, face.cost)) return fail('そのコストのカードは実行できません');
-  if (kind === 'summon' && !canSummon(c, player, face.cost)) return fail('そのクリーチャーは召喚できません');
+  if (!canPlayCard(c, player, uid, faceIdx)) return fail('そのカードは使えません');
 
   let onto: number | undefined;
-  if (face.type === 'evolution') {
+  if (face.type === 'evolution' && !altAb?.cost.graveEvolve) {
     const pm = extra?.onto !== undefined ? permByPid(s, extra.onto) : null;
     if (!pm || pm.owner !== player) return fail('進化元を選んでください');
     const topUid = pm.perm.cards[0];
-    const cc = mkCC(c, player, { self: uid, it: topUid, itFace: s.cards[topUid].face });
+    const cc = mkCC(c, player, { self: uid, it: topUid, itFace: s.cards[topUid].face, evo: true });
     if (!face.evolveFrom || !evalCond(cc, face.evolveFrom)) return fail('進化元の条件を満たしていません');
     onto = pm.perm.pid;
   } else if (extra?.onto !== undefined) return fail('進化クリーチャーではありません');
+
+  // 別のコスト(マナを払うかわりに、手札を捨てる・マナを払わない)
+  let freeAlt = false;
+  let reduceAlt = 0;
+  let tapAlt: number[] | undefined;
+  let graveUnder: number[] | undefined;
+  let toMana: number[] | undefined;
+  let payAlt: number | undefined;
+  let discard: number[] | undefined;
+  if (extra?.alt !== undefined) {
+    const ab = info.altCosts.find((a) => a.id === extra.alt);
+    if (!ab) return fail('その別のコストはありません');
+    if (from !== (ab.cost.from?.[0] ?? 'hand') && !(ab.cost.from ?? ['hand']).includes(from)) return fail('そのゾーンから使う別のコストではありません');
+    if (ab.when && !evalCond(mkCC(c, player, { self: uid }), ab.when)) return fail('別のコストを使える条件を満たしていません');
+    freeAlt = ab.cost.reduce === undefined && ab.cost.pay === undefined && !ab.cost.graveEvolve && !ab.cost.fushigi; // 別のコストは、マナを払うかわりのコスト(reduce は軽減、pay はコストのかわりに払う。墓地進化・フシギバースは、コストを払う)
+    reduceAlt = ab.cost.reduce ?? 0;
+    if (ab.cost.tapCreatures) {
+      const n = ab.cost.tapCreatures;
+      const cands = s.players[player].battle.filter((p) => !p.tapped && isCreatureType(faceTypeOf(c, p.cards[0]))).map((p) => p.pid);
+      if (extra.tapAlt?.length) {
+        if (extra.tapAlt.length !== n || new Set(extra.tapAlt).size !== n || !extra.tapAlt.every((p) => cands.includes(p))) return fail('タップするクリーチャーが条件に合いません');
+        tapAlt = extra.tapAlt.slice();
+      } else {
+        if (cands.length < n) return fail('タップできるクリーチャーが足りません');
+        tapAlt = cands.slice(0, n);
+      }
+    }
+    if (ab.cost.pay !== undefined) payAlt = ab.cost.pay;
+    if (ab.cost.graveEvolve) {
+      // 超無限墓地進化: 墓地のクリーチャーを1体以上選んで、その上に重ねて出す。選んだ数だけコストを少なくする(1未満にならない)
+      const under = (extra.under ?? []).slice();
+      const ok = under.length > 0 && new Set(under).size === under.length && under.every((u) => s.cards[u]?.zone === 'grave' && s.cards[u].owner === player && isCreatureType(faceTypeOf(c, u)));
+      if (!ok) return fail('墓地から重ねるクリーチャーを選んでください');
+      graveUnder = under;
+      reduceAlt = under.length;
+    }
+    if (ab.cost.fushigi) {
+      // フシギバース: 自分のクリーチャーを1体タップしてマナゾーンに置き、基準のコストからそのコストを引いた数を支払う
+      const pid = extra.tapAlt?.[0];
+      const pm = pid !== undefined ? permByPid(s, pid) : null;
+      if (!pm || pm.owner !== player || pm.perm.tapped || !isCreatureType(faceTypeOf(c, pm.perm.cards[0]))) return fail('マナゾーンに置く、アンタップしている自分のクリーチャーを選んでください');
+      payAlt = Math.max(ab.cost.fushigi.min, ab.cost.fushigi.base - costBase(c, pm.perm.cards[0]));
+      toMana = [pm.perm.cards[0]];
+      tapAlt = undefined;
+    }
+    if (ab.cost.discard) {
+      const d = ab.cost.discard;
+      const ccd = mkCC(c, player, { self: uid });
+      const cands = s.players[player].hand.filter((u) => u !== uid && (!d.where || evalCond({ ...ccd, it: u, itFace: -1 }, d.where)));
+      if (extra.discard?.length) {
+        if (extra.discard.length !== d.n || new Set(extra.discard).size !== d.n || !extra.discard.every((u) => cands.includes(u))) return fail('捨てる手札が条件に合いません');
+        discard = extra.discard.slice();
+      } else {
+        if (cands.length < d.n) return fail('捨てる手札が足りません');
+        discard = cands.slice(0, d.n);
+      }
+    }
+  } else if (extra?.discard?.length) return fail('別のコストを選んでいません');
+  if (freeAlt) free = true;
 
   const taps = extra?.tap ?? [];
   if (taps.length) {
@@ -131,7 +236,8 @@ export function planPlay(
       seen.add(cost);
     }
   }
-  const cost = costOf(c, uid, faceIdx, { taps, free });
+  const once: number[] = [];
+  const cost = payAlt !== undefined ? payAlt : Math.max(graveUnder ? 1 : 0, costOf(c, uid, faceIdx, { taps, free, once }) - reduceAlt);
   const civs = face.civs;
   const need = free ? 0 : payNeed(cost, civs.length);
   let pay: number[] = [];
@@ -142,7 +248,7 @@ export function planPlay(
       if (m.length !== need || new Set(m).size !== m.length) return fail('支払うマナの枚数が違います');
       for (const u of m) {
         const mc = s.cards[u];
-        if (!mc || mc.owner !== player || mc.zone !== 'mana' || mc.tapped || u === uid) return fail('そのマナは使えません');
+        if (!mc || mc.owner !== player || u === uid || !manaSources(c, player).includes(u)) return fail('そのマナは使えません');
       }
       if (!covers(c, m, civs)) return fail('文明を満たしていません');
       pay = m.slice();
@@ -153,7 +259,7 @@ export function planPlay(
       pay = plan;
     }
   }
-  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto };
+  return { ok: true, face: faceIdx, kind, cost, need, civs, pay, after, taps, onto, ...(discard ? { discard } : {}), ...(extra?.alt !== undefined ? { alt: extra.alt } : {}), ...(once.length ? { once } : {}), ...(grantSrc !== null ? { grant: grantSrc } : {}), ...(tapAlt ? { tapAlt } : {}), ...(rush ? { rush: true } : {}), ...(graveUnder ? { under: graveUnder } : {}), ...(toMana ? { toMana } : {}) };
 }
 
 /** 支払いの選択肢(UI が「聞くか、自動で払うか」を決めるための情報) */
@@ -179,11 +285,10 @@ export interface PayChoice {
 export function payChoice(c: Ctx, player: PlayerId, uid: number, from: ZoneName, faceIdx: number, extra: PlayExtra | undefined, free: boolean): PayChoice {
   const base = planPlay(c, player, uid, from, faceIdx, { ...(extra ?? {}), pay: undefined }, free);
   if (!base.ok || base.need <= 0) return { need: base.need, avail: [], auto: base.pay, obvious: true };
-  const s = c.s;
-  const avail = s.players[player].mana.filter((u) => !s.cards[u].tapped && u !== uid);
+  const avail = manaSources(c, player, [uid]);
   const groups = new Map<string, number[]>();
   for (const u of avail) {
-    const key = manaCivs(c, u).slice().sort().join(',');
+    const key = sourceCivs(c, u).slice().sort().join(',');
     const g = groups.get(key);
     if (g) g.push(u);
     else groups.set(key, [u]);
@@ -212,7 +317,7 @@ export function payChoice(c: Ctx, player: PlayerId, uid: number, from: ZoneName,
 
 /** 選んだマナが、必要な文明を1枚ずつ(1枚は1文明)満たせるか */
 function covers(c: Ctx, mana: number[], civs: Civ[]): boolean {
-  const cs = mana.map((u) => manaCivs(c, u));
+  const cs = mana.map((u) => sourceCivs(c, u));
   const used = new Set<number>();
   const go = (i: number): boolean => {
     if (i === civs.length) return true;
@@ -245,18 +350,87 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       s.skipTurn = false;
       s.manaCharged = false;
       // 自分のマナとクリーチャーをアンタップし、召喚酔いを解除する
-      for (const u of s.players[P].mana) s.cards[u].tapped = false;
-      for (const perm of s.players[P].battle) {
-        perm.tapped = false;
-        perm.sick = false;
+      // 「相手のターンのはじめに、相手はマナゾーンのカードを n 枚までしかアンタップできない」(卍月 ガ・リュザーク 卍)
+      const limits = activeStatics(c, 'untapLimit').filter((st) => st.controller !== P);
+      let untapLeft = limits.length ? Math.min(...limits.map((st) => (st.ability.mod.type === 'untapLimit' ? st.ability.mod.n : 99))) : Infinity;
+      // 「次のターンのはじめに、アンタップしない」(noUntap)
+      const noUntapPids = new Set<number>();
+      const noUntapUids = new Set<number>();
+      for (const e of s.effects) {
+        if (e.mod.kind !== 'noUntap' || e.until.kind !== 'untilTurnStart' || e.until.player !== P) continue;
+        for (const p of e.mod.pids) noUntapPids.add(p);
+        for (const u of e.mod.uids) noUntapUids.add(u);
       }
-      // 「次の自分のターンのはじめまで」の期限切れ
-      s.effects = s.effects.filter((e) => !(e.until.kind === 'untilTurnStart' && e.until.player === P && s.turn > e.until.afterTurn));
+      for (const u of s.players[P].mana) {
+        if (!s.cards[u].tapped || noUntapUids.has(u)) continue;
+        if (untapLeft > 0) {
+          s.cards[u].tapped = false;
+          untapLeft--;
+        }
+      }
+      for (const perm of s.players[P].battle) {
+        if (!noUntapPids.has(perm.pid)) perm.tapped = false;
+        perm.sick = false;
+        delete perm.hyper; // ハイパーモードは、次の自分のターンのはじめまで
+      }
+      // 「次の自分のターンのはじめまで」の期限切れ(逆転撃の支払い(owe)は、支払いの段階で消す)
+      s.effects = s.effects.filter((e) => !(e.until.kind === 'untilTurnStart' && e.until.player === P && s.turn > e.until.afterTurn && e.mod.kind !== 'owe' && e.mod.kind !== 'startShield'));
       emit(c, 'stepStart', { step: 'start', player: P });
       s.batchNo++;
       collectBatch(c, [c.out[c.out.length - 1]]);
-      f.stage = 1;
+      f.stage = s.effects.some((e) => (e.mod.kind === 'owe' || e.mod.kind === 'startShield') && e.controller === P) ? 5 : 1;
       pushProc(c, 'settle');
+      return;
+    }
+    case 5: {
+      // 逆転撃: 次の自分のターンのはじめに、マナを支払う。払えなければ、ゲームに負ける。1回に1つずつ処理する
+      const e = s.effects.find((x) => (x.mod.kind === 'owe' || x.mod.kind === 'startShield') && x.controller === P);
+      if (!e) {
+        f.stage = 1;
+        return;
+      }
+      if (e.mod.kind === 'startShield') {
+        // 次の自分のターンのはじめに、自分のシールドを1つ手札に加える(「S・トリガー」は使えない)。質問は、状態を変更する前に行う
+        const shields = s.players[P].shield;
+        if (shields.length === 0) {
+          s.effects = s.effects.filter((x) => x.id !== e.id);
+          return;
+        }
+        const pick =
+          shields.length === 1
+            ? [shields[0]]
+            : ask<number[]>(c, {
+                player: P,
+                why: 'select',
+                input: { shape: 'pick', candidates: shields.slice(), min: 1, max: 1 },
+                source: null,
+                prompt: '手札に加える自分のシールドを選んでください(「S・トリガー」は使えない)',
+              });
+        s.effects = s.effects.filter((x) => x.id !== e.id);
+        moveCards(c, pick, { to: 'hand', cause: 'effect' });
+        pushProc(c, 'settle');
+        return;
+      }
+      if (e.mod.kind !== 'owe') {
+        f.stage = 1;
+        return;
+      }
+      const plan = planPayment(c, P, [e.mod.civ], e.mod.n);
+      if (!plan) {
+        // 払えない: 負ける(「ゲームに負ける時」の置換があれば使える)。質問は、状態を変更する前に行う
+        if (lossReplacement(c, P, false)) {
+          s.effects = s.effects.filter((x) => x.id !== e.id);
+          return;
+        }
+        s.effects = s.effects.filter((x) => x.id !== e.id);
+        s.winner = opponentOf(P);
+        s.loseReason = '逆転撃の支払い不能';
+        emit(c, 'gameOver', { winner: s.winner, reason: '逆転撃の支払い不能' });
+        return;
+      }
+      for (const u of plan) setTapped(c, u, true);
+      s.effects = s.effects.filter((x) => x.id !== e.id);
+      emit(c, 'paidDebt', { owner: P, n: plan.length });
       return;
     }
     case 1: {
@@ -298,9 +472,39 @@ function runTurn(c: Ctx, f: ProcFrame): void {
       return;
     }
     case 4: {
-      s.effects = s.effects.filter((e) => !(e.until.kind === 'endOfTurn' && e.until.turn <= s.turn));
+      // アビスラッシュ・J・O・E: ターンの終わりに山札の下に置く(置換の質問が出ることがあるので、1体ずつ、この段階の先頭で行う)
+      {
+        const done: number[] = (f.vars.bottomDone as number[] | undefined) ?? [];
+        const perm = s.players[P].battle.find((x) => {
+          if (done.includes(x.pid)) return false;
+          if (x.rush === s.turn) return !(x.rushIfAttacked && !s.turnLog.some((e) => e.type === 'attackDeclared' && e.attacker === x.pid));
+          return x.endBottom === s.turn;
+        });
+        if (perm) {
+          const moved = moveCards(c, [perm.cards[0]], { to: 'deck', cause: 'effect', pos: 'bottom' });
+          f.vars.bottomDone = [...done, perm.pid];
+          // J・O・E: 山札の下に置いたら、カードを1枚引く
+          if (perm.endBottom === s.turn && moved.some((r) => r.moved)) drawCards(c, P, 1);
+          pushProc(c, 'settle');
+          return;
+        }
+      }
+      s.effects = s.effects.filter(
+        (e) =>
+          !(e.until.kind === 'endOfTurn' && e.until.turn <= s.turn) &&
+          !(e.until.kind === 'untilOppTurnEnd' && s.turn > e.until.afterTurn && P !== e.until.player),
+      );
       s.turn += 1;
-      s.active = opponentOf(P);
+      // 「このターンの後に自分のターンを追加する」: 追加のターンの後は、本来の順番に戻る
+      const normal = s.resume ?? opponentOf(P);
+      const extra = s.extraTurns?.shift();
+      if (extra !== undefined) {
+        s.resume = normal;
+        s.active = extra;
+      } else {
+        s.resume = undefined;
+        s.active = normal;
+      }
       s.step = 'start';
       f.stage = 0;
       return;
@@ -324,7 +528,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       const owner = card.owner;
       const plan = planPlay(c, owner, uid, v.from, v.face, v.extra, !!v.free);
       if (!plan.ok) {
-        if (v.free) {
+        if (v.free || v.soft) {
           popFrame(c, f); // 無料で使えない(進化元がない等)
           return;
         }
@@ -336,6 +540,12 @@ function runPlay(c: Ctx, f: ProcFrame): void {
         setTapped(c, pm.perm.cards[0], true);
       }
       for (const u of plan.pay) setTapped(c, u, true);
+      // 別のコスト: 手札を捨てる・クリーチャーをタップする
+      for (const pid of plan.tapAlt ?? []) {
+        const pm = permByPid(s, pid);
+        if (pm) setTapped(c, pm.perm.cards[0], true);
+      }
+      if (plan.discard?.length) moveCards(c, plan.discard, { to: 'grave', cause: 'discard' });
       // プレイ中として処理する(場所は limbo)
       const prevZone = card.zone;
       removeFrom(c, uid);
@@ -343,8 +553,18 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       card.ep++;
       card.face = plan.face;
       s.limbo.push(uid);
-      v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free };
+      for (const src of plan.once ?? []) s.usage['cd:' + src] = s.turn;
+      if (plan.grant !== undefined) s.usage['gp:' + plan.grant] = s.turn;
+      v.plan = { kind: plan.kind, paid: plan.pay.length, cost: plan.cost, after: plan.after, onto: plan.onto ?? null, face: plan.face, free: !!v.free, ...(plan.alt ? { alt: plan.alt } : {}), ...(plan.rush ? { rush: true } : {}), ...(plan.under ? { under: plan.under } : {}) };
       v.fromZone = prevZone;
+      // フシギバース: タップしたクリーチャーを、マナゾーンに置く(離れる時の置換の質問が出ることがあるので、別の段階で行う)
+      if (plan.toMana?.length) v.toMana = plan.toMana;
+      f.stage = plan.toMana?.length ? 4 : 1;
+      return;
+    }
+    case 4: {
+      moveCards(c, (v.toMana as number[] | undefined) ?? [], { to: 'mana', cause: 'manaPlace', tapped: true });
+      delete v.toMana;
       f.stage = 1;
       return;
     }
@@ -352,9 +572,34 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       const p = v.plan;
       const card = s.cards[uid];
       const owner = card.owner;
-      if (p.kind === 'summon') {
+      // パンドラ・シフト: 出すかわりに、超次元ゾーンに置く
+      if (p.kind === 'summon' && p.alt && c.reg.getInfo(card.defId, p.face).altCosts.some((a) => a.id === p.alt && a.cost.toHyper)) {
+        moveCards(c, [uid], { to: 'hyper', cause: 'pandora', noReplace: true });
+        f.stage = 3;
+        return;
+      }
+      if (p.kind === 'summon' || p.kind === 'put') {
         const evs: Ev[] = [];
-        enterBattle(c, uid, { to: 'battle', cause: 'summon', via: 'summon', onto: p.onto ?? undefined, face: p.face, paid: p.paid, cost: p.cost, free: p.free }, evs);
+        const via = p.kind === 'summon' ? 'summon' : 'put';
+        enterBattle(c, uid, { to: 'battle', cause: via, via, onto: p.onto ?? undefined, face: p.face, paid: p.paid, cost: p.cost, free: p.free, from: v.fromZone, ...(p.under?.length ? { under: p.under } : {}) }, evs);
+        if (p.kind === 'summon' && s.cards[uid].zone === 'battle') onSummoned(c, uid);
+        // J・O・E: このターンの終わりに山札の下に置き、カードを1枚引く
+        if (p.alt && s.cards[uid].zone === 'battle' && c.reg.getInfo(card.defId, p.face).altCosts.some((a) => a.id === p.alt && a.cost.endBottomDraw)) {
+          const pm = permByPid(s, s.cards[uid].pid);
+          if (pm) pm.perm.endBottom = s.turn;
+        }
+        // アビスラッシュ
+        if (p.rush && s.cards[uid].zone === 'battle') {
+          const pm = permByPid(s, s.cards[uid].pid);
+          if (pm) pm.perm.rush = s.turn;
+        }
+        // 別のコストを使って出た印(そのターンだけ。altUsed の条件で調べる)
+        if (p.alt && s.cards[uid].zone === 'battle') s.usage['alt:' + uid + ':' + p.alt] = s.turn;
+        // S・トリガーとして使って出た印(S・トリガー・プラスのP能力の条件。イベントの内容は変えない)
+        if (v.st) {
+          const ent = evs.find((e) => e.type === 'entered' && e.card === uid);
+          if (ent && gameHas(c, 'stUsed')) s.usage['st:' + uid] = ent.id;
+        }
         s.batchNo++;
         collectBatch(c, evs);
         s.dirtySba = true;
@@ -373,6 +618,7 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       }
       emit(c, 'cast', { card: uid, owner, free: p.free, paid: p.paid, cost: p.cost, face: p.face, from: v.fromZone });
       const ev = c.out[c.out.length - 1];
+      if (v.st && gameHas(c, 'stUsed')) s.usage['st:' + uid] = ev.id; // S・トリガーとして唱えた印(その印を見る能力があるゲームだけ)
       s.batchNo++;
       collectBatch(c, [ev]);
       f.stage = 2;
@@ -398,11 +644,16 @@ function runPlay(c: Ctx, f: ProcFrame): void {
       // 呪文の解決後。墓地(または山札の下)に置く
       const p = v.plan;
       const card = s.cards[uid];
+      if (card.zone === 'limbo' && gameHas(c, 'afterCast') && v.after !== 'hyper' && afterCastReplacement(c, uid, p.face)) {
+        // 唱え終わった呪文を、墓地のかわりに別の手順で動かす(フィールドの下に置く、など)
+        f.stage = 3;
+        return;
+      }
       if (card.zone === 'limbo') {
         if (v.after === 'hyper') {
           // インターステラ: 墓地(や山札の下)のかわりに超次元ゾーンに置く。呪文自身の置換と重なる時は超次元ゾーンを選ぶ
           moveCards(c, [uid], { to: 'hyper', cause: 'castHyper', noReplace: true });
-        } else if (p.after === 'deckBottom' || v.after === 'deckBottom') {
+        } else if (p.after === 'deckBottom' || v.after === 'deckBottom' || (v.fromZone === 'grave' && graveCastGoesBottom(c, card.owner))) {
           moveCards(c, [uid], { to: 'deck', cause: 'castBottom', pos: 'bottom', noReplace: true });
         } else {
           // 呪文自身の効果が、自身の移動を置換する(チャージャーなど)。他の置換効果より優先する(総合ルール 409.2b / 609.8a)。
@@ -439,6 +690,51 @@ function runPlay(c: Ctx, f: ProcFrame): void {
   }
 }
 
+/**
+ * 唱え終わった呪文に当てはまる「かわりに〜する」(match.type = 'afterCast')を探し、あれば、その手順を行う効果を積んで true を返す。
+ * 持つのはバトルゾーンの、能力を無視されていないカード(複数あれば、先頭のもの)。
+ */
+function afterCastReplacement(c: Ctx, uid: number, faceIdx: number): boolean {
+  const s = c.s;
+  const card = s.cards[uid];
+  for (const p of [0, 1] as PlayerId[]) {
+    for (const perm of s.players[p].battle) {
+      const src = perm.cards[0];
+      const info = infoOf(c, src);
+      for (const r of info.replaces) {
+        const a = r.ability;
+        if (a.match.type !== 'afterCast' || a.apply.type !== 'steps') continue;
+        const m = a.match;
+        if (m.owner !== undefined && m.owner !== 'any' && (m.owner === 'self' ? card.owner !== p : card.owner === p)) continue;
+        if (a.while && !evalCond(mkCC(c, p, { self: src }), a.while)) continue;
+        if (m.cond && !evalCond(mkCC(c, p, { self: src, it: uid, itFace: faceIdx }), m.cond)) continue;
+        const sc = s.cards[src];
+        const ev: Ev = { id: nextId(s), causedBy: null, type: 'afterCast', turn: s.turn, card: uid, owner: card.owner };
+        s.cont.push({
+          kind: 'effect',
+          id: nextId(s),
+          causedBy: c.cause,
+          ability: { defId: sc.defId, face: sc.face, idx: r.idx },
+          source: { uid: src, ep: sc.ep },
+          lki: snapOf(c, src),
+          controller: p,
+          pc: 0,
+          vars: {},
+          trigger: ev,
+          noOptional: true,
+        });
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** 自分の墓地から呪文を唱えた後、墓地のかわりに山札の下に置くか(サイクルペディア) */
+function graveCastGoesBottom(c: Ctx, owner: PlayerId): boolean {
+  return activeStatics(c, 'graveCastToBottom').some((st) => st.controller === owner);
+}
+
 function removeFrom(c: Ctx, uid: number): void {
   const s = c.s;
   const card = s.cards[uid];
@@ -453,7 +749,150 @@ function removeFrom(c: Ctx, uid: number): void {
   }
 }
 
+// ───────────────────────── バトル ─────────────────────────
+
+type PermRef = NonNullable<ReturnType<typeof permByPid>>;
+
+/** 「バトルする時」の誘発を発行する(聞き手のいるカードがある時だけ。段階を増やさず、既存の対戦の記録を変えない) */
+function emitBattleStarted(c: Ctx, pm: PermRef, dm: PermRef): void {
+  if (!listens(c, 'battleStarted')) return;
+  const evb = emit(c, 'battleStarted', {
+    attacker: pm.perm.pid,
+    defender: dm.perm.pid,
+    attackerCard: pm.perm.cards[0],
+    defenderCard: dm.perm.cards[0],
+    owner: pm.owner,
+  });
+  c.s.batchNo++;
+  collectBatch(c, [evb]);
+  pushProc(c, 'settle');
+}
+
+/** パワーを比べて、負けた方(同じなら両方)を破壊する。スレイヤーも処理する。「バトルの後」に使う当事者の情報を返す */
+function resolveBattleCore(c: Ctx, pm: PermRef, dm: PermRef) {
+  const br = resolveBattle(c, pm.perm.pid, dm.perm.pid)!;
+  return { attacker: br.aPid, defender: br.dPid, attackerCard: br.aTop, defenderCard: br.dTop, owner: br.aOwner };
+}
+
+/** バトルの当事者を、「かわりにこのクリーチャーにバトルさせてもよい」(battleProxy)で置き換える。置き換えなければ、そのまま返す */
+function battleProxySwap(c: Ctx, pma: { perm: Permanent; owner: PlayerId }, pmd: { perm: Permanent; owner: PlayerId }): { a: { perm: Permanent; owner: PlayerId }; d: { perm: Permanent; owner: PlayerId } } {
+  const s = c.s;
+  if (!gameHas(c, 'battleProxy')) return { a: pma, d: pmd };
+  const swap = (side: { perm: Permanent; owner: PlayerId }): { perm: Permanent; owner: PlayerId } => {
+    const owner = side.owner;
+    const cands = s.players[owner].battle.filter((x) => {
+      if (x === side.perm || x === pma.perm || x === pmd.perm) return false;
+      return infoOf(c, x.cards[0]).statics.some(
+        (st) =>
+          st.ability.mod.type === 'battleProxy' &&
+          (!st.ability.while || evalCond(mkCC(c, owner, { self: x.cards[0] }), st.ability.while)) &&
+          evalCond(mkCC(c, owner, { self: x.cards[0], it: side.perm.cards[0], itFace: s.cards[side.perm.cards[0]].face }), st.ability.mod.cond),
+      );
+    });
+    if (cands.length === 0) return side;
+    const ans = ask<number[]>(c, {
+      player: owner,
+      why: 'may',
+      input: { shape: 'pick', candidates: cands.map((x) => x.cards[0]), min: 0, max: 1 },
+      source: { uid: cands[0].cards[0], ep: s.cards[cands[0].cards[0]].ep },
+      prompt: 'バトルを、かわりにこのクリーチャーにさせますか?(選べば置き換える)',
+    });
+    if (ans.length === 0) return side;
+    return permByPid(s, s.cards[ans[0]].pid)!;
+  };
+  const a = swap(pma);
+  const d = swap(pmd);
+  return { a, d };
+}
+
+function runBattle(c: Ctx, f: ProcFrame): void {
+  const s = c.s;
+  const v = f.vars;
+  const pma = permByPid(s, v.a);
+  const pmd = permByPid(s, v.d);
+  switch (f.stage) {
+    case 0: {
+      if (!pma || !pmd || pma.owner === pmd.owner) {
+        popFrame(c, f);
+        return;
+      }
+      // 「自分の他のジャイアントが相手のクリーチャーとバトルする時、かわりにこのクリーチャーにバトルさせてもよい」(銀河竜 ゴルファンタジスタ)
+      const swapped = battleProxySwap(c, pma, pmd);
+      v.a = swapped.a.perm.pid;
+      v.d = swapped.d.perm.pid;
+      f.stage = 1;
+      emitBattleStarted(c, swapped.a, swapped.d);
+      return;
+    }
+    case 1: {
+      // 「バトルする時」の効果の解決で、どちらかが場を離れていれば、バトルは行われない(115.3a)
+      if (!pma || !pmd || s.winner !== null) {
+        popFrame(c, f);
+        return;
+      }
+      const bi = resolveBattleCore(c, pma, pmd);
+      if (listens(c, 'afterBattle')) v.battle = bi;
+      f.stage = 2;
+      pushProc(c, 'settle');
+      return;
+    }
+    case 2: {
+      if (listens(c, 'afterBattle') && v.battle && s.winner === null && !s.skipTurn) {
+        const eva = emit(c, 'afterBattle', { ...v.battle });
+        s.batchNo++;
+        collectBatch(c, [eva]);
+        f.stage = 3;
+        pushProc(c, 'settle');
+        return;
+      }
+      popFrame(c, f);
+      return;
+    }
+    case 3:
+      popFrame(c, f);
+      return;
+  }
+}
+
 // ───────────────────────── 攻撃 ─────────────────────────
+
+/**
+ * 攻撃の終わり: 「攻撃の終わりに」の誘発(聞き手がいる時だけ)・「最初の攻撃の終わりにアンタップする」を処理して、攻撃の手続きを終える。
+ * ターンが飛ばされる・勝敗が決まった場合は、何も起こさない。
+ */
+function endAttack(c: Ctx, f: ProcFrame): void {
+  const s = c.s;
+  const v = f.vars;
+  const pm = permByPid(s, v.pid);
+  // 攻撃が行われた(攻撃の宣言をした)クリーチャーがいる時だけ
+  if (pm && s.winner === null && !s.skipTurn) {
+    // 最初の攻撃の終わりにアンタップする効果(調律師ピーカプなど)
+    const un = s.effects.find((e) => e.pid === pm.perm.pid && e.mod.kind === 'untapAfterAttack');
+    if (un) {
+      s.effects = s.effects.filter((e) => e !== un);
+      setTapped(c, pm.perm.cards[0], false);
+    }
+    if (listens(c, 'attackEnded')) {
+      // 攻撃中にシールドをブレイクしたか(キリフダッシュの条件)
+      let broke = false;
+      for (let i = s.turnLog.length - 1; i >= 0; i--) {
+        const e = s.turnLog[i];
+        if (e.type === 'shieldBroken' && e.by === pm.perm.pid) broke = true;
+        if (e.type === 'attackDeclared' && e.attacker === pm.perm.pid) break;
+      }
+      const ev = emit(c, 'attackEnded', { card: pm.perm.cards[0], attacker: pm.perm.pid, owner: pm.owner, broke });
+      s.batchNo++;
+      collectBatch(c, [ev]);
+    }
+  }
+  // G・ブレイカー: その攻撃の後、自分のシールドをすべてブレイクする
+  if (pm && s.winner === null && !s.skipTurn && s.players[pm.owner].shield.length > 0 && breakerCount(c, pm.perm) >= 99) {
+    popFrame(c, f);
+    s.cont.push({ kind: 'proc', id: nextId(s), causedBy: c.cause, name: 'break', stage: 0, vars: { pid: pm.perm.pid, owner: opponentOf(pm.owner), n: s.players[pm.owner].shield.length } });
+    return;
+  }
+  popFrame(c, f);
+}
 
 function runAttack(c: Ctx, f: ProcFrame): void {
   const s = c.s;
@@ -462,7 +901,7 @@ function runAttack(c: Ctx, f: ProcFrame): void {
     case 0: {
       const pm = permByPid(s, v.pid);
       if (!pm) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const owner = pm.owner;
@@ -478,17 +917,17 @@ function runAttack(c: Ctx, f: ProcFrame): void {
     }
     case 1: {
       if (s.winner !== null || s.skipTurn) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const pm = permByPid(s, v.pid);
       if (!pm) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const target = v.target as { kind: 'player' } | { kind: 'creature'; pid: number };
       if (target.kind === 'creature' && !permByPid(s, target.pid)) {
-        popFrame(c, f); // 攻撃先が場を離れた → 攻撃は終了
+        endAttack(c, f); // 攻撃先が場を離れた → 攻撃は終了
         return;
       }
       const defender = opponentOf(pm.owner);
@@ -496,7 +935,11 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       const attacked = v.target.kind === 'creature' ? v.target.pid : -1;
       const cands = isUnblockable(c, pm.perm)
         ? []
-        : s.players[defender].battle.filter((p) => p.pid !== attacked && canBlock(c, p)).map((p) => p.cards[0]);
+        : s.players[defender].battle
+            .filter((p) => p.pid !== attacked && (canBlock(c, p) || (attacked !== -1 && canGuard(c, p))))
+            // 飛行: 飛行を持つクリーチャーは、飛行を持たないクリーチャーにブロックされない
+            .filter((p) => !(gameHas(c, 'flying') && hasSelfStatic(c, pm.perm.cards[0], 'flying') && !hasSelfStatic(c, p.cards[0], 'flying')))
+            .map((p) => p.cards[0]);
       // ブロッカーは、複数体を同時に選べる(507.1a / 507.2)。ブロックを強制する効果を受けているものは、必ず選ぶ(507.1b)。
       // 選んだ全員がタップし、最後に解決した1体だけが、攻撃先を変更してブロッククリーチャーになる(507.2a)
       const forced = cands.filter((u) => mustBlock(c, permByPid(s, s.cards[u].pid)!.perm));
@@ -541,12 +984,12 @@ function runAttack(c: Ctx, f: ProcFrame): void {
     }
     case 2: {
       if (s.winner !== null || s.skipTurn) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const pm = permByPid(s, v.pid);
       if (!pm) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       const target = v.target as { kind: 'player' } | { kind: 'creature'; pid: number };
@@ -557,49 +1000,44 @@ function runAttack(c: Ctx, f: ProcFrame): void {
       }
       const dm0 = permByPid(s, target.pid);
       if (!dm0) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
       // 「バトルする時」の誘発は、パワーを比べる前に解決する(総合ルール 115.2 / 701.13a)。
       // 聞き手のいるカードがある時だけ、イベントを発行する(段階を増やさず、既存の対戦の記録を変えない)
-      f.stage = 4;
-      if (c.reg.trigByDef.has('battleStarted')) {
-        const evb = emit(c, 'battleStarted', {
-          attacker: pm.perm.pid,
-          defender: dm0.perm.pid,
-          attackerCard: pm.perm.cards[0],
-          defenderCard: dm0.perm.cards[0],
-          owner: pm.owner,
-        });
-        s.batchNo++;
-        collectBatch(c, [evb]);
-        pushProc(c, 'settle');
+      const sw = battleProxySwap(c, pm, dm0);
+      if (sw.a !== pm || sw.d !== dm0) {
+        v.ba = sw.a.perm.pid;
+        v.bd = sw.d.perm.pid;
       }
+      f.stage = 4;
+      emitBattleStarted(c, sw.a, sw.d);
       return;
     }
     case 4: {
       // バトル。「バトルする時」の効果の解決で、どちらかが場を離れていれば、バトルは行われない(115.3a)
       if (s.winner !== null || s.skipTurn) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
-      const pm = permByPid(s, v.pid);
       const target = v.target as { kind: 'player' } | { kind: 'creature'; pid: number };
-      const dm = target.kind === 'creature' ? permByPid(s, target.pid) : null;
+      // バトルの当事者(置き換えられていなければ、攻撃したクリーチャーと攻撃先)
+      const pm = permByPid(s, v.ba ?? v.pid);
+      const dm = target.kind === 'creature' ? permByPid(s, v.bd ?? target.pid) : null;
       if (!pm || !dm) {
-        popFrame(c, f);
+        endAttack(c, f);
         return;
       }
-      const br = resolveBattle(c, pm.perm.pid, dm.perm.pid)!;
+      const bi = resolveBattleCore(c, pm, dm);
       // 「バトルの後」の誘発のために、バトルの当事者を残す(聞き手がいる時だけ)
-      if (c.reg.trigByDef.has('afterBattle')) v.battle = { attacker: br.aPid, defender: br.dPid, attackerCard: br.aTop, defenderCard: br.dTop, owner: br.aOwner };
+      if (listens(c, 'afterBattle')) v.battle = bi;
       f.stage = 5;
       pushProc(c, 'settle');
       return;
     }
     case 5: {
       // 「バトルの後」の誘発(総合ルール 701.13d)。勝敗の誘発を解決し終えた後に誘発する
-      if (c.reg.trigByDef.has('afterBattle') && v.battle && s.winner === null && !s.skipTurn) {
+      if (listens(c, 'afterBattle') && v.battle && s.winner === null && !s.skipTurn) {
         const eva = emit(c, 'afterBattle', { ...v.battle });
         s.batchNo++;
         collectBatch(c, [eva]);
@@ -607,11 +1045,11 @@ function runAttack(c: Ctx, f: ProcFrame): void {
         pushProc(c, 'settle');
         return;
       }
-      popFrame(c, f);
+      endAttack(c, f);
       return;
     }
     case 3:
-      popFrame(c, f);
+      endAttack(c, f);
       return;
   }
 }
@@ -634,6 +1072,10 @@ function runBreak(c: Ctx, f: ProcFrame): void {
           pushProc(c, 'settle');
           return;
         }
+        if (playerCannotLose(c, defender)) {
+          popFrame(c, f); // ゲームに負けない効果を受けている: 攻撃は終わる
+          return;
+        }
         s.winner = attackerOwner;
         s.loseReason = 'ダイレクトアタック';
         emit(c, 'gameOver', { winner: attackerOwner, reason: 'ダイレクトアタック' });
@@ -641,15 +1083,26 @@ function runBreak(c: Ctx, f: ProcFrame): void {
         return;
       }
       const n = Math.min(v.n, shields.length);
-      // どのシールドを割るかは攻撃側が選ぶが、裏向きなので無作為に扱う(spec 3.7)
-      const pool = shields.slice();
-      const broken: number[] = [];
-      while (broken.length < n) broken.push(pool.splice(rngInt(s, pool.length), 1)[0]);
+      let broken: number[] = [];
+      if (n < shields.length && shieldClasses(s, shields).length >= 2) {
+        // 見分けのつくシールド(EXライフなど)があり、全部は割れない: どれを割るかは攻撃側が選ぶ(509.3)
+        broken = ask<number[]>(c, {
+          player: attackerOwner,
+          why: 'pickShield',
+          input: { shape: 'pick', candidates: shields.slice(), min: n, max: n },
+          source: null,
+          prompt: `ブレイクするシールドを${n}枚選んでください(表向きのシールドとEXライフのシールドは見分けがつきます。ほかは裏向きで見分けがつきません)`,
+        });
+      } else {
+        // 見分けがつかない(全部が裏向きで同じ扱い)ので、無作為に扱う(spec 3.7)
+        const pool = shields.slice();
+        while (broken.length < n) broken.push(pool.splice(rngInt(s, pool.length), 1)[0]);
+      }
       v.broken = broken;
       // 「ブレイクする前に」の誘発は、ブレイクするシールドを選んだ後、ブレイクする前に解決する(総合ルール 509.3 / 509.4)。
       // 聞き手のいるカードがある時だけ、イベントを発行する(既存の対戦の記録を変えない)
       f.stage = 3;
-      if (c.reg.trigByDef.has('beforeBreak')) {
+      if (listens(c, 'beforeBreak')) {
         const evb = emit(c, 'beforeBreak', { attacker: v.pid, owner: attackerOwner, defenderOwner: defender, cards: broken.slice() });
         s.batchNo++;
         collectBatch(c, [evb]);
@@ -660,7 +1113,10 @@ function runBreak(c: Ctx, f: ProcFrame): void {
     case 3: {
       // 「ブレイクする前に」の効果の解決でクリーチャーが場を離れても、すでに選んだシールドはブレイクされる(509.4c)。
       // シールドゾーンから離れたカードだけは、ブレイクできない
-      const broken: number[] = (v.broken as number[]).filter((u) => s.cards[u].zone === 'shield' && s.cards[u].owner === defender);
+      // 「ブレイクする前に」の効果で、ブレイクするシールドの上にカードが重ねられていたら、山の一番上のカードをブレイクする
+      const underOf = new Map<number, number>();
+      for (const [top, under] of Object.entries(s.piles ?? {})) for (const u of under) underOf.set(u, Number(top));
+      const broken: number[] = [...new Set((v.broken as number[]).map((u) => underOf.get(u) ?? u))].filter((u) => s.cards[u].zone === 'shield' && s.cards[u].owner === defender);
       v.broken = broken;
       if (broken.length === 0) {
         popFrame(c, f);
@@ -677,9 +1133,28 @@ function runBreak(c: Ctx, f: ProcFrame): void {
     case 1: {
       const broken: number[] = v.broken;
       s.breaking = broken.slice(); // 再実行時の復元
+      // ボルメテウス・サファイア・ドラゴン: シールドを手札に加えるかわりに墓地に置く(S・トリガーは使えない)
+      const atkPerm = permByPid(s, v.pid);
+      if (atkPerm && infoOf(c, atkPerm.perm.cards[0]).statics.some((st) => st.ability.mod.type === 'burnShields')) {
+        moveCards(c, broken, { to: 'grave', cause: 'burn', noReplace: true });
+        s.breaking = [];
+        f.stage = 2;
+        pushProc(c, 'settle');
+        return;
+      }
+      // Q.Q.QX.(5.S.D.): シールドを手札に加えるかわりに、相手の山札の上から4枚目の位置に、横向きに刺す
+      if (atkPerm && infoOf(c, atkPerm.perm.cards[0]).statics.some((st) => st.ability.mod.type === 'stab5sd')) {
+        s.breaking = [];
+        stabIntoDeck(c, broken, 4);
+        f.stage = 2;
+        pushProc(c, 'settle');
+        return;
+      }
       // S・トリガー/G・ストライクを宣言できるカード(革命2は、ブレイク後の枚数で判定)
       const cands: number[] = [];
-      for (const u of broken) {
+      // 重ねられたシールドは、山の全部のカードが手札に加わる。S・トリガーは、それぞれのカードで宣言できる
+      const withUnder = broken.flatMap((u) => [u, ...(s.piles?.[u] ?? [])]);
+      for (const u of withUnder) {
         if (declaration(c, u)) cands.push(u);
       }
       let declared: number[] = [];
@@ -692,9 +1167,33 @@ function runBreak(c: Ctx, f: ProcFrame): void {
           prompt: 'S・トリガー/G・ストライクを宣言するカードを選んでください',
         });
       }
+      // S・バック: 宣言しなかったシールドのカードを捨てて、手札の呪文をコストを支払わずに唱える
+      const sbacks: { u: number; back: number }[] = [];
+      if (gameHas(c, 'sBack')) {
+        for (const u of broken) {
+          if (declared.includes(u)) continue;
+          const back = s.players[defender].hand.find((h) => !sbacks.some((x) => x.back === h) && sBackMatches(c, defender, h, u));
+          if (back === undefined) continue;
+          const yes = ask<boolean>(c, {
+            player: defender,
+            why: 'may',
+            input: { shape: 'yesno' },
+            source: { uid: back, ep: s.cards[back].ep },
+            prompt: `S・バック: 《${c.reg.defs[s.cards[u].defId].name}》を捨てて、手札の《${c.reg.defs[s.cards[back].defId].name}》をコストを支払わずに唱えますか?`,
+          });
+          if (yes) sbacks.push({ u, back });
+        }
+      }
       // 宣言がすべて終わってから、手札に加える(112.3a)
       const kinds = declared.map((u) => ({ u, d: declaration(c, u)! }));
-      moveCards(c, broken, { to: 'hand', cause: 'break', noReplace: true });
+      moveCards(c, sbacks.length ? broken.filter((u) => !sbacks.some((x) => x.u === u)) : broken, { to: 'hand', cause: 'break', noReplace: true });
+      if (sbacks.length) moveCards(c, sbacks.map((x) => x.u), { to: 'grave', cause: 'discard', noReplace: true });
+      for (const { back } of sbacks) {
+        const bc = s.cards[back];
+        const sf = c.reg.defs[bc.defId].faces.findIndex((x) => x.type === 'spell');
+        if (sf < 0) continue;
+        s.cont.push({ kind: 'proc', id: nextId(s), causedBy: c.cause, name: 'play', stage: 0, vars: { uid: back, ep: bc.ep, from: 'hand', face: sf, free: true, after: null, settle: false } });
+      }
       s.breaking = [];
       const batch = ++s.batchNo;
       for (const { u, d } of kinds) {
@@ -723,19 +1222,83 @@ function runBreak(c: Ctx, f: ProcFrame): void {
   }
 }
 
+/** S・バック: 手札のカード back が、シールドから手札に加わるカード u に対して使えるか */
+function sBackMatches(c: Ctx, owner: PlayerId, back: number, u: number): boolean {
+  if (back === u) return false;
+  const def = c.reg.defs[c.s.cards[back].defId];
+  for (const face of def.faces) {
+    for (const a of face.abilities) {
+      if (a.kind === 'keyword' && a.name === 'sBack' && a.attacker && evalCond({ ...mkCC(c, owner, { self: back }), it: u, itFace: -1 }, a.attacker)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * シールドを「攻撃側から見て見分けがつくか」で分けた組(シールドゾーンの並びの順)。
+ * 裏向きのシールドは中身が見えず、どれも同じ扱い(組 -1)。見分けがつくのは、EXライフのシールド(どのクリーチャーに紐づくかで組が分かれる)と、
+ * 表向きのシールド(G城。同じ札ごとに組が分かれる)。ブレイクの選択の判定と合法手の列挙は、この関数だけを見る。
+ */
+export function shieldClasses(s: GameState, shields: number[]): number[][] {
+  const groups = new Map<number | string, number[]>();
+  for (const u of shields) {
+    const card = s.cards[u];
+    const key = card.up ? `up:${card.defId}` : card.ex ? card.exPid : -1;
+    const g = groups.get(key);
+    if (g) g.push(u);
+    else groups.set(key, [u]);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * ブレイクするシールドの選び方を、見分けがつく違いごとに1つずつ(各組から何枚か。組の中は並びの先頭から)。
+ * どれを選んでも同じものは数えない。AI の探索の分岐を減らす(legalActions)。
+ */
+export function shieldPickChoices(s: GameState, shields: number[], n: number): number[][] {
+  const classes = shieldClasses(s, shields);
+  const out: number[][] = [];
+  const go = (i: number, left: number, cur: number[]) => {
+    if (i === classes.length) {
+      if (left === 0) out.push(cur.slice());
+      return;
+    }
+    for (let k = 0; k <= Math.min(classes[i].length, left); k++) go(i + 1, left - k, cur.concat(classes[i].slice(0, k)));
+  };
+  go(0, n, []);
+  return out;
+}
+
 /** シールドゾーンから手札に加わる時に宣言できる能力(S・トリガー / G・ストライク)。 */
 export function declaration(c: Ctx, uid: number): { kind: 'shieldTrigger' | 'gStrike'; ref: AbilityRef; face: number } | null {
   const s = c.s;
   const card = s.cards[uid];
   const def = c.reg.defs[card.defId];
   const cc = mkCC(c, card.owner, { self: uid });
+  // 豪龍の記憶: 「S・トリガー」を与えられたシールド(次の持ち主のターンのはじめまで)
+  const grantedTurn = s.usage[`stg:${uid}:${card.ep}`];
+  const granted = grantedTurn !== undefined && card.zone === 'shield' && s.turn - grantedTurn <= 1;
+  // 「自分のシールドゾーンから手札に加える呪文すべてに、S・トリガーを与える」(天雷龍姫エリザベス)
+  const spellGranted = gameHas(c, 'spellShieldTrigger') && activeStatics(c, 'spellShieldTrigger').some((st) => st.controller === card.owner);
+  // 攻撃中の相手のクリーチャーの「このクリーチャーの攻撃中、相手は G・ストライクを使えない」(覇帝なき侵略 レッドゾーンF)
+  const gBanned =
+    gameHas(c, 'noGStrike') &&
+    activeStatics(c, 'noGStrike').some((st) => st.controller !== card.owner && isAttacking(c, s.cards[st.src].pid));
+  // 相手の「自身の S・トリガーを使えない」(バイラス・カースド)
+  const stBanned = gameHas(c, 'noOppShieldTrigger') && activeStatics(c, 'noOppShieldTrigger').some((st) => st.controller !== card.owner);
   for (let fi = 0; fi < def.faces.length; fi++) {
     const info = c.reg.getInfo(card.defId, fi);
-    for (const st of info.shieldTriggers) {
+    for (const st of stBanned ? [] : info.shieldTriggers) {
       if (st.ability.while && !evalCond(cc, st.ability.while)) continue;
       return { kind: 'shieldTrigger', ref: { defId: card.defId, face: fi, idx: st.idx }, face: fi };
     }
-    if (info.gStrike) return { kind: 'gStrike', ref: { defId: card.defId, face: fi, idx: info.gStrike.idx }, face: fi };
+    if (spellGranted && !stBanned && def.faces[fi].type === 'spell') {
+      return { kind: 'shieldTrigger', ref: { defId: card.defId, face: fi, idx: 0 }, face: fi };
+    }
+    if (granted && !stBanned && def.faces.length > 0 && fi === (def.faces.findIndex((x) => x.type === 'spell') >= 0 ? def.faces.findIndex((x) => x.type === 'spell') : 0)) {
+      return { kind: 'shieldTrigger', ref: { defId: card.defId, face: fi, idx: 0 }, face: fi };
+    }
+    if (info.gStrike && !gBanned) return { kind: 'gStrike', ref: { defId: card.defId, face: fi, idx: info.gStrike.idx }, face: fi };
   }
   return null;
 }
@@ -930,7 +1493,7 @@ function resolveEntry(c: Ctx, e: PoolEntry): void {
       causedBy: logged.id,
       name: 'play',
       stage: 0,
-      vars: { uid: e.source.uid, ep: card.ep, from: 'hand', face, free: true, after: null },
+      vars: { uid: e.source.uid, ep: card.ep, from: 'hand', face, free: true, after: null, ...(gameHas(c, 'stUsed') ? { st: true } : {}) },
     });
     return;
   }
@@ -960,11 +1523,26 @@ export function runSba(c: Ctx): boolean {
   const s = c.s;
   if (!s.dirtySba) return false;
   if (s.winner !== null) return false;
+  // 山札の横向きのカードを手札に加えたプレイヤーは、ゲームに負ける(「ゲームに負ける時」の置換・負けない効果が使える)
+  if (s.pendingLoss && s.pendingLoss.length > 0) {
+    const p = s.pendingLoss[0];
+    if (lossReplacement(c, p, false)) {
+      s.pendingLoss.shift();
+      return true;
+    }
+    s.pendingLoss.shift();
+    if (!playerCannotLose(c, p)) {
+      s.winner = opponentOf(p);
+      s.loseReason = '山札の横向きのカードを手札に加えた';
+      emit(c, 'gameOver', { winner: s.winner, reason: s.loseReason });
+    }
+    return true;
+  }
   // 山札が0枚のプレイヤーは敗北(104.2b)
   // 山札が0枚の敗北は、0枚になった出来事に対して1回(置換された後は、山札が増えるまで再度は起きない)
   for (const p of [0, 1] as PlayerId[]) if (s.players[p].deck.length > 0) delete s.usage['deckOutHandled' + p];
   const losers = ([0, 1] as PlayerId[]).filter(
-    (p) => s.players[p].deck.length === 0 && s.turn >= 1 && !(s.cfg.solitaire && p === 1) && !s.usage['deckOutHandled' + p],
+    (p) => s.players[p].deck.length === 0 && s.turn >= 1 && !(s.cfg.solitaire && p === 1) && !s.usage['deckOutHandled' + p] && !playerCannotLose(c, p) && !activeStatics(c, 'noDeckOutLoss').some((st) => st.controller === p),
   );
   if (losers.length) {
     for (const p of losers) {
@@ -980,7 +1558,14 @@ export function runSba(c: Ctx): boolean {
   // パワー0以下のクリーチャーは破壊される(108.1b)
   const dead: number[] = [];
   for (const p of [0, 1] as PlayerId[]) {
-    for (const perm of s.players[p].battle) if (powerOf(c, perm) <= 0) dead.push(perm.cards[0]);
+    // 「離れない」クリーチャーは、破壊されない(破壊しようとしても何も起きないので、状況起因処理が終わらなくなるのを避ける)
+    for (const perm of s.players[p].battle) {
+      const u = perm.cards[0];
+      if (!isCreatureType(faceTypeOf(c, u)) || powerOf(c, perm) > 0 || cannotLeave(c, u, 'destroy')) continue;
+      // 破壊のかわりの手順(エスケープなど)がまだ終わっていないクリーチャーは、その手順のあとにもう一度調べる(手順が動かず、聞き直しが終わらなくなるのを避ける)
+      if (s.cont.some((f) => f.kind === 'effect' && f.trigger?.type === 'replaced' && f.trigger.card === u)) continue;
+      dead.push(u);
+    }
   }
   if (dead.length) {
     moveCards(c, dead, { to: 'grave', cause: 'destroy' });
@@ -1045,7 +1630,53 @@ function lossReplacement(c: Ctx, p: PlayerId, deckOut: boolean): boolean {
       return true;
     }
   }
-  return false;
+  // 「ゲームに負ける時、かわりに〜してもよい」(手順を行う置換): バトルゾーンと手札のカードが持つ
+  const cands: { uid: number; idx: number; ab: Extract<Ability, { kind: 'replace' }> }[] = [];
+  const holders = [...s.players[p].battle.map((x) => x.cards[0]), ...s.players[p].hand];
+  for (const uid of holders) {
+    const card = s.cards[uid];
+    const info = card.zone === 'battle' ? infoOf(c, uid) : c.reg.getInfo(card.defId, 0);
+    for (const r of info.replaces) {
+      const a = r.ability;
+      if (a.apply.type !== 'steps' || a.match.type !== 'gameLoss') continue;
+      if (a.match.turn === 'opponent' && s.active === p) continue;
+      if (a.match.turn === 'own' && s.active !== p) continue;
+      if (a.match.reason === 'deckOut' && !deckOut) continue; // 山札切れによる敗北だけ
+      if (a.while && !evalCond(mkCC(c, p, { self: uid }), a.while)) continue;
+      cands.push({ uid, idx: r.idx, ab: a });
+    }
+  }
+  if (cands.length === 0) return false;
+  let pickIdx = 0;
+  if (cands.length > 1 || cands[0].ab.optional) {
+    const labels = cands.map((x) => x.ab.label ?? 'かわりの処理を行う');
+    const ans = ask<number[]>(c, {
+      player: p,
+      why: 'replaceChoice',
+      input: { shape: 'option', options: [...labels, '置換しない'], pick: 1, repeat: false, allIf: false },
+      source: { uid: cands[0].uid, ep: s.cards[cands[0].uid].ep },
+      prompt: 'ゲームに負ける時、かわりの処理を行えます',
+    });
+    pickIdx = ans[0];
+    if (pickIdx >= cands.length) return false;
+  }
+  const chosen = cands[pickIdx];
+  const card = s.cards[chosen.uid];
+  if (deckOut) s.usage[key] = 1;
+  s.cont.push({
+    kind: 'effect',
+    id: nextId(s),
+    causedBy: c.cause,
+    ability: { defId: card.defId, face: card.zone === 'battle' ? card.face : 0, idx: chosen.idx },
+    source: { uid: chosen.uid, ep: card.ep },
+    lki: snapOf(c, chosen.uid),
+    controller: p,
+    pc: 0,
+    vars: {},
+    trigger: null,
+    noOptional: true,
+  });
+  return true;
 }
 
 // ───────────────────────── ディスパッチ ─────────────────────────
@@ -1062,6 +1693,8 @@ export function runProc(c: Ctx, f: ProcFrame): void {
       return runBreak(c, f);
     case 'settle':
       return runSettle(c, f);
+    case 'battle':
+      return runBattle(c, f);
     default:
       throw new Error('未知の手続き: ' + f.name);
   }

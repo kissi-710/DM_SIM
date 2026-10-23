@@ -3,6 +3,7 @@ import { costOf, effectsOnPerm, hasKeyword, powerOf, type KwName } from '../engi
 import { mkCtx, permByPid } from '../engine/state';
 import type { GameState } from '../engine/types';
 import { civGradient } from './CardView';
+import { faceTypeLabel } from './typeLabel';
 import { CIV_NAME, isConcealed, reg, untilLabel } from './format';
 
 /** reveal: 本人にも見えないカード(シールドなど)を見せる(練習用の「自分のシールドを見る」) */
@@ -21,7 +22,7 @@ export function CardDetail({ s, uid, reveal = false }: { s: GameState; uid: numb
       {def.faces.map((f, i) => (
         <div key={i} className="panel" style={{ padding: 6 }}>
           <div className="row" style={{ gap: 6 }}>
-            <span className="tag">{f.type === 'spell' ? '呪文' : f.type === 'castle' ? 'G城' : f.type === 'evolution' ? '進化' : f.type === 'smaxEvolution' ? 'S-MAX進化' : 'クリーチャー'}</span>
+            <span className="tag">{faceTypeLabel(f.type)}</span>
             <span className="tag">コスト {f.cost}</span>
             {f.power !== undefined && <span className="tag">パワー {f.power}</span>}
             <span style={{ width: 60, height: 8, background: civGradient(f.civs), borderRadius: 4, display: 'inline-block' }} title={f.civs.map((x) => CIV_NAME[x]).join('・')} />

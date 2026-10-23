@@ -240,9 +240,29 @@ export function setNativeRounds(f: NativeRounds | null): void {
   native = f;
 }
 
-/** Rust 版が持たない設定(プレイアウトの L1 の調整値・効果選択の先読み)を使う時は、TS 版で評価する(黙って無視しない) */
-export function nativeUnsupported(w?: Partial<RewardWeights>): boolean {
-  return !!w && (w.l1 !== undefined || w.lookahead === true);
+/** Rust 版が持たないカード(25の王道の新規カード)。これらが対局に含まれる時は、TS 版で評価する */
+let nativeSkip: ReadonlySet<string> = new Set();
+let nativeSkipCache = new WeakMap<object, boolean>();
+export function setNativeSkipCards(ids: Iterable<string>): void {
+  nativeSkip = new Set(ids);
+  nativeSkipCache = new WeakMap();
+}
+
+/**
+ * Rust 版が持たない設定(プレイアウトの L1 の調整値・効果選択の先読み)や、Rust 版が持たないカードを含む対局は、TS 版で評価する
+ * (黙って無視しない)。env を渡すと、後者も調べる
+ */
+export function nativeUnsupported(w?: Partial<RewardWeights>, env?: SearchEnv): boolean {
+  if (w && (w.l1 !== undefined || w.lookahead === true)) return true;
+  if (env && nativeSkip.size > 0) {
+    let hit = nativeSkipCache.get(env);
+    if (hit === undefined) {
+      hit = env.view.cards.some((c) => nativeSkip.has(c.defId)) || (env.candidateDecks ?? []).some((d) => d.some((id) => nativeSkip.has(id)));
+      nativeSkipCache.set(env, hit);
+    }
+    return hit;
+  }
+  return false;
 }
 
 /**
@@ -250,7 +270,7 @@ export function nativeUnsupported(w?: Partial<RewardWeights>): boolean {
  * 戻り値は手ごとの報酬(alive でない手・例外を出した手は NaN)。純関数なので、どの Worker で評価しても同じ。
  */
 export function evalRound(env: SearchEnv, reg: Registry, seed: number, alive: number[]): number[] {
-  if (native && !nativeUnsupported(env.weights)) {
+  if (native && !nativeUnsupported(env.weights, env)) {
     try {
       return native(env, seed, alive);
     } catch {

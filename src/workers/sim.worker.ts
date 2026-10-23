@@ -6,7 +6,7 @@ import { setNativePairedRound, setNativeTree } from '../ai/tree';
 import { CARD_DB } from '../cards';
 import { loadRegistry } from '../engine/registry';
 import { runJob, type SimJob, type SimOut } from '../sim/jobs';
-import { DmEngine } from '../wasm/dmEngine';
+import { DmEngine, rustRegistryJson } from '../wasm/dmEngine';
 import { errorMessage } from '../engine/types';
 
 export type { SimJob, SimOut };
@@ -20,7 +20,7 @@ const nativeReady: Promise<void> = (async () => {
   const url = Object.values(wasmUrls)[0];
   if (!url) throw new Error('src/wasm/dmsim.wasm がありません');
   const bytes = await (await fetch(url)).arrayBuffer();
-  const eng = await DmEngine.create(bytes, JSON.stringify(reg.defs));
+  const eng = await DmEngine.create(bytes, rustRegistryJson(reg.defs));
   setNativeRounds(eng.asNativeRounds());
   setNativeTree(eng.asNativeTree());
   setNativePairedRound(eng.asNativePairedRound());

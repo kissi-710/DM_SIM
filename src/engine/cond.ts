@@ -1,9 +1,9 @@
 // 条件・式・セレクタの評価、イベントパターンの照合(effects 6.4 / 4.3)。
 import type { Cond, Expr, Pattern, Selector } from './ast';
-import { canBeChosen, charsLite, charsOf, costBase, manaCivs } from './derive';
+import { canBeChosen, charsLite, charsOf, costBase, hasKeyword, infoOf, manaCivs } from './derive';
 import type { Ctx } from './state';
-import { opponentOf, permByPid } from './state';
-import { type Civ, type Ev, isCreatureType, type PlayerId, type Snap } from './types';
+import { gameHas, opponentOf, permByPid } from './state';
+import { type Civ, type Ev, type FaceType, isCreatureType, type Permanent, type PlayerId, type Snap } from './types';
 
 export interface CC {
   c: Ctx;
@@ -17,6 +17,19 @@ export interface CC {
   itFace?: number;
   iter?: PlayerId;
   event?: Ev | null;
+  /** 進化元を調べている(シンカライズのタマシードを、クリーチャーとして扱う) */
+  evo?: boolean;
+}
+
+/** クロスギア(uid)がクロスしているクリーチャーの山。クロスされていなければ(クロス先が場を離れていても)null */
+export function crossHostOf(c: Ctx, gearUid: number): Permanent | null {
+  const s = c.s;
+  const card = s.cards[gearUid];
+  if (card.zone !== 'battle') return null;
+  const gp = permByPid(s, card.pid);
+  if (!gp || gp.perm.crossedOn === undefined) return null;
+  const hp = permByPid(s, gp.perm.crossedOn);
+  return hp && hp.owner === gp.owner ? hp.perm : null;
 }
 
 export function mkCC(c: Ctx, controller: PlayerId, extra: Partial<CC> = {}): CC {
@@ -28,6 +41,11 @@ export function mkCC(c: Ctx, controller: PlayerId, extra: Partial<CC> = {}): CC 
 export function getVar(cc: CC, name: string): any {
   if (name === '$self') {
     return cc.self == null ? null : { uid: cc.self, ep: cc.c.s.cards[cc.self].ep };
+  }
+  // 誘発したイベントのカード(いまのゾーンで参照する。呪文を唱えた後に墓地にある、など)
+  if (name === '$ev.card') {
+    const u = cc.event?.card;
+    return typeof u === 'number' ? { uid: u, ep: cc.c.s.cards[u].ep } : null;
   }
   if (name === '$eventCard') {
     // 誘発の原因になったイベントのカード(出たクリーチャーなど)。出た後に別の山になっていれば無効
@@ -71,6 +89,24 @@ export function evalExpr(cc: CC, e: Expr | undefined, dflt = 0): number {
     return typeof v === 'number' ? v : Array.isArray(v) ? v.length : 0;
   }
   if ('count' in o) return selectCards(cc, o.count).length;
+  if ('len' in o) return varUids(cc, o.len, { ignoreEp: true }).length;
+  if ('evLen' in o) {
+    const v = cc.event?.[o.evLen];
+    return Array.isArray(v) ? v.length : 0;
+  }
+  if ('distinct' in o) {
+    const set = new Set<number>();
+    for (const u of selectCards(cc, o.distinct.sel)) set.add(costBase(cc.c, u));
+    return set.size;
+  }
+  if ('under' in o) {
+    const uids = varUids(cc, o.under, { ignoreEp: true });
+    if (uids.length === 0) return 0;
+    const card = cc.c.s.cards[uids[0]];
+    if (card.zone !== 'battle') return 0;
+    const pm = permByPid(cc.c.s, card.pid);
+    return pm ? Math.max(0, pm.perm.cards.length - 1) : 0;
+  }
   if ('costOf' in o) {
     if (o.costOf === '$self' && cc.selfSnap) return cc.selfSnap.cost;
     const uids = varUids(cc, o.costOf, { ignoreEp: true });
@@ -81,6 +117,11 @@ export function evalExpr(cc: CC, e: Expr | undefined, dflt = 0): number {
   if ('sub' in o) return evalExpr(cc, o.sub[0]) - evalExpr(cc, o.sub[1]);
   if ('min' in o) return Math.min(...o.min.map((x: Expr) => evalExpr(cc, x)));
   if ('max' in o) return Math.max(...o.max.map((x: Expr) => evalExpr(cc, x)));
+  if ('mul' in o) return o.mul.reduce((a: number, x: Expr) => a * evalExpr(cc, x), 1);
+  if ('powerOf' in o) {
+    const uids = varUids(cc, o.powerOf, { ignoreEp: true });
+    return uids.length === 0 ? 0 : charsOf(cc.c, uids[0], -1).power;
+  }
   throw new Error('未知の式: ' + JSON.stringify(e));
 }
 
@@ -100,8 +141,9 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   }
   if ('shields' in o) {
     const broken = s.breaking;
-    const n = s.players[cc.controller].shield.filter((u) => !broken.includes(u)).length;
     const q = o.shields;
+    const who = q.who === 'opponent' ? opponentOf(cc.controller) : cc.controller;
+    const n = s.players[who].shield.filter((u) => !broken.includes(u)).length;
     if (q.lte !== undefined && n > q.lte) return false;
     if (q.gte !== undefined && n < q.gte) return false;
     if (q.eq !== undefined && n !== q.eq) return false;
@@ -137,6 +179,48 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
     return (o.civsPresent.civs as Civ[]).every((x) => set.has(x));
   }
   if ('nonEmpty' in o) return varUids(cc, o.nonEmpty, { ignoreEp: true }).length > 0;
+  if ('some' in o) return varUids(cc, o.some.var, { ignoreEp: true }).some((u) => evalCond({ ...cc, it: u, itFace: -1 }, o.some.where));
+  if ('isSelf' in o) return cc.it != null && cc.it === cc.self;
+  if ('faceUp' in o) return cc.it != null && !!s.cards[cc.it].up;
+  if ('altUsed' in o) return cc.self != null && s.usage['alt:' + cc.self + ':' + o.altUsed] === s.turn;
+  if ('nameHas' in o) return cc.it != null && cc.c.reg.defs[s.cards[cc.it].defId].name.includes(o.nameHas);
+  if ('onBase' in o) {
+    const base = cc.event?.base?.[0];
+    return typeof base === 'number' && evalCond({ ...cc, it: base, itFace: -1 }, o.onBase);
+  }
+  if ('powerRank' in o) {
+    if (cc.it == null) return false;
+    const powers = selectCards(cc, o.powerRank.of).map((u) => charsOf(cc.c, u, -1).power);
+    if (powers.length === 0) return false;
+    const want = o.powerRank.which === 'max' ? Math.max(...powers) : Math.min(...powers);
+    return charsOf(cc.c, cc.it, -1).power === want;
+  }
+  if ('allSame' in o) {
+    const uids = varUids(cc, o.allSame.var, { ignoreEp: true });
+    if (uids.length === 0) return false;
+    const cost0 = costBase(cc.c, uids[0]);
+    return uids.every((u) => costBase(cc.c, u) === cost0 && (!o.allSame.where || evalCond({ ...cc, it: u, itFace: -1 }, o.allSame.where)));
+  }
+  if ('eventIs' in o) return !!cc.event && Object.entries(o.eventIs).every(([k, v]) => cc.event![k] === v);
+  if ('hasCip' in o) {
+    if (cc.it == null) return false;
+    const cd = s.cards[cc.it];
+    const fi = (cc.itFace ?? -1) >= 0 ? cc.itFace! : cd.zone === 'battle' || cd.zone === 'limbo' ? cd.face : 0;
+    return cc.c.reg.getInfo(cd.defId, fi).triggers.some((t) => {
+      const sp = t.ability.spec;
+      if (t.ability.gen || sp.subject !== 'self') return false;
+      const ons = Array.isArray(sp.on) ? sp.on : [sp.on];
+      return ons.some((on) => on.type === 'entered' && on.via === undefined);
+    });
+  }
+  if ('hyper' in o) {
+    if (cc.self == null || s.cards[cc.self].zone !== 'battle') return false;
+    return !!permByPid(s, s.cards[cc.self].pid)?.perm.hyper;
+  }
+  // S・トリガーとして使って、出た/唱えた(S・トリガー・プラスのP能力の条件)
+  if ('stUsed' in o) return !!(cc.event && (cc.event.type === 'cast' || cc.event.type === 'entered') && s.usage['st:' + cc.event.card] === cc.event.id);
+  // ゲーム中に1度の能力を、まだ使っていない(markUsed で記録する)
+  if ('unused' in o) return cc.self == null || !cc.c.s.usage['once:' + cc.self + ':' + o.unused];
   if ('notInBattle' in o) {
     if (cc.self == null) return true;
     const def = s.cards[cc.self].defId;
@@ -145,8 +229,75 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('logged' in o) {
     const min = o.logged.min ?? 1;
     let n = 0;
-    for (const ev of s.turnLog) if (matchPattern(cc, o.logged.pattern, ev)) n++;
+    let from = 0;
+    if (o.logged.since) {
+      for (let i = s.turnLog.length - 1; i >= 0; i--) {
+        if (s.turnLog[i].type === o.logged.since) {
+          from = i + 1;
+          break;
+        }
+      }
+    }
+    for (let i = from; i < s.turnLog.length; i++) if (matchPattern(cc, o.logged.pattern, s.turnLog[i])) n++;
     return n >= min;
+  }
+  if ('ultimate' in o) {
+    if (cc.it == null) return false;
+    return cc.c.reg.defs[s.cards[cc.it].defId].faces.some((x) => x.ultimate) === o.ultimate;
+  }
+  if ('twin' in o) {
+    if (cc.it == null) return false;
+    return (cc.c.reg.defs[s.cards[cc.it].defId].faces.length >= 2) === o.twin;
+  }
+  if ('distinctCosts' in o) {
+    const uids = varUids(cc, o.distinctCosts, { ignoreEp: true });
+    if (uids.length < 2) return false;
+    return new Set(uids.map((u) => costBase(cc.c, u))).size === uids.length;
+  }
+  if ('crossed' in o) {
+    if (cc.self == null) return false;
+    return (crossHostOf(cc.c, cc.self) !== null) === o.crossed;
+  }
+  if ('hostIs' in o) {
+    if (cc.self == null) return false;
+    const host = crossHostOf(cc.c, cc.self);
+    return host !== null && evalCond({ ...cc, it: host.cards[0], itFace: s.cards[host.cards[0]].face }, o.hostIs);
+  }
+  if ('hasGear' in o) {
+    if (cc.self == null) return false;
+    const sp = permByPid(s, s.cards[cc.self].pid);
+    if (!sp) return false;
+    return s.players[s.cards[cc.self].owner].battle.some((g) => g.crossedOn === sp.perm.pid);
+  }
+  if ('ownedBy' in o) {
+    if (cc.it == null) return false;
+    return (s.cards[cc.it].owner === cc.controller) === (o.ownedBy === 'self');
+  }
+  if ('baseFor' in o) {
+    if (cc.it == null) return false;
+    const evoUid = varUids(cc, o.baseFor, { ignoreEp: true })[0];
+    if (evoUid === undefined) return false;
+    const evoDef = cc.c.reg.defs[s.cards[evoUid].defId];
+    const evoFace = evoDef.faces.find((x) => x.evolveFrom);
+    if (!evoFace?.evolveFrom) return false;
+    return evalCond({ ...cc, self: evoUid, it: cc.it, itFace: s.cards[cc.it].face, evo: true }, evoFace.evolveFrom);
+  }
+  if ('hasKw' in o) {
+    if (cc.it == null) return false;
+    const hc = s.cards[cc.it];
+    if (hc.zone === 'battle') {
+      const hk = permByPid(s, hc.pid);
+      return hk != null && hasKeyword(cc.c, hk.perm, o.hasKw);
+    }
+    // バトルゾーン以外(手札など): そのカードの(クリーチャー面の)能力に、そのキーワードがあるか
+    const hdef = cc.c.reg.defs[hc.defId];
+    const hfi = hdef.faces.findIndex((x) => x.type !== 'spell');
+    return hfi >= 0 && !!(cc.c.reg.getInfo(hc.defId, hfi) as unknown as Record<string, unknown>)[o.hasKw];
+  }
+  if ('selfTapped' in o) {
+    if (cc.self == null) return false;
+    const sp = permByPid(s, s.cards[cc.self].pid);
+    return sp !== null && sp !== undefined && s.cards[cc.self].zone === 'battle' && sp.perm.tapped === o.selfTapped;
   }
   if ('zoneIs' in o) {
     return cc.it != null && s.cards[cc.it].zone === o.zoneIs;
@@ -174,20 +325,33 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   }
   if ('power' in o) {
     const p = ch.power;
-    if (o.power.lte !== undefined && p > o.power.lte) return false;
-    if (o.power.gte !== undefined && p < o.power.gte) return false;
+    const q = o.power;
+    if (q.lte !== undefined && p > evalExpr(cc, q.lte)) return false;
+    if (q.gte !== undefined && p < evalExpr(cc, q.gte)) return false;
+    if (q.lt !== undefined && !(p < evalExpr(cc, q.lt))) return false;
+    if (q.gt !== undefined && !(p > evalExpr(cc, q.gt))) return false;
     return true;
   }
   if ('powerLtSelf' in o) return cc.self != null && ch.power < charsOf(cc.c, cc.self).power;
   if ('type' in o) {
-    if (o.type === 'creature') return isCreatureType(ch.type);
-    return ch.type === 'spell';
+    if (cc.evo && o.type === 'creature' && ch.type === 'tamaseed') {
+      const cd = s.cards[it];
+      if (cd.zone === 'battle' && cc.c.reg.getInfo(cd.defId, cd.face).shinkalize) return true;
+    }
+    return matchesType(ch.type, o.type);
   }
   if ('evolution' in o) {
     const isEvo = ch.type === 'evolution' || ch.type === 'smaxEvolution';
     return isEvo === o.evolution;
   }
-  if ('race' in o) return ch.races.some((r) => raceMatches(r, o.race));
+  if ('race' in o) {
+    // ツインパクトは、バトルゾーン以外ではどちらの面の種族も持つ
+    const card = s.cards[it];
+    if ((cc.itFace ?? -1) < 0 && card.zone !== 'battle' && card.zone !== 'limbo') {
+      return cc.c.reg.defs[card.defId].faces.some((f) => (f.races ?? []).some((r) => raceMatches(r, o.race)));
+    }
+    return ch.races.some((r) => raceMatches(r, o.race));
+  }
   if ('tapped' in o) {
     const card = s.cards[it];
     if (card.zone === 'battle') return (permByPid(s, card.pid)?.perm.tapped ?? false) === o.tapped;
@@ -236,6 +400,7 @@ export function selectCards(cc: CC, sel: Selector): number[] {
       else if (z === 'limbo') list = s.limbo.filter((u) => s.cards[u].owner === owner);
       else list = s.players[owner][z];
       for (const uid of list) {
+        if (sel.of && s.cards[uid].zone !== z) continue; // 変数のカードのうち、そのゾーンに今あるものだけ
         if (except.includes(uid)) continue;
         if (sel.notSelf && uid === cc.self) continue;
         const hint = faceHint(cc, uid, sel.type);
@@ -246,13 +411,32 @@ export function selectCards(cc: CC, sel: Selector): number[] {
         }
         if (sel.chooseable && z === 'battle' && owner !== cc.controller) {
           const pm = permByPid(s, s.cards[uid].pid);
-          if (pm && !canBeChosen(cc.c, pm.perm, cc.controller)) continue;
+          if (pm && !canBeChosen(cc.c, pm.perm, cc.controller, cc.self)) continue;
         }
         out.push(uid);
       }
     }
   }
+  // 「相手がクリーチャーを選ぶなら、可能ならこのクリーチャーを選ぶ」(同期の妖精)
+  if (sel.chooseable && out.length > 1 && gameHas(cc.c, 'mustBeChosen')) {
+    const taunt = out.filter((u) => {
+      const cd = s.cards[u];
+      return cd.zone === 'battle' && cd.owner !== cc.controller && infoOf(cc.c, u).statics.some((st) => st.ability.mod.type === 'mustBeChosen');
+    });
+    if (taunt.length > 0) return taunt;
+  }
   return out;
+}
+
+/** 面の種類が、条件・セレクタの type に合うか('element' = 呪文以外のバトルゾーンのカード) */
+export function matchesType(t: FaceType, want: string): boolean {
+  switch (want) {
+    case 'creature': return isCreatureType(t);
+    case 'spell': return t === 'spell';
+    case 'element': return t !== 'spell';
+    case 'card': return true;
+    default: return t === want; // tamaseed / field / crossgear
+  }
 }
 
 /** セレクタの type に合うか。合うなら判定に使う面(-1=面0)を、合わなければ null を返す。 */
@@ -262,12 +446,11 @@ function faceHint(cc: CC, uid: number, type: Selector['type']): number | null {
   const def = cc.c.reg.defs[card.defId];
   if (card.zone === 'battle' || card.zone === 'limbo') {
     const f = def.faces[card.face] ?? def.faces[0];
-    if (type === 'spell') return f.type === 'spell' ? card.face : null;
-    if (type === 'creature') return isCreatureType(f.type) ? card.face : null;
-    return card.face;
+    if (!type || type === 'card') return card.face;
+    return matchesType(f.type, type) ? card.face : null;
   }
   if (!type || type === 'card') return -1;
-  const idx = def.faces.findIndex((f) => (type === 'spell' ? f.type === 'spell' : isCreatureType(f.type)));
+  const idx = def.faces.findIndex((f) => matchesType(f.type, type));
   return idx < 0 ? null : idx;
 }
 
@@ -277,6 +460,7 @@ function faceHint(cc: CC, uid: number, type: Selector['type']): number | null {
  * イベントがパターンに合うか。owner/controller/player は cc.controller から見た相対('self'/'opponent'/'any')。
  */
 export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
+  const s = cc.c.s;
   if (pat.type !== ev.type) return false;
   if (pat.self && ev.card !== cc.self) return false;
   if (pat.role) {
@@ -306,6 +490,14 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
   if (pat.from !== undefined && ev.from !== pat.from) return false;
   if (pat.to !== undefined && ev.to !== pat.to) return false;
   if (pat.kind !== undefined && ev.kind !== pat.kind) return false;
+  // beforeBreak など: 攻撃しているのが、この能力の発生源自身
+  if (pat.selfAttacker && (cc.self == null || ev.attacker !== s.cards[cc.self].pid)) return false;
+  if (pat.notVia !== undefined && ev.via === pat.notVia) return false;
+  if (pat.targetKind !== undefined && ev.target?.kind !== pat.targetKind) return false;
+  // 攻撃先が、この能力の発生源自身(クリーチャー)
+  if (pat.targetSelf) {
+    if (cc.self == null || ev.target?.kind !== 'creature' || ev.target.pid !== s.cards[cc.self].pid) return false;
+  }
   if (pat.ex !== undefined && !!ev.ex !== pat.ex) return false;
   if (pat.step !== undefined && ev.step !== pat.step) return false;
   if (pat.paid !== undefined && ev.paid !== pat.paid) return false;
@@ -322,10 +514,23 @@ export function matchPattern(cc: CC, pat: Pattern, ev: Ev): boolean {
     if (ev.winnerOwner === undefined) return false;
     if (!rel(pat.winner, ev.winnerOwner)) return false;
   }
+  if (pat.broke !== undefined && !!ev.broke !== pat.broke) return false;
+  // クロスギアをクロスしているクリーチャーが攻撃する時
+  if (pat.hostAttacker) {
+    if (cc.self == null) return false;
+    const host = crossHostOf(cc.c, cc.self);
+    if (!host || ev.attacker !== host.pid) return false;
+  }
   if (pat.attackerCond) {
     const uid: number | undefined = ev.card;
     if (uid === undefined) return false;
     if (!evalCond({ ...cc, it: uid, itFace: -1 }, pat.attackerCond)) return false;
+  }
+  // イベントのカード(出た・唱えた・離れたカードなど)が満たす条件
+  if (pat.cond) {
+    const uid: number | undefined = ev.card;
+    if (uid === undefined) return false;
+    if (!evalCond({ ...cc, it: uid, itFace: typeof ev.face === 'number' ? ev.face : -1 }, pat.cond)) return false;
   }
   return true;
 }
