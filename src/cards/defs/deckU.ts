@@ -15,6 +15,9 @@ const useFree = (v: string): StepDef[] => [
   ]),
 ];
 
+/** 山札の上から表向きにした3枚のうち、残り(実行されなかったもの)をすべてマナゾーンに置く */
+const leftoverToMana = act({ move: { sel: { zone: 'deck', owner: 'self', of: '$top' }, to: 'mana', cause: 'effect' } });
+
 export const DECK_U: CardDef[] = [
   // 1. 全虹帝 ミノガミ / ハザード・パクト
   card(
@@ -89,9 +92,11 @@ export const DECK_U: CardDef[] = [
         ifc({ distinctCosts: '$top' }, [
           selectUpTo('$e', { zone: 'deck', owner: 'self', of: '$top', type: 'element', where: { cost: { lte: 9 } } } as Selector, 3, { prompt: 'コストを支払わずに実行する、コスト9以下のエレメントを好きな数選んでください' }),
           ...useFree('$e'),
+          leftoverToMana,
+        ], [
+          // 「残りをすべてマナゾーンに置く」は独立した文: 異なるコストでなかった時も、3枚ともマナゾーンに置く(台帳 L26。GameConfig.kiyonagaLeftoverOnFail で切替)
+          ifc({ cfg: 'kiyonagaLeftoverOnFail' }, [leftoverToMana]),
         ]),
-        // 「残りをすべてマナゾーンに置く」は独立した文: 異なるコストでなかった時も、3枚ともマナゾーンに置く(dmwiki の注釈)
-        act({ move: { sel: { zone: 'deck', owner: 'self', of: '$top' }, to: 'mana', cause: 'effect' } }),
       ], { label: '攻撃する時、山札の上から3枚を表向きにする。それらがすべて異なるコストなら、その中から、コスト9以下のエレメントを好きな数、コストを支払わずに実行してもよい。残りをすべてマナゾーンに置く' }),
     ]),
   ),

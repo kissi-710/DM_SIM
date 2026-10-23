@@ -197,6 +197,8 @@ pub enum Cond {
     OnBase(Box<Cond>),
     PowerRank { max: bool, of: Rc<Selector> },
     Unused(String),
+    /// GameConfig の真偽値の項目(kiyonagaLeftoverOnFail)
+    CfgKiyonaga,
 }
 
 #[derive(Clone, Debug)]
@@ -877,6 +879,12 @@ pub fn parse_cond(j: &Json) -> R<Cond> {
     }
     if let Some(v) = o.get("powerRank") {
         return Ok(Cond::PowerRank { max: s_of(v, "which") == Some("max"), of: Rc::new(parse_selector(v.get("of").ok_or("powerRank.of")?)?) });
+    }
+    if let Some(v) = o.get("cfg") {
+        return match v.as_str() {
+            Some("kiyonagaLeftoverOnFail") => Ok(Cond::CfgKiyonaga),
+            _ => Err("cfg: 未知の項目".to_string()),
+        };
     }
     if let Some(v) = o.get("unused") {
         return Ok(Cond::Unused(v.as_str().ok_or("unused")?.to_string()));

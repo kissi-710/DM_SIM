@@ -152,6 +152,11 @@ export interface GameConfig {
   /** ジ・ウォッチ等の「ターンの残りをとばす」でターン終了時の誘発を起こすか(L6)。公式Q&A 46393 では起きない(既定 false) */
   skipRunsEndTriggers: boolean;
   maxFrameSteps: number; // L7
+  /**
+   * L26 五輪の求道者 清永「残りをすべてマナゾーンに置く」を、「すべて異なるコスト」でなかった時も行うか。
+   * 公式の裁定は無い。カードテキストの文の構造に従い、既定は true(3枚ともマナゾーンに置く)。false なら、異なるコストの時だけ。
+   */
+  kiyonagaLeftoverOnFail: boolean;
 }
 
 export const defaultConfig = (): GameConfig => ({
@@ -163,6 +168,7 @@ export const defaultConfig = (): GameConfig => ({
   sbaTiming: 'afterEachStep',
   skipRunsEndTriggers: false,
   maxFrameSteps: 20000,
+  kiyonagaLeftoverOnFail: true,
 });
 
 export interface Snap {

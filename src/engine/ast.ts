@@ -109,6 +109,8 @@ export type Cond =
   | { powerRank: { which: 'max' | 'min'; of: Selector } }
   /** ゲーム中に1度の能力(key)を、まだ使っていない */
   | { unused: string }
+  /** ゲーム設定(GameConfig)の、真偽値の項目が true か(ルールの不明点を切り替える。ROADMAP の台帳 L26) */
+  | { cfg: "kiyonagaLeftoverOnFail" }
   | { turnOf: 'self' | 'opponent' }
   | { zoneIs: ZoneName }
   /** $it が、能力の発生源(EXライフを持つクリーチャー)のEXライフのシールドか */

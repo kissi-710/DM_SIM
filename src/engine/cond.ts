@@ -220,6 +220,7 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   // S・トリガーとして使って、出た/唱えた(S・トリガー・プラスのP能力の条件)
   if ('stUsed' in o) return !!(cc.event && (cc.event.type === 'cast' || cc.event.type === 'entered') && s.usage['st:' + cc.event.card] === cc.event.id);
   // ゲーム中に1度の能力を、まだ使っていない(markUsed で記録する)
+  if ('cfg' in o) return cc.c.s.cfg[o.cfg as 'kiyonagaLeftoverOnFail'] === true;
   if ('unused' in o) return cc.self == null || !cc.c.s.usage['once:' + cc.self + ':' + o.unused];
   if ('notInBattle' in o) {
     if (cc.self == null) return true;

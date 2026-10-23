@@ -500,6 +500,7 @@ pub fn state_from_json(reg: &Registry, j: &Json) -> R<State> {
         sba_after_each_step: gs(cj, "sbaTiming")? == "afterEachStep",
         skip_runs_end_triggers: gb(cj, "skipRunsEndTriggers")?,
         max_frame_steps: gi(cj, "maxFrameSteps")? as i32,
+        kiyonaga_leftover_on_fail: get(cj, "kiyonagaLeftoverOnFail").ok().and_then(|v| v.as_bool()).unwrap_or(true),
     };
     let mut deck_ids = Vec::new();
     for d in get(j, "deckIds")?.as_arr().ok_or("deckIds")? {
@@ -771,6 +772,7 @@ pub fn state_to_json(reg: &Registry, s: &State) -> Json {
         ("sbaTiming", Json::str(if c.sba_after_each_step { "afterEachStep" } else { "afterEffect" })),
         ("skipRunsEndTriggers", Json::Bool(c.skip_runs_end_triggers)),
         ("maxFrameSteps", Json::int(c.max_frame_steps as i64)),
+        ("kiyonagaLeftoverOnFail", Json::Bool(c.kiyonaga_leftover_on_fail)),
     ]);
     let mut out = Json::obj(vec![
         ("v", Json::int(s.v as i64)),

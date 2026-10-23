@@ -104,6 +104,18 @@ describe('U05 五輪の求道者 清永 / U06 アカシック・ゼノン', () =
     expect(sim.count(0, 'mana', W)).toBe(2);
     expect(sim.has(0, 'mana', ZENON)).toBe(true);
   });
+  it('清永(台帳 L26): kiyonagaLeftoverOnFail を false にすると、異なるコストの時だけマナゾーンに置く(反対の解釈への切替)', () => {
+    const fail = new Sim({ p0: { battle: [{ c: KIYO }], deck: [W, W, ZENON, N, N] }, p1: { shield: 5 }, cfg: { kiyonagaLeftoverOnFail: false } });
+    fail.attack(KIYO, 'player');
+    fail.drain();
+    expect(fail.count(0, 'mana', W)).toBe(0);
+    expect(fail.count(0, 'deck')).toBe(5);
+    const ok = new Sim({ p0: { battle: [{ c: KIYO }], deck: [W, 'AQvibrato', ZENON, N, N] }, p1: { shield: 5 }, cfg: { kiyonagaLeftoverOnFail: false } });
+    ok.attack(KIYO, 'player');
+    ok.pick(W, ZENON);
+    ok.drain();
+    expect(ok.has(0, 'mana', 'AQvibrato')).toBe(true);
+  });
   it('ゼノン: 自分のツインパクト・クリーチャーすべてに「スピードアタッカー」を与える', () => {
     const sim = new Sim({ p0: { battle: [{ c: ZENON }, { c: TWIN, sick: true }] }, p1: { shield: 5 } });
     expect(attackActions(sim).some((a) => a.type === 'ATTACK' && a.attacker === sim.pid(0, TWIN))).toBe(true);

@@ -389,6 +389,7 @@ pub fn eval_cond(cc: &CC, cond: &Cond) -> bool {
             }
             _ => false,
         },
+        Cond::CfgKiyonaga => s.cfg.kiyonaga_leftover_on_fail,
         Cond::Unused(key) => cc.self_.map_or(true, |me| s.usage_get(&UKey::Other(format!("once:{}:{}", me, key))).is_none()),
         Cond::Ultimate(b) => match cc.it {
             Some(it) => cc.e.reg.defs[s.cards[it as usize].def as usize].faces.iter().any(|f| f.ultimate) == *b,

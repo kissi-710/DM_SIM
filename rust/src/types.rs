@@ -741,6 +741,7 @@ pub struct Cfg {
     pub sba_after_each_step: bool,
     pub skip_runs_end_triggers: bool,
     pub max_frame_steps: i32,
+    pub kiyonaga_leftover_on_fail: bool,
 }
 
 impl Default for Cfg {
@@ -754,6 +755,7 @@ impl Default for Cfg {
             sba_after_each_step: true,
             skip_runs_end_triggers: false,
             max_frame_steps: 20000,
+            kiyonaga_leftover_on_fail: true,
         }
     }
 }
