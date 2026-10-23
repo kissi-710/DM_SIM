@@ -88,6 +88,14 @@ describe('U05 五輪の求道者 清永 / U06 アカシック・ゼノン', () =
     expect(sim.has(0, 'mana', 'AQvibrato')).toBe(true);
     expect(checkInvariants(sim.s)).toEqual([]);
   });
+  it('清永: ツインパクトカードは、好きな方のコストを参照できる(公式Q&A 45933)。ボン・キゴマイム2枚(3と2)と同期の妖精(4)で、すべて異なるコストになる', () => {
+    const sim = new Sim({ p0: { battle: [{ c: KIYO }], deck: ['ボン・キゴマイム', 'ボン・キゴマイム', '同期の妖精', N, N] }, p1: { shield: 5 } });
+    sim.attack(KIYO, 'player');
+    sim.pick('ボン・キゴマイム', 'ボン・キゴマイム', '同期の妖精');
+    sim.drain();
+    expect(sim.count(0, 'battle', 'ボン・キゴマイム')).toBe(2);
+    expect(sim.has(0, 'battle', '同期の妖精')).toBe(true);
+  });
   it('清永: コストがすべて異ならなければ、エレメントは実行できない。ただし、3枚ともマナゾーンに置く(「残りをすべてマナゾーンに置く」は独立した文)', () => {
     const sim = new Sim({ p0: { battle: [{ c: KIYO }], deck: [W, W, ZENON, N, N] }, p1: { shield: 5 } });
     sim.attack(KIYO, 'player');

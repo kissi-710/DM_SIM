@@ -403,14 +403,41 @@ pub fn eval_cond(cc: &CC, cond: &Cond) -> bool {
             if uids.len() < 2 {
                 return false;
             }
-            let mut set: Vec<i32> = Vec::new();
-            for u in &uids {
-                let c = cost_base(cc.e, *u);
-                if !set.contains(&c) {
-                    set.push(c);
+            // ツインパクトカードは、好きな方のコストを参照できる(公式Q&A 45933)。どちらかを選んで、すべて異なるコストにできるか
+            let options: Vec<Vec<i32>> = uids
+                .iter()
+                .map(|&u| {
+                    let card = &cc.e.s.cards[u as usize];
+                    if card.zone == Zone::Battle || card.zone == Zone::Limbo {
+                        vec![cost_base(cc.e, u)]
+                    } else {
+                        let mut v: Vec<i32> = Vec::new();
+                        for f in &cc.e.reg.defs[card.def as usize].faces {
+                            if !v.contains(&f.cost) {
+                                v.push(f.cost);
+                            }
+                        }
+                        v
+                    }
+                })
+                .collect();
+            fn assign(options: &[Vec<i32>], i: usize, used: &mut Vec<i32>) -> bool {
+                if i == options.len() {
+                    return true;
                 }
+                for &cost in &options[i] {
+                    if used.contains(&cost) {
+                        continue;
+                    }
+                    used.push(cost);
+                    if assign(options, i + 1, used) {
+                        return true;
+                    }
+                    used.pop();
+                }
+                false
             }
-            set.len() == uids.len()
+            assign(&options, 0, &mut Vec::new())
         }
         Cond::Crossed(b) => match cc.self_ {
             Some(me) => cross_host_of(cc.e, me).is_some() == *b,

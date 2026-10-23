@@ -252,7 +252,24 @@ export function evalCond(cc: CC, cond: Cond | undefined): boolean {
   if ('distinctCosts' in o) {
     const uids = varUids(cc, o.distinctCosts, { ignoreEp: true });
     if (uids.length < 2) return false;
-    return new Set(uids.map((u) => costBase(cc.c, u))).size === uids.length;
+    // ツインパクトカードは、好きな方のコストを参照できる(公式Q&A 45933)。どちらかを選んで、すべて異なるコストにできるか
+    const options = uids.map((u) => {
+      const card = s.cards[u];
+      const def = cc.c.reg.defs[card.defId];
+      return card.zone === 'battle' || card.zone === 'limbo' ? [costBase(cc.c, u)] : [...new Set(def.faces.map((f) => f.cost))];
+    });
+    const used = new Set<number>();
+    const assign = (i: number): boolean => {
+      if (i === options.length) return true;
+      for (const cost of options[i]) {
+        if (used.has(cost)) continue;
+        used.add(cost);
+        if (assign(i + 1)) return true;
+        used.delete(cost);
+      }
+      return false;
+    };
+    return assign(0);
   }
   if ('crossed' in o) {
     if (cc.self == null) return false;
