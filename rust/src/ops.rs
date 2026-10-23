@@ -1013,10 +1013,11 @@ pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>
         c.s.next_pid += 1;
         // 「タップして出る」(プチョヘンザ): 相手の常在型能力。進化で重なる時は、すでにいる山なので対象外
         let mut tapped_in = opts.tapped || enters_tapped_by_static(c.env(), uid, owner, face_idx);
-        if !tapped_in && game_has(c.env(), Feat::EnterTapped) {
+        // クリーチャーだけが対象(フィールド・タマシードなどは対象外)。「はじめて出る」も、クリーチャーの数で数える
+        if !tapped_in && game_has(c.env(), Feat::EnterTapped) && c.reg.face(def, face_idx).ty.is_creature() {
             let e = c.env();
             // 各ターン、はじめて出る相手のクリーチャーは、タップして出る
-            if !c.s.turn_log.iter().any(|ev| ev.ty == s::ENTERED && ev.int(s::OWNER) == Some(owner as i64)) {
+            if !c.s.turn_log.iter().any(|ev| ev.ty == s::ENTERED && ev.int(s::OWNER) == Some(owner as i64) && ev.sym_of(s::KIND) == Some(s::CREATURE)) {
                 tapped_in = any_static(e, |st| matches!(st.m, StaticMod::EnterTappedFirst) && st.controller != owner);
             }
             if !tapped_in {

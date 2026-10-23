@@ -118,6 +118,7 @@ export const DECK_J: CardDef[] = [
       exLife(),
       tBreaker(),
       staticAb({ type: 'grantKeyword', keyword: 'speedAttacker', cond: { type: 'creature' } }),
+      staticAb({ type: 'peekDeckTop' }),
       staticAb({ type: 'allowPlayFrom', from: 'deck', cond: { type: 'creature' }, oncePerTurn: true }),
     ]),
   ),

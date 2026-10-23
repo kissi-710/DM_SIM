@@ -1,7 +1,8 @@
 // PlayerView: 自分から見える情報だけの状態(design 7.1 / 7.3)。
 // 隠れたカードの defId は '?' に置き換える。開示の処理はこの関数だけに閉じ込める。
 import type { Registry } from './registry';
-import { cloneState } from './state';
+import { activeStatics } from './derive';
+import { cloneState, mkCtx } from './state';
 import type { DeckGroupHint, Ev, GameState, PlayerId } from './types';
 
 export type InfoPreset = 'fair' | 'partial' | 'hypothesis' | 'full';
@@ -75,6 +76,11 @@ export function toPlayerView(state: GameState, player: PlayerId, policy: InfoPol
   // 自分の隠れた領域(山札・シールドは本人にも見えない)
   const rv = policy.preset === 'partial' ? policy.reveal : undefined;
   if (!rv?.ownDeck) for (const u of v.players[player].deck) hide(u);
+  // 自分のターン中、山札の上から1枚をいつでも見てもよい(オロチリュウセイ)
+  const top = state.players[player].deck[0];
+  if (top !== undefined && v.cards[top].defId === '?' && state.active === player && activeStatics(mkCtx(state, reg), 'peekDeckTop').some((st) => st.controller === player)) {
+    v.cards[top].defId = state.cards[top].defId;
+  }
   // 表向きのシールドは、見える(重なって置かれたシールドの下のカードは、裏向きなので隠す)
   const underShield = Object.values(v.piles ?? {}).flat();
   if (!rv?.ownShield) for (const u of v.players[player].shield) if (!v.cards[u].up) hide(u);

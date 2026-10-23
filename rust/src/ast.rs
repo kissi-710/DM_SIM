@@ -424,6 +424,8 @@ pub enum StaticMod {
     IgnoreCastBan { cond: Cond },
     GraveCastToBottom,
     NoDeckOutLoss,
+    /// 自分のターン中、自分の山札の上から1枚をいつでも見てもよい(情報だけ。探索には影響しない)
+    PeekDeckTop,
     EnterTapped,
     PowerAddExpr { expr: Expr },
     Stab5sd,
@@ -1261,6 +1263,7 @@ pub fn parse_ability(j: &Json) -> R<Ability> {
                 Some("ignoreCastBan") => StaticMod::IgnoreCastBan { cond: parse_cond(m.get("cond").ok_or("ignoreCastBan.cond")?)? },
                 Some("graveCastToBottom") => StaticMod::GraveCastToBottom,
                 Some("noDeckOutLoss") => StaticMod::NoDeckOutLoss,
+                Some("peekDeckTop") => StaticMod::PeekDeckTop,
                 Some("enterTapped") => StaticMod::EnterTapped,
                 Some("powerAddExpr") => StaticMod::PowerAddExpr { expr: parse_expr(m.get("expr").ok_or("powerAddExpr.expr")?)? },
                 Some("stab5sd") => StaticMod::Stab5sd,

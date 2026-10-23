@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { Sim, mana } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';
-import { powerOf } from '../../src/engine/derive';
+import { costOf, powerOf } from '../../src/engine/derive';
 import { mkCtx } from '../../src/engine/state';
 import { reg } from '../scenario';
 
@@ -62,6 +62,15 @@ describe('M02 邪闘 シス', () => {
   });
 });
 
+describe('M01 ジャガイスト: 手札が2枚なければ、2枚捨てる選択は出ない', () => {
+  it('出した後の手札が1枚なら、聞かれない', () => {
+    const sim = new Sim({ p0: { hand: [JAGA, N], mana: mana(5, D), deck: [N, N, N, N] } });
+    sim.play(JAGA);
+    expect(sim.pending.why).toBe('turnAction');
+    expect(sim.count(0, 'hand')).toBe(1);
+  });
+});
+
 describe('M03 アビスベル=ジャシン帝', () => {
   it('自分の墓地にあるアビス・クリーチャーに「アビスラッシュ」を与え、墓地のクリーチャーの召喚コストを2少なくする', () => {
     const sim = new Sim({ p0: { battle: [{ c: JASHIN }], grave: [MARDAN], mana: mana(2, D) } });
@@ -69,6 +78,10 @@ describe('M03 アビスベル=ジャシン帝', () => {
     expect(sim.tappedMana(0)).toBe(2);
     expect(sim.has(0, 'battle', MARDAN)).toBe(true);
     expect(attackActions(sim).some((a) => a.type === 'ATTACK' && a.attacker === sim.pid(0, MARDAN))).toBe(true);
+  });
+  it('墓地のクリーチャーの召喚コストの軽減は、0以下にならない(コスト2のクリーチャーは1)', () => {
+    const sim = new Sim({ p0: { battle: [{ c: JASHIN }], grave: ['AQvibrato'] } });
+    expect(costOf(mkCtx(sim.s, reg), sim.uid(0, 'grave', 'AQvibrato'), 0)).toBe(1);
   });
   it('このクリーチャーが離れる時、かわりに自分の手札を2枚捨ててもよい', () => {
     const sim = new Sim({ p0: { battle: [{ c: JASHIN }], hand: [N, N] }, p1: { hand: ['青銅のバンビシカット'], mana: mana(9, 'ドンドン火噴くナウ'), deck: [N, N] }, active: 1 });
@@ -90,6 +103,13 @@ describe('M04 深淵の壊炉 マーダン=ロウ', () => {
     sim.use(W);
     sim.drain();
     expect(sim.has(1, 'grave', W)).toBe(true);
+  });
+  it('「クリーチャーを1体選び、捨てさせる」は強制: 手札にクリーチャーが1体なら、聞かずに捨てさせる', () => {
+    const sim = new Sim({ p0: { hand: [MARDAN], mana: mana(4, D) }, p1: { hand: [W, N] } });
+    sim.play(MARDAN);
+    sim.drain();
+    expect(sim.has(1, 'grave', W)).toBe(true);
+    expect(sim.has(1, 'hand', N)).toBe(true);
   });
   it('シビルカウント3: 闇のクリーチャーが3つ以上あれば、攻撃する時、相手の墓地のカードの「出た時」の能力を使い、山札の下に置く', () => {
     const sim = new Sim({

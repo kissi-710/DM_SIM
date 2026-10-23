@@ -16,7 +16,7 @@ import {
   type PoolEntry,
   type ZoneName,
 } from './types';
-import { kindOfType } from './types';
+import { isCreatureType, kindOfType } from './types';
 
 // ───────────────────────── 質問(ask) ─────────────────────────
 
@@ -665,8 +665,9 @@ export function enterBattle(c: Ctx, uid: number, opts: MoveOpts, evs: Ev[] = [])
     // 各ターン、はじめて出る相手のクリーチャーは、タップして出る
     // 「タップして出る」(プチョヘンザ): 相手の常在型能力。進化で重なる時は、すでにいる山なので対象外
     let tappedIn = !!opts.tapped || entersTappedByStatic(c, uid, owner, faceIdx);
-    if (!tappedIn && gameHas(c, 'enterTapped')) {
-      if (!s.turnLog.some((e) => e.type === 'entered' && e.owner === owner)) tappedIn = activeStatics(c, 'enterTappedFirst').some((st) => st.controller !== owner);
+    // クリーチャーだけが対象(フィールド・タマシードなどは対象外)。「はじめて出る」も、クリーチャーの数で数える
+    if (!tappedIn && gameHas(c, 'enterTapped') && isCreatureType(c.reg.defs[card.defId].faces[faceIdx].type)) {
+      if (!s.turnLog.some((e) => e.type === 'entered' && e.owner === owner && e.kind === 'creature')) tappedIn = activeStatics(c, 'enterTappedFirst').some((st) => st.controller !== owner);
       if (!tappedIn) tappedIn = activeStatics(c, 'enterTapped').some((st) => st.controller !== owner);
     }
     perm = {

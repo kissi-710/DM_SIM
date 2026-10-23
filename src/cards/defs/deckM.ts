@@ -17,7 +17,10 @@ export const DECK_M: CardDef[] = [
     creature('邪幽 ジャガイスト', 5, 'D', 9000, ['アビスドラゴン'], [
       blocker(),
       wBreaker(),
-      cip([maybe([select('$h', { zone: 'hand', owner: 'self' }, { min: 2, max: 2, prompt: '捨てる手札を2枚選んでください' }), act({ move: { sel: '$h', to: 'grave', cause: 'discard' } }), ...mekureido(ABYSS, 5)], '手札を2枚捨てて、アビス・メクレイド5しますか?')]),
+      cip([maybe([select('$h', { zone: 'hand', owner: 'self' }, { min: 2, max: 2, prompt: '捨てる手札を2枚選んでください' }), act({ move: { sel: '$h', to: 'grave', cause: 'discard' } }), ...mekureido(ABYSS, 5)], '手札を2枚捨てて、アビス・メクレイド5しますか?')], {
+        // 手札が2枚なければ、2枚は捨てられない
+        ifAtResolve: { count: { zone: 'hand', owner: 'self' }, gte: 2 },
+      }),
       trig(
         { on: { type: 'entered', owner: 'self', from: 'deck', cond: isCreature }, subject: 'any', limit: { perTurn: 1 } },
         [
@@ -59,7 +62,7 @@ export const DECK_M: CardDef[] = [
           steps: [select('$h', { zone: 'hand', owner: 'self' }, { min: 2, max: 2, prompt: '捨てる手札を2枚選んでください' }), act({ move: { sel: '$h', to: 'grave', cause: 'discard' } })],
         },
       },
-      staticAb({ type: 'costDelta', delta: -2, cond: and(isCreature, { zoneIs: 'grave' }) }),
+      staticAb({ type: 'costDelta', delta: -2, cond: and(isCreature, { zoneIs: 'grave' }), floor: 1 }),
     ]),
   ),
 
@@ -69,7 +72,7 @@ export const DECK_M: CardDef[] = [
     creature('深淵の壊炉 マーダン=ロウ', 4, 'D', 4000, ['アビスロイヤル'], [
       slayer(),
       cip([
-        selectUpTo('$d', { zone: 'hand', owner: 'opponent', type: 'creature' }, 1, { prompt: '捨てさせる、相手の手札のクリーチャーを選んでください' }),
+        select('$d', { zone: 'hand', owner: 'opponent', type: 'creature' }, { prompt: '捨てさせる、相手の手札のクリーチャーを選んでください' }),
         act({ move: { sel: '$d', to: 'grave', cause: 'discard' } }),
       ]),
       onAttack(

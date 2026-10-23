@@ -1,6 +1,7 @@
 // デッキJ「めくりに命をかけろ！８軸ガチロボデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
-import { Sim, mana } from '../scenario';
+import { FAIR, toPlayerView } from '../../src/engine/view';
+import { Sim, mana, reg } from '../scenario';
 
 const N = 'フェアリー・ライフ';
 const W = 'アクアン';
@@ -118,6 +119,25 @@ describe('J06 斬龍電融 オロチリュウセイ / J09 永遠のリュウセ�
     sim.drain();
     expect(sim.count(0, 'battle', W)).toBe(2);
     expect(sim.legal().some((a) => a.type === 'PLAY_CARD' && a.from === 'deck')).toBe(false); // 1体だけ
+  });
+  it('オロチリュウセイ: 自分のターン中、山札の上から1枚をいつでも見てもよい(視点に開く。相手のターンは見えない)', () => {
+    const sim = new Sim({ p0: { battle: ['斬龍電融 オロチリュウセイ'], deck: [W, N, N] }, p1: { deck: [N, N, N] } });
+    const top = sim.s.players[0].deck[0];
+    const mine = toPlayerView(sim.s, 0, FAIR, reg);
+    expect(mine.cards[top].defId).toBe(sim.s.cards[top].defId); // 一番上だけ見える
+    expect(mine.cards[sim.s.players[0].deck[1]].defId).toBe('?');
+    expect(toPlayerView(sim.s, 1, FAIR, reg).cards[top].defId).toBe('?'); // 相手には見えない
+    const opp = new Sim({ p0: { battle: ['斬龍電融 オロチリュウセイ'], deck: [W, N, N] }, p1: { deck: [N, N, N] }, active: 1 });
+    expect(toPlayerView(opp.s, 0, FAIR, reg).cards[opp.s.players[0].deck[0]].defId).toBe('?'); // 相手のターンは見えない
+  });
+  it('永遠のリュウセイ・カイザー: タップして出るのはクリーチャーだけ(フィールドは対象外)', () => {
+    const sim = new Sim({ p0: { battle: ['永遠のリュウセイ・カイザー'] }, p1: { hand: ['卍 新世壊 卍', W], mana: mana(8, W) }, active: 1 });
+    sim.play('卍 新世壊 卍');
+    sim.drain();
+    expect(sim.s.players[1].battle.find((p) => sim.s.cards[p.cards[0]].defId === 'dm26sd1-D02')!.tapped).toBe(false);
+    sim.play(W);
+    sim.drain();
+    expect(sim.s.players[1].battle.find((p) => sim.s.cards[p.cards[0]].defId !== 'dm26sd1-D02')!.tapped).toBe(true);
   });
   it('永遠のリュウセイ・カイザー: 相手のクリーチャーはタップして出る', () => {
     const sim = new Sim({ p0: { battle: ['永遠のリュウセイ・カイザー'] }, p1: { hand: [W, W], mana: mana(8, W) }, active: 1 });

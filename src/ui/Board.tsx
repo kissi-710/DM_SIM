@@ -4,6 +4,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CardView } from './CardView';
 import { buildDropMap, type Drop } from './dropMap';
+import { reg } from './format';
+import { activeStatics } from '../engine/derive';
+import { mkCtx } from '../engine/state';
 import { Kbd } from './Kbd';
 import { useDrag } from './useDrag';
 import type { Action, GameState, PlayerId } from '../engine/types';
@@ -282,6 +285,10 @@ export function Board(b: BoardProps) {
         <div className="chip">
           <span className="chip-label">山札</span>
           <b>{z.deck.length}</b>
+          {/* 自分のターン中、山札の一番上が見える時(オロチリュウセイ)は、その名前を出す */}
+          {mine && z.deck.length > 0 && (b.peek || (s.active === p && activeStatics(mkCtx(s, reg), 'peekDeckTop').some((st) => st.controller === p))) && (
+            <span className="muted" title="山札の一番上(いつでも見てよい)">上: {reg.defs[s.cards[z.deck[0]].defId]?.name}</span>
+          )}
         </div>
         {renderShield(p, mine)}
         {renderGrave(p, mine)}
