@@ -39,7 +39,7 @@ export const DECK_N: CardDef[] = [
       cip([
         maybe(
           [
-            selectUpTo('$g', myCreature(), 3, { prompt: '「G・ブレイカー」を与える自分のクリーチャーを3体まで選んでください' }),
+            select('$g', myCreature(), { min: 3, max: 3, prompt: '「G・ブレイカー」を与える自分のクリーチャーを3体選んでください' }),
             act({ addEffect: { sel: '$g', mod: { kind: 'breaker', n: 99 }, until: 'endOfTurn' } }),
           ],
           '「シールドいらねえー!」と言って、自分のクリーチャー3体に「G・ブレイカー」を与えますか?',
@@ -55,7 +55,7 @@ export const DECK_N: CardDef[] = [
   card(
     'dm26sd1-N03',
     creature('ヘルトッQ', 5, '', 5050, ['ジョーカーズ'], [
-      speedAttacker(),
+      staticAb({ type: 'attackPlayerOnEntry' }),
       cip([maybe([draw({ count: { zone: 'battle', owner: 'self', type: 'creature', where: joker } })], '自分のジョーカーズ・クリーチャー1体につき、カードを1枚引きますか?')]),
     ]),
   ),

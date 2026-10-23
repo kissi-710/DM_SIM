@@ -101,8 +101,7 @@ export const DECK_O: CardDef[] = [
               min: { count: { zone: 'battle', owner: 'iter', type: 'element', where: or({ type: 'creature' }, { type: 'tamaseed' }), except: '$keep' } },
               max: { count: { zone: 'battle', owner: 'iter', type: 'element', where: or({ type: 'creature' }, { type: 'tamaseed' }), except: '$keep' } },
             },
-            act({ setVar: { as: '$n', value: { count: { zone: 'battle', owner: 'iter', type: 'element', where: or({ type: 'creature' }, { type: 'tamaseed' }), except: '$keep' } } } }),
-            act({ shuffleIn: { sel: '$rest' } }),
+            act({ shuffleIn: { sel: '$rest', as: '$n' } }), // 山札に加えたカードの枚数(進化元も数える)
             { op: 'repeat', times: { var: '$n' }, body: [act({ addShield: { n: 1, who: 'iter' } })] },
           ],
         },

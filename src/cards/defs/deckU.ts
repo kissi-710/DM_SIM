@@ -22,7 +22,7 @@ export const DECK_U: CardDef[] = [
     creature('全虹帝 ミノガミ', 5, 'N', 5000, ['グランセクト'], [
       machFighter(),
       cip([
-        selectUpTo('$g', { zone: 'grave', owner: 'self', where: twin }, 1, { prompt: 'マナゾーンに置く、墓地のツインパクトカードを選んでください' }),
+        select('$g', { zone: 'grave', owner: 'self', where: twin }, { prompt: 'マナゾーンに置く、墓地のツインパクトカードを選んでください' }),
         act({ move: { sel: '$g', to: 'mana', cause: 'manaPlace' } }),
       ]),
       trig({ on: { type: 'attackDeclared', self: true }, subject: 'any' }, [
@@ -89,8 +89,9 @@ export const DECK_U: CardDef[] = [
         ifc({ distinctCosts: '$top' }, [
           selectUpTo('$e', { zone: 'deck', owner: 'self', of: '$top', type: 'element', where: { cost: { lte: 9 } } } as Selector, 3, { prompt: 'コストを支払わずに実行する、コスト9以下のエレメントを好きな数選んでください' }),
           ...useFree('$e'),
-          act({ move: { sel: { zone: 'deck', owner: 'self', of: '$top' }, to: 'mana', cause: 'effect' } }),
         ]),
+        // 「残りをすべてマナゾーンに置く」は独立した文: 異なるコストでなかった時も、3枚ともマナゾーンに置く(dmwiki の注釈)
+        act({ move: { sel: { zone: 'deck', owner: 'self', of: '$top' }, to: 'mana', cause: 'effect' } }),
       ], { label: '攻撃する時、山札の上から3枚を表向きにする。それらがすべて異なるコストなら、その中から、コスト9以下のエレメントを好きな数、コストを支払わずに実行してもよい。残りをすべてマナゾーンに置く' }),
     ]),
   ),

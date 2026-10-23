@@ -93,7 +93,7 @@ describe('Y05 ヘルコプ太の心絵 / Y06 進化設計図 / Y07 神羅ケン�
   it('神羅ケンジ・キングダム: 自分の墓地から召喚してもよい(進化クリーチャー1体の上に置く)。出た時、山札の上から3枚を墓地に置き、その中からクリーチャーを1体出す', () => {
     const sim = new Sim({ p0: { battle: [{ c: LION, under: [REX] }], grave: [KENJI], mana: [...mana(2, D), ...mana(2, N)], deck: [N, W, N, N] } });
     sim.play(KENJI, { from: 'grave', extra: { onto: sim.pid(0, LION) } });
-    sim.pick(W);
+    // 3枚の中のクリーチャーはアクアン1体だけなので、聞かずに出す(「出す」は強制)
     sim.drain();
     expect(sim.has(0, 'battle', KENJI)).toBe(true);
     expect(sim.has(0, 'battle', W)).toBe(true);

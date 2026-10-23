@@ -853,12 +853,16 @@ function actBattle(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void 
 }
 
 /** 山札に加えてシャッフルする(それぞれの持ち主の山札に) */
-function actShuffleIn(c: Ctx, _f: EffectFrame, cc: CC, a: any, _key: string): void {
+function actShuffleIn(c: Ctx, f: EffectFrame, cc: CC, a: any, _key: string): void {
   const s = c.s;
   const uids = resolveSel(cc, a.sel);
+  if (a.as) f.vars[a.as] = 0;
   if (uids.length === 0) return;
   const owners = new Set<PlayerId>(uids.map((u) => s.cards[u].owner));
+  const before = new Map<PlayerId, number>([...owners].map((p) => [p, s.players[p].deck.length]));
   moveCards(c, uids, { to: 'deck', cause: 'effect', pos: 'top' });
+  // as: 山札に加わったカードの枚数(進化元など、重なっていたカードも数える)
+  if (a.as) f.vars[a.as] = [...owners].reduce<number>((n, p) => n + s.players[p].deck.length - before.get(p)!, 0);
   for (const p of owners) shuffleDeck(c, p);
 }
 

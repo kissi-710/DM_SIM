@@ -103,7 +103,7 @@ export const DECK_Y: CardDef[] = [
         wBreaker(),
         cip([
           act({ moveTop: { n: 3, to: 'grave', cause: 'trash', as: '$g' } }),
-          selectUpTo('$c', { zone: 'grave', owner: 'self', of: '$g', type: 'creature', where: { evolution: false } }, 1, { prompt: '出す、その3枚の中のクリーチャーを選んでください' }),
+          select('$c', { zone: 'grave', owner: 'self', of: '$g', type: 'creature', where: { evolution: false } }, { prompt: '出す、その3枚の中のクリーチャーを選んでください' }),
           act({ put: { sel: '$c' } }),
         ]),
       ]),

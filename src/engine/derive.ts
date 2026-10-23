@@ -47,7 +47,7 @@ export function charsLite(c: Ctx, uid: number, hint: number = -1): Chars {
   else idx = hint >= 0 && def.faces[hint] ? hint : 0;
   const face = def.faces[idx];
   const civs = inPlay || hint >= 0 ? face.civs : unionCivs(def.faces);
-  return { face, faceIdx: idx, civs, cost: face.cost, power: face.power ?? 0, type: face.type, races: face.races ?? [] };
+  return { face, faceIdx: idx, civs, cost: face.cost, power: face.power ?? 0, type: face.tamaseedUnless ? dynamicType(c, uid, face) : face.type, races: face.races ?? [] };
 }
 
 /** カードの特性。hint=-1 のとき、場以外のカードは面0(文明は全面の和集合)で見る。power は、バトルゾーンの一番上のカードなら継続効果を含む */
@@ -74,11 +74,27 @@ export function costBase(c: Ctx, uid: number): number {
   return def.faces[faceIdxOf(card, def)].cost;
 }
 
+/**
+ * バトルゾーンのカードの種類(タマシード/クリーチャー(ヘラクレス)は、条件を満たさない間、タマシード)。
+ * 条件の評価中に、そのカード自身の種類を聞かれたら、本来の種類を返す(「自然のクリーチャーまたはタマシードの数」は、どちらの種類でも同じ数になる)
+ */
+const typeGuard = new Set<number>();
+function dynamicType(c: Ctx, uid: number, face: Face): FaceType {
+  if (!face.tamaseedUnless || typeGuard.has(uid) || c.s.cards[uid].zone !== 'battle') return face.type;
+  typeGuard.add(uid);
+  try {
+    return evalCond(mkCC(c, c.s.cards[uid].owner, { self: uid }), face.tamaseedUnless) ? face.type : 'tamaseed';
+  } finally {
+    typeGuard.delete(uid);
+  }
+}
+
 /** 使用中の面の種類(hint なし。charsLite(c, uid, -1).type と同じ) */
 export function faceTypeOf(c: Ctx, uid: number): FaceType {
   const card = c.s.cards[uid];
   const def = c.reg.defs[card.defId];
-  return def.faces[faceIdxOf(card, def)].type;
+  const face = def.faces[faceIdxOf(card, def)];
+  return face.tamaseedUnless ? dynamicType(c, uid, face) : face.type;
 }
 
 export function infoOf(c: Ctx, uid: number): FaceInfo {
@@ -109,7 +125,11 @@ export function isIgnored(c: Ctx, uid: number): boolean {
   if (c.s.sealed && isSealed(c, uid)) return true;
   for (const e of c.s.effects) {
     if (e.controller === card.owner) continue;
-    if (e.mod.kind === 'ignoreAll') return true;
+    // 「相手のクリーチャーすべての能力を無視する」: クリーチャーだけが対象(クロスギア・フィールドなどは対象外)
+    if (e.mod.kind === 'ignoreAll') {
+      if (isCreatureType(c.reg.defs[card.defId].faces[card.face]?.type ?? 'creature')) return true;
+      continue;
+    }
     if (e.mod.kind !== 'ignoreCost') continue;
     if (costBase(c, uid) === e.mod.n) return true;
   }
@@ -367,9 +387,11 @@ function canAttackBase(c: Ctx, perm: Permanent, target: { kind: 'player' } | { k
   const speed = hasKeyword(c, perm, 'speedAttacker');
   const mach = hasKeyword(c, perm, 'machFighter');
   const sick = isSick(c, perm);
-  if (sick && !speed && !mach) return false;
+  // 「出たターンに相手プレイヤーを攻撃できる」(ヘルトッQ): プレイヤーだけ。クリーチャーは攻撃できない
+  const playerOnly = sick && !speed && !mach && hasSelfStatic(c, uid, 'attackPlayerOnEntry');
+  if (sick && !speed && !mach && !playerOnly) return false;
   if (target.kind === 'player') {
-    if (sick && !speed) return false; // マッハファイターは出たターン、プレイヤーを攻撃できない
+    if (sick && !speed && !playerOnly) return false; // マッハファイターは出たターン、プレイヤーを攻撃できない
     if (playerAttackBlockedByEntry(c, perm, owner)) return false;
     // 「自分は、このクリーチャーよりパワーが小さいクリーチャーに攻撃されない」(大樹王 ギガンディダノス)
     if (gameHas(c, 'protectPlayerFromWeaker')) {
@@ -382,6 +404,7 @@ function canAttackBase(c: Ctx, perm: Permanent, target: { kind: 'player' } | { k
     }
     return true;
   }
+  if (playerOnly) return false;
   const tp = permByPid(s, target.pid);
   if (!tp || tp.owner === owner) return false;
   if (!canBeAttacked(c, tp.perm)) return false;
@@ -640,6 +663,17 @@ export function cannotLeave(c: Ctx, uid: number, cause?: string): boolean {
 }
 
 /** クロスのコスト(クロスギアのマナコストをもう一度払う。コスト軽減の効果も受ける)と文明 */
+/** このクロスギアを、コストを支払わずにこのクリーチャーにクロスしてもよいか(freeCrossTo) */
+export function freeCrossTo(c: Ctx, gearUid: number, hostUid: number): boolean {
+  for (const st of activeStatics(c, 'freeCrossTo')) {
+    if (st.src !== gearUid) continue;
+    const mod = st.ability.mod;
+    if (mod.type !== 'freeCrossTo') continue;
+    if (evalCond(mkCC(c, st.controller, { self: st.src, it: hostUid, itFace: c.s.cards[hostUid].face }), mod.cond)) return true;
+  }
+  return false;
+}
+
 export function crossCost(c: Ctx, gearUid: number): { cost: number; civs: Civ[] } {
   const card = c.s.cards[gearUid];
   const def = c.reg.defs[card.defId];

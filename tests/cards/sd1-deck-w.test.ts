@@ -47,6 +47,12 @@ describe('W03 レッドゾーン / W04 レッドゾーンF', () => {
     expect(sim.has(1, 'battle', W)).toBe(true);
     expect(checkInvariants(sim.s)).toEqual([]);
   });
+  it('侵略は、手札からだけ(墓地・マナゾーン・バトルゾーンのレッドゾーンは、重なれない)', () => {
+    const sim = new Sim({ p0: { grave: [REDZONE], mana: [REDZONE], battle: [{ c: HUNTER }] }, p1: { shield: 5 } });
+    sim.attack(HUNTER, 'player');
+    expect(sim.s.pending?.why).not.toBe('may');
+    expect(sim.has(0, 'battle', REDZONE)).toBe(false);
+  });
   it('レッドゾーンF: 攻撃中、相手は「G・ストライク」を使えない', () => {
     const sim = new Sim({ p0: { battle: [{ c: REDZONE_F, under: [HUNTER] }] }, p1: { shield: ['光開の精霊サイフォゲート'.length ? '邪脳の魔法陣' : N] } });
     sim.attack(REDZONE_F, 'player');
@@ -94,7 +100,7 @@ describe('W06 超次元の王家 / W07 再興王女プリン', () => {
     const sim = new Sim({ p0: { battle: [{ c: PRIN }], hyper: [ROYAL], deck: [N, N, N, N] }, p1: { deck: [N, N] }, active: 1 });
     sim.endTurn();
     sim.yes();
-    sim.pick(ROYAL);
+    // 出せるエイリアンは王家1体だけなので、聞かずに出す(「出す」は強制)
     sim.drain();
     expect(sim.has(0, 'battle', ROYAL)).toBe(true);
     expect(sim.s.players[0].hyper.length).toBe(1); // プリンが超次元ゾーンに
@@ -102,6 +108,18 @@ describe('W06 超次元の王家 / W07 再興王女プリン', () => {
 });
 
 describe('W08 ブラックゾーン / W09 ザ・トリッパー / W10 邪心臓の魔法陣', () => {
+  it('ブラックゾーン: S級侵略は、手札・墓地・バトルゾーンから重なれる(マナゾーンからは重なれない)', () => {
+    const fromGrave = new Sim({ p0: { grave: [BLACKZONE], battle: [{ c: HUNTER }] }, p1: { shield: 5 } });
+    fromGrave.attack(HUNTER, 'player');
+    fromGrave.order('S級侵略');
+    fromGrave.yes();
+    fromGrave.drain();
+    expect(fromGrave.has(0, 'battle', BLACKZONE)).toBe(true);
+    const fromMana = new Sim({ p0: { mana: [BLACKZONE], battle: [{ c: HUNTER }] }, p1: { shield: 5 } });
+    fromMana.attack(HUNTER, 'player');
+    expect(fromMana.s.pending?.why).not.toBe('pickNext');
+    expect(fromMana.s.pending?.why).not.toBe('may');
+  });
   it('ブラックゾーン: 出た時、相手は自身のパワーが一番小さいクリーチャーすべてに封印を1つずつ付ける', () => {
     const sim = new Sim({ p0: { hand: [BLACKZONE], battle: [{ c: HUNTER }], mana: [...mana(4, F), ...mana(3, 'フットレス=トレース')] }, p1: { battle: [{ c: W }, { c: '終末の監視者 ジ・ウォッチ' }], deck: [N, N, N] } });
     sim.play(BLACKZONE, { extra: { onto: sim.pid(0, HUNTER) } });

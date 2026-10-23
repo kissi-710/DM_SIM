@@ -17,6 +17,9 @@ const handBlocker = (light: boolean): Selector => ({
 /** 手札の(光の)ブロッカーを、最大 n 体出す */
 const putBlockers = (light: boolean, n: number, prompt: string): StepDef[] => [selectUpTo('$b', handBlocker(light), n, { prompt }), act({ put: { sel: '$b' } })];
 
+/** 手札の(光の)ブロッカーを、1体出す(「出してもよい」ではない呪文用。出せるなら必ず出す) */
+const putBlockerExactly = (light: boolean, prompt: string): StepDef[] => [select('$b', handBlocker(light), { prompt }), act({ put: { sel: '$b' } })];
+
 /** 山札の上から4枚を表向きにして、コスト7以上のクリーチャーをすべて手札に加え、残りを山札の下に置く */
 const blueprint = (): StepDef[] => [
   act({ lookTop: { n: 4, as: '$t' } }),
@@ -68,7 +71,7 @@ export const DECK_T: CardDef[] = [
         label: '自分のターンの終わりに、光の「ブロッカー」を持つ、進化ではないクリーチャーを1体、自分の手札から出してもよい',
       }),
     ]),
-    spell('スターゲイズ・ゲート', 5, 'L', [], putBlockers(true, 1, '出す、手札の光の「ブロッカー」を持つ進化ではないクリーチャーを選んでください')),
+    spell('スターゲイズ・ゲート', 5, 'L', [], putBlockerExactly(true, '出す、手札の光の「ブロッカー」を持つ進化ではないクリーチャーを選んでください')),
   ),
 
   // 4. ヘブンズ・ゲート

@@ -1,9 +1,9 @@
 // デッキR「勝舞の魂クロスせよ！火光サムライデッキ」(docs/decks-25oudou.md)の新規カード。クロスギア・サムライ・メクレイドなど。
-import type { Ability, Cond, StepDef } from '../../engine/ast';
+import type { Ability, StepDef } from '../../engine/ast';
 import type { CardDef, Face } from '../../engine/types';
 import {
   act, and, blocker, card, cip, civ, costGte, creature, destroy, draw, gStrike, ifc, isCreature, maybe, mekureido, myCreature, nameHas, onAttack,
-  oppCreature, or, race, revolutionChange, select, selectUpTo, spell, sTrigger, staticAb, trig, wBreaker,
+  oppCreature, or, race, revolutionChange, select, spell, sTrigger, staticAb, trig, wBreaker,
 } from '../dsl';
 import { civsOf } from '../dsl';
 
@@ -22,12 +22,6 @@ const useFree = (v: string): StepDef[] => [
     ifc({ some: { var: v, where: { type: 'spell' } } }, [act({ castFree: { sel: v } })], [act({ put: { sel: v } })]),
   ]),
 ];
-
-/** このクロスギアを、コストを支払わずに cond に合う自分のクリーチャーにクロスしてもよい(ジェネレートした時) */
-const freeCross = (target: Cond, label: string): Ability =>
-  trig({ on: { type: 'entered' }, subject: 'self' }, [
-    maybe([select('$ct', myCreature(target), { prompt: 'クロスする自分のクリーチャーを選んでください' }), act({ cross: { gear: '$self', to: '$ct' } })], label + 'しますか?'),
-  ], { label });
 
 export const DECK_R: CardDef[] = [
   // 1. 悪魔世界の閃光
@@ -118,7 +112,8 @@ export const DECK_R: CardDef[] = [
       staticAb({ type: 'costDelta', delta: -1, cond: and(isCreature, or(race(DRAGON), samurai)), floor: 1 }, { crossed: false }),
       staticAb({ type: 'powerAddOthers', n: 2000, cond: or(race(DRAGON), samurai) }, { hostIs: or(race(DRAGON), samurai) }),
       staticAb({ type: 'grantKeyword', keyword: 'speedAttacker', cond: and(isCreature, or(race(DRAGON), samurai)) }, { hostIs: or(race(DRAGON), samurai) }),
-      freeCross(nameHas('ボルメテウス・武者・ドラゴン'), 'このクロスギアをコストを支払わずに名前に《ボルメテウス・武者・ドラゴン》とあるクリーチャーにクロス'),
+      // このクロスギアをコストを支払わずに名前に《ボルメテウス・武者・ドラゴン》とあるクリーチャーにクロスしてもよい(クロスのコストが 0)
+      staticAb({ type: 'freeCrossTo', cond: and(isCreature, nameHas('ボルメテウス・武者・ドラゴン')) }),
     ]),
   ),
 
@@ -135,7 +130,7 @@ export const DECK_R: CardDef[] = [
       gStrike(),
       wBreaker(),
       cip([
-        selectUpTo('$d', { zone: 'battle', owner: 'opponent', type: 'element', chooseable: true, where: { cost: { lte: { count: { zone: 'battle', owner: 'self', type: 'element', where: civ('F') } } } } }, 1, { prompt: '破壊する、自分の火のエレメントの数以下のコストの相手のエレメントを選んでください' }),
+        select('$d', { zone: 'battle', owner: 'opponent', type: 'element', chooseable: true, where: { cost: { lte: { count: { zone: 'battle', owner: 'self', type: 'element', where: civ('F') } } } } }, { prompt: '破壊する、自分の火のエレメントの数以下のコストの相手のエレメントを選んでください' }),
         destroy('$d'),
         maybe([draw({ count: { zone: 'battle', owner: 'self', type: 'element', where: civ('L') } })], '自分の光のエレメント1つにつき、カードを1枚引きますか?'),
       ]),
@@ -153,7 +148,8 @@ export const DECK_R: CardDef[] = [
     'dm26sd1-R09',
     crossgear('竜牙 リュウジン・ドスファング', 5, 'LF', ['アーマード・ドラゴン', 'アーマード・サムライ'], [
       trig({ on: [{ type: 'entered', self: true }, { type: 'attackDeclared', hostAttacker: true }], subject: 'any' }, mekureido(SAMURAI, 5), { label: 'このクロスギアが出た時、またはこれをクロスしたクリーチャーが攻撃する時、サムライ・メクレイド5する' }),
-      freeCross(samurai, 'このクロスギアをコストを支払わずにサムライ・クリーチャーにクロス'),
+      // このクロスギアをコストを支払わずにサムライ・クリーチャーにクロスしてもよい(クロスのコストが 0)
+      staticAb({ type: 'freeCrossTo', cond: and(isCreature, samurai) }),
     ]),
   ),
 ];

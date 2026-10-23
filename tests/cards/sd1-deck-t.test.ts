@@ -48,7 +48,7 @@ describe('T01 ウェルキウス / T02 サイフォゲート / T03 アケルナ�
   it('スターゲイズ・ゲート: 光の「ブロッカー」を持つ進化ではないクリーチャーを1体、手札から出す', () => {
     const sim = new Sim({ p0: { hand: [AKERNAR, SIPHO], mana: mana(5, L) } });
     sim.play(AKERNAR, { face: 1 });
-    sim.pick(SIPHO);
+    // 出せるのは1体だけなので、聞かずに出す(「出す」は強制。出してもよい、ではない)
     sim.drain();
     expect(sim.has(0, 'battle', SIPHO)).toBe(true);
   });

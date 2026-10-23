@@ -59,7 +59,7 @@ export const DECK_Q: CardDef[] = [
         selectUpTo('$h', { zone: 'hand', owner: 'self' }, 1, { prompt: '表向きにする手札を選んでください(表向きにしなくてもよい)' }),
         act({ reveal: { items: '$h' } }),
         ifc({ nonEmpty: '$h' }, [
-          selectUpTo('$o', oppCreature({ cost: { eq: { costOf: '$h' } } }), 1, { prompt: '持ち主の手札に戻す、同じコストの相手のクリーチャーを選んでください' }),
+          select('$o', oppCreature({ cost: { eq: { costOf: '$h' } } }), { prompt: '持ち主の手札に戻す、同じコストの相手のクリーチャーを選んでください' }),
           bounce('$o'),
         ]),
       ]),

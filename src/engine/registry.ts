@@ -94,7 +94,8 @@ export type FeatureName =
   | 'noGStrike'
   | 'oppManaTapped'
   | 'cannotSummonAll'
-  | 'protectPlayerFromWeaker';
+  | 'protectPlayerFromWeaker'
+  | 'freeCross';
 
 export interface Registry {
   db: CardDB;
@@ -173,7 +174,7 @@ function expandFace(face: Face): Face {
     } else if (a.name === 'invasion') {
       const spec: TriggerSpec = {
         on: { type: 'attackDeclared', attackerCond: a.attacker, owner: 'self' },
-        watch: ['battle', 'hand', 'grave', 'mana'],
+        watch: a.from ?? ['hand'],
         // 自分自身が攻撃する時には誘発しない(自分自身の上には重ねられない)。
         // バトルゾーンから侵略する場合の「別のクリーチャー」の攻撃だけが対象
         subject: 'other',
@@ -556,6 +557,7 @@ export function loadRegistry(origDb: CardDB): Registry {
     noGStrike: staticOf('noGStrike'),
     cannotSummonAll: staticOf('cannotSummonAll'),
     protectPlayerFromWeaker: staticOf('protectPlayerFromWeaker'),
+    freeCross: staticOf('freeCrossTo'),
     oppManaTapped: staticOf('oppManaTapped'),
     battleProxy: staticOf('battleProxy'),
     sBack: featureDefs((ab) => ab.kind === 'keyword' && ab.name === 'sBack'),

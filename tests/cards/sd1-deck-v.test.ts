@@ -61,7 +61,7 @@ describe('V03 グレイト“S-駆” / V04 クロスファイア / V05 ブレ�
   it('クロスファイア: 攻撃する時、自分のマナゾーンに火文明があれば、このターン、自分の他のクリーチャー1体に「スピードアタッカー」を与える', () => {
     const sim = new Sim({ p0: { battle: [{ c: CROSSFIRE }, { c: W, sick: true }], mana: mana(1, F) }, p1: { shield: 5 } });
     sim.attack(CROSSFIRE, 'player');
-    sim.pick(W);
+    // 他のクリーチャーはアクアン1体だけなので、聞かずに与える(「1体に与える」は強制)
     sim.drain();
     expect(sim.s.effects.some((e) => e.mod.kind === 'grant')).toBe(true);
   });
@@ -135,7 +135,7 @@ describe('V09 インカ / V10 ポレキチ / V11 エール', () => {
     sim.play(YELL, { face: 1 });
     sim.pick(POREKICHI);
     sim.pick(W);
-    sim.pick('AQvibrato');
+    // もう1体は、残りが AQvibrato だけなので、聞かずに破壊する(「選び、破壊する」は強制)
     sim.drain();
     expect(sim.count(1, 'battle')).toBe(0);
   });

@@ -733,7 +733,8 @@ fn face_hint(cc: &CC, uid: i32, ty: Option<SelType>) -> Option<i32> {
         let f = def.faces.get(card.face as usize).unwrap_or(&def.faces[0]);
         return match ty {
             None | Some(SelType::Card) => Some(card.face),
-            Some(t) => matches_type(f.ty, t).then_some(card.face),
+            // バトルゾーンでは、条件つきでタマシードとして扱うカード(ヘラクレス)の今の種類で見る
+            Some(t) => matches_type(if f.tamaseed_unless.is_some() { chars_lite(cc.e, uid, -1).ty } else { f.ty }, t).then_some(card.face),
         };
     }
     match ty {

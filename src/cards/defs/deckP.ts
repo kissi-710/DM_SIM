@@ -24,7 +24,7 @@ export const DECK_P: CardDef[] = [
       {
         kind: 'replace',
         label: '自分の山札の最後の1枚を引いたことによって自分がゲームに負ける時、かわりに勝つ',
-        match: { type: 'gameLoss', player: 'self', reason: 'deckOut' },
+        match: { type: 'gameLoss', player: 'self', reason: 'deckOutDraw' },
         apply: { type: 'steps', steps: [act({ win: {} })] },
       },
     ]),
@@ -141,10 +141,9 @@ export const DECK_P: CardDef[] = [
     ]),
   ),
 
-  // 11. 環嵐! ホールインワン・ヘラクレス(タマシード/クリーチャー。タマシードとしての扱いは簡略化し、常にクリーチャーとして扱う)
-  card(
-    'dm26sd1-P11',
-    creature('環嵐! ホールインワン・ヘラクレス', 4, 'N', 12000, ['ジャイアント・インセクト', 'ACE'], [
+  // 11. 環嵐! ホールインワン・ヘラクレス(タマシード/クリーチャー。自分の自然のクリーチャーまたは自然のタマシードが合計4つ未満の間は、クリーチャーとして扱わず、タマシードとして扱う)
+  card('dm26sd1-P11', {
+    ...creature('環嵐! ホールインワン・ヘラクレス', 4, 'N', 12000, ['ジャイアント・インセクト', 'ACE'], [
       tBreaker(),
       cip([
         {
@@ -157,12 +156,13 @@ export const DECK_P: CardDef[] = [
         },
       ]),
       staticAb({ type: 'allowPlayFrom', from: 'mana', cond: isCreature, oncePerTurn: true }),
-      staticAb({ type: 'cannotAttack' }, { cmp: { l: { add: [{ count: { zone: 'battle', owner: 'self', type: 'creature', where: civ('N') } }, { count: { zone: 'battle', owner: 'self', type: 'tamaseed', where: civ('N') } }] }, op: '<', r: 4 } }),
       onAttack([
         select('$t', oppCreature()),
         act({ move: { sel: '$t', to: 'mana', cause: 'manaPlace' } }),
         act({ moveTop: { n: 2, to: 'mana', cause: 'effect' } }),
       ], { label: '攻撃する時、相手のクリーチャーを1体選んで持ち主のマナゾーンに置く。その後、山札の上から2枚までマナゾーンに置く' }),
     ]),
-  ),
+    // 自分の自然のクリーチャーまたは自然のタマシードが合計4つ以上なければ、バトルゾーンにあるこのタマシードはクリーチャーとして扱わない
+    tamaseedUnless: { cmp: { l: { add: [{ count: { zone: 'battle', owner: 'self', type: 'creature', where: civ('N') } }, { count: { zone: 'battle', owner: 'self', type: 'tamaseed', where: civ('N') } }] }, op: '>=', r: 4 } },
+  }),
 ];

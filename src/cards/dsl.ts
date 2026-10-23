@@ -1,7 +1,7 @@
 // カード定義を短く書くためのビルダー(25の王道 全デッキ。docs/decks-25oudou.md)。
 // 出力は engine/ast.ts のASTそのもの(データ)。cards.json と同じ形の CardDef を作る。
 import type { Ability, ActDef, Cond, Expr, KeywordName, Selector, StepDef, TriggerSpec } from '../engine/ast';
-import type { CardDef, Civ, Face, FaceType } from '../engine/types';
+import type { CardDef, Civ, Face, FaceType, ZoneName } from '../engine/types';
 
 // ───────────────────────── 文明・面 ─────────────────────────
 
@@ -75,8 +75,8 @@ export const sympathy = (): Ability => kw('sympathy');
 
 /** 革命チェンジ[attacker の条件を満たす攻撃クリーチャーと入れ替える] */
 export const revolutionChange = (label: string, attacker: Cond): Ability => kw('revolutionChange', { label, attacker });
-/** 侵略[attacker] */
-export const invasion = (label: string, attacker: Cond): Ability => kw('invasion', { label, attacker });
+/** 侵略[attacker]。from = 重なれるゾーン(省略 = 手札だけ。S級侵略は ['hand', 'grave', 'battle']) */
+export const invasion = (label: string, attacker: Cond, from?: ZoneName[]): Ability => kw('invasion', { label, attacker, ...(from ? { from } : {}) });
 
 // ───────────────────────── 誘発型・常在型能力 ─────────────────────────
 

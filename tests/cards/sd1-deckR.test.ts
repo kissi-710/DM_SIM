@@ -71,11 +71,14 @@ describe('R05 竜装 ゴウソク / R06 竜装 ザンゲキ', () => {
     expect(power(sim, 0, GRENOH)).toBe(7000);
     expect(sim.legal().some((a) => a.type === 'ATTACK' && a.attacker === sim.pid(0, BUI))).toBe(true);
   });
-  it('ザンゲキをジェネレートした時、コストを支払わずに《ボルメテウス・武者・ドラゴン》にクロスしてもよい', () => {
-    const sim = new Sim({ p0: { hand: [ZANGEKI], battle: [{ c: BUI }], mana: mana(4, F) } });
-    sim.play(ZANGEKI);
-    sim.use(BUI);
+  it('ザンゲキは、コストを支払わずに《ボルメテウス・武者・ドラゴン》にクロスしてもよい(マナがなくても。ジェネレートしたあとも、いつでも)', () => {
+    const sim = new Sim({ p0: { hand: [ZANGEKI], battle: [{ c: BUI }, { c: GRENOH }], mana: mana(4, F) } });
+    sim.play(ZANGEKI); // マナを使い切る
+    const acts = crossActs(sim);
+    expect(acts.length).toBe(1); // 武偉だけ(ホワイトグレンオーは、マナを払わなければクロスできない)
+    sim.do(acts[0]);
     expect(sim.s.players[0].battle.find((p) => p.crossedOn === sim.pid(0, BUI))).toBeDefined();
+    expect(sim.tappedMana(0)).toBe(4);
   });
 });
 
@@ -83,7 +86,6 @@ describe('R09 竜牙 リュウジン・ドスファング', () => {
   it('出た時、サムライ・メクレイド5する(山札の上から3枚を見て、コスト5以下のサムライを1枚、コストを支払わずに使う)', () => {
     const sim = new Sim({ p0: { hand: [DOS], mana: [...mana(2, L), ...mana(3, F)], deck: [GRENOH, N, N, N] } });
     sim.play(DOS);
-    sim.order('サムライ');
     sim.pick(GRENOH);
     sim.drain();
     expect(sim.has(0, 'battle', GRENOH)).toBe(true);
@@ -173,7 +175,7 @@ describe('R01 悪魔世界の閃光 / R08 ムサシ「弐天」', () => {
   it('ムサシ「弐天」: コストが火のエレメントの数以下なら破壊する', () => {
     const sim = new Sim({ p0: { hand: [MUSASHI], battle: [{ c: GRENOH }], mana: [...mana(3, F), ...mana(2, L)] }, p1: { battle: [{ c: W }, { c: 'AQvibrato' }] } });
     sim.play(MUSASHI);
-    sim.pick('AQvibrato');
+    // 破壊できるのはアクアン(コスト4)ではなく AQvibrato(コスト2)だけなので、聞かずに破壊する(「選び、破壊する」は強制)
     sim.drain();
     expect(sim.has(1, 'battle', 'AQvibrato')).toBe(false);
   });

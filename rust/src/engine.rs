@@ -3,7 +3,9 @@
 use crate::legal::validate_action;
 use crate::ops::*;
 use crate::procs::*;
-use crate::derive::{cross_cost, pay_need, plan_payment};
+use crate::cond::game_has;
+use crate::derive::{cross_cost, free_cross_to, pay_need, plan_payment};
+use crate::registry::Feat;
 use crate::registry::Registry;
 use crate::state::*;
 use crate::types::*;
@@ -105,7 +107,9 @@ fn apply_turn_action(c: &mut Ctx, a: &Action) -> Res<()> {
                 (t.cards[0], t.pid)
             };
             let (cost, civs) = cross_cost(c.env(), gu);
-            let pay = plan_payment(c.env(), go, &civs, pay_need(cost, civs.len() as i32), &[], &[]);
+            // コストを支払わずにクロスしてもよい相手(freeCrossTo)なら、マナは払わない
+            let free = game_has(c.env(), Feat::FreeCross) && free_cross_to(c.env(), gu, host_top);
+            let pay = if free { Some(Vec::new()) } else { plan_payment(c.env(), go, &civs, pay_need(cost, civs.len() as i32), &[], &[]) };
             let pay = match pay {
                 Some(p) => p,
                 None => return Ok(()),

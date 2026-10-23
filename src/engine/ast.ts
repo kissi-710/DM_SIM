@@ -233,6 +233,10 @@ export type StaticMod =
   | { type: 'stab5sd' }
   /** 相手は、自身の山札を見れず、順序を変えられない */
   | { type: 'deckLock' }
+  /** このクロスギアは、コストを支払わずに、cond に合う自分のクリーチャーにクロスしてもよい(クロスのコストが 0。ジェネレートしたあとも、いつでも) */
+  | { type: 'freeCrossTo'; cond: Cond }
+  /** このクリーチャーは、出たターンに相手プレイヤーを攻撃できる(クリーチャーは攻撃できない。ヘルトッQ。スピードアタッカーとは別) */
+  | { type: 'attackPlayerOnEntry' }
   /** 自分のターン中、自分の山札の上から1枚を、いつでも見てもよい(情報だけで、ルールには影響しない。PlayerView が山札の一番上を開く) */
   | { type: 'peekDeckTop' }
   /** 相手は、自身の「S・トリガー」を使えない(G・ストライクは使える) */
@@ -288,7 +292,7 @@ export type ReplaceApply =
   | { type: 'steps'; steps: StepDef[] };
 
 export type Ability =
-  | { kind: 'keyword'; name: KeywordName; n?: number; while?: Cond; steps?: StepDef[]; attacker?: Cond; label?: string }
+  | { kind: 'keyword'; name: KeywordName; n?: number; while?: Cond; steps?: StepDef[]; attacker?: Cond; label?: string; /** 侵略: 重なれるゾーン(省略 = 手札だけ。S級侵略は手札・墓地・バトルゾーン、SSS級侵略は手札・マナ・墓地・バトルゾーン) */ from?: ZoneName[] }
   | { kind: 'trigger'; spec: TriggerSpec; optional?: boolean; steps: StepDef[]; label?: string; /** キーワードから展開した誘発型能力(「出た時」で始まる能力に数えない) */ gen?: boolean }
   | { kind: 'spell'; steps: StepDef[] }
   | { kind: 'static'; mod: StaticMod; while?: Cond }

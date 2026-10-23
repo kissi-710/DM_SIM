@@ -1607,6 +1607,16 @@ export function runSba(c: Ctx): boolean {
  * deckOut: 山札切れによる敗北か(置換後、山札が増えるまで再度は起きないので、記録する)。
  * ダイレクトアタックによる敗北は、攻撃のたびに起きる出来事なので記録しない。
  */
+/** 山札からカードが最後に離れたのが、カードを引いたことによるものか(今のターンの記録から調べる) */
+function lastDeckExitWasDraw(c: Ctx, p: PlayerId): boolean {
+  const log = c.s.turnLog;
+  for (let i = log.length - 1; i >= 0; i--) {
+    const e = log[i];
+    if (e.type === 'moved' && e.from === 'deck' && e.owner === p) return e.cause === 'draw';
+  }
+  return false;
+}
+
 function lossReplacement(c: Ctx, p: PlayerId, deckOut: boolean): boolean {
   const s = c.s;
   const key = `deckOutHandled${p}`;
@@ -1653,6 +1663,8 @@ function lossReplacement(c: Ctx, p: PlayerId, deckOut: boolean): boolean {
       if (a.match.turn === 'opponent' && s.active === p) continue;
       if (a.match.turn === 'own' && s.active !== p) continue;
       if (a.match.reason === 'deckOut' && !deckOut) continue; // 山札切れによる敗北だけ
+      // 山札の最後の1枚を「引いたことによって」負ける時だけ(山札が墓地に置かれて0枚になった時などは含まない)
+      if (a.match.reason === 'deckOutDraw' && !(deckOut && lastDeckExitWasDraw(c, p))) continue;
       if (a.while && !evalCond(mkCC(c, p, { self: uid }), a.while)) continue;
       cands.push({ uid, idx: r.idx, ab: a });
     }

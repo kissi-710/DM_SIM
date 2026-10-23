@@ -1,5 +1,5 @@
 // 合法手の列挙と検証(design 5 / effects 12)。
-import { canAttack, charsOf, costBase, costOf, crossCost, defaultPlayFace, faceTypeOf, grantedPlayFrom, infoOf, isSick, payNeed, planPayment } from './derive';
+import { canAttack, charsOf, costBase, costOf, crossCost, defaultPlayFace, freeCrossTo, faceTypeOf, grantedPlayFrom, infoOf, isSick, payNeed, planPayment } from './derive';
 import { evalCond, mkCC } from './cond';
 import { planPlay, shieldPickChoices } from './procs';
 import type { Registry } from './registry';
@@ -92,8 +92,12 @@ export function crossActions(c: Ctx, player: PlayerId): Extract<Action, { type: 
   const hosts = mine.filter((p) => isCreatureType(faceTypeOf(c, p.cards[0])));
   for (const g of gears) {
     const { cost, civs } = crossCost(c, g.cards[0]);
-    if (!planPayment(c, player, civs, payNeed(cost, civs.length))) continue;
-    for (const h of hosts) if (g.crossedOn !== h.pid) out.push({ type: 'CROSS', gear: g.pid, target: h.pid });
+    const canPay = !!planPayment(c, player, civs, payNeed(cost, civs.length));
+    for (const h of hosts) {
+      if (g.crossedOn === h.pid) continue;
+      // コストを支払わずにクロスしてもよい相手(freeCrossTo)なら、マナがなくてもクロスできる
+      if (canPay || (gameHas(c, 'freeCross') && freeCrossTo(c, g.cards[0], h.cards[0]))) out.push({ type: 'CROSS', gear: g.pid, target: h.pid });
+    }
   }
   return out;
 }

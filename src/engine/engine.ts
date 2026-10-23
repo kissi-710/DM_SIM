@@ -1,10 +1,10 @@
 // エンジンの入口: 初期化・step(reducer)・実行ループ(design 5)。
 import { loadRegistry, type Registry } from './registry';
-import { crossCost, defaultPlayFace, payNeed, planPayment } from './derive';
+import { crossCost, defaultPlayFace, freeCrossTo, payNeed, planPayment } from './derive';
 import { runSba, pushProc, runProc } from './procs';
 import { collectBatch, emit, moveCards, setTapped } from './ops';
 import { legalActions, validateAction } from './legal';
-import { cloneState, hashSeed, mkCtx, nextId, permByPid, rngNext, shuffleInPlace, type Ctx } from './state';
+import { cloneState, gameHas, hashSeed, mkCtx, nextId, permByPid, rngNext, shuffleInPlace, type Ctx } from './state';
 import { runEffect } from './vm';
 import {
   type Action,
@@ -201,7 +201,9 @@ function applyTurnAction(c: Ctx, a: Exclude<Action, { type: 'ANSWER' }>): void {
       if (!gp || !tp) return;
       const gu = gp.perm.cards[0];
       const { cost, civs } = crossCost(c, gu);
-      const pay = planPayment(c, gp.owner, civs, payNeed(cost, civs.length));
+      // コストを支払わずにクロスしてもよい相手(freeCrossTo)なら、マナは払わない
+      const free = gameHas(c, 'freeCross') && freeCrossTo(c, gu, tp.perm.cards[0]);
+      const pay = free ? [] : planPayment(c, gp.owner, civs, payNeed(cost, civs.length));
       if (!pay) return;
       for (const u of pay) setTapped(c, u, true);
       gp.perm.crossedOn = tp.perm.pid;

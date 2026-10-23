@@ -790,7 +790,7 @@
         "abilities": [
           { "kind": "keyword", "name": "breaker", "n": 2 },
           {
-            "kind": "keyword", "name": "invasion", "label": "SSS級侵略[天災]",
+            "kind": "keyword", "name": "invasion", "label": "SSS級侵略[天災]", "from": ["battle", "hand", "grave", "mana"],
             "attacker": { "all": [{ "any": [{ "civ": "water" }, { "civ": "darkness" }, { "civ": "nature" }] }, { "race": "コマンド" }] }
           },
           {

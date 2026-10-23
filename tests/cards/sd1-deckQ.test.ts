@@ -70,7 +70,7 @@ describe('Q03 五番龍 レイクポーチャー ParZero', () => {
     sim.order('出た時');
     sim.pick(W, N);
     sim.pick(W); // 表向きにする手札: アクアン(コスト4)
-    sim.pick(W); // 同じコストの相手のクリーチャーを手札に戻す
+    // 同じコストの相手のクリーチャーは1体だけなので、聞かずに手札に戻す(「選び、戻す」は強制)
     sim.drain();
     expect(sim.has(1, 'hand', W)).toBe(true);
     expect(checkInvariants(sim.s)).toEqual([]);

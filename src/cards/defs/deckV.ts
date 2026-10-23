@@ -35,7 +35,8 @@ export const DECK_V: CardDef[] = [
           draw(1),
           selectUpTo('$d', { zone: 'hand', owner: 'self' }, { count: { zone: 'hand', owner: 'self' } }, { prompt: '捨てる手札を好きな枚数選んでください(捨てなくてもよい)' }),
           act({ move: { sel: '$d', to: 'grave', cause: 'discard' } }),
-          selectUpTo('$o', power6000, { len: '$d' }, { prompt: '破壊する、相手のパワー6000以下のクリーチャーを選んでください(捨てた手札1枚につき1体)' }),
+          // 捨てた手札1枚につき1体(いなければ、いるだけ)
+          select('$o', power6000, { min: { len: '$d' }, max: { len: '$d' }, prompt: '破壊する、相手のパワー6000以下のクリーチャーを選んでください(捨てた手札1枚につき1体)' }),
           destroy('$o'),
         ]),
       ]),
@@ -68,7 +69,7 @@ export const DECK_V: CardDef[] = [
       wBreaker(),
       onAttack([
         ifc(manaHas('F'), [
-          selectUpTo('$o', { zone: 'battle', owner: 'self', type: 'creature', notSelf: true }, 1, { prompt: 'このターン、「スピードアタッカー」を与える自分の他のクリーチャーを選んでください' }),
+          select('$o', { zone: 'battle', owner: 'self', type: 'creature', notSelf: true }, { prompt: 'このターン、「スピードアタッカー」を与える自分の他のクリーチャーを選んでください' }),
           act({ addEffect: { sel: '$o', mod: { kind: 'grant', keyword: 'speedAttacker' }, until: 'endOfTurn' } }),
         ]),
       ], { label: '攻撃する時、自分のマナゾーンに火文明があれば、このターン、自分の他のクリーチャー1体に「スピードアタッカー」を与える' }),
@@ -126,7 +127,7 @@ export const DECK_V: CardDef[] = [
       {
         kind: 'replace',
         label: '相手のクリーチャーは、相手の手札以外から出ない',
-        match: { type: 'enter', owner: 'opponent', notFrom: 'hand' },
+        match: { type: 'enter', owner: 'opponent', notFrom: 'hand', cond: isCreature },
         apply: { type: 'stay' },
       },
     ]),
@@ -165,9 +166,9 @@ export const DECK_V: CardDef[] = [
     spell('「みんな一緒に応援してね!」', 4, 'F', [sTrigger()], [
       select('$d', { zone: 'hand', owner: 'self' }, { prompt: '捨てる手札を選んでください' }),
       act({ move: { sel: '$d', to: 'grave', cause: 'discard' } }),
-      selectUpTo('$a', power6000, 1, { prompt: '破壊する、相手のパワー6000以下のクリーチャーを選んでください' }),
+      select('$a', power6000, { prompt: '破壊する、相手のパワー6000以下のクリーチャーを選んでください' }),
       destroy('$a'),
-      ifc({ some: { var: '$d', where: race(FAIRY) } }, [selectUpTo('$b', power6000, 1, { prompt: 'もう1体、破壊する相手のパワー6000以下のクリーチャーを選んでください' }), destroy('$b')]),
+      ifc({ some: { var: '$d', where: race(FAIRY) } }, [select('$b', power6000, { prompt: 'もう1体、破壊する相手のパワー6000以下のクリーチャーを選んでください' }), destroy('$b')]),
     ]),
   ),
 ];

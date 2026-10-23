@@ -56,6 +56,8 @@ export interface Face {
   star?: boolean;
   /** 究極進化(究極進化MAX の進化元の条件「究極進化クリーチャー」に使う) */
   ultimate?: boolean;
+  /** タマシード/クリーチャー: バトルゾーンでは、この条件を満たさない間、クリーチャーとして扱わず、タマシードとして扱う(ヘラクレス)。条件の評価中は、このカードの種類は本来の種類(クリーチャー)として数える */
+  tamaseedUnless?: Cond;
 }
 
 export interface CardDef {

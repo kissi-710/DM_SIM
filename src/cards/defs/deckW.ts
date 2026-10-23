@@ -2,7 +2,7 @@
 import type { CardDef } from '../../engine/types';
 import {
   act, and, anyCiv, card, cip, civ, creature, destroy, draw, evolution, gStrike, invasion, isCreature, justDiver, maybe, nameHas, oppCreature, race, select,
-  selectUpTo, shinkalize, speedAttacker, staticAb, sTrigger, tamaseed, tBreaker, trig, wBreaker,
+  shinkalize, speedAttacker, staticAb, sTrigger, tamaseed, tBreaker, trig, wBreaker,
 } from '../dsl';
 
 const lowestPower = { zone: 'battle', owner: 'opponent', type: 'creature', where: { powerRank: { which: 'min', of: { zone: 'battle', owner: 'opponent', type: 'creature' } } } } as const;
@@ -108,7 +108,7 @@ export const DECK_W: CardDef[] = [
       trig({ on: { type: 'stepStart', step: 'start', player: 'self' }, subject: 'any' }, [
         maybe([
           act({ move: { sel: '$self', to: 'hyper', cause: 'effect' } }),
-          selectUpTo('$a', { zone: 'hyper', owner: 'self', type: 'creature', where: and(race('エイリアン'), { not: nameHas('再興王女プリン') }) }, 1, { prompt: '出す、超次元ゾーンの《再興王女プリン》ではないエイリアン・クリーチャーを選んでください' }),
+          select('$a', { zone: 'hyper', owner: 'self', type: 'creature', where: and(race('エイリアン'), { not: nameHas('再興王女プリン') }) }, { prompt: '出す、超次元ゾーンの《再興王女プリン》ではないエイリアン・クリーチャーを選んでください' }),
           act({ put: { sel: '$a' } }),
         ], 'このクリーチャーを自分の超次元ゾーンに置いて、エイリアン・クリーチャーを超次元ゾーンから出しますか?'),
       ], { label: '自分のターンのはじめに、このクリーチャーを自分の超次元ゾーンに置いてもよい。そうしたら、《再興王女プリン》ではないエイリアン・クリーチャーを1体、自分の超次元ゾーンから出す' }),
@@ -119,7 +119,7 @@ export const DECK_W: CardDef[] = [
   card(
     'dm26sd1-W08',
     evolution('禁断の轟速 ブラックゾーン', 7, 'DF', 12000, ['ソニック・コマンド', 'S級侵略者'], and(isCreature, anyCiv('DF')), [
-      invasion('S級侵略[轟速]', and(anyCiv('DF'), race('コマンド'))),
+      invasion('S級侵略[轟速]', and(anyCiv('DF'), race('コマンド')), ['hand', 'grave', 'battle']),
       tBreaker(),
       cip([act({ seal: { sel: lowestPower } })], { label: '出た時、相手は自身のパワーが一番小さいクリーチャーすべてに封印を1つずつ付ける' }),
     ]),

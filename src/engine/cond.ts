@@ -1,6 +1,6 @@
 // 条件・式・セレクタの評価、イベントパターンの照合(effects 6.4 / 4.3)。
 import type { Cond, Expr, Pattern, Selector } from './ast';
-import { canBeChosen, charsLite, charsOf, costBase, hasKeyword, infoOf, manaCivs } from './derive';
+import { canBeChosen, charsLite, charsOf, costBase, faceTypeOf, hasKeyword, infoOf, manaCivs } from './derive';
 import type { Ctx } from './state';
 import { gameHas, opponentOf, permByPid } from './state';
 import { type Civ, type Ev, type FaceType, isCreatureType, type Permanent, type PlayerId, type Snap } from './types';
@@ -447,7 +447,8 @@ function faceHint(cc: CC, uid: number, type: Selector['type']): number | null {
   if (card.zone === 'battle' || card.zone === 'limbo') {
     const f = def.faces[card.face] ?? def.faces[0];
     if (!type || type === 'card') return card.face;
-    return matchesType(f.type, type) ? card.face : null;
+    // バトルゾーンでは、条件つきでタマシードとして扱うカード(ヘラクレス)の今の種類で見る
+    return matchesType(f.tamaseedUnless ? faceTypeOf(cc.c, uid) : f.type, type) ? card.face : null;
   }
   if (!type || type === 'card') return -1;
   const idx = def.faces.findIndex((f) => matchesType(f.type, type));

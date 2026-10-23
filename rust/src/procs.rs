@@ -2217,6 +2217,16 @@ pub fn run_sba(c: &mut Ctx) -> Res<bool> {
 /// 「ゲームに負ける時、かわりに〜してもよい」(ジャオウガ)。置換したら true。
 /// deck_out: 山札切れによる敗北か(置換後、山札が増えるまで再度は起きないので、記録する)。
 /// ダイレクトアタックによる敗北は、攻撃のたびに起きる出来事なので記録しない。
+/// 山札からカードが最後に離れたのが、カードを引いたことによるものか(今のターンの記録から調べる)
+fn last_deck_exit_was_draw(c: &Ctx, p: PlayerId) -> bool {
+    for e in c.s.turn_log.iter().rev() {
+        if e.ty == s::MOVED && e.sym_of(s::FROM) == Some(Zone::Deck.sym()) && e.int(s::OWNER) == Some(p as i64) {
+            return e.sym_of(s::CAUSE) == Some(s::DRAW);
+        }
+    }
+    false
+}
+
 fn loss_replacement(c: &mut Ctx, p: PlayerId, deck_out: bool) -> Res<bool> {
     let key = UKey::DeckOut(p);
     let reg = c.reg;
@@ -2313,6 +2323,10 @@ fn loss_replacement(c: &mut Ctx, p: PlayerId, deck_out: bool) -> Res<bool> {
                     }
                     if match_.reason == Some(sym("deckOut")) && !deck_out {
                         continue; // 山札切れによる敗北だけ
+                    }
+                    // 山札の最後の1枚を「引いたことによって」負ける時だけ(山札が墓地に置かれて0枚になった時などは含まない)
+                    if match_.reason == Some(sym("deckOutDraw")) && !(deck_out && last_deck_exit_was_draw(c, p)) {
+                        continue;
                     }
                     if let Some(w) = while_ {
                         if !eval_cond(&CC::new(e, p).with_self(uid), w) {

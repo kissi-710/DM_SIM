@@ -64,7 +64,33 @@ pub fn chars_lite<'a>(e: Env<'a>, uid: i32, hint: i32) -> Chars<'a> {
     };
     let face = &def.faces[idx];
     let civs: &[Civ] = if in_play || hint >= 0 { &face.civs } else { &def.union_civs };
-    Chars { face, face_idx: idx as i32, civs, cost: face.cost, power: face.power.unwrap_or(0), ty: face.ty, races: &face.races }
+    let ty = if face.tamaseed_unless.is_some() { dynamic_type(e, uid, face) } else { face.ty };
+    Chars { face, face_idx: idx as i32, civs, cost: face.cost, power: face.power.unwrap_or(0), ty, races: &face.races }
+}
+
+thread_local! {
+    /// 種類の条件を評価中のカード(その間、そのカード自身の種類は本来の種類として数える)
+    static TYPE_GUARD: std::cell::RefCell<Vec<i32>> = std::cell::RefCell::new(Vec::new());
+}
+
+/// バトルゾーンのカードの種類(タマシード/クリーチャー(ヘラクレス)は、条件を満たさない間、タマシード)
+fn dynamic_type(e: Env, uid: i32, face: &Face) -> FaceType {
+    let cond = match &face.tamaseed_unless {
+        Some(c) => c,
+        None => return face.ty,
+    };
+    let card = &e.s.cards[uid as usize];
+    if card.zone != Zone::Battle || TYPE_GUARD.with(|g| g.borrow().contains(&uid)) {
+        return face.ty;
+    }
+    TYPE_GUARD.with(|g| g.borrow_mut().push(uid));
+    let ok = eval_cond(&CC::new(e, card.owner).with_self(uid), cond);
+    TYPE_GUARD.with(|g| g.borrow_mut().pop());
+    if ok {
+        face.ty
+    } else {
+        FaceType::Tamaseed
+    }
 }
 
 /// 表記コスト(使用中の面。場以外は面0)
@@ -111,7 +137,14 @@ pub fn is_ignored(e: Env, uid: i32) -> bool {
             continue;
         }
         match ef.m {
-            EffectMod::IgnoreAll => return true,
+            // 「相手のクリーチャーすべての能力を無視する」: クリーチャーだけが対象(クロスギア・フィールドなどは対象外)
+            EffectMod::IgnoreAll => {
+                let def = &e.reg.defs[card.def as usize];
+                let face = def.faces.get(card.face.max(0) as usize).unwrap_or(&def.faces[0]);
+                if face.ty.is_creature() {
+                    return true;
+                }
+            }
             EffectMod::IgnoreCost(n) => {
                 if cost_base(e, uid) == n {
                     return true;
@@ -689,12 +722,14 @@ fn can_attack_base(e: Env, perm: &Perm, target: &crate::state::Target) -> bool {
     let speed = has_keyword(e, perm, Kw::SpeedAttacker);
     let mach = has_keyword(e, perm, Kw::MachFighter);
     let sick = is_sick(e, perm);
-    if sick && !speed && !mach {
+    // 「出たターンに相手プレイヤーを攻撃できる」(ヘルトッQ): プレイヤーだけ。クリーチャーは攻撃できない
+    let player_only = sick && !speed && !mach && has_self_static(e, uid, |m| matches!(m, StaticMod::AttackPlayerOnEntry));
+    if sick && !speed && !mach && !player_only {
         return false;
     }
     match target {
         Target::Player => {
-            if sick && !speed {
+            if sick && !speed && !player_only {
                 return false; // マッハファイターは出たターン、プレイヤーを攻撃できない
             }
             if player_attack_blocked_by_entry(e, perm, owner) {
@@ -718,6 +753,9 @@ fn can_attack_base(e: Env, perm: &Perm, target: &crate::state::Target) -> bool {
             true
         }
         Target::Creature(pid) => {
+            if player_only {
+                return false;
+            }
             let (towner, ti) = match s.perm_by_pid(*pid) {
                 Some(x) => x,
                 None => return false,
@@ -1100,6 +1138,19 @@ pub fn cannot_leave(e: Env, uid: i32, cause: Option<Sym>) -> bool {
 }
 
 /// クロスのコスト(クロスギアのマナコストをもう一度払う。コスト軽減の効果も受ける)と文明
+/// このクロスギアを、コストを支払わずにこのクリーチャーにクロスしてもよいか(FreeCrossTo)
+pub fn free_cross_to(e: Env, gear: i32, host: i32) -> bool {
+    let hface = e.s.cards[host as usize].face;
+    any_static(e, |st| {
+        if let StaticMod::FreeCrossTo { cond } = st.m {
+            if st.src == gear {
+                return eval_cond(&CC::new(e, st.controller).with_self(st.src).with_it(host, hface), cond);
+            }
+        }
+        false
+    })
+}
+
 pub fn cross_cost(e: Env, gear: i32) -> (i32, Rc<Vec<Civ>>) {
     let card = &e.s.cards[gear as usize];
     let fi = chars_lite(e, gear, -1).face_idx;

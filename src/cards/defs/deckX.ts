@@ -2,7 +2,7 @@
 import type { Ability, Cond, Expr } from '../../engine/ast';
 import type { CardDef } from '../../engine/types';
 import {
-  act, and, breaker, card, cip, creature, destroy, draw, evolution, isCreature, machFighter, maybe, onAttack, oppCreature, select, selectUpTo,
+  act, and, breaker, card, cip, creature, destroy, draw, evolution, isCreature, machFighter, maybe, onAttack, oppCreature, select,
   speedAttacker, spell, sTrigger, staticAb, tBreaker, trig, wBreaker, yobinion,
 } from '../dsl';
 
@@ -25,7 +25,7 @@ export const DECK_X: CardDef[] = [
           act({ dropUnder: { sel: '$self', n: 1, to: 'grave' } }),
           select('$t', oppCreature(), { prompt: 'このターン、パワーを-9000する相手のクリーチャーを選んでください' }),
           act({ addEffect: { sel: '$t', mod: { kind: 'powerAdd', n: -9000 }, until: 'endOfTurn' } }),
-          selectUpTo('$g', { zone: 'grave', owner: 'self', type: 'creature', where: { evolution: false } }, 1, { prompt: '出す、墓地の進化ではないクリーチャーを選んでください' }),
+          select('$g', { zone: 'grave', owner: 'self', type: 'creature', where: { evolution: false } }, { prompt: '出す、墓地の進化ではないクリーチャーを選んでください' }),
           act({ put: { sel: '$g' } }),
         ], 'メテオバーン: このクリーチャーの下にあるカードを1枚墓地に置きますか?'),
       ], { label: 'メテオバーン' }),

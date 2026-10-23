@@ -1,6 +1,10 @@
 // デッキP「コンボで連鎖！自然単グランセクトデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。W・シンパシー・ガードマン・攻撃できない制限など。
 import { describe, expect, it } from 'vitest';
-import { Sim, mana } from '../scenario';
+import { charsOf } from '../../src/engine/derive';
+import { mkCtx } from '../../src/engine/state';
+import { mkCC, selectCards } from '../../src/engine/cond';
+import { oppCreature } from '../../src/cards/dsl';
+import { Sim, mana, reg } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';
 
 const N = 'フェアリー・ライフ';
@@ -37,6 +41,13 @@ describe('P01 水上第九院 シャコガイル', () => {
     sim.endTurn(); // 相手のターンのはじめ: 5枚引く(1枚で山札切れ)、3枚捨てる
     sim.drain();
     expect(sim.s.winner).toBe(0);
+  });
+  it('引いたことによらず(山札の上から墓地に置いて)山札が0枚になった時は、置換されず、負ける', () => {
+    const sim = new Sim({ p0: { hand: ['ドミー=ゾー'], battle: [{ c: KAIGA }], mana: mana(5, 'フットレス=トレース'), deck: [N, N, N] }, p1: { deck: [N, N] } });
+    sim.play('ドミー=ゾー');
+    sim.yes(); // 山札の上から5枚を墓地に置く(3枚で山札切れ)
+    sim.drain();
+    expect(sim.s.winner).toBe(1);
   });
 });
 
@@ -173,6 +184,18 @@ describe('P11 環嵐! ホールインワン・ヘラクレス', () => {
   it('自分の自然のクリーチャーまたはタマシードが合計4つ以上なければ、攻撃できない', () => {
     const sim = new Sim({ p0: { battle: [{ c: HERA }, { c: N }] }, p1: { shield: 5 } });
     expect(attackActions(sim)).toEqual([]);
+  });
+  it('自然のクリーチャーまたはタマシードが合計4つ未満の間は、クリーチャーとして扱わない(タマシード)。4つ以上なら、クリーチャー', () => {
+    const few = new Sim({ p0: { battle: [{ c: HERA }, { c: DEDE }] }, p1: { shield: 5 } });
+    expect(charsOf(mkCtx(few.s, reg), few.uid(0, 'battle', HERA)).type).toBe('tamaseed');
+    const many = new Sim({ p0: { battle: [{ c: HERA }, { c: DEDE }, { c: DEDE }, { c: DEDE }] }, p1: { shield: 5 } });
+    expect(charsOf(mkCtx(many.s, reg), many.uid(0, 'battle', HERA)).type).toBe('creature');
+    expect(attackActions(many).some((x) => x.type === 'ATTACK' && x.attacker === many.pid(0, HERA))).toBe(true);
+  });
+  it('クリーチャーとして扱わない間は、「クリーチャーを選ぶ」効果の対象にならない', () => {
+    const sim = new Sim({ p0: { battle: [{ c: HERA }] }, p1: { hand: ['堕呪 エアヴォ'], mana: mana(4, W) } });
+    // 相手の「クリーチャー」は、タマシード扱いの自分のヘラクレスを選べない(エアヴォは「バトルゾーンにあるカード」なので選べる)
+    expect(selectCards(mkCC(mkCtx(sim.s, reg), 1, {}), oppCreature())).toEqual([]);
   });
   it('自分のターンに一度、クリーチャーを1体、自分のマナゾーンから召喚してもよい', () => {
     const sim = new Sim({ p0: { battle: [{ c: HERA }], mana: [DEDE, N] } });

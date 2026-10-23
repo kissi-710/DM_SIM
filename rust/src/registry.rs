@@ -23,6 +23,8 @@ pub struct Face {
     pub star: bool,
     /// 究極進化
     pub ultimate: bool,
+    /// タマシード/クリーチャー(ヘラクレス): バトルゾーンでは、この条件を満たさない間、タマシードとして扱う
+    pub tamaseed_unless: Option<Cond>,
     /// 呪文が、相手のクリーチャーがいなければ空振りになるか(ルールベースAIが、相手の盤面が空の時に避ける。
     /// カードのデータから判定する。TS 版の ai/spellTargets.ts と同じ)
     pub needs_opp_creature: bool,
@@ -139,9 +141,10 @@ pub enum Feat {
     OppManaTapped,
     CannotSummonAll,
     ProtectPlayerFromWeaker,
+    FreeCross,
 }
 
-pub const N_FEAT: usize = 30;
+pub const N_FEAT: usize = 31;
 
 #[derive(Clone, Debug)]
 pub enum Instr {
@@ -232,6 +235,10 @@ impl Registry {
                     },
                     star: f.get("star").and_then(|x| x.as_bool()).unwrap_or(false),
                     ultimate: f.get("ultimate").and_then(|x| x.as_bool()).unwrap_or(false),
+                    tamaseed_unless: match f.get("tamaseedUnless") {
+                        Some(c) => Some(parse_cond(c).map_err(|e| format!("{}: {}", id, e))?),
+                        None => None,
+                    },
                     needs_opp_creature: f
                         .get("abilities")
                         .and_then(|a| a.as_arr())
@@ -409,6 +416,7 @@ impl Registry {
                             StaticMod::NoGStrike => set(Feat::NoGStrike),
                             StaticMod::CannotSummonAll { .. } => set(Feat::CannotSummonAll),
                             StaticMod::ProtectPlayerFromWeaker => set(Feat::ProtectPlayerFromWeaker),
+                            StaticMod::FreeCrossTo { .. } => set(Feat::FreeCross),
                             StaticMod::OppManaTapped => set(Feat::OppManaTapped),
                             StaticMod::BattleProxy { .. } => set(Feat::BattleProxy),
                             _ => {}

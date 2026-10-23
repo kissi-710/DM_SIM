@@ -1208,12 +1208,15 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
             }
             Ok(())
         }
-        Act::ShuffleIn { sel } => {
+        Act::ShuffleIn { sel, as_ } => {
             // 山札に加えてシャッフルする(それぞれの持ち主の山札に)
             let uids = {
                 let cc = cc_of(c.env(), f);
                 resolve_sel(&cc, sel)
             };
+            if let Some(a) = as_ {
+                var_set(&mut f.vars, *a, Val::Int(0));
+            }
             if uids.is_empty() {
                 return Ok(());
             }
@@ -1224,9 +1227,15 @@ fn exec_act(c: &mut Ctx, f: &mut EffectFrame, act: &Act) -> Res<()> {
                     owners.push(o);
                 }
             }
+            let before: Vec<usize> = owners.iter().map(|&p| c.s.players[p as usize].deck.len()).collect();
             let mut o = MoveOpts::new(Zone::Deck, s::EFFECT);
             o.pos = Some(true);
             move_cards(c, &uids, &o)?;
+            // as: 山札に加わったカードの枚数(進化元など、重なっていたカードも数える)
+            if let Some(a) = as_ {
+                let moved: usize = owners.iter().zip(before.iter()).map(|(&p, &b)| c.s.players[p as usize].deck.len() - b).sum();
+                var_set(&mut f.vars, *a, Val::Int(moved as i64));
+            }
             for p in owners {
                 shuffle_deck(c, p);
             }

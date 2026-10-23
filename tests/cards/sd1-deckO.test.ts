@@ -94,6 +94,21 @@ describe('O03 ジョーカーズの心絵', () => {
   });
 });
 
+describe('O03 ジョーカーズの心絵: 重なったカードも数える', () => {
+  it('進化元が重なったクリーチャーが山札に加わる時は、重なっていたカードの枚数だけシールド化する', () => {
+    const sim = new Sim({
+      p0: { hand: [JOKER_E], battle: [{ c: W }, { c: REX, under: [W] }], mana: mana(8, L), deck: [N, N, N, N, N, N], shield: 0 },
+      p1: { deck: [N, N, N], shield: 0 },
+    });
+    sim.play(JOKER_E);
+    sim.pick(W); // 残すクリーチャー(進化元付きのレクスターズは山札に加わる: 2枚)
+    sim.pick(JOKER_E);
+    sim.drain();
+    expect(sim.count(0, 'shield')).toBe(2);
+    expect(checkInvariants(sim.s)).toEqual([]);
+  });
+});
+
 describe('O04 スロットンの心絵 / O05 ゲラッチョの心絵', () => {
   it('スロットンの心絵: 光のコスト7以下の進化クリーチャーを手札から出し、次の自分のターンのはじめまで「ブロッカー」を与える', () => {
     const sim = new Sim({ p0: { hand: [SLOT, LION], battle: [{ c: REX }], mana: mana(5, L), deck: [N, N] } });

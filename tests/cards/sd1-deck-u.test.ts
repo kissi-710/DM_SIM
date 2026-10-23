@@ -19,8 +19,7 @@ describe('U01 全虹帝 ミノガミ / ハザード・パクト', () => {
   it('出た時、ツインパクトカードを1枚、自分の墓地からマナゾーンに置く', () => {
     const sim = new Sim({ p0: { hand: [MINO], mana: mana(5, N), grave: [TWIN, N] } });
     sim.play(MINO);
-    sim.pick(TWIN);
-    sim.drain();
+    sim.drain(); // ツインパクトは墓地に1枚だけなので、聞かずにマナゾーンに置く(「置く」は強制)
     expect(sim.has(0, 'mana', TWIN)).toBe(true);
   });
   it('ハザード・パクト: 山札の上から1枚目をマナゾーンに置く。それがツインパクトカードなら、カードを1枚引く', () => {
@@ -89,11 +88,13 @@ describe('U05 五輪の求道者 清永 / U06 アカシック・ゼノン', () =
     expect(sim.has(0, 'mana', 'AQvibrato')).toBe(true);
     expect(checkInvariants(sim.s)).toEqual([]);
   });
-  it('清永: コストがすべて異ならなければ、何もしない', () => {
+  it('清永: コストがすべて異ならなければ、エレメントは実行できない。ただし、3枚ともマナゾーンに置く(「残りをすべてマナゾーンに置く」は独立した文)', () => {
     const sim = new Sim({ p0: { battle: [{ c: KIYO }], deck: [W, W, ZENON, N, N] }, p1: { shield: 5 } });
     sim.attack(KIYO, 'player');
     sim.drain();
     expect(sim.has(0, 'battle', W)).toBe(false);
+    expect(sim.count(0, 'mana', W)).toBe(2);
+    expect(sim.has(0, 'mana', ZENON)).toBe(true);
   });
   it('ゼノン: 自分のツインパクト・クリーチャーすべてに「スピードアタッカー」を与える', () => {
     const sim = new Sim({ p0: { battle: [{ c: ZENON }, { c: TWIN, sick: true }] }, p1: { shield: 5 } });

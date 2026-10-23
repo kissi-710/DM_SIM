@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { Sim, mana, reg } from '../scenario';
 import { checkInvariants } from '../../src/engine/invariants';
-import { infoOf } from '../../src/engine/derive';
+import { infoOf, isIgnored } from '../../src/engine/derive';
 import { mkCtx } from '../../src/engine/state';
 
 const N = 'フェアリー・ライフ';
@@ -58,13 +58,19 @@ describe('N02 めっちゃ! デンヂャラスG3 / ケッシング・ゼロ', ()
   it('出た時、「シールドいらねえー!」と言ってもよい。そうしたら、そのターン、自分のクリーチャー3体に「G・ブレイカー」を与える', () => {
     const sim = new Sim({ p0: { hand: [DENJA], battle: [{ c: W }], mana: mana(10, N), shield: 2 }, p1: { shield: 5 } });
     sim.play(DENJA);
-    sim.yes();
-    sim.pick(W);
+    sim.yes(); // 自分のクリーチャーは2体だけなので、3体の選択は聞かずに全員
     sim.drain();
     sim.attack(W, 'player');
     sim.drain();
     expect(sim.count(1, 'shield')).toBe(0);
     expect(sim.count(0, 'shield')).toBe(0);
+  });
+  it('ケッシング・ゼロ: 能力を無視されるのは、相手のクリーチャーだけ(フィールドは対象外)', () => {
+    const sim = new Sim({ p0: { hand: [DENJA], mana: mana(5, N) }, p1: { battle: ['卍 新世壊 卍'] } });
+    sim.play(DENJA, { face: 1 });
+    sim.yes();
+    sim.drain();
+    expect(isIgnored(mkCtx(sim.s, reg), sim.uid(1, 'battle', '卍 新世壊 卍'))).toBe(false);
   });
   it('ケッシング・ゼロ: このターン、相手のクリーチャーすべての能力を無視する', () => {
     const sim = new Sim({ p0: { hand: [DENJA], mana: mana(5, N) }, p1: { battle: [{ c: '邪幽 ジャガイスト' }] } });
@@ -76,6 +82,12 @@ describe('N02 めっちゃ! デンヂャラスG3 / ケッシング・ゼロ', ()
 });
 
 describe('N03 ヘルトッQ', () => {
+  it('出たターンに相手プレイヤーを攻撃できる。ただしクリーチャーは攻撃できない(スピードアタッカーとは別)', () => {
+    const sim = new Sim({ p0: { battle: [{ c: HELTO, sick: true }] }, p1: { battle: [{ c: W, tapped: true }] } });
+    const acts = attackActions(sim);
+    expect(acts.some((a) => a.type === 'ATTACK' && a.target.kind === 'player')).toBe(true);
+    expect(acts.some((a) => a.type === 'ATTACK' && a.target.kind === 'creature')).toBe(false);
+  });
   it('自分のジョーカーズ・クリーチャー1体につき、カードを1枚引いてもよい', () => {
     const sim = new Sim({ p0: { hand: [HELTO], battle: [{ c: CHICKEN }], mana: mana(5, N), deck: [N, N, N, N] } });
     sim.play(HELTO);

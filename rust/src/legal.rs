@@ -87,11 +87,13 @@ pub fn cross_actions(e: Env, player: PlayerId) -> Vec<Action> {
     let hosts: Vec<&Perm> = mine.iter().filter(|p| chars_lite(e, p.cards[0], -1).ty.is_creature()).collect();
     for g in gears {
         let (cost, civs) = cross_cost(e, g.cards[0]);
-        if plan_payment(e, player, &civs, pay_need(cost, civs.len() as i32), &[], &[]).is_none() {
-            continue;
-        }
+        let can_pay = plan_payment(e, player, &civs, pay_need(cost, civs.len() as i32), &[], &[]).is_some();
         for h in &hosts {
-            if g.crossed_on != Some(h.pid) {
+            if g.crossed_on == Some(h.pid) {
+                continue;
+            }
+            // コストを支払わずにクロスしてもよい相手(freeCrossTo)なら、マナがなくてもクロスできる
+            if can_pay || (game_has(e, Feat::FreeCross) && free_cross_to(e, g.cards[0], h.cards[0])) {
                 out.push(Action::Cross { gear: g.pid, target: h.pid });
             }
         }
