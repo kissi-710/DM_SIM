@@ -709,6 +709,17 @@ function afterCastReplacement(c: Ctx, uid: number, faceIdx: number): boolean {
         if (a.while && !evalCond(mkCC(c, p, { self: src }), a.while)) continue;
         if (m.cond && !evalCond(mkCC(c, p, { self: src, it: uid, itFace: faceIdx }), m.cond)) continue;
         const sc = s.cards[src];
+        // 「かわりに〜してもよい」: 置き換えるかを、状態を変更する前に聞く(断れば、墓地に置く)
+        if (a.optional) {
+          const yes = ask<boolean>(c, {
+            player: p,
+            why: 'may',
+            input: { shape: 'yesno' },
+            source: { uid: src, ep: sc.ep },
+            prompt: `${c.reg.defs[sc.defId].name}: ${a.label ?? '墓地に置くかわりに置き換えますか?'}`,
+          });
+          if (!yes) continue;
+        }
         const ev: Ev = { id: nextId(s), causedBy: null, type: 'afterCast', turn: s.turn, card: uid, owner: card.owner };
         s.cont.push({
           kind: 'effect',

@@ -2,7 +2,7 @@
 import type { Cond, Selector } from '../../engine/ast';
 import type { CardDef } from '../../engine/types';
 import {
-  act, and, blocker, bounce, card, civ, costLte, creature, destroy, draw, exLife, field, ifc, justDiver, maybe, not, notEvolution,
+  act, and, blocker, bounce, card, civ, costLte, creature, destroy, draw, exLife, field, ifc, justDiver, not, notEvolution,
   onAttack, oppCreature, or, race, select, selectUpTo, slayer, speedAttacker, spell, sTrigger, staticAb, tBreaker, trig, wBreaker,
 } from '../dsl';
 
@@ -49,9 +49,10 @@ export const DECK_D: CardDef[] = [
     field('卍 新世壊 卍', 2, 'W', [
       {
         kind: 'replace',
-        label: '魔導具呪文を、墓地のかわりにこのフィールドの下に置く',
+        label: '魔導具呪文を、墓地のかわりにこのフィールドの下に置いて、カードを1枚引く',
+        optional: true,
         match: { type: 'afterCast', owner: 'self', cond: race(DOGU) },
-        apply: { type: 'steps', steps: [act({ putUnder: { sel: '$ev.card', onto: '$self' } }), maybe([draw(1)], 'カードを1枚引きますか?')] },
+        apply: { type: 'steps', steps: [act({ putUnder: { sel: '$ev.card', onto: '$self' } }), draw(1)] },
       },
       staticAb({ type: 'ignoreCastBan', cond: or(race(DOGU), race(DORUSUZAKU)) }),
       trig(
@@ -103,13 +104,13 @@ export const DECK_D: CardDef[] = [
       'W',
       [sTrigger()],
       [
-        select('$t', oppCreature(), { prompt: '次の自分のターンのはじめまで、攻撃もブロックもできなくする相手のクリーチャーを選んでください' }),
-        lockOpp('$t'),
-        // S・トリガー・プラス: 相手のターンに、そのターン中に自分のシールドが2つ以上ブレイクされていれば、S・トリガーで使った時にP能力を得る
+        // S・トリガー・プラス: 相手のターンに、そのターン中に自分のシールドが2つ以上ブレイクされていれば、S・トリガーで使った時にP能力(テキストの先頭)を得る
         ifc(and({ stUsed: true }, { turnOf: 'opponent' }, { logged: { pattern: { type: 'shieldBroken', owner: 'self' }, min: 2 } }), [
           select('$e', { zone: 'battle', owner: 'opponent', type: 'element', chooseable: true }, { prompt: 'P: 持ち主の手札に戻す相手のエレメントを選んでください' }),
           bounce('$e'),
         ]),
+        select('$t', oppCreature(), { prompt: '次の自分のターンのはじめまで、攻撃もブロックもできなくする相手のクリーチャーを選んでください' }),
+        lockOpp('$t'),
       ],
       [DOGU],
     ),
@@ -131,7 +132,7 @@ export const DECK_D: CardDef[] = [
     'dm26sd1-D08',
     creature('好詠音愛 クロカミ', 3, 'W', 2000, ['マジック・マーメイド'], [
       justDiver(),
-      staticAb({ type: 'costDelta', delta: -1, cond: { type: 'spell' } }),
+      staticAb({ type: 'costDelta', delta: -1, cond: { type: 'spell' }, floor: 1 }),
       trig({ on: { type: 'cast', owner: 'self' }, subject: 'any' }, [select('$t', oppCreature(), { prompt: '次の自分のターンのはじめまで、攻撃もブロックもできなくする相手のクリーチャーを選んでください' }), lockOpp('$t')]),
     ]),
   ),

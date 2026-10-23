@@ -1,6 +1,8 @@
 // デッキD「目指せ全開ガ・リュミーズ水魔導具デッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
-import { Sim, mana } from '../scenario';
+import { costOf } from '../../src/engine/derive';
+import { mkCtx } from '../../src/engine/state';
+import { Sim, mana, reg } from '../scenario';
 
 const N = 'フェアリー・ライフ';
 const W = 'アクアン';
@@ -78,6 +80,13 @@ describe('D08 好詠音愛 クロカミ', () => {
     sim.drain();
     expect(sim.s.effects.some((e) => e.mod.kind === 'cannotAttack')).toBe(true);
   });
+  it('コストは0以下にはならない: コスト1の呪文は、1のまま', () => {
+    const sim = new Sim({ p0: { hand: ['堕呪 ゾメンザン'], battle: ['好詠音愛 クロカミ'], mana: [W] } });
+    const uid = sim.uid(0, 'hand', '堕呪 ゾメンザン');
+    expect(costOf(mkCtx(sim.s, reg), uid, 0)).toBe(1); // 軽減で 0 にはならない(コスト1の呪文は1のまま)
+    sim.play('堕呪 ゾメンザン');
+    expect(sim.tappedMana(0)).toBe(1);
+  });
 });
 
 describe('D10 凶鬼98号 ガシャゴン', () => {
@@ -129,11 +138,28 @@ describe('D02 卍 新世壊 卍', () => {
       p0: { hand: ['堕呪 ゾメンザン'], battle: ['卍 新世壊 卍'], mana: [W], deck: [N, N, N] },
     });
     sim.play('堕呪 ゾメンザン');
-    sim.use(); // 1枚引く
+    sim.use(); // 置き換える(置いたら、1枚引く)
     expect(sim.count(0, 'hand')).toBe(1);
     expect(sim.count(0, 'grave')).toBe(0);
     const field = sim.s.players[0].battle[0];
     expect(field.cards.length).toBe(2);
+    expect(sim.pending.why).toBe('turnAction'); // 引くかは聞かない(公式Q&A 2021.10.22: 置いたら引かなければいけない)
+  });
+  it('置き換えは任意(公式Q&A 2021.10.22): 断れば、呪文は墓地に置かれ、カードは引かない', () => {
+    const sim = new Sim({
+      p0: { hand: ['堕呪 ゾメンザン'], battle: ['卍 新世壊 卍'], mana: [W], deck: [N, N, N] },
+    });
+    sim.play('堕呪 ゾメンザン');
+    sim.decline();
+    expect(sim.count(0, 'hand')).toBe(0);
+    expect(sim.has(0, 'grave', '堕呪 ゾメンザン')).toBe(true);
+    expect(sim.s.players[0].battle[0].cards.length).toBe(1);
+  });
+  it('魔導具でない呪文は、置き換えの対象ではない(聞かれず、墓地に置かれる)', () => {
+    const sim = new Sim({ p0: { hand: ['フェアリー・ライフ'], battle: ['卍 新世壊 卍'], mana: [N, N], deck: [N, N, N] } });
+    sim.play('フェアリー・ライフ');
+    expect(sim.pending.why).toBe('turnAction');
+    expect(sim.has(0, 'grave', 'フェアリー・ライフ')).toBe(true);
   });
   it('呪文を唱えられなくする効果を無視して、魔導具呪文を唱えられる', () => {
     const sim = new Sim({

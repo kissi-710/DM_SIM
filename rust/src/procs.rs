@@ -1018,7 +1018,7 @@ fn run_play(c: &mut Ctx, f: &mut ProcFrame) -> Res<()> {
 /// 持つのはバトルゾーンの、能力を無視されていないカード(複数あれば、先頭のもの)。
 fn after_cast_replacement(c: &mut Ctx, uid: i32, face_idx: i32) -> Res<bool> {
     let owner = c.s.cards[uid as usize].owner;
-    let mut found: Option<(PlayerId, i32, u16, u16, i32, i32)> = None; // (p, src, face, idx, def, ep)
+    let mut found: Option<(PlayerId, i32, u16, u16, i32, i32, bool)> = None; // (p, src, face, idx, def, ep, optional)
     {
         let e = c.env();
         let sym_ac = sym("afterCast");
@@ -1032,7 +1032,7 @@ fn after_cast_replacement(c: &mut Ctx, uid: i32, face_idx: i32) -> Res<bool> {
                 let sc = &c.s.cards[src as usize];
                 let face = e.reg.face(sc.def, chars_lite(e, src, -1).face_idx);
                 for &ri in &info.replaces {
-                    if let Ability::Replace { match_, apply: ReplaceApply::Steps(_), while_, .. } = &face.abilities[ri as usize] {
+                    if let Ability::Replace { match_, apply: ReplaceApply::Steps(_), while_, optional, .. } = &face.abilities[ri as usize] {
                         if match_.ty != sym_ac {
                             continue;
                         }
@@ -1051,14 +1051,21 @@ fn after_cast_replacement(c: &mut Ctx, uid: i32, face_idx: i32) -> Res<bool> {
                                 continue;
                             }
                         }
-                        found = Some((p, src, sc.face as u16, ri, sc.def as i32, sc.ep));
+                        found = Some((p, src, sc.face as u16, ri, sc.def as i32, sc.ep, *optional));
                         break 'outer;
                     }
                 }
             }
         }
     }
-    if let Some((p, src, sface, ri, def, ep)) = found {
+    if let Some((p, src, sface, ri, def, ep, optional)) = found {
+        // 「かわりに〜してもよい」: 置き換えるかを、状態を変更する前に聞く(断れば、墓地に置く)
+        if optional {
+            let ans = ask(c, NeedInput { player: p, why: Why::May, input: Some(InputSpec::YesNo), source: Some(ObjRef { uid: src, ep }) })?;
+            if ans.as_bool() != Some(true) {
+                return Ok(false);
+            }
+        }
         let evid = c.s.next_id();
         let ev = Rc::new(Ev { id: evid, caused_by: None, ty: sym("afterCast"), turn: c.s.turn, f: vec![(s::CARD, Val::Int(uid as i64)), (s::OWNER, Val::Int(owner as i64))] });
         push_effect(c, AbilityRef { def: def as u16, face: sface as u8, idx: ri }, ObjRef { uid: src, ep }, p, Some(ev), true);
