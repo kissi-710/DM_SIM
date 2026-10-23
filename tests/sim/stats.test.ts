@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveSeed } from '../../src/engine/prng';
-import { hypergeomAtLeast, hypergeomPmf, normalQuantile, wilson, zFamily } from '../../src/sim/stats';
+import { addTurnHist, hypergeomAtLeast, hypergeomPmf, normalQuantile, roundOf, turnSummary, wilson, zFamily } from '../../src/sim/stats';
 
 describe('wilson(95%信頼区間)', () => {
   it('試行0回は [0, 1]', () => {
@@ -127,5 +127,32 @@ describe('deriveSeed(試合・試行のシードの派生)', () => {
   });
   it('連続する index は連続するシード(範囲を分けて実行しても、同じ試合は同じシード)', () => {
     expect(deriveSeed(9, 11) - deriveSeed(9, 10)).toBe(1);
+  });
+});
+
+describe('ターン数の分布(turnSummary / roundOf)', () => {
+  it('エンジンの手番(片道)を往復にする: 先攻1・後攻2 → 1ターン目、先攻3・後攻4 → 2ターン目', () => {
+    expect([1, 2, 3, 4, 13].map(roundOf)).toEqual([1, 1, 2, 2, 7]);
+  });
+
+  it('平均・中央値・最小・最大・標準偏差(標本)を出す', () => {
+    // 5, 6, 6, 7, 9 → 平均 6.6、中央値 6、標本分散 (2.56+0.36+0.36+0.16+5.76)/4 = 2.3
+    const t = turnSummary({ 5: 1, 6: 2, 7: 1, 9: 1 })!;
+    expect(t).toMatchObject({ n: 5, min: 5, max: 9, median: 6 });
+    expect(t.mean).toBeCloseTo(6.6, 12);
+    expect(t.sd).toBeCloseTo(Math.sqrt(2.3), 12);
+  });
+
+  it('偶数個の中央値は、真ん中の2つの平均', () => {
+    expect(turnSummary({ 4: 1, 5: 1, 8: 2 })!.median).toBe(6.5);
+  });
+
+  it('1試合なら標準偏差は 0、試合が無ければ null', () => {
+    expect(turnSummary({ 7: 1 })).toMatchObject({ n: 1, mean: 7, median: 7, sd: 0 });
+    expect(turnSummary({})).toBeNull();
+  });
+
+  it('分布は足し合わせて統合できる', () => {
+    expect(addTurnHist({ 5: 1, 6: 2 }, { 6: 1, 8: 1 })).toEqual({ 5: 1, 6: 3, 8: 1 });
   });
 });

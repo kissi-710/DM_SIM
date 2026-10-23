@@ -14,7 +14,7 @@ import {
   type ProbResult,
   type SolitaireParams,
 } from './solitaire';
-import { addAcc, emptyAcc, estimateRate, wilson, type RateAcc } from './stats';
+import { addAcc, addTurnHist, emptyAcc, estimateRate, turnSummary, wilson, type RateAcc, type TurnHist } from './stats';
 import { composeStrength, strengthDecks, type CardStrength } from './strength';
 
 export type MatchJobOpts = Omit<MatchOpts, 'onProgress' | 'shouldCancel'>;
@@ -207,7 +207,7 @@ export function mergeMatches(parts: MatchStats[], ms?: number): MatchStats {
   let winsA = 0;
   let winsB = 0;
   let draws = 0;
-  let turns = 0;
+  let turnHist: TurnHist = {};
   let firstWins = 0;
   let aFirstGames = 0;
   let aFirstWins = 0;
@@ -230,8 +230,8 @@ export function mergeMatches(parts: MatchStats[], ms?: number): MatchStats {
     winsA += p.winsA;
     winsB += p.winsB;
     draws += p.draws;
-    // 平均・割合は整数の合計から作られているので、元の個数に戻せる
-    turns += Math.round(p.avgTurns * Math.max(1, p.games));
+    turnHist = addTurnHist(turnHist, p.turnHist ?? {});
+    // 割合は整数の合計から作られているので、元の個数に戻せる
     firstWins += Math.round(p.firstPlayerWinRate * Math.max(1, p.games));
     aFirstGames += p.gamesAFirst;
     aSecondGames += p.gamesASecond;
@@ -250,7 +250,8 @@ export function mergeMatches(parts: MatchStats[], ms?: number): MatchStats {
     winRateA: est.rate,
     ci95A: est.ci,
     acc,
-    avgTurns: turns / n,
+    avgTurns: turnSummary(turnHist)?.mean ?? 0,
+    turnHist,
     firstPlayerWinRate: firstWins / n,
     winRateAFirst: aFirstGames ? aFirstWins / aFirstGames : null,
     winRateASecond: aSecondGames ? aSecondWins / aSecondGames : null,

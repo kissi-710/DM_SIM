@@ -1,4 +1,4 @@
-// カード効果の再監査(docs/card-audit.md M12-24)で見つけた、既存のカード(A・B・インターステラなど)の誤りを固定するテスト。
+// カード効果の再監査(docs/card-audit.md M13-24)で見つけた、既存のカード(A・B・インターステラなど)の誤りを固定するテスト。
 import { describe, expect, it } from 'vitest';
 import { battlePower, charsOf, costOf, powerOf } from '../../src/engine/derive';
 import { mkCtx } from '../../src/engine/state';

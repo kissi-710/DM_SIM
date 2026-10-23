@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CARD_DB, deckCards } from '../../src/cards';
 import { formatStats, runMatches, type MatchOpts } from '../../src/sim/batch';
+import { mergeMatches } from '../../src/sim/jobs';
+import { turnSummary } from '../../src/sim/stats';
 
 const base = (o: Partial<MatchOpts> = {}): MatchOpts => ({
   deckA: deckCards('maruru'),
@@ -23,6 +25,25 @@ describe('runMatches(バッチ対戦)', () => {
     expect(s.avgTurns).toBeGreaterThan(0);
     expect(Object.values(s.reasons).reduce((a, b) => a + b, 0)).toBe(8);
     expect(s.gamesAFirst + s.gamesASecond).toBe(8);
+  });
+
+  it('ターン数は往復で数え、分布(turnHist)の合計が試合数、平均が avgTurns と一致する', () => {
+    const s = runMatches(CARD_DB, base({ games: 10 }));
+    const t = turnSummary(s.turnHist)!;
+    expect(t.n).toBe(10);
+    expect(t.mean).toBeCloseTo(s.avgTurns, 12);
+    expect(t.min).toBeLessThanOrEqual(t.median);
+    expect(t.median).toBeLessThanOrEqual(t.max);
+    // 対戦画面の「N ターン目」と同じ数え方: 1 試合で内部の手番が最大 2N なら N ターン目
+    expect(formatStats('x', s)).toContain('ターン数(往復)');
+  });
+
+  it('範囲を分けて実行して統合しても、ターン数の分布は一括の実行と一致する', () => {
+    const whole = runMatches(CARD_DB, base({ games: 8 }));
+    const parts = [runMatches(CARD_DB, base({ games: 4, startIndex: 0 })), runMatches(CARD_DB, base({ games: 4, startIndex: 4 }))];
+    const merged = mergeMatches(parts);
+    expect(merged.turnHist).toEqual(whole.turnHist);
+    expect(merged.avgTurns).toBeCloseTo(whole.avgTurns, 12);
   });
 
   it('同じシードなら、時間以外は同じ結果(再現性)', () => {
