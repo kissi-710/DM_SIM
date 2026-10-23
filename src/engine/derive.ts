@@ -471,7 +471,11 @@ export function costOf(c: Ctx, uid: number, faceIdx: number, opts: CostOpts = {}
   let cost = face.cost;
   const info = c.reg.getInfo(card.defId, faceIdx);
   if (info.sympathy) cost -= s.players[card.owner].mana.length;
-  if (info.hyperEnergy && opts.taps?.length) cost -= 2 * opts.taps.length;
+  if (info.hyperEnergy && opts.taps?.length) {
+    // 「ただしコストは0以下にはならない」(軽減が働いた時だけ。元が0なら0のまま)
+    const before = cost;
+    cost = Math.max(cost - 2 * opts.taps.length, Math.min(before, 1));
+  }
   if (info.selfCosts.length > 0) {
     const cc = mkCC(c, card.owner, { self: uid });
     for (const sc of info.selfCosts) {
@@ -482,7 +486,12 @@ export function costOf(c: Ctx, uid: number, faceIdx: number, opts: CostOpts = {}
   }
   // 「このターン、次に召喚する自分のクリーチャーのコストを少なくする」
   if (s.effects.length > 0 && isCreatureType(face.type)) {
-    for (const e of s.effects) if (e.mod.kind === 'nextSummon' && e.controller === card.owner) cost += e.mod.delta;
+    for (const e of s.effects) {
+      if (e.mod.kind !== 'nextSummon' || e.controller !== card.owner) continue;
+      // 「ただしコストは0以下にはならない」(軽減が働いた時だけ。元が0なら0のまま)
+      const before = cost;
+      cost = Math.max(cost + e.mod.delta, Math.min(before, 1));
+    }
   }
   for (const st of activeStatics(c, 'costDelta')) {
     if (st.controller !== card.owner) continue;

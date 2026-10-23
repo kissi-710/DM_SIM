@@ -1,6 +1,8 @@
 // デッキE「呪文連打でコンボを目指せゴスペルデッキ」の新規カード(docs/decks-25oudou.md)のシナリオテスト。
 import { describe, expect, it } from 'vitest';
-import { Sim, mana } from '../scenario';
+import { costOf } from '../../src/engine/derive';
+import { mkCtx } from '../../src/engine/state';
+import { Sim, mana, reg } from '../scenario';
 
 const N = 'フェアリー・ライフ';
 const W = 'アクアン';
@@ -163,6 +165,20 @@ describe('E09 氷柱と炎弧の決断 / E10 T・T・T', () => {
     sim.option(2);
     sim.play('流星のガイアッシュ・カイザー'); // コスト6 → 3
     expect(sim.tappedMana(0)).toBe(3 + 3);
+  });
+});
+
+describe('次に召喚するクリーチャーのコスト軽減は、0以下にならない', () => {
+  it('T・T・T: コスト3のクリーチャーは、3少なくしても1(0にはならない)', () => {
+    const sim = new Sim({ p0: { hand: ['T・T・T', '天災 デドダム'], mana: [L, W, F, W, N, N, N] } });
+    sim.play('T・T・T');
+    sim.option(2);
+    expect(costOf(mkCtx(sim.s, reg), sim.uid(0, 'hand', '天災 デドダム'), 0)).toBe(1);
+  });
+  it('キリモミ・ヤマアラシ: コスト3のクリーチャーは2', () => {
+    const sim = new Sim({ p0: { hand: ['キリモミ・ヤマアラシ', '天災 デドダム'], mana: [F, W, W, W] } });
+    sim.play('キリモミ・ヤマアラシ');
+    expect(costOf(mkCtx(sim.s, reg), sim.uid(0, 'hand', '天災 デドダム'), 0)).toBe(2);
   });
 });
 

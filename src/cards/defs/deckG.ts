@@ -56,7 +56,7 @@ export const DECK_G: CardDef[] = [
     'dm26sd1-G05',
     creature('アシスター・コッピ', 2, 'F', 3000, ['アーマード・ファイアー・バード'], [
       staticAb({ type: 'powerAttacker', n: 2000 }),
-      staticAb({ type: 'costDelta', delta: -1, cond: race(ARMORED), oncePerTurn: true }),
+      staticAb({ type: 'costDelta', delta: -1, cond: race(ARMORED), oncePerTurn: true, floor: 1 }),
     ]),
   ),
 
@@ -81,7 +81,7 @@ export const DECK_G: CardDef[] = [
   // 7. チャラ・ルピア
   card(
     'dm26sd1-G07',
-    creature('チャラ・ルピア', 2, 'LF', 1500, ['ファイアー・バード'], [staticAb({ type: 'costDelta', delta: -2, cond: and({ type: 'creature' }, race('ドラゴン')) })]),
+    creature('チャラ・ルピア', 2, 'LF', 1500, ['ファイアー・バード'], [staticAb({ type: 'costDelta', delta: -2, cond: and({ type: 'creature' }, race('ドラゴン')), floor: 1 })]),
   ),
 
   // 8. ボルシャック・ヴォルジャアク

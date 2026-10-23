@@ -796,7 +796,9 @@ pub fn cost_of_once(e: Env, uid: i32, face_idx: i32, taps: &[i32], free: bool, o
         cost -= s.players[card.owner as usize].mana.len() as i32;
     }
     if info.hyper_energy && !taps.is_empty() {
-        cost -= 2 * taps.len() as i32;
+        // 「ただしコストは0以下にはならない」(軽減が働いた時だけ。元が0なら0のまま)
+        let before = cost;
+        cost = (cost - 2 * taps.len() as i32).max(before.min(1));
     }
     if !info.self_costs.is_empty() {
         let cc = CC::new(e, card.owner).with_self(uid);
@@ -822,7 +824,9 @@ pub fn cost_of_once(e: Env, uid: i32, face_idx: i32, taps: &[i32], free: bool, o
         for ef in &s.effects {
             if let EffectMod::NextSummon { delta, .. } = ef.m {
                 if ef.controller == card.owner {
-                    cost += delta;
+                    // 「ただしコストは0以下にはならない」(軽減が働いた時だけ。元が0なら0のまま)
+                    let before = cost;
+                    cost = (cost + delta).max(before.min(1));
                 }
             }
         }

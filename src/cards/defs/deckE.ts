@@ -63,8 +63,11 @@ export const DECK_E: CardDef[] = [
     'dm26sd1-E05',
     spell('最期の竜炎', 1, 'F', [sTrigger()], [
       ...discardOne(),
-      select('$t', { zone: 'battle', owner: 'opponent', type: 'element', chooseable: true, where: { cost: { lte: { costOf: '$dd' } } } }, { prompt: '破壊する相手のエレメントを選んでください' }),
-      destroy('$t'),
+      // 「こうして捨てたカード以下」: 捨てられなかった(手札がない)なら、選ぶ対象がない
+      ifc({ nonEmpty: '$dd' }, [
+        select('$t', { zone: 'battle', owner: 'opponent', type: 'element', chooseable: true, where: { cost: { lte: { costOf: '$dd' } } } }, { prompt: '破壊する相手のエレメントを選んでください' }),
+        destroy('$t'),
+      ]),
     ]),
   ),
 
@@ -128,7 +131,7 @@ export const DECK_E: CardDef[] = [
           { label: '手札を1枚捨て、カードを2枚引く', steps: [...discardOne(), draw(2)] },
           {
             label: 'コスト2以下のエレメントを1つ、手札から出す',
-            steps: [selectUpTo('$p', { zone: 'hand', owner: 'self', type: 'element', where: and(costLte(2), notEvolution) }, 1), act({ put: { sel: '$p' } })],
+            steps: [select('$p', { zone: 'hand', owner: 'self', type: 'element', where: and(costLte(2), notEvolution) }, { prompt: '手札から出すコスト2以下のエレメントを選んでください' }), act({ put: { sel: '$p' } })],
           },
         ],
       },
