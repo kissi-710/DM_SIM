@@ -61,6 +61,14 @@ describe('S02 ヴェネラック-F5 / S03 光器アメリア', () => {
     expect(sim.count(1, 'shield')).toBe(1);
     expect(checkInvariants(sim.s)).toEqual([]);
   });
+  it('ヴェネラック: マナをタップして召喚したクリーチャーには反応しない(公式Q&A 48153: 条件は「マナゾーンのカードをタップしない」こと)', () => {
+    const sim = new Sim({ p0: { battle: [{ c: VENE }], shield: 0 }, p1: { hand: ['コレンココ・タンク'], mana: mana(7, N), shield: 0 }, active: 1 });
+    sim.play('コレンココ・タンク');
+    sim.drain();
+    expect(sim.s.pending?.why).not.toBe('may');
+    expect(sim.has(1, 'battle', 'コレンココ・タンク')).toBe(true);
+    expect(sim.count(1, 'shield')).toBe(0);
+  });
   it('アメリア: 出た時、山札の上から1枚目をシールド化する。次の自分のターンのはじめに、自分のシールドを1つ手札に加える(「S・トリガー」は使えない)', () => {
     const sim = new Sim({ p0: { hand: [AMELIA], mana: mana(2, L), deck: [N, N, N], shield: 1 }, p1: { deck: [N, N, N] } });
     sim.play(AMELIA);
