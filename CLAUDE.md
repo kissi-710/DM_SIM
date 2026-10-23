@@ -69,6 +69,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 | `npm run build:wasm` | Rust 版エンジンを WASM にビルドして `src/wasm/dmsim.wasm` に置く(要 Rust。あれば AI の探索が自動で使う。無ければ TS 版)。**wasm は git の管理外なので、pull / merge で `rust/` やカードが変わったら必ず作り直す**。古いままだと新しいカードを読めず、黙って TS 版(約 10 倍遅く、Worker ごとに約 240MB)に落ちて CPU・メモリを使い切る。dev / batch / prob / aibench の前に `scripts/check-wasm.mjs` が古さを警告し、バッチ画面も TS 版に落ちた時に警告を出す |
 | `npx tsx scripts/diff-fuzz.ts [試合数] [シード]` | TS 版と Rust 版(WASM)のラウンド評価の一致を、ランダムなデッキ・局面で広く確かめる(要 `build:wasm`)。ずれた局面は `scratch/survey/` に書き出す。まれなずれは、固定フィクスチャの `test:rust` では見つからない |
 | `npx tsx scripts/behavior-snapshot.ts --check tests/fixtures/behavior-snapshot.json` | 挙動スナップショットの確認(全デッキ・全 AI の固定シードの対局と調査を hash にした 978 件。**リファクタリング・高速化など、挙動を変えない変更の後に必ず回す**。ルール・カード・AI を意図して変えた時だけ、`behavior-snapshot.ts <出力先>` で取り直す。docs/refactoring.md) |
+| `npx tsx scripts/audit-games.ts [組ごとの試合数] [シード]` | 全デッキの総当たり対局で、エンジンの不変条件(例外・終局・カードの所在・JSON の往復)を検査し、一度も発火しなかった能力を数える。カードやエンジンを変えたら回す(docs/card-audit.md) |
 | `npm run test:rust` | Rust 版と TS 版の差分テスト。正解データ(`rust/fixtures/games.json`)を TS 版で作り直してから `cargo test --release` を実行する。ルール・カード・プレイアウトを変えたら必ず回す(フィクスチャが無いとテストはスキップされる) |
 
 注意: この環境(Windows)では `python` / `python3` は Microsoft Store のスタブで動かない。Python が必要なときは `py` で実行する(例: `py script.py`)。
@@ -81,6 +82,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 - カード効果は **データ(AST)** で書く(`src/cards/data/*.json`)。エンジンのコードを触るのは「原始操作が足りない時」だけ。
 - **質問(`ask`)は状態を変更する前に行う**。再実行しても二重に変更されない(effects 6.5 の再開可能な実行)。
 - **選択の余地がない質問は出さない(自明なら自動で進める)**。選択がある時だけ聞く。判定はエンジン側の関数にしてテストで固定する(例: `payChoice`。effects 11.6)。
+- 新しいカードを足したら、公式テキストと1枚ずつ突き合わせる(観点は docs/card-audit.md)。「〜まで」「してもよい」は任意、それ以外(「選び、〜する」「出す」)は強制。「ただしコストは0以下にならない」は `floor: 1`。
 - 新しいカード能力を足したら、`tests/cards/` にシナリオテストを書く。ルールの不明点は ROADMAP の「要確認ルール台帳」(L1〜)に記録する。
 - UI・ログは日本語。カード画像は当面なし(テキスト表示)。
 
