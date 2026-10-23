@@ -3,7 +3,8 @@
 use crate::cond::*;
 use crate::derive::*;
 use crate::procs::{plan_play, plan_play_ok};
-use crate::registry::Registry;
+use crate::registry::{Feat, Registry};
+use crate::ast::{Ability, PlayKind};
 use crate::state::*;
 use crate::types::*;
 use std::rc::Rc;
@@ -63,11 +64,66 @@ fn turn_actions(e: Env, player: PlayerId) -> Vec<Action> {
             }
             out.push(a);
         }
+        out.extend(hyperize_actions(e, player));
+        out.extend(cross_actions(e, player));
         out.push(Action::EndMain);
     }
     if s.step == Step::Main || s.step == Step::Attack {
         out.extend(attack_actions(e, player));
         out.push(Action::EndTurn);
+    }
+    out
+}
+
+/// クロスできるクロスギアとクリーチャーの組(クロスギアのコストをもう一度、マナで払えるもの)
+pub fn cross_actions(e: Env, player: PlayerId) -> Vec<Action> {
+    let s = e.s;
+    let mut out = Vec::new();
+    let mine = &s.players[player as usize].battle;
+    let gears: Vec<&Perm> = mine.iter().filter(|p| chars_lite(e, p.cards[0], -1).ty == FaceType::Crossgear).collect();
+    if gears.is_empty() {
+        return out;
+    }
+    let hosts: Vec<&Perm> = mine.iter().filter(|p| chars_lite(e, p.cards[0], -1).ty.is_creature()).collect();
+    for g in gears {
+        let (cost, civs) = cross_cost(e, g.cards[0]);
+        if plan_payment(e, player, &civs, pay_need(cost, civs.len() as i32), &[], &[]).is_none() {
+            continue;
+        }
+        for h in &hosts {
+            if g.crossed_on != Some(h.pid) {
+                out.push(Action::Cross { gear: g.pid, target: h.pid });
+            }
+        }
+    }
+    out
+}
+
+/// ハイパー化できるクリーチャーと、タップする他のクリーチャーの組(ハイパーモード中でないもの)
+pub fn hyperize_actions(e: Env, player: PlayerId) -> Vec<Action> {
+    let mut out = Vec::new();
+    let mine = &e.s.players[player as usize].battle;
+    for perm in mine {
+        if perm.hyper {
+            continue;
+        }
+        let need = match info_of(e, perm.cards[0]).hyperize {
+            Some(n) if n >= 0 => n,
+            _ => continue,
+        };
+        let others: Vec<&Perm> = mine.iter().filter(|p| p.pid != perm.pid && !p.tapped && chars_lite(e, p.cards[0], -1).ty.is_creature()).collect();
+        if need == 0 {
+            out.push(Action::Hyperize { pid: perm.pid, tap: vec![] });
+            continue;
+        }
+        // need = 1 が通常。2体以上なら、組み合わせの先頭だけ(まれ)
+        if need == 1 {
+            for o in others {
+                out.push(Action::Hyperize { pid: perm.pid, tap: vec![o.pid] });
+            }
+        } else if others.len() as i32 >= need {
+            out.push(Action::Hyperize { pid: perm.pid, tap: others.iter().take(need as usize).map(|p| p.pid).collect() });
+        }
     }
     out
 }
@@ -95,22 +151,27 @@ pub fn play_actions(e: Env, player: PlayerId) -> Vec<Action> {
     crate::prof!(6);
     let s = e.s;
     let mut out = Vec::new();
-    for z in [Zone::Hand, Zone::Mana, Zone::Grave] {
-        let list: &Vec<i32> = match z {
-            Zone::Hand => &s.players[player as usize].hand,
-            Zone::Mana => &s.players[player as usize].mana,
-            _ => &s.players[player as usize].grave,
+    let zones: &[Zone] = if game_has(e, Feat::AllowPlayFrom) { &[Zone::Hand, Zone::Mana, Zone::Grave, Zone::Hyper, Zone::Deck] } else { &[Zone::Hand, Zone::Mana, Zone::Grave, Zone::Hyper] };
+    for &z in zones {
+        // 山札から使えるのは、一番上のカードだけ(「山札の上から召喚してもよい」)
+        let list: Vec<i32> = match z {
+            Zone::Hand => s.players[player as usize].hand.clone(),
+            Zone::Mana => s.players[player as usize].mana.clone(),
+            Zone::Hyper => s.players[player as usize].hyper.clone(),
+            Zone::Deck => s.players[player as usize].deck.iter().take(1).copied().collect(),
+            _ => s.players[player as usize].grave.clone(),
         };
-        for &uid in list {
+        for uid in list {
             let def = &e.reg.defs[s.cards[uid as usize].def as usize];
             for (fi, face) in def.faces.iter().enumerate() {
                 let info = e.reg.info(s.cards[uid as usize].def, fi as i32);
                 if z != Zone::Hand {
-                    let want_cast = face.ty == FaceType::Spell;
+                    let kind = if face.ty == FaceType::Spell { PlayKind::Cast } else if face.ty.is_creature() { PlayKind::Summon } else { PlayKind::Put };
                     let ok = info.permissions.iter().any(|&pi| match &face.abilities[pi as usize] {
-                        crate::ast::Ability::Permission { play_cast, from, .. } => *from == z && *play_cast == want_cast,
+                        Ability::Permission { play, from, .. } => *from == z && *play == kind,
                         _ => false,
-                    });
+                    }) || (face.ty.is_creature() && granted_play_from(e, player, uid, fi as i32, z).is_some())
+                        || info.alt_costs.iter().any(|&ai| matches!(&face.abilities[ai as usize], Ability::AltCost { cost, .. } if cost.from.as_ref().map_or(false, |fz| fz.contains(&z))));
                     if !ok {
                         continue;
                     }
@@ -126,7 +187,43 @@ pub fn play_actions(e: Env, player: PlayerId) -> Vec<Action> {
     out
 }
 
-fn extra_variants(e: Env, player: PlayerId, uid: i32, _from: Zone, fi: i32) -> Vec<Option<PlayExtra>> {
+fn extra_variants(e: Env, player: PlayerId, uid: i32, from: Zone, fi: i32) -> Vec<Option<PlayExtra>> {
+    let s = e.s;
+    let def = &e.reg.defs[s.cards[uid as usize].def as usize];
+    let face = &def.faces[fi as usize];
+    let info = e.reg.info(s.cards[uid as usize].def, fi);
+    // 別のコスト(マナを払うかわりに、手札を捨てる・マナを払わない)は、別の使い方として並べる。使えるかは、呼び出し側が plan_play で調べる
+    let mut alts: Vec<PlayExtra> = Vec::new();
+    for &ai in &info.alt_costs {
+        if let Ability::AltCost { id, cost, .. } = &face.abilities[ai as usize] {
+            let owner = s.cards[uid as usize].owner;
+            if cost.grave_evolve {
+                // 超無限墓地進化: 墓地のクリーチャーを、コストの大きいものから k 体(1 ≤ k)
+                let mut g: Vec<i32> = s.players[owner as usize].grave.iter().copied().filter(|&u| chars_lite(e, u, -1).ty.is_creature()).collect();
+                g.sort_by(|a, b| cost_base(e, *b).cmp(&cost_base(e, *a)));
+                for k in 1..=g.len().min(8) {
+                    alts.push(PlayExtra { alt: Some(id.clone()), under: Some(g[..k].to_vec()), ..Default::default() });
+                }
+            } else if cost.fushigi.is_some() {
+                // フシギバース: タップしてマナゾーンに置く自分のクリーチャーごと
+                for p in &s.players[owner as usize].battle {
+                    if !p.tapped && chars_lite(e, p.cards[0], -1).ty.is_creature() {
+                        alts.push(PlayExtra { alt: Some(id.clone()), tap_alt: Some(vec![p.pid]), ..Default::default() });
+                    }
+                }
+            } else {
+                alts.push(PlayExtra { alt: Some(id.clone()), ..Default::default() });
+            }
+        }
+    }
+    let mut base = extra_variants_base(e, player, uid, from, fi);
+    if !alts.is_empty() {
+        base.extend(alts.into_iter().map(Some));
+    }
+    base
+}
+
+fn extra_variants_base(e: Env, player: PlayerId, uid: i32, _from: Zone, fi: i32) -> Vec<Option<PlayExtra>> {
     let s = e.s;
     let def = &e.reg.defs[s.cards[uid as usize].def as usize];
     let face = &def.faces[fi as usize];
@@ -135,7 +232,8 @@ fn extra_variants(e: Env, player: PlayerId, uid: i32, _from: Zone, fi: i32) -> V
     if face.ty == FaceType::Evolution {
         for perm in &s.players[player as usize].battle {
             let top = perm.cards[0];
-            let cc = CC::new(e, player).with_self(uid).with_it(top, s.cards[top as usize].face);
+            let mut cc = CC::new(e, player).with_self(uid).with_it(top, s.cards[top as usize].face);
+            cc.evo = true;
             if let Some(ef) = &face.evolve_from {
                 if eval_cond(&cc, ef) {
                     bases.push(Some(perm.pid));
@@ -151,7 +249,7 @@ fn extra_variants(e: Env, player: PlayerId, uid: i32, _from: Zone, fi: i32) -> V
             continue;
         }
         if !info.hyper_energy {
-            out.push(onto.map(|o| PlayExtra { onto: Some(o), tap: None, pay: None }));
+            out.push(onto.map(|o| PlayExtra { onto: Some(o), ..Default::default() }));
             continue;
         }
         // ハイパーエナジー: コストが互いに異なるクリーチャーを j 体タップする代表的な選び方
@@ -184,7 +282,7 @@ fn extra_variants(e: Env, player: PlayerId, uid: i32, _from: Zone, fi: i32) -> V
                 break;
             }
             let tap: Vec<i32> = reps[..j].iter().map(|p| p.pid).collect();
-            let extra = PlayExtra { onto, tap: Some(tap), pay: None };
+            let extra = PlayExtra { onto, tap: Some(tap), ..Default::default() };
             if j == 0 && onto.is_none() {
                 out.push(None);
             } else {
@@ -197,9 +295,10 @@ fn extra_variants(e: Env, player: PlayerId, uid: i32, _from: Zone, fi: i32) -> V
 
 // ───────────────────────── 回答の列挙・検証 ─────────────────────────
 
-fn combos(items: &[i32], min: i32, max: i32, limit: usize) -> Vec<Vec<i32>> {
+fn combos(items: &[i32], min: i32, max: i32, limit: usize, sum: Option<&(i32, Vec<i32>)>) -> Vec<Vec<i32>> {
     let mut res: Vec<Vec<i32>> = Vec::new();
-    fn go(items: &[i32], min: usize, max: usize, limit: usize, start: usize, cur: &mut Vec<i32>, res: &mut Vec<Vec<i32>>) {
+    #[allow(clippy::too_many_arguments)]
+    fn go(items: &[i32], min: usize, max: usize, limit: usize, start: usize, cur: &mut Vec<i32>, res: &mut Vec<Vec<i32>>, total: i32, sum: Option<&(i32, Vec<i32>)>) {
         if res.len() >= limit {
             return;
         }
@@ -210,15 +309,21 @@ fn combos(items: &[i32], min: i32, max: i32, limit: usize) -> Vec<Vec<i32>> {
             return;
         }
         for i in start..items.len() {
+            let t = total + sum.map_or(0, |s| s.1[i]);
+            if let Some(s) = sum {
+                if t > s.0 {
+                    continue;
+                }
+            }
             cur.push(items[i]);
-            go(items, min, max, limit, i + 1, cur, res);
+            go(items, min, max, limit, i + 1, cur, res, t, sum);
             cur.pop();
             if res.len() >= limit {
                 return;
             }
         }
     }
-    go(items, min.max(0) as usize, max.max(0) as usize, limit, 0, &mut Vec::new(), &mut res);
+    go(items, min.max(0) as usize, max.max(0) as usize, limit, 0, &mut Vec::new(), &mut res, 0, sum);
     res
 }
 
@@ -228,7 +333,7 @@ pub fn enumerate_answers(p: &Pending, limit: usize) -> Vec<Val> {
         None => return vec![],
     };
     match inp {
-        InputSpec::Pick { candidates, min, max } => combos(candidates, *min, *max, limit).into_iter().map(|v| Val::ints(&v)).collect(),
+        InputSpec::Pick { candidates, min, max, sum } => combos(candidates, *min, *max, limit, sum.as_ref()).into_iter().map(|v| Val::ints(&v)).collect(),
         InputSpec::YesNo => vec![Val::Bool(true), Val::Bool(false)],
         InputSpec::Order { candidates, .. } => candidates.iter().map(|&c| Val::Int(c as i64)).collect(),
         InputSpec::Ack { .. } => vec![Val::Bool(true)],
@@ -308,7 +413,7 @@ pub fn validate_answer(p: &Pending, v: &Val) -> Option<String> {
         None => return Some("入力を受け付けていません".into()),
     };
     match inp {
-        InputSpec::Pick { candidates, min, max } => {
+        InputSpec::Pick { candidates, min, max, sum } => {
             let a = match v {
                 Val::List(_) => v.to_i32s(),
                 _ => return Some("配列で答えてください".into()),
@@ -324,6 +429,12 @@ pub fn validate_answer(p: &Pending, v: &Val) -> Option<String> {
             }
             if !a.iter().all(|x| candidates.contains(x)) {
                 return Some("候補にないものを選んでいます".into());
+            }
+            if let Some((m, costs)) = sum {
+                let total: i32 = a.iter().map(|x| costs[candidates.iter().position(|c| c == x).unwrap_or(0)]).sum();
+                if total > *m {
+                    return Some(format!("コストの合計は {} 以下にしてください", m));
+                }
             }
             None
         }
@@ -448,7 +559,7 @@ pub fn validate_action(s: &State, reg: &Registry, a: &Action) -> Option<String> 
             };
             let from = from.unwrap_or(Zone::Hand);
             let def = &reg.defs[card.def as usize];
-            let fi = face.unwrap_or_else(|| def.faces.iter().position(|f| f.ty != FaceType::Spell).unwrap_or(0) as i32);
+            let fi = face.unwrap_or_else(|| def.faces.iter().position(|f| f.ty.is_creature()).unwrap_or(0) as i32);
             let plan = plan_play(e, player, *uid, from, fi, extra.as_ref(), false);
             if plan.ok {
                 None
@@ -464,6 +575,49 @@ pub fn validate_action(s: &State, reg: &Registry, a: &Action) -> Option<String> 
                 None => Some("攻撃できるクリーチャーではありません".into()),
                 Some(pm) => (!can_attack(e, pm, target)).then(|| "その対象は攻撃できません".to_string()),
             }
+        }
+        Action::Cross { gear, target } => {
+            if s.step != Step::Main {
+                return Some("今はクロスできません".into());
+            }
+            let ok = cross_actions(e, player).iter().any(|x| matches!(x, Action::Cross { gear: g, target: t } if g == gear && t == target));
+            if ok {
+                None
+            } else {
+                Some("クロスできません".into())
+            }
+        }
+        Action::Hyperize { pid, tap } => {
+            if s.step != Step::Main {
+                return Some("今はハイパー化できません".into());
+            }
+            let ok = hyperize_actions(e, player).iter().any(|x| matches!(x, Action::Hyperize { pid: p, tap: t } if p == pid && t.len() == tap.len() && t.iter().all(|y| tap.contains(y))));
+            if ok {
+                return None;
+            }
+            // 組み合わせは、先頭だけを列挙している。タップする他のクリーチャーが条件に合えば通す
+            let pm = match s.players[player as usize].battle.iter().find(|x| x.pid == *pid) {
+                Some(p) if !p.hyper => p,
+                _ => return Some("ハイパー化できません".into()),
+            };
+            let need = match info_of(e, pm.cards[0]).hyperize {
+                Some(n) if tap.len() as i32 == n => n,
+                _ => return Some("ハイパー化できません".into()),
+            };
+            let _ = need;
+            let mut u = tap.clone();
+            u.sort();
+            u.dedup();
+            if u.len() != tap.len() {
+                return Some("ハイパー化できません".into());
+            }
+            for t in tap {
+                match s.players[player as usize].battle.iter().find(|x| x.pid == *t) {
+                    Some(tp) if tp.pid != pm.pid && !tp.tapped && chars_lite(e, tp.cards[0], -1).ty.is_creature() => {}
+                    _ => return Some("タップできないクリーチャーです".into()),
+                }
+            }
+            None
         }
         Action::Answer { .. } => None,
     }

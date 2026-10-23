@@ -8,12 +8,6 @@ import { SD1_CARDS } from './defs';
 export const CARD_LIST = [...(raw as unknown as CardDef[]), ...SD1_CARDS];
 
 /**
- * Rust 版(WASM)が持たないカード: 25の王道の新規カード(M10。ルール・能力は TS 版が基準)。
- * これらを含む対局の探索は、TS 版で評価する(src/wasm/dmEngine.ts の rustRegistryJson、src/ai/mcts.ts の setNativeSkipCards)
- */
-export const TS_ONLY_CARD_IDS: string[] = SD1_CARDS.map((c) => c.id);
-
-/**
  * カードDB。CARD_LIST に加えて、カード単体の強さの測定で差し替える「無能力」カード(blank-コスト-文明)を持つ。
  * 無能力カードは、探索用の WASM にも渡る(定義を1回だけ読む)ので、DB に入れておく。一覧(CARD_LIST)には出ない。
  */
@@ -568,6 +562,22 @@ export const SD1_DECKS: DeckPreset[] = [
   },
 ];
 DECK_PRESETS.push(...SD1_DECKS);
+
+/** 25の王道(DM26-SD1)の新規カードの ID すべて(学習モデルのカード別の特徴量には入れない。src/ai/l1learn.ts) */
+export const SD1_CARD_IDS: string[] = SD1_CARDS.map((c) => c.id);
+
+/**
+ * Rust 版(WASM)にカードの能力まで実装したデッキ(SD1_DECKS の id)。Rust 版の差分テスト(rust/tests/diff.rs)で TS 版と一致を確かめてから足す。
+ * デッキのカードがすべて Rust 版で動けば、そのデッキの対局の探索も Rust 版で評価する
+ */
+export const RUST_READY_DECKS: string[] = ['sd1-c', 'sd1-d', 'sd1-e', 'sd1-f', 'sd1-g', 'sd1-h', 'sd1-i', 'sd1-j', 'sd1-k', 'sd1-l', 'sd1-m', 'sd1-n', 'sd1-o', 'sd1-p', 'sd1-q', 'sd1-r', 'sd1-s', 'sd1-t', 'sd1-u', 'sd1-v', 'sd1-w', 'sd1-x', 'sd1-y'];
+
+/**
+ * Rust 版(WASM)が持たないカード: 25の王道の新規カードのうち、Rust 版にまだ実装していないデッキのもの(ルール・能力は TS 版が基準)。
+ * これらを含む対局の探索は、TS 版で評価する(src/wasm/dmEngine.ts の rustRegistryJson、src/ai/mcts.ts の setNativeSkipCards)
+ */
+const READY_IDS = new Set(SD1_DECKS.filter((d) => RUST_READY_DECKS.includes(d.id)).flatMap((d) => d.list.map(([id]) => id)));
+export const TS_ONLY_CARD_IDS: string[] = SD1_CARD_IDS.filter((id) => !READY_IDS.has(id));
 
 export function deckCards(id: string): string[] {
   const p = DECK_PRESETS.find((d) => d.id === id);

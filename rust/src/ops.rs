@@ -4,7 +4,7 @@
 use crate::ast::*;
 use crate::cond::*;
 use crate::derive::*;
-use crate::registry::Registry;
+use crate::registry::{Face, Feat, Registry};
 use crate::types::*;
 use std::rc::Rc;
 
@@ -43,6 +43,153 @@ impl<'a> Ctx<'a> {
     pub fn env(&self) -> Env<'_> {
         Env { s: &self.s, reg: self.reg }
     }
+}
+
+/// そのイベントの種類を監視する能力が、対局のデッキのカードにあるか(なければ、イベントを発行しない)。
+/// TS 版(ops.ts の listens)と同じ: デッキが分からない状態では、カードDB全体で調べる
+pub fn listens(c: &Ctx, ty: Sym) -> bool {
+    let by_def = match c.reg.trig_by_def.get(ty.0 as usize) {
+        Some(Some(v)) => v,
+        _ => return false,
+    };
+    let ids = &c.s.deck_ids;
+    if ids.len() < 2 || ids[0].is_empty() || ids[1].is_empty() {
+        return true;
+    }
+    ids.iter().any(|l| l.iter().any(|&d| by_def.get(d as usize).map_or(false, |r| !r.is_empty())))
+}
+
+/// バトルゾーンの一番上のカードの、使用中の面
+pub fn top_face<'a>(e: Env<'a>, uid: i32) -> &'a Face {
+    let card = &e.s.cards[uid as usize];
+    e.reg.face(card.def, chars_lite(e, uid, -1).face_idx)
+}
+
+/// 効果フレームを積む(手順を行う)。出る時の置換の「その後」・かわりの手順・山札がない時の置換などで使う
+pub fn push_effect(c: &mut Ctx, ability: AbilityRef, source: ObjRef, controller: PlayerId, trigger: Option<Rc<Ev>>, no_optional: bool) {
+    let lki = Rc::new(snap_of(c.env(), source.uid));
+    let id = c.s.next_id();
+    c.s.cont.push(Frame::Effect(EffectFrame { id, caused_by: c.cause, ability, source, lki, controller, pc: 0, vars: Vec::new(), trigger, no_optional }));
+}
+
+/// 置換の対象の持ち主・使い手の関係(want: self / opponent / any。pl = 置換を持つカードの持ち主)
+fn rel_pl(want: Option<Rel>, actual: PlayerId, pl: PlayerId) -> bool {
+    match want {
+        None | Some(Rel::Any) => true,
+        Some(Rel::Self_) => actual == pl,
+        Some(Rel::Opponent) => actual != pl,
+    }
+}
+
+/// クリーチャーが召喚された後の処理: 「このターン、次に召喚する自分のクリーチャー」の効果を使い切る。
+/// sa の効果は、召喚されたクリーチャーに、そのターンのスピードアタッカーを与える。
+pub fn on_summoned(c: &mut Ctx, uid: i32) {
+    if c.s.effects.is_empty() {
+        return;
+    }
+    let (owner, zone, pid) = {
+        let card = &c.s.cards[uid as usize];
+        (card.owner, card.zone, card.pid)
+    };
+    let mine: Vec<bool> = c.s.effects.iter().filter_map(|e| if let EffectMod::NextSummon { sa, .. } = e.m { if e.controller == owner { Some(sa) } else { None } } else { None }).collect();
+    if mine.is_empty() {
+        return;
+    }
+    c.s.effects.retain(|e| !(matches!(e.m, EffectMod::NextSummon { .. }) && e.controller == owner));
+    if zone == Zone::Battle && mine.iter().any(|&sa| sa) {
+        let id = c.s.next_id();
+        let turn = c.s.turn;
+        c.s.effects.push(ContEffect { id, pid, m: EffectMod::Grant(s::KW_SPEED_ATTACKER), until: Duration::EndOfTurn { turn }, controller: owner });
+    }
+}
+
+/// 封印を1つ墓地に置く: owner の、cmd_civs と同じ文明を持つ封印されたクリーチャーのそれぞれから、封印を1つ
+fn release_seals(c: &mut Ctx, owner: PlayerId, cmd_civs: &[Civ], evs: &mut Vec<Rc<Ev>>) {
+    let n = c.s.players[owner as usize].battle.len();
+    for i in 0..n {
+        if c.s.players[owner as usize].battle[i].seals.is_empty() {
+            continue;
+        }
+        let top = c.s.players[owner as usize].battle[i].cards[0];
+        let civs = top_face(c.env(), top).civs.clone();
+        if !civs.iter().any(|x| cmd_civs.contains(x)) {
+            continue;
+        }
+        let u = c.s.players[owner as usize].battle[i].seals.remove(0);
+        let usnap = Rc::new(snap_of(c.env(), u));
+        let uowner = c.s.cards[u as usize].owner;
+        {
+            let uc = &mut c.s.cards[u as usize];
+            uc.zone = Zone::Grave;
+            uc.ep += 1;
+            uc.pid = -1;
+        }
+        c.s.players[uowner as usize].grave.push(u);
+        evs.push(emit(
+            c,
+            s::MOVED,
+            vec![
+                (s::CARD, Val::Int(u as i64)),
+                (s::OWNER, Val::Int(uowner as i64)),
+                (s::FROM, Val::zone(Zone::Battle)),
+                (s::TO, Val::zone(Zone::Grave)),
+                (sym("cause"), Val::Str(sym("sealRelease"))),
+                (s::KIND, Val::Str(s::CREATURE)),
+                (s::EX, Val::Bool(false)),
+                (s::LKI, Val::Snap(usnap)),
+                (s::UNDERNEATH, Val::Bool(true)),
+            ],
+        ));
+    }
+}
+
+/// カードを、持ち主の山札の上から depth 枚目の位置に、横向きに刺す(終葬 5.S.D.)。横向きのカードを手札に加えたプレイヤーは、ゲームに負ける
+pub fn stab_into_deck(c: &mut Ctx, uids: &[i32], depth: i32) {
+    let mut evs: Vec<Rc<Ev>> = Vec::new();
+    for &uid in uids {
+        let (from, owner) = {
+            let card = &c.s.cards[uid as usize];
+            (card.zone, card.owner)
+        };
+        let snap = Rc::new(snap_of(c.env(), uid));
+        remove_from_zone(c, uid);
+        let n = c.s.players[owner as usize].deck.len();
+        c.s.players[owner as usize].deck.insert(((depth - 1).max(0) as usize).min(n), uid);
+        {
+            let card = &mut c.s.cards[uid as usize];
+            card.zone = Zone::Deck;
+            card.ep += 1;
+            card.pid = -1;
+            card.tapped = false;
+            card.ex = false;
+            card.ex_pid = -1;
+            card.face = 0;
+            card.up = false;
+            card.side = true;
+        }
+        evs.push(emit(
+            c,
+            s::MOVED,
+            vec![
+                (s::CARD, Val::Int(uid as i64)),
+                (s::OWNER, Val::Int(owner as i64)),
+                (s::FROM, Val::zone(from)),
+                (s::TO, Val::zone(Zone::Deck)),
+                (sym("cause"), Val::Str(sym("stab"))),
+                (s::KIND, Val::Str(s::CREATURE)),
+                (s::EX, Val::Bool(false)),
+                (s::LKI, Val::Snap(snap)),
+            ],
+        ));
+    }
+    c.s.batch_no += 1;
+    collect_batch(c, &evs);
+    c.s.dirty_sba = true;
+}
+
+/// カードをいまのゾーンから取り除く(置き先は呼び出し側が決める)
+pub fn remove_zone_card(c: &mut Ctx, uid: i32) {
+    remove_from_zone(c, uid);
 }
 
 // ───────────────────────── 質問(ask) ─────────────────────────
@@ -118,6 +265,9 @@ pub fn collect(c: &mut Ctx, ev: &Rc<Ev>) {
                 Some(pm) if pm.cards[0] == uid as i32 => {}
                 _ => continue,
             }
+            if !c.s.effects.is_empty() && is_ignored(c.env(), uid as i32) {
+                continue; // 能力を無視されている
+            }
         }
         for r in refs {
             let spec = match &reg.defs[r.def as usize].faces[r.face as usize].abilities[r.idx as usize] {
@@ -140,6 +290,29 @@ pub fn collect(c: &mut Ctx, ev: &Rc<Ev>) {
                 continue;
             }
             try_trigger(c, ev, uid as i32, r.face, r.idx, spec, batch);
+        }
+    }
+    // バトルゾーンを離れたカード自身の、離れた時の能力(lookBack)。離れる直前の面の能力を使う
+    if ev.ty == s::MOVED && ev.sym_of(s::FROM) == Some(s::Z_BATTLE) && ev.get(s::UNDERNEATH).is_none() {
+        if let Some(Val::Snap(lki)) = ev.get(s::LKI) {
+            if let Some(uid) = ev.int(s::CARD) {
+                let uid = uid as i32;
+                let card_zone = c.s.cards[uid as usize].zone;
+                let def = c.s.cards[uid as usize].def;
+                if card_zone != Zone::Battle {
+                    let refs = &by_def[def as usize];
+                    for r in refs {
+                        let spec = match &reg.defs[r.def as usize].faces[r.face as usize].abilities[r.idx as usize] {
+                            Ability::Trigger { spec, .. } => spec,
+                            _ => continue,
+                        };
+                        if !spec.look_back || r.face as i32 != lki.face {
+                            continue;
+                        }
+                        try_trigger(c, ev, uid, r.face, r.idx, spec, batch);
+                    }
+                }
+            }
         }
     }
 }
@@ -181,6 +354,20 @@ fn try_trigger(c: &mut Ctx, ev: &Rc<Ev>, uid: i32, face: u8, idx: u16, spec: &Tr
             }
         }
         if n != nth {
+            return;
+        }
+    }
+    if let Some(nm) = spec.nth_min {
+        let mut n = 0;
+        for e in &c.s.turn_log {
+            if e.ty == ev.ty && e.get(s::OWNER) == ev.get(s::OWNER) && (ev.get(s::CAUSE).is_none() || e.get(s::CAUSE) == ev.get(s::CAUSE)) {
+                n += 1;
+            }
+            if e.id == ev.id {
+                break;
+            }
+        }
+        if n < nm {
             return;
         }
     }
@@ -336,11 +523,17 @@ pub struct MoveOpts {
     pub alone: bool,
     /// シールドゾーンへ表向きで置く(G城の実行)
     pub up: bool,
+    /// このカードの下に重ねるカード(無月の門・超無限墓地進化など)。バトルゾーンのカードは、その山ごと下に入る
+    pub under: Option<Vec<i32>>,
+    /// 出す前にいたゾーン(プレイ中は limbo にいるので、元のゾーンを伝える。置換の判定に使う)
+    pub from: Option<Zone>,
+    /// この移動を起こした効果の使い手(置換の判定に使う。イベントには載せない)
+    pub by: Option<PlayerId>,
 }
 
 impl MoveOpts {
     pub fn new(to: Zone, cause: Sym) -> MoveOpts {
-        MoveOpts { to, cause, pos: None, onto: None, via: None, tapped: false, paid: None, cost: None, free: false, no_replace: false, face: None, alone: false, up: false }
+        MoveOpts { to, cause, pos: None, onto: None, via: None, tapped: false, paid: None, cost: None, free: false, no_replace: false, face: None, alone: false, up: false, under: None, from: None, by: None }
     }
 }
 
@@ -417,6 +610,8 @@ fn place_in_zone(c: &mut Ctx, uid: i32, to: Zone, pos: Option<bool>) -> Res<()> 
 enum Also {
     ExShieldToGrave(i32),
     SmaxSacrifice(Vec<i32>),
+    /// かわりに、その手順を行う(src = 手順を持つカード。省略 = 動くカード自身)
+    Steps { ability: AbilityRef, src: Option<i32> },
 }
 
 struct Proposal {
@@ -427,6 +622,8 @@ struct Proposal {
     pos: Option<bool>,
     cancelled: bool,
     also: Option<Also>,
+    replaced: bool,
+    by: Option<PlayerId>,
 }
 
 /// カードを移動する(バッチ)。置換を判定し、移動し、イベントを発行して誘発を収集する。
@@ -437,11 +634,13 @@ pub fn move_cards(c: &mut Ctx, uids: &[i32], opts: &MoveOpts) -> Res<Vec<MoveRes
         .iter()
         .map(|&uid| {
             let card = &c.s.cards[uid as usize];
-            // 表向きのシールド(G城)がシールドゾーンを離れる時は、かわりに墓地に置く(手札に加わらない)
-            if card.zone == Zone::Shield && card.up && opts.to != Zone::Shield && opts.to != Zone::Grave {
-                Proposal { uid, from: card.zone, to: Zone::Grave, cause: s::REPLACED, pos: opts.pos, cancelled: false, also: None }
+            // 表向きのシールド(G城)がシールドゾーンを離れる時は、かわりに墓地に置く(手札に加わらない)。
+            // カードを重ねた山の一番上(piles に載る。煌龍 サッヴァークなど)は、これではない: 山ごと手札に加わる
+            let in_pile = c.s.piles.as_ref().map_or(false, |pl| pl.iter().any(|(k, _)| *k == uid));
+            if card.zone == Zone::Shield && card.up && !in_pile && opts.to != Zone::Shield && opts.to != Zone::Grave {
+                Proposal { uid, from: card.zone, to: Zone::Grave, cause: s::REPLACED, pos: opts.pos, cancelled: false, also: None, replaced: true, by: opts.by }
             } else {
-                Proposal { uid, from: card.zone, to: opts.to, cause: opts.cause, pos: opts.pos, cancelled: false, also: None }
+                Proposal { uid, from: card.zone, to: opts.to, cause: opts.cause, pos: opts.pos, cancelled: false, also: None, replaced: false, by: opts.by }
             }
         })
         .collect();
@@ -475,6 +674,23 @@ pub fn move_cards(c: &mut Ctx, uids: &[i32], opts: &MoveOpts) -> Res<Vec<MoveRes
                 results.push(MoveResult { uid: p.uid, moved: false, to: p.from, ep: c.s.cards[p.uid as usize].ep });
                 continue;
             }
+            Some(Also::Steps { ability, src }) => {
+                // かわりに、そのカードの手順を行う(手札から捨てられる時に出す、など)。手順は、いまの処理の後に行う
+                let (powner, pep) = {
+                    let card = &c.s.cards[p.uid as usize];
+                    (card.owner, card.ep)
+                };
+                let srcu = src.unwrap_or(p.uid);
+                let (sowner, sep) = {
+                    let sc = &c.s.cards[srcu as usize];
+                    (sc.owner, sc.ep)
+                };
+                // 手順の中から、動くはずだったカードを `$ev.card` で参照できるようにする
+                let evp = Rc::new(Ev { id: c.s.next_id(), caused_by: None, ty: sym("replaced"), turn: c.s.turn, f: vec![(s::CARD, Val::Int(p.uid as i64)), (s::OWNER, Val::Int(powner as i64))] });
+                push_effect(c, *ability, ObjRef { uid: srcu, ep: sep }, sowner, Some(evp), true);
+                results.push(MoveResult { uid: p.uid, moved: false, to: p.from, ep: pep });
+                continue;
+            }
             None => {}
         }
         let r = do_move(c, p.uid, p.to, p.cause, p.pos, &mut evs, opts)?;
@@ -488,7 +704,13 @@ pub fn move_cards(c: &mut Ctx, uids: &[i32], opts: &MoveOpts) -> Res<Vec<MoveRes
 
 /// マナゾーンに置かれる時にタップ状態か。多色カード(ツインパクトは両面の和集合)はタップして置く(spec 3.4.1 M-1)。
 fn enters_mana_tapped(c: &Ctx, uid: i32, opts: &MoveOpts) -> bool {
-    chars_lite(c.env(), uid, -1).civs.len() > 1 || opts.tapped
+    let e = c.env();
+    let owner = c.s.cards[uid as usize].owner;
+    // 相手のカードは、マナゾーンにタップして置かれる(影速 ザ・トリッパー)
+    if game_has(e, Feat::OppManaTapped) && any_static(e, |st| matches!(st.m, StaticMod::OppManaTapped) && st.controller != owner) {
+        return true;
+    }
+    mana_civs(e, uid).len() > 1 || opts.tapped
 }
 
 /// 実際の移動(置換は済んでいる)。進化の山は下のカードも一緒に動かす。
@@ -501,24 +723,52 @@ fn do_move(c: &mut Ctx, uid: i32, to: Zone, cause: Sym, pos: Option<bool>, evs: 
     let snap = Rc::new(snap_of(e, uid));
     let hint = if from == Zone::Battle || from == Zone::Limbo { face } else { -1 };
     let face_ty = chars_lite(e, uid, hint).ty;
-    let kind = if face_ty == FaceType::Spell {
-        s::SPELL
-    } else if face_ty == FaceType::Castle {
-        s::CASTLE
-    } else {
-        s::CREATURE
-    };
+    let kind = face_ty.kind_sym();
     // 山(進化元)を一緒に動かす
     let mut under: Vec<i32> = Vec::new();
-    if from == Zone::Battle && to != Zone::Battle && !opts.alone {
+    let mut seal_cards: Vec<i32> = Vec::new();
+    // スター進化: 離れる時、かわりに一番上のカードだけが離れる
+    let alone = opts.alone || (from == Zone::Battle && c.reg.face(c.s.cards[uid as usize].def, face).star);
+    if from == Zone::Battle && to != Zone::Battle && !alone {
         if let Some(pm) = c.s.perm(pid) {
             if pm.cards[0] == uid {
                 under = pm.cards[1..].to_vec();
+                seal_cards = pm.seals.clone(); // 封印は、山が離れる時に、墓地に置かれる
             }
+        }
+    }
+    // 山札に横向きに刺されたカード(終葬 5.S.D.): 山札から出る時に印を外す。手札に加えたプレイヤーは、ゲームに負ける
+    if c.s.cards[uid as usize].side {
+        c.s.cards[uid as usize].side = false;
+        if from == Zone::Deck && to == Zone::Hand {
+            c.s.pending_loss.get_or_insert_with(Vec::new).push(owner);
+            c.s.dirty_sba = true;
         }
     }
     if to == Zone::Battle {
         return enter_battle(c, uid, opts, evs);
+    }
+    // シールドの山: ブレイク・墓地送りでは山ごと動く。それ以外(1枚だけを選んで動かす)は、そのカードだけが抜け、下のカードがシールドになる
+    let mut under_shield: Vec<i32> = Vec::new();
+    if from == Zone::Shield {
+        let pile = c.s.piles.as_mut().and_then(|pl| pl.iter().position(|(k, _)| *k == uid).map(|i| pl.remove(i).1));
+        if let Some(pile) = pile {
+            if cause == s::BREAK || cause == sym("burn") {
+                under_shield = pile;
+            } else {
+                let nt = pile[0];
+                let rest: Vec<i32> = pile[1..].to_vec();
+                let list = &mut c.s.players[owner as usize].shield;
+                if let Some(i) = list.iter().position(|x| *x == uid) {
+                    list[i] = nt;
+                }
+                if !rest.is_empty() {
+                    let pl = c.s.piles.get_or_insert_with(Vec::new);
+                    pl.push((nt, rest));
+                    pl.sort_by_key(|(k, _)| *k);
+                }
+            }
+        }
     }
     remove_from_zone(c, uid);
     {
@@ -555,6 +805,37 @@ fn do_move(c: &mut Ctx, uid: i32, to: Zone, cause: Sym, pos: Option<bool>, evs: 
         f.push((s::UP, Val::Bool(true)));
     }
     evs.push(emit(c, s::MOVED, f));
+    for u in under_shield {
+        let usnap = Rc::new(snap_of(c.env(), u));
+        let uowner = c.s.cards[u as usize].owner;
+        remove_from_zone(c, u);
+        {
+            let uc = &mut c.s.cards[u as usize];
+            uc.zone = to;
+            uc.ep += 1;
+            uc.pid = -1;
+            uc.face = 0;
+            uc.up = false;
+        }
+        let t = if to == Zone::Mana { enters_mana_tapped(c, u, opts) } else { false };
+        c.s.cards[u as usize].tapped = t;
+        place_in_zone(c, u, to, pos)?;
+        evs.push(emit(
+            c,
+            s::MOVED,
+            vec![
+                (s::CARD, Val::Int(u as i64)),
+                (s::OWNER, Val::Int(uowner as i64)),
+                (s::FROM, Val::zone(Zone::Shield)),
+                (s::TO, Val::zone(to)),
+                (s::CAUSE, Val::Str(cause)),
+                (s::KIND, Val::Str(s::CREATURE)),
+                (s::EX, Val::Bool(false)),
+                (s::LKI, Val::Snap(usnap)),
+                (s::UNDERNEATH, Val::Bool(true)),
+            ],
+        ));
+    }
     for u in under {
         let usnap = Rc::new(snap_of(c.env(), u));
         let uowner = c.s.cards[u as usize].owner;
@@ -588,6 +869,37 @@ fn do_move(c: &mut Ctx, uid: i32, to: Zone, cause: Sym, pos: Option<bool>, evs: 
             ],
         ));
     }
+    // 封印されていたカードは、墓地に置かれる
+    for u in seal_cards {
+        if c.s.cards[u as usize].zone != Zone::Battle {
+            continue;
+        }
+        let usnap = Rc::new(snap_of(c.env(), u));
+        let uowner = c.s.cards[u as usize].owner;
+        {
+            let uc = &mut c.s.cards[u as usize];
+            uc.zone = Zone::Grave;
+            uc.ep += 1;
+            uc.pid = -1;
+            uc.face = 0;
+        }
+        c.s.players[uowner as usize].grave.push(u);
+        evs.push(emit(
+            c,
+            s::MOVED,
+            vec![
+                (s::CARD, Val::Int(u as i64)),
+                (s::OWNER, Val::Int(uowner as i64)),
+                (s::FROM, Val::zone(Zone::Battle)),
+                (s::TO, Val::zone(Zone::Grave)),
+                (sym("cause"), Val::Str(sym("seal"))),
+                (s::KIND, Val::Str(s::CREATURE)),
+                (s::EX, Val::Bool(false)),
+                (s::LKI, Val::Snap(usnap)),
+                (s::UNDERNEATH, Val::Bool(true)),
+            ],
+        ));
+    }
     let ep = c.s.cards[uid as usize].ep;
     Ok(MoveResult { uid, moved: true, to, ep })
 }
@@ -604,6 +916,12 @@ pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>
     let snap = Rc::new(snap_of(c.env(), uid));
     let face_idx = opts.face.unwrap_or(c.s.cards[uid as usize].face);
     let via = opts.via.unwrap_or(s::EFFECT);
+    // 出る時の置換(「相手のクリーチャーが出る時、かわりに〜に置く」)。状態を変更する前に判定する
+    if game_has(c.env(), Feat::EntryReplace) && !opts.no_replace {
+        if let Some(rep) = entry_replacement(c, uid, opts, face_idx, via)? {
+            return apply_entry_replacement(c, uid, &rep);
+        }
+    }
     // 相手の表向きのシールド(G城)がある間、召喚以外の方法で出る時は、かわりにマナゾーンに置く
     if from != Zone::Battle && via != s::SUMMON && shield_static(c.env(), opp(owner), |m| matches!(m, StaticMod::NonSummonEntryToMana)) {
         let mut o2 = opts.clone();
@@ -620,7 +938,64 @@ pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>
     }
     let perm_pid: i32;
     let mut base: Vec<i32> = Vec::new();
-    if let Some(onto) = opts.onto {
+    if let Some(under) = opts.under.as_ref().filter(|u| !u.is_empty()) {
+        // 下に重ねるカードを集める(バトルゾーンのカードは山ごと。他のゾーンのカードは、バトルゾーンへ移す)
+        let mut pile: Vec<i32> = vec![uid];
+        let mut seen: Vec<i32> = Vec::new();
+        for &u in under {
+            let (uzone, upid) = {
+                let uc = &c.s.cards[u as usize];
+                (uc.zone, uc.pid)
+            };
+            if uzone == Zone::Battle {
+                if seen.contains(&upid) {
+                    continue;
+                }
+                seen.push(upid);
+                let (po, pi) = match c.s.perm_by_pid(upid) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let perm = c.s.players[po as usize].battle.remove(pi);
+                pile.extend(perm.cards.iter().copied());
+            } else {
+                let usnap = Rc::new(snap_of(c.env(), u));
+                let uowner = c.s.cards[u as usize].owner;
+                remove_from_zone(c, u);
+                {
+                    let uc = &mut c.s.cards[u as usize];
+                    uc.zone = Zone::Battle;
+                    uc.ep += 1;
+                    uc.tapped = false;
+                    uc.face = 0;
+                }
+                pile.push(u);
+                evs.push(emit(
+                    c,
+                    s::MOVED,
+                    vec![
+                        (s::CARD, Val::Int(u as i64)),
+                        (s::OWNER, Val::Int(uowner as i64)),
+                        (s::FROM, Val::zone(uzone)),
+                        (s::TO, Val::zone(Zone::Battle)),
+                        (s::CAUSE, Val::Str(opts.cause)),
+                        (s::KIND, Val::Str(s::CREATURE)),
+                        (s::EX, Val::Bool(false)),
+                        (s::LKI, Val::Snap(usnap)),
+                        (s::UNDERNEATH, Val::Bool(true)),
+                    ],
+                ));
+            }
+        }
+        perm_pid = c.s.next_pid;
+        c.s.next_pid += 1;
+        let turn = c.s.turn;
+        for &u in &pile {
+            c.s.cards[u as usize].pid = perm_pid;
+        }
+        base = pile[1..].to_vec();
+        c.s.players[owner as usize].battle.push(Perm::new(perm_pid, pile, opts.tapped, true, turn));
+    } else if let Some(onto) = opts.onto {
         let (po, pi) = match c.s.perm_by_pid(onto) {
             Some(x) => x,
             None => return fail("重ねる山がありません"),
@@ -636,12 +1011,23 @@ pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>
     } else {
         perm_pid = c.s.next_pid;
         c.s.next_pid += 1;
-        // 「タップして出る」(プチョヘンザ)。進化で重なる時は、すでにいる山なので対象外
-        let enters_tapped = opts.tapped || enters_tapped_by_static(c.env(), uid, owner, face_idx);
-        let perm = Perm { pid: perm_pid, cards: vec![uid], tapped: enters_tapped, sick: true, entered_turn: c.s.turn };
+        // 「タップして出る」(プチョヘンザ): 相手の常在型能力。進化で重なる時は、すでにいる山なので対象外
+        let mut tapped_in = opts.tapped || enters_tapped_by_static(c.env(), uid, owner, face_idx);
+        if !tapped_in && game_has(c.env(), Feat::EnterTapped) {
+            let e = c.env();
+            // 各ターン、はじめて出る相手のクリーチャーは、タップして出る
+            if !c.s.turn_log.iter().any(|ev| ev.ty == s::ENTERED && ev.int(s::OWNER) == Some(owner as i64)) {
+                tapped_in = any_static(e, |st| matches!(st.m, StaticMod::EnterTappedFirst) && st.controller != owner);
+            }
+            if !tapped_in {
+                tapped_in = any_static(e, |st| matches!(st.m, StaticMod::EnterTapped) && st.controller != owner);
+            }
+        }
+        let perm = Perm::new(perm_pid, vec![uid], tapped_in, true, c.s.turn);
         c.s.cards[uid as usize].pid = perm_pid;
         c.s.players[owner as usize].battle.push(perm);
     }
+    let ekind = c.reg.face(def, face_idx).ty.kind_sym();
     evs.push(emit(
         c,
         s::MOVED,
@@ -651,14 +1037,15 @@ pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>
             (s::FROM, Val::zone(from)),
             (s::TO, Val::zone(Zone::Battle)),
             (s::CAUSE, Val::Str(opts.cause)),
-            (s::KIND, Val::Str(s::CREATURE)),
+            (s::KIND, Val::Str(ekind)),
             (s::EX, Val::Bool(false)),
             (s::LKI, Val::Snap(snap)),
             (s::VIA, Val::Str(via)),
         ],
     ));
     // 侵略でバトルゾーンの別の山から移動する場合は「出た」扱いにならない(decks.md)
-    if from != Zone::Battle {
+    let from_battle = from == Zone::Battle;
+    if !from_battle {
         let mut f = vec![
             (s::CARD, Val::Int(uid as i64)),
             (s::OWNER, Val::Int(owner as i64)),
@@ -670,8 +1057,12 @@ pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>
         }
         f.push((s::FREE, Val::Bool(opts.free)));
         f.push((s::PID, Val::Int(perm_pid as i64)));
-        f.push((s::KIND, Val::Str(s::CREATURE)));
+        f.push((s::KIND, Val::Str(ekind)));
         f.push((s::FACE, Val::Int(face_idx as i64)));
+        // 出た元のゾーン。「山札から出た時」などを見る能力があるゲームだけ、イベントに残す(既存の対戦の記録を変えない)
+        if game_has(c.env(), Feat::EnteredFrom) {
+            f.push((s::FROM, Val::zone(opts.from.unwrap_or(from))));
+        }
         evs.push(emit(c, s::ENTERED, f));
     }
     if opts.onto.is_some() {
@@ -686,6 +1077,29 @@ pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>
                 (s::VIA, Val::Str(via)),
             ],
         ));
+    }
+    // コマンドが出た時、その持ち主は、そのコマンドと同じ文明を持つ自身のカードから、封印を1つ墓地に置く
+    if c.s.sealed && !from_battle && ekind == s::CREATURE {
+        let face = c.reg.face(def, face_idx);
+        if face.races.iter().any(|r| r.contains("コマンド")) {
+            let civs = face.civs.clone();
+            release_seals(c, owner, &civs, evs);
+        }
+    }
+    // フィールドは、1枚だけ出していられる。新しく出したら、前のフィールドは墓地に置かれる
+    if ekind == sym("field") && opts.onto.is_none() {
+        let olds: Vec<i32> = c.s.players[owner as usize]
+            .battle
+            .iter()
+            .filter(|pm| pm.pid != perm_pid && {
+                let tc = &c.s.cards[pm.cards[0] as usize];
+                c.reg.face(tc.def, tc.face).ty == FaceType::Field
+            })
+            .map(|pm| pm.cards[0])
+            .collect();
+        if !olds.is_empty() {
+            move_cards(c, &olds, &MoveOpts::new(Zone::Grave, sym("fieldReplace")))?;
+        }
     }
     // EXライフ: 出る時、山札の上1枚をシールドにする
     let info_exlife = c.reg.info(def, face_idx).ex_life;
@@ -721,6 +1135,203 @@ pub fn enter_battle(c: &mut Ctx, uid: i32, opts: &MoveOpts, evs: &mut Vec<Rc<Ev>
     Ok(MoveResult { uid, moved: true, to: Zone::Battle, ep })
 }
 
+/// 出る時の置換の結果
+pub struct EntryRep {
+    pub to: Zone,
+    pub stay: bool,
+    pub then: Option<(i32, u16, PlayerId)>,
+}
+
+/// 出る時の置換(entry_replacement の結果)を実行する: かわりの行き先に置き、置いた後の手順があれば積む
+pub fn apply_entry_replacement(c: &mut Ctx, uid: i32, rep: &EntryRep) -> Res<MoveResult> {
+    // 出ない: いまのゾーン(プレイ中なら、元のゾーン)に残る
+    if !rep.stay || c.s.cards[uid as usize].zone == Zone::Limbo {
+        let mut o = MoveOpts::new(rep.to, s::REPLACED);
+        o.no_replace = true;
+        move_cards(c, &[uid], &o)?;
+    }
+    // 置いた後の手順(ベイB セガーレ: その後、自分はこのクリーチャーをマナゾーンに置く)
+    if let Some((src, idx, owner)) = rep.then {
+        let (sdef, sface, sep) = {
+            let sc = &c.s.cards[src as usize];
+            (sc.def, sc.face, sc.ep)
+        };
+        push_effect(c, AbilityRef { def: sdef, face: sface as u8, idx }, ObjRef { uid: src, ep: sep }, owner, None, true);
+    }
+    Ok(MoveResult { uid, moved: false, to: rep.to, ep: c.s.cards[uid as usize].ep })
+}
+
+/// 出る時の置換(match.type = 'enter')。バトルゾーンの、能力を無視されていないカードが持つ。
+/// 当てはまるものがあれば、かわりに置く先のゾーンを返す(複数なら、出るカードの持ち主が選ぶ)。
+pub fn entry_replacement(c: &mut Ctx, uid: i32, opts: &MoveOpts, face_idx: i32, via: Sym) -> Res<Option<EntryRep>> {
+    struct ECand {
+        label: String,
+        to: Zone,
+        optional: bool,
+        stay: bool,
+        then: Option<(i32, u16, PlayerId)>,
+    }
+    let (owner, ep, def, czone) = {
+        let card = &c.s.cards[uid as usize];
+        (card.owner, card.ep, card.def, card.zone)
+    };
+    let origin = opts.from.unwrap_or(czone);
+    let mut cands: Vec<ECand> = Vec::new();
+    {
+        let e = c.env();
+        let sym_move = sym("move");
+        let sym_enter = sym("enter");
+        // 「山札から手札以外のゾーンに置かれる時」の置換(move)も、バトルゾーンへ出る時に当てはまる
+        if origin == Zone::Deck {
+            for pl in 0..2u8 {
+                for perm in &c.s.players[pl as usize].battle {
+                    let src = perm.cards[0];
+                    if src == uid {
+                        continue;
+                    }
+                    let info = info_of(e, src);
+                    if info.replaces.is_empty() {
+                        continue;
+                    }
+                    let face = top_face(e, src);
+                    for &ri in &info.replaces {
+                        if let Ability::Replace { match_, apply: ReplaceApply::ChangeDest { to, .. }, optional, while_, label } = &face.abilities[ri as usize] {
+                            if match_.ty != sym_move || match_.from != Some(s::Z_DECK) {
+                                continue;
+                            }
+                            if match_.not_to == Some(s::Z_BATTLE) {
+                                continue;
+                            }
+                            if !rel_pl(match_.owner, owner, pl) {
+                                continue;
+                            }
+                            if let Some(w) = while_ {
+                                if !eval_cond(&CC::new(e, pl).with_self(src), w) {
+                                    continue;
+                                }
+                            }
+                            cands.push(ECand { label: label.clone().unwrap_or_else(|| "かわりに置く".to_string()), to: *to, optional: *optional, stay: false, then: None });
+                        }
+                    }
+                }
+            }
+        }
+        for p in 0..2u8 {
+            for perm in &c.s.players[p as usize].battle {
+                let src = perm.cards[0];
+                if src == uid {
+                    continue;
+                }
+                let info = info_of(e, src);
+                if info.replaces.is_empty() {
+                    continue;
+                }
+                let face = top_face(e, src);
+                for &ri in &info.replaces {
+                    if let Ability::Replace { match_, apply, optional, while_, label } = &face.abilities[ri as usize] {
+                        if match_.ty != sym_enter {
+                            continue;
+                        }
+                        let (to_z, is_stay, then) = match apply {
+                            ReplaceApply::ChangeDest { to, then } => (*to, false, then.is_some()),
+                            ReplaceApply::Stay => (origin, true, false),
+                            _ => continue,
+                        };
+                        if !rel_pl(match_.owner, owner, p) {
+                            continue;
+                        }
+                        if match_.turn == Some(TurnSel::Own) && c.s.active != p {
+                            continue;
+                        }
+                        if match_.turn == Some(TurnSel::Opponent) && c.s.active == p {
+                            continue;
+                        }
+                        if let Some(v) = match_.via {
+                            if via != v {
+                                continue;
+                            }
+                        }
+                        if let Some(v) = match_.not_via {
+                            if via == v {
+                                continue;
+                            }
+                        }
+                        if let Some(v) = match_.from {
+                            if origin.sym() != v {
+                                continue;
+                            }
+                        }
+                        if let Some(v) = match_.not_from {
+                            if origin.sym() == v {
+                                continue;
+                            }
+                        }
+                        let cc = CC::new(e, p).with_self(src).with_it(uid, face_idx);
+                        if let Some(w) = while_ {
+                            if !eval_cond(&CC::new(e, p).with_self(src), w) {
+                                continue;
+                            }
+                        }
+                        if let Some(m) = &match_.cond {
+                            if !eval_cond(&cc, m) {
+                                continue;
+                            }
+                        }
+                        cands.push(ECand {
+                            label: label.clone().unwrap_or_else(|| "かわりに置く".to_string()),
+                            to: to_z,
+                            optional: *optional,
+                            stay: is_stay,
+                            then: if then { Some((src, ri, p)) } else { None },
+                        });
+                    }
+                }
+            }
+        }
+    }
+    if cands.is_empty() {
+        return Ok(None);
+    }
+    let mut chosen = 0usize;
+    // 同じ行き先に置く強制の置換が重なっているだけなら、どれを使っても同じ(聞かない)
+    let same_dest = cands.iter().all(|x| !x.optional && x.to == cands[0].to && x.then.is_none());
+    if !same_dest && (cands.len() > 1 || cands[0].optional) {
+        let mut options: Vec<String> = cands.iter().map(|x| x.label.clone()).collect();
+        options.push("置換しない".to_string());
+        let ans = ask(
+            c,
+            NeedInput {
+                player: owner,
+                why: Why::ReplaceChoice,
+                input: Some(InputSpec::Option { options, pick: 1, repeat: false, all_if: false, seen: None }),
+                source: Some(ObjRef { uid, ep }),
+            },
+        )?;
+        chosen = ans.to_i32s().first().copied().unwrap_or(0) as usize;
+        if chosen >= cands.len() {
+            return Ok(None);
+        }
+    }
+    let _ = def;
+    let ch = cands.swap_remove(chosen);
+    Ok(Some(EntryRep { to: ch.to, stay: ch.stay, then: ch.then }))
+}
+
+/// 各ターン、はじめて自分のクリーチャーがバトルする時に勝つ効果を、いま使えるか(使えるなら、使ったと記録する)
+fn first_battle_wins_for(c: &mut Ctx, owner: PlayerId) -> bool {
+    let key = UKey::Other(format!("fbw:{}", owner));
+    let turn = c.s.turn as i64;
+    if c.s.usage_get(&key) == Some(turn) {
+        return false;
+    }
+    let e = c.env();
+    if !any_static(e, |st| matches!(st.m, StaticMod::FirstBattleWins) && st.controller == owner) {
+        return false;
+    }
+    c.s.usage_set(&key, turn);
+    true
+}
+
 // ───────────────────────── バトル ─────────────────────────
 
 pub struct BattleResult {
@@ -743,9 +1354,21 @@ pub fn resolve_battle(c: &mut Ctx, a_pid: i32, d_pid: i32) -> Res<Option<BattleR
         Some(x) => x,
         None => return Ok(None),
     };
+    let (mut pa, mut pd) = {
+        let e = c.env();
+        (battle_power(e, &c.s.players[po as usize].battle[pi]), battle_power(e, &c.s.players[dop as usize].battle[di]))
+    };
+    // 各ターン、はじめて自分のクリーチャーがバトルする時、そのクリーチャーはそのバトルに勝つ(輝く革命 ボルシャック・フレア)
+    if game_has(c.env(), Feat::FirstBattleWins) {
+        let aw = first_battle_wins_for(c, po);
+        let dw = first_battle_wins_for(c, dop);
+        if aw && !dw {
+            pa = i64::MAX;
+        } else if dw && !aw {
+            pd = i64::MAX;
+        }
+    }
     let e = c.env();
-    let pa = battle_power(e, &c.s.players[po as usize].battle[pi]);
-    let pd = battle_power(e, &c.s.players[dop as usize].battle[di]);
     let a_top = c.s.players[po as usize].battle[pi].cards[0];
     let d_top = c.s.players[dop as usize].battle[di].cards[0];
     let mut losers: Vec<i32> = Vec::new();
@@ -803,12 +1426,14 @@ enum Cand {
     ChangeDest { to: Zone, label: String, optional: bool },
     Smax { picks: Vec<i32>, label: String },
     ExLife { shield: i32, label: String },
+    /// かわりに、その手順を行う(src = 手順を持つカード)
+    Steps { ability: AbilityRef, src: i32, label: String, optional: bool },
 }
 
 impl Cand {
     fn label(&self) -> &str {
         match self {
-            Cand::ChangeDest { label, .. } | Cand::Smax { label, .. } | Cand::ExLife { label, .. } => label,
+            Cand::ChangeDest { label, .. } | Cand::Smax { label, .. } | Cand::ExLife { label, .. } | Cand::Steps { label, .. } => label,
         }
     }
     fn optional(&self) -> bool {
@@ -816,6 +1441,7 @@ impl Cand {
             Cand::ChangeDest { optional, .. } => *optional,
             Cand::Smax { .. } => true,
             Cand::ExLife { .. } => false,
+            Cand::Steps { optional, .. } => *optional,
         }
     }
 }
@@ -823,13 +1449,202 @@ impl Cand {
 /// 提案に置換効果を適用する。1つの出来事に1回だけで、連鎖しない(101.5)。
 /// 複数あるか任意の場合は、持ち主に選ばせる(ask)。
 fn apply_replacements(c: &mut Ctx, p: &mut Proposal) -> Res<()> {
-    let reg = c.reg;
-    let (owner, pid, def, face, ep, c_pid) = {
+    // どのカードの、どの移動にも当てはまる置換(「山札から手札以外のゾーンに置かれる時、かわりに墓地に置く」など)
+    if game_has(c.env(), Feat::MoveReplace) {
+        apply_move_replacements(c, p)?;
+        if p.replaced {
+            return Ok(());
+        }
+    }
+    // 手札から捨てられる時の置換(自身の能力)
+    if game_has(c.env(), Feat::HandReplace) && p.from == Zone::Hand && p.to == Zone::Grave && p.cause == sym("discard") {
+        apply_hand_replacement(c, p)?;
+        return Ok(());
+    }
+    apply_leave_replacements(c, p)
+}
+
+/// match.type = 'move': バトルゾーンのカードが持つ、他のカードの移動の置換(changeDest)
+fn apply_move_replacements(c: &mut Ctx, p: &mut Proposal) -> Res<()> {
+    struct MCand {
+        label: String,
+        to: Zone,
+        optional: bool,
+    }
+    let (powner, pep) = {
         let card = &c.s.cards[p.uid as usize];
-        (card.owner, card.pid, card.def, card.face, card.ep, card.pid)
+        (card.owner, card.ep)
     };
-    let _ = pid;
+    let mut cands: Vec<MCand> = Vec::new();
+    {
+        let e = c.env();
+        let sym_move = sym("move");
+        for pl in 0..2u8 {
+            for perm in &c.s.players[pl as usize].battle {
+                let src = perm.cards[0];
+                let info = info_of(e, src);
+                if info.replaces.is_empty() {
+                    continue;
+                }
+                let face = top_face(e, src);
+                for &ri in &info.replaces {
+                    if let Ability::Replace { match_, apply: ReplaceApply::ChangeDest { to, .. }, optional, while_, label } = &face.abilities[ri as usize] {
+                        if match_.ty != sym_move {
+                            continue;
+                        }
+                        if !rel_pl(match_.owner, powner, pl) {
+                            continue;
+                        }
+                        if let Some(f) = match_.from {
+                            if p.from.sym() != f {
+                                continue;
+                            }
+                        }
+                        if let Some(f) = match_.not_from {
+                            if p.from.sym() == f {
+                                continue;
+                            }
+                        }
+                        if match_.turn == Some(TurnSel::Opponent) && c.s.active == pl {
+                            continue;
+                        }
+                        if match_.turn == Some(TurnSel::Own) && c.s.active != pl {
+                            continue;
+                        }
+                        if let Some(z) = match_.to {
+                            if p.to.sym() != z {
+                                continue;
+                            }
+                        }
+                        if let Some(z) = match_.not_to {
+                            if p.to.sym() == z {
+                                continue;
+                            }
+                        }
+                        if let Some(cs) = match_.cause {
+                            if p.cause != cs {
+                                continue;
+                            }
+                        }
+                        if *to == p.to {
+                            continue; // 行き先が変わらない置換は、起こらない
+                        }
+                        if let Some(w) = while_ {
+                            if !eval_cond(&CC::new(e, pl).with_self(src), w) {
+                                continue;
+                            }
+                        }
+                        if let Some(m) = &match_.cond {
+                            if !eval_cond(&CC::new(e, pl).with_self(src).with_it(p.uid, -1), m) {
+                                continue;
+                            }
+                        }
+                        cands.push(MCand { label: label.clone().unwrap_or_else(|| "かわりに置く".to_string()), to: *to, optional: *optional });
+                    }
+                }
+            }
+        }
+    }
+    if cands.is_empty() {
+        return Ok(());
+    }
+    let mut chosen = 0usize;
+    // 同じ行き先に置く強制の置換が重なっているだけなら、どれを使っても同じ(聞かない)
+    let same_dest = cands.iter().all(|x| !x.optional && x.to == cands[0].to);
+    if !same_dest && (cands.len() > 1 || cands[0].optional) {
+        let mut options: Vec<String> = cands.iter().map(|x| x.label.clone()).collect();
+        options.push("置換しない".to_string());
+        let ans = ask(
+            c,
+            NeedInput {
+                player: powner,
+                why: Why::ReplaceChoice,
+                input: Some(InputSpec::Option { options, pick: 1, repeat: false, all_if: false, seen: None }),
+                source: Some(ObjRef { uid: p.uid, ep: pep }),
+            },
+        )?;
+        chosen = ans.to_i32s().first().copied().unwrap_or(0) as usize;
+        if chosen >= cands.len() {
+            return Ok(());
+        }
+    }
+    p.to = cands[chosen].to;
+    p.cause = s::REPLACED;
+    p.replaced = true;
+    Ok(())
+}
+
+/// 手札から捨てられるカード自身の置換(「捨てられる時、墓地に置くかわりに出してもよい」など)
+fn apply_hand_replacement(c: &mut Ctx, p: &mut Proposal) -> Res<()> {
+    let (powner, pep, def) = {
+        let card = &c.s.cards[p.uid as usize];
+        (card.owner, card.ep, card.def)
+    };
+    let reg = c.reg;
+    let info = reg.info(def, 0);
+    let face = reg.face(def, 0);
+    let sym_moved = s::MOVED;
+    for &ri in &info.replaces {
+        if let Ability::Replace { match_, apply: ReplaceApply::Steps(_), optional, while_, label } = &face.abilities[ri as usize] {
+            if match_.ty != sym_moved || match_.from != Some(s::Z_HAND) {
+                continue;
+            }
+            if let Some(cs) = match_.cause {
+                if p.cause != cs {
+                    continue;
+                }
+            }
+            if match_.turn == Some(TurnSel::Opponent) && c.s.active == powner {
+                continue;
+            }
+            if match_.turn == Some(TurnSel::Own) && c.s.active != powner {
+                continue;
+            }
+            // 相手の効果で捨てられる時だけ
+            if match_.by_opponent && (p.by.is_none() || p.by == Some(powner)) {
+                continue;
+            }
+            if let Some(w) = while_ {
+                if !eval_cond(&CC::new(c.env(), powner).with_self(p.uid), w) {
+                    continue;
+                }
+            }
+            if *optional {
+                let lab = label.clone().unwrap_or_else(|| "かわりの処理を行う".to_string());
+                let ans = ask(
+                    c,
+                    NeedInput {
+                        player: powner,
+                        why: Why::ReplaceChoice,
+                        input: Some(InputSpec::Option { options: vec![lab, "置換しない".to_string()], pick: 1, repeat: false, all_if: false, seen: None }),
+                        source: Some(ObjRef { uid: p.uid, ep: pep }),
+                    },
+                )?;
+                if ans.to_i32s().first().copied().unwrap_or(1) != 0 {
+                    return Ok(());
+                }
+            }
+            p.cancelled = true;
+            p.also = Some(Also::Steps { ability: AbilityRef { def, face: 0, idx: ri }, src: None });
+            p.replaced = true;
+            return Ok(());
+        }
+    }
+    Ok(())
+}
+
+fn apply_leave_replacements(c: &mut Ctx, p: &mut Proposal) -> Res<()> {
+    let reg = c.reg;
+    let (owner, def, ep, c_pid) = {
+        let card = &c.s.cards[p.uid as usize];
+        (card.owner, card.def, card.ep, card.pid)
+    };
     if p.from != Zone::Battle {
+        return Ok(());
+    }
+    // 「離れない」(ペトローバ・ハイパー・エン・ゲルス): バトルゾーンを離れる移動はすべて起きない
+    if p.to != Zone::Battle && cannot_leave(c.env(), p.uid, Some(p.cause)) {
+        p.cancelled = true;
         return Ok(());
     }
     match c.s.perm(c_pid) {
@@ -839,50 +1654,122 @@ fn apply_replacements(c: &mut Ctx, p: &mut Proposal) -> Res<()> {
     if p.to == Zone::Battle {
         return Ok(());
     }
-    let e = c.env();
-    let info = info_of(e, p.uid);
-    let face_def = reg.face(def, chars_lite(e, p.uid, -1).face_idx);
     let mut cands: Vec<Cand> = Vec::new();
-    // カード自身の置換効果(破壊 → マナゾーン / S-MAX進化の身代わり)
-    for &ri in &info.replaces {
-        if let Ability::Replace { match_, apply, optional, while_, label } = &face_def.abilities[ri as usize] {
-            if let Some(w) = while_ {
-                if !eval_cond(&CC::new(e, owner).with_self(p.uid), w) {
-                    continue;
-                }
-            }
-            if match_.ty != s::MOVED {
-                continue;
-            }
-            if let Some(f) = match_.from {
-                if f != p.from.sym() {
-                    continue;
-                }
-            }
-            if let Some(cs) = match_.cause {
-                if cs != p.cause {
-                    continue;
-                }
-            }
-            match apply {
-                ReplaceApply::ChangeDest(to) => {
-                    let lab = match label {
-                        Some(l) => l.clone(),
-                        None => format!("かわりに{}に置く", if *to == Zone::Mana { "マナゾーン" } else { to.name() }),
-                    };
-                    cands.push(Cand::ChangeDest { to: *to, label: lab, optional: *optional });
-                }
-                ReplaceApply::SmaxSacrifice => {
-                    if let Some(picks) = smax_victims(c, owner, p.uid) {
-                        cands.push(Cand::Smax { picks, label: label.clone().unwrap_or_else(|| "かわりに表向きのカード3枚を破壊する".to_string()) });
+    let ex_life;
+    {
+        let e = c.env();
+        let info = info_of(e, p.uid);
+        ex_life = info.ex_life;
+        let face_def = reg.face(def, chars_lite(e, p.uid, -1).face_idx);
+        let sym_leave = sym("leave");
+        // カード自身の置換効果(破壊 → マナゾーン / S-MAX進化の身代わり)
+        for &ri in &info.replaces {
+            if let Ability::Replace { match_, apply, optional, while_, label } = &face_def.abilities[ri as usize] {
+                if let Some(w) = while_ {
+                    if !eval_cond(&CC::new(e, owner).with_self(p.uid), w) {
+                        continue;
                     }
                 }
-                ReplaceApply::CancelTrigger => {}
+                if match_.ty != s::MOVED && match_.ty != sym_leave {
+                    continue;
+                }
+                if let Some(f) = match_.from {
+                    if f != p.from.sym() {
+                        continue;
+                    }
+                }
+                if let Some(cs) = match_.cause {
+                    if cs != p.cause {
+                        continue;
+                    }
+                }
+                if let Some(m) = &match_.cond {
+                    if !eval_cond(&CC::new(e, owner).with_self(p.uid).with_it(p.uid, -1), m) {
+                        continue;
+                    }
+                }
+                match apply {
+                    ReplaceApply::Steps(_) => {
+                        let face_i = chars_lite(e, p.uid, -1).face_idx as u8;
+                        cands.push(Cand::Steps {
+                            ability: AbilityRef { def, face: face_i, idx: ri },
+                            src: p.uid,
+                            label: label.clone().unwrap_or_else(|| "かわりの処理を行う".to_string()),
+                            optional: *optional,
+                        });
+                    }
+                    ReplaceApply::ChangeDest { to, .. } => {
+                        let lab = match label {
+                            Some(l) => l.clone(),
+                            None => format!("かわりに{}に置く", if *to == Zone::Mana { "マナゾーン" } else { to.name() }),
+                        };
+                        cands.push(Cand::ChangeDest { to: *to, label: lab, optional: *optional });
+                    }
+                    ReplaceApply::SmaxSacrifice => {
+                        if let Some(picks) = smax_victims_env(e, owner, p.uid) {
+                            cands.push(Cand::Smax { picks, label: label.clone().unwrap_or_else(|| "かわりに表向きのカード3枚を破壊する".to_string()) });
+                        }
+                    }
+                    ReplaceApply::CancelTrigger | ReplaceApply::Stay => {}
+                }
+            }
+        }
+        // 他のクリーチャーが離れる時の置換(match.type = 'leave'。ウルトラ・セイバー・表向きのシールドの身代わりなど)
+        if game_has(e, Feat::LeaveReplace) {
+            for pl in 0..2u8 {
+                for perm in &c.s.players[pl as usize].battle {
+                    let src = perm.cards[0];
+                    if src == p.uid {
+                        continue;
+                    }
+                    let sinfo = info_of(e, src);
+                    if sinfo.replaces.is_empty() {
+                        continue;
+                    }
+                    let sface = top_face(e, src);
+                    let sc = &c.s.cards[src as usize];
+                    for &ri in &sinfo.replaces {
+                        if let Ability::Replace { match_, apply: ReplaceApply::Steps(_), optional, while_, label } = &sface.abilities[ri as usize] {
+                            if match_.ty != sym_leave {
+                                continue;
+                            }
+                            if !rel_pl(match_.owner, owner, pl) {
+                                continue;
+                            }
+                            if let Some(f) = match_.from {
+                                if f != p.from.sym() {
+                                    continue;
+                                }
+                            }
+                            if let Some(cs) = match_.cause {
+                                if cs != p.cause {
+                                    continue;
+                                }
+                            }
+                            if let Some(w) = while_ {
+                                if !eval_cond(&CC::new(e, pl).with_self(src), w) {
+                                    continue;
+                                }
+                            }
+                            if let Some(m) = &match_.cond {
+                                if !eval_cond(&CC::new(e, pl).with_self(src).with_it(p.uid, -1), m) {
+                                    continue;
+                                }
+                            }
+                            cands.push(Cand::Steps {
+                                ability: AbilityRef { def: sc.def, face: sc.face as u8, idx: ri },
+                                src,
+                                label: label.clone().unwrap_or_else(|| "かわりの処理を行う".to_string()),
+                                optional: *optional,
+                            });
+                        }
+                    }
+                }
             }
         }
     }
     // EXライフ: 離れる時、かわりにシールドを墓地に置く
-    if info.ex_life {
+    if ex_life {
         let sh = c.s.players[owner as usize].shield.iter().copied().find(|u| {
             let sc = &c.s.cards[*u as usize];
             sc.ex && sc.ex_pid == c_pid
@@ -918,11 +1805,14 @@ fn apply_replacements(c: &mut Ctx, p: &mut Proposal) -> Res<()> {
             return Ok(()); // 置換しない
         }
     }
-    let _ = face;
     match cands.swap_remove(chosen) {
         Cand::ChangeDest { to, .. } => {
             p.to = to;
             p.cause = s::REPLACED;
+        }
+        Cand::Steps { ability, src, .. } => {
+            p.cancelled = true;
+            p.also = Some(Also::Steps { ability, src: Some(src) });
         }
         Cand::Smax { picks: pool, .. } => {
             // 3枚ちょうどなら選択の余地がない。それより多ければ、持ち主が破壊する3枚を選ぶ
@@ -934,7 +1824,7 @@ fn apply_replacements(c: &mut Ctx, p: &mut Proposal) -> Res<()> {
                     NeedInput {
                         player: owner,
                         why: Why::Select,
-                        input: Some(InputSpec::Pick { candidates: pool, min: 3, max: 3 }),
+                        input: Some(InputSpec::Pick { candidates: pool, min: 3, max: 3, sum: None }),
                         source: Some(ObjRef { uid: p.uid, ep }),
                     },
                 )?;
@@ -948,13 +1838,18 @@ fn apply_replacements(c: &mut Ctx, p: &mut Proposal) -> Res<()> {
             p.also = Some(Also::ExShieldToGrave(shield));
         }
     }
+    p.replaced = true;
     Ok(())
 }
 
 /// ジャオウガの身代わりで破壊できる、自分の表向きのカード(自身を除く)。3枚に満たなければ None。
 /// 公式 Q&A 41461: 「表向きでバトルゾーンに存在するカードを破壊できます」。マナゾーンのカードは含まない。
 pub fn smax_victims(c: &Ctx, owner: PlayerId, self_uid: i32) -> Option<Vec<i32>> {
-    let pool: Vec<i32> = c.s.players[owner as usize].battle.iter().map(|perm| perm.cards[0]).filter(|&u| u != self_uid).collect();
+    smax_victims_env(c.env(), owner, self_uid)
+}
+
+pub fn smax_victims_env(e: Env, owner: PlayerId, self_uid: i32) -> Option<Vec<i32>> {
+    let pool: Vec<i32> = e.s.players[owner as usize].battle.iter().map(|perm| perm.cards[0]).filter(|&u| u != self_uid).collect();
     if pool.len() < 3 {
         None
     } else {
@@ -969,12 +1864,54 @@ pub fn draw_cards(c: &mut Ctx, player: PlayerId, n: i64) -> Res<i32> {
     for _ in 0..n {
         let uid = match c.s.players[player as usize].deck.first() {
             Some(&u) => u,
-            None => break, // 山札が0枚の時にドローしても何も起こらない(114.6)
+            None => {
+                // 山札が0枚の時にドローしても何も起こらない(114.6)。「引く時、山札がなければ、かわりに〜」の置換があれば、その手順を行う
+                if game_has(c.env(), Feat::DrawEmpty) {
+                    draw_empty_replacement(c, player);
+                }
+                break;
+            }
         };
         move_cards(c, &[uid], &MoveOpts::new(Zone::Hand, s::DRAW))?;
         drawn += 1;
     }
     Ok(drawn)
+}
+
+/// 山札がない時に引く時の置換(不死鳥縫合 ブラック・ビッグバン): あれば、その手順を行う効果を積む
+fn draw_empty_replacement(c: &mut Ctx, player: PlayerId) {
+    let mut found: Option<(i32, u16, u16, i32)> = None;
+    {
+        let e = c.env();
+        let sym_de = sym("drawEmpty");
+        'outer: for perm in &c.s.players[player as usize].battle {
+            let src = perm.cards[0];
+            let info = info_of(e, src);
+            if info.replaces.is_empty() {
+                continue;
+            }
+            let face = top_face(e, src);
+            let sc = &c.s.cards[src as usize];
+            for &ri in &info.replaces {
+                if let Ability::Replace { match_, apply: ReplaceApply::Steps(_), while_, .. } = &face.abilities[ri as usize] {
+                    if match_.ty != sym_de {
+                        continue;
+                    }
+                    if let Some(w) = while_ {
+                        if !eval_cond(&CC::new(e, player).with_self(src), w) {
+                            continue;
+                        }
+                    }
+                    found = Some((src, sc.face as u16, ri, sc.ep));
+                    break 'outer;
+                }
+            }
+        }
+    }
+    if let Some((src, face, ri, ep)) = found {
+        let def = c.s.cards[src as usize].def;
+        push_effect(c, AbilityRef { def, face: face as u8, idx: ri }, ObjRef { uid: src, ep }, player, None, false);
+    }
 }
 
 pub fn shuffle_in_place(s: &mut State, arr: &mut [i32]) {
@@ -991,6 +1928,9 @@ pub fn shuffle_in_place(s: &mut State, arr: &mut [i32]) {
 }
 
 pub fn shuffle_deck(c: &mut Ctx, player: PlayerId) {
+    if deck_locked(c.env(), player) {
+        return; // 山札の順序を変えられない(5.S.D.)
+    }
     let mut deck = std::mem::take(&mut c.s.players[player as usize].deck);
     shuffle_in_place(&mut c.s, &mut deck);
     c.s.players[player as usize].deck = deck;

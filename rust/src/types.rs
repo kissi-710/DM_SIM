@@ -207,6 +207,9 @@ pub enum FaceType {
     SmaxEvolution,
     /// G城(実行すると、表向きのシールドになる。クリーチャーでも呪文でもない)
     Castle,
+    Tamaseed,
+    Field,
+    Crossgear,
 }
 
 impl FaceType {
@@ -217,15 +220,33 @@ impl FaceType {
             "evolution" => FaceType::Evolution,
             "smaxEvolution" => FaceType::SmaxEvolution,
             "castle" => FaceType::Castle,
+            "tamaseed" => FaceType::Tamaseed,
+            "field" => FaceType::Field,
+            "crossgear" => FaceType::Crossgear,
             _ => return None,
         })
     }
     pub fn is_evo(self) -> bool {
         matches!(self, FaceType::Evolution | FaceType::SmaxEvolution)
     }
-    /// クリーチャーとして出る種類か(呪文でも城でもない)
+    /// クリーチャーとして扱う種類か(進化・S-MAX進化を含む。タマシード・フィールド・クロスギアは含まない)
     pub fn is_creature(self) -> bool {
+        matches!(self, FaceType::Creature | FaceType::Evolution | FaceType::SmaxEvolution)
+    }
+    /// バトルゾーンに出る種類か(呪文・G城以外)
+    pub fn is_permanent(self) -> bool {
         !matches!(self, FaceType::Spell | FaceType::Castle)
+    }
+    /// 出来事(moved / entered)の kind に使う区分(TS 版の kindOfType)
+    pub fn kind_sym(self) -> Sym {
+        match self {
+            FaceType::Spell => s::SPELL,
+            FaceType::Castle => s::CASTLE,
+            FaceType::Tamaseed => sym("tamaseed"),
+            FaceType::Field => sym("field"),
+            FaceType::Crossgear => sym("crossgear"),
+            _ => s::CREATURE,
+        }
     }
 }
 
@@ -477,6 +498,8 @@ pub struct Card {
     pub face: i32,
     /// 表向きのシールドか(G城。シールドゾーンにある間だけ true)
     pub up: bool,
+    /// 山札に、横向きに刺されているか(終葬 5.S.D.)
+    pub side: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -486,6 +509,24 @@ pub struct Perm {
     pub tapped: bool,
     pub sick: bool,
     pub entered_turn: i32,
+    /// ハイパーモード中か(次の持ち主のターンのはじめまで)
+    pub hyper: bool,
+    /// 封印(裏向きで、この山の上に置かれたカードの uid)。無ければ空
+    pub seals: Vec<i32>,
+    /// アビスラッシュ: そのターン(無ければ None)
+    pub rush: Option<i32>,
+    /// アビスラッシュの、攻撃していた時だけ山札の下に置く
+    pub rush_if_attacked: bool,
+    /// クロスギア: クロスしているクリーチャーの山(pid)
+    pub crossed_on: Option<i32>,
+    /// J・O・E: このターンの終わりに山札の下に置き、そうしたらカードを1枚引く(そのターン)
+    pub end_bottom: Option<i32>,
+}
+
+impl Perm {
+    pub fn new(pid: i32, cards: Vec<i32>, tapped: bool, sick: bool, entered_turn: i32) -> Perm {
+        Perm { pid, cards, tapped, sick, entered_turn, hyper: false, seals: Vec::new(), rush: None, rush_if_attacked: false, crossed_on: None, end_bottom: None }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -542,6 +583,7 @@ pub enum ProcName {
     Break,
     Settle,
     Sba,
+    Battle,
 }
 
 impl ProcName {
@@ -553,6 +595,7 @@ impl ProcName {
             ProcName::Break => "break",
             ProcName::Settle => "settle",
             ProcName::Sba => "sba",
+            ProcName::Battle => "battle",
         }
     }
     pub fn parse(s: &str) -> Option<ProcName> {
@@ -563,6 +606,7 @@ impl ProcName {
             "break" => ProcName::Break,
             "settle" => ProcName::Settle,
             "sba" => ProcName::Sba,
+            "battle" => ProcName::Battle,
             _ => return None,
         })
     }
@@ -618,6 +662,8 @@ pub struct PoolEntry {
 pub enum Duration {
     EndOfTurn { turn: i32 },
     UntilTurnStart { player: PlayerId, after_turn: i32 },
+    /// 次の、相手(player の相手)のターンの終わりまで: after_turn より後で、player 以外のターンが終わる時に失効する
+    UntilOppTurnEnd { player: PlayerId, after_turn: i32 },
     Source { uid: i32, ep: i32 },
 }
 
@@ -630,8 +676,37 @@ pub enum EffectMod {
     CannotBeAttacked,
     /// ブロックを強制する(総合ルール 507.1b)
     MustBlock,
-    /// プレイヤー単位(pid = -1): 発生源の持ち主の相手は呪文を唱えられない
-    CannotCast,
+    /// プレイヤー単位(pid = -1): 発生源の持ち主の相手は呪文を唱えられない(n があれば、そのコストの呪文だけ)
+    CannotCast(Option<i32>),
+    CannotBlock,
+    /// 攻撃クリーチャーの山: ブレイクするシールドの数を、少なくとも n にする
+    Breaker(i32),
+    /// 攻撃クリーチャーの山: 最初の攻撃の終わりに、アンタップする
+    UntapAfterAttack,
+    /// プレイヤー単位: 発生源の持ち主の相手の、表記コストが n のクリーチャーは、攻撃もブロックもできない
+    CannotActCost(i32),
+    /// プレイヤー単位: 発生源の持ち主の相手は、クリーチャーで攻撃できない
+    CannotAttackAny,
+    /// プレイヤー単位: 発生源の持ち主は、ゲームに負けない
+    CannotLose,
+    /// 指定のクリーチャーの山(pids)・マナのカード(uids)は、次の持ち主のターンのはじめにアンタップしない
+    NoUntap { pids: Vec<i32>, uids: Vec<i32> },
+    /// プレイヤー単位: 発生源の持ち主が次に召喚するクリーチャーのコストを delta 増減する
+    NextSummon { delta: i32, sa: bool },
+    /// プレイヤー単位: 発生源の持ち主の相手は、各ターン1度までしか、クリーチャーで攻撃もブロックもできない
+    OncePerTurnActs,
+    /// プレイヤー単位: 発生源の持ち主の相手は、コストが n 以下の呪文を唱えられない
+    CannotCastLte(i32),
+    /// プレイヤー単位: 発生源の持ち主の相手の、コストが n のバトルゾーンのカードの能力を無視する
+    IgnoreCost(i32),
+    /// プレイヤー単位: 発生源の持ち主の相手の、クリーチャーすべての能力を無視する
+    IgnoreAll,
+    /// このクリーチャー(pid)は、離れない
+    CannotLeave,
+    /// プレイヤー単位: 発生源の持ち主は、次の自分のターンのはじめに、自分のシールドを1つ手札に加える
+    StartShield,
+    /// プレイヤー単位: 発生源の持ち主は、次の自分のターンのはじめに civ を含む n 枚のマナを支払う。払えなければゲームに負ける
+    Owe { civ: Civ, n: i32 },
     /// プレイヤー単位: 発生源の持ち主の相手は、コストが n のカードを実行できない
     CannotUseCost(i32),
     /// プレイヤー単位: 発生源の持ち主の相手は、コストが n 以下のクリーチャーを召喚できない
@@ -683,7 +758,7 @@ impl Default for Cfg {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum InputSpec {
-    Pick { candidates: Vec<i32>, min: i32, max: i32 },
+    Pick { candidates: Vec<i32>, min: i32, max: i32, sum: Option<(i32, Vec<i32>)> },
     Assign { items: Vec<i32>, slots: Vec<SlotSpec> },
     Option { options: Vec<String>, pick: i32, repeat: bool, all_if: bool, seen: Option<Vec<i32>> },
     YesNo,
@@ -831,9 +906,21 @@ pub struct State {
     pub winner: Winner,
     pub lose_reason: Option<String>,
     pub skip_turn: bool,
+    /// 「このターンの後に自分のターンを追加する」の予約
+    pub extra_turns: Option<Vec<PlayerId>>,
+    /// 追加のターンの後に、本来の順番で次に行うプレイヤー
+    pub resume: Option<PlayerId>,
+    /// 封印がいちど付けられたか
+    pub sealed: bool,
+    /// ゲームに負ける手続きを待っているプレイヤー
+    pub pending_loss: Option<Vec<PlayerId>>,
+    /// シールドの山: 一番上のカードの uid → その下に重なっているカード(uid の昇順で持つ)
+    pub piles: Option<Vec<(i32, Vec<i32>)>>,
     pub mana_charged: bool,
     pub breaking: Vec<i32>,
     pub deck_ids: Rc<Vec<Vec<u16>>>,
+    /// この対局のデッキが持つ機能のビット(registry::Feat。デッキが分からない状態では、カードDB全体)
+    pub feats: u64,
     /// 山札の中で中身が公開された札のまとまり(TS 版 GameState.knownDeck と同じ)。プレイヤーごとに、まとまりの (uid, ep) の並び。
     /// 探索では使わない(決定化に使う視点側のヒントは SearchEnv.deck_known)。往復の一致のために持つ
     pub known_deck: Option<[Vec<Vec<(i32, i32)>>; 2]>,

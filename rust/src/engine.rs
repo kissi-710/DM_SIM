@@ -3,6 +3,7 @@
 use crate::legal::validate_action;
 use crate::ops::*;
 use crate::procs::*;
+use crate::derive::{cross_cost, pay_need, plan_payment};
 use crate::registry::Registry;
 use crate::state::*;
 use crate::types::*;
@@ -66,7 +67,7 @@ fn apply_turn_action(c: &mut Ctx, a: &Action) -> Res<()> {
             };
             let fi = match face {
                 Some(f) => *f,
-                None => c.reg.defs[def as usize].faces.iter().position(|f| f.ty != FaceType::Spell).unwrap_or(0) as i32,
+                None => c.reg.defs[def as usize].faces.iter().position(|f| f.ty.is_creature()).unwrap_or(0) as i32,
             };
             push_proc(c, ProcName::Settle, vec![]);
             push_proc(
@@ -87,6 +88,52 @@ fn apply_turn_action(c: &mut Ctx, a: &Action) -> Res<()> {
             c.s.step = Step::Attack;
             push_proc(c, ProcName::Settle, vec![]);
             push_proc(c, ProcName::Attack, vec![(s::PID, Val::Int(*attacker as i64)), (s::TARGET, target_to_val(target))]);
+        }
+        Action::Cross { gear, target } => {
+            // クロス: クロスギアのコストをもう一度マナで払い、自分のクリーチャーにクロスする
+            push_proc(c, ProcName::Settle, vec![]);
+            let gp = c.s.perm_by_pid(*gear);
+            let tp = c.s.perm_by_pid(*target);
+            let ((go, gi), (to, ti)) = match (gp, tp) {
+                (Some(g), Some(t)) => (g, t),
+                _ => return Ok(()),
+            };
+            let _ = to;
+            let gu = c.s.players[go as usize].battle[gi].cards[0];
+            let (host_top, host_pid) = {
+                let t = &c.s.players[to as usize].battle[ti];
+                (t.cards[0], t.pid)
+            };
+            let (cost, civs) = cross_cost(c.env(), gu);
+            let pay = plan_payment(c.env(), go, &civs, pay_need(cost, civs.len() as i32), &[], &[]);
+            let pay = match pay {
+                Some(p) => p,
+                None => return Ok(()),
+            };
+            for u in pay {
+                set_tapped(c, u, true);
+            }
+            c.s.players[go as usize].battle[gi].crossed_on = Some(host_pid);
+            let ev = emit(c, sym("crossed"), vec![(s::CARD, Val::Int(gu as i64)), (s::OWNER, Val::Int(go as i64)), (sym("host"), Val::Int(host_top as i64)), (sym("hostPid"), Val::Int(host_pid as i64))]);
+            collect_batch(c, &[ev]);
+        }
+        Action::Hyperize { pid, tap } => {
+            // ハイパー化: 他のクリーチャーをタップして、ハイパーモードを解放する
+            push_proc(c, ProcName::Settle, vec![]);
+            let (po, pi) = match c.s.perm_by_pid(*pid) {
+                Some(x) => x,
+                None => return Ok(()),
+            };
+            for t in tap {
+                if let Some((to, ti)) = c.s.perm_by_pid(*t) {
+                    let top = c.s.players[to as usize].battle[ti].cards[0];
+                    set_tapped(c, top, true);
+                }
+            }
+            c.s.players[po as usize].battle[pi].hyper = true;
+            let top = c.s.players[po as usize].battle[pi].cards[0];
+            let ev = emit(c, sym("hyperized"), vec![(s::CARD, Val::Int(top as i64)), (s::OWNER, Val::Int(po as i64)), (s::PID, Val::Int(*pid as i64))]);
+            collect_batch(c, &[ev]);
         }
         Action::Answer { .. } => {}
     }

@@ -2,7 +2,7 @@
 
 use crate::ast::*;
 use crate::cond::*;
-use crate::registry::{Face, FaceInfo};
+use crate::registry::{Face, FaceInfo, Feat};
 use crate::types::*;
 use std::rc::Rc;
 
@@ -74,8 +74,87 @@ pub fn cost_base(e: Env, uid: i32) -> i32 {
 
 pub fn info_of<'a>(e: Env<'a>, uid: i32) -> &'a FaceInfo {
     let card = &e.s.cards[uid as usize];
+    if card.zone == Zone::Battle && (!e.s.effects.is_empty() || e.s.sealed) && is_ignored(e, uid) {
+        return &e.reg.empty_info;
+    }
     let ch = chars_lite(e, uid, -1);
     e.reg.info(card.def, ch.face_idx)
+}
+
+/// 封印されているか(封印されているクリーチャーは、能力を失い、攻撃もブロックもできない)
+pub fn is_sealed(e: Env, uid: i32) -> bool {
+    let card = &e.s.cards[uid as usize];
+    if !e.s.sealed || card.zone != Zone::Battle {
+        return false;
+    }
+    e.s.perm(card.pid).map_or(false, |p| !p.seals.is_empty())
+}
+
+/// 相手は、自身の山札を見れず、順序を変えられない(5.S.D.)
+pub fn deck_locked(e: Env, p: PlayerId) -> bool {
+    game_has_any_static(e, |st| matches!(st.m, StaticMod::DeckLock) && st.controller != p)
+}
+
+/// 常在型能力のうち、pred に合うものがあるか(while を満たすもののみ)
+fn game_has_any_static<'a>(e: Env<'a>, pred: impl Fn(&ActiveStatic<'a>) -> bool) -> bool {
+    any_static(e, |st| pred(st))
+}
+
+/// バトルゾーンのカードが、能力を無視されているか(「そのコストの相手のエレメントの能力を無視する」「相手のクリーチャーすべての能力を無視する」・封印)
+pub fn is_ignored(e: Env, uid: i32) -> bool {
+    let card = &e.s.cards[uid as usize];
+    if e.s.sealed && is_sealed(e, uid) {
+        return true;
+    }
+    for ef in &e.s.effects {
+        if ef.controller == card.owner {
+            continue;
+        }
+        match ef.m {
+            EffectMod::IgnoreAll => return true,
+            EffectMod::IgnoreCost(n) => {
+                if cost_base(e, uid) == n {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+/// そのカード自身が持つ常在型能力(while を満たしているもの)に、pred に合うものがあるか
+pub fn has_self_static(e: Env, uid: i32, pred: impl Fn(&StaticMod) -> bool) -> bool {
+    let info = info_of(e, uid);
+    if info.statics.is_empty() {
+        return false;
+    }
+    let card = &e.s.cards[uid as usize];
+    let face = e.reg.face(card.def, chars_lite(e, uid, -1).face_idx);
+    for &si in &info.statics {
+        if let Ability::Static { m, while_ } = &face.abilities[si as usize] {
+            if !pred(m) {
+                continue;
+            }
+            if let Some(w) = while_ {
+                if !eval_cond(&CC::new(e, card.owner).with_self(uid), w) {
+                    continue;
+                }
+            }
+            return true;
+        }
+    }
+    false
+}
+
+/// その山のクリーチャーが、いま攻撃中か(攻撃の手続きが終わっていない)
+pub fn is_attacking(e: Env, pid: i32) -> bool {
+    e.s.cont.iter().any(|f| matches!(f, Frame::Proc(p) if p.name == ProcName::Attack && var_get(&p.vars, s::PID).and_then(|v| v.as_i32()) == Some(pid)))
+}
+
+/// そのプレイヤーが、ゲームに負けない効果を受けているか
+pub fn player_cannot_lose(e: Env, p: PlayerId) -> bool {
+    e.s.effects.iter().any(|ef| ef.m == EffectMod::CannotLose && ef.controller == p)
 }
 
 // ───────────────────────── 継続効果 ─────────────────────────
@@ -116,7 +195,13 @@ pub fn active_statics<'a>(e: Env<'a>) -> Vec<ActiveStatic<'a>> {
 }
 
 /// 常在型能力を1つずつ処理する(f が true を返したら打ち切って true を返す)。Vec を確保しない。
-pub fn any_static<'a>(e: Env<'a>, mut f: impl FnMut(&ActiveStatic<'a>) -> bool) -> bool {
+pub fn any_static<'a>(e: Env<'a>, f: impl FnMut(&ActiveStatic<'a>) -> bool) -> bool {
+    any_static_if(e, |_| true, f)
+}
+
+/// any_static の、能力の種類 `sel` で先に絞ってから `while` を評価する版(TS の activeStatics(c, modType) と同じ順序)。
+/// 絞らないと、パワーの計算中に無関係な `while`(パワーを見るもの)を評価して再帰する。
+pub fn any_static_if<'a>(e: Env<'a>, sel: impl Fn(&StaticMod) -> bool, mut f: impl FnMut(&ActiveStatic<'a>) -> bool) -> bool {
     crate::prof!(15);
     for p in 0..2u8 {
         for perm in &e.s.players[p as usize].battle {
@@ -125,13 +210,16 @@ pub fn any_static<'a>(e: Env<'a>, mut f: impl FnMut(&ActiveStatic<'a>) -> bool) 
             // バトルゾーンの一番上: 使用中の面(無ければ面0)
             let def = &e.reg.defs[card.def as usize];
             let fidx = if card.face >= 0 && (card.face as usize) < def.faces.len() { card.face } else { 0 };
-            let info = e.reg.info(card.def, fidx);
+            let info = if !e.s.effects.is_empty() || e.s.sealed { info_of(e, uid) } else { e.reg.info(card.def, fidx) };
             if info.statics.is_empty() {
                 continue;
             }
             let face = &def.faces[fidx as usize];
             for &si in &info.statics {
                 if let Ability::Static { m, while_ } = &face.abilities[si as usize] {
+                    if !sel(m) {
+                        continue;
+                    }
                     if let Some(w) = while_ {
                         let cc = CC::new(e, p).with_self(uid);
                         if !eval_cond(&cc, w) {
@@ -157,7 +245,7 @@ pub fn power_of(e: Env, perm: &Perm) -> i32 {
     let def = &e.reg.defs[card.def as usize];
     let face = def.faces.get(card.face as usize).unwrap_or(&def.faces[0]);
     let mut p = face.power.unwrap_or(0);
-    let info = e.reg.info(card.def, card.face);
+    let info = info_of(e, uid);
     // 能力は getInfo の面で読む(TS 版は info.statics[].ability をそのまま使う)
     let face_for_abilities = e.reg.face(card.def, card.face);
     for &si in &info.statics {
@@ -173,6 +261,66 @@ pub fn power_of(e: Env, perm: &Perm) -> i32 {
     for ef in &e.s.effects {
         if ef.pid == perm.pid {
             if let EffectMod::PowerAdd(n) = ef.m {
+                p += n;
+            }
+        }
+    }
+    // 式で増減するパワー(「コストが異なるクリーチャー1体につき+3000」など)
+    for &si in &info.statics {
+        if let Ability::Static { m: StaticMod::PowerAddExpr { expr }, while_ } = &face_for_abilities.abilities[si as usize] {
+            let cc = CC::new(e, card.owner).with_self(uid);
+            if let Some(w) = while_ {
+                if !eval_cond(&cc, w) {
+                    continue;
+                }
+            }
+            p += eval_expr(&cc, expr) as i32;
+        }
+    }
+    // このクロスギアをクロスしたクリーチャーのパワーを増やす(竜装 ゴウソク・タキオンアーマー)
+    if game_has(e, Feat::HostPowerAdd) {
+        for g in &e.s.players[card.owner as usize].battle {
+            if g.crossed_on != Some(perm.pid) {
+                continue;
+            }
+            let gi = info_of(e, g.cards[0]);
+            let gcard = &e.s.cards[g.cards[0] as usize];
+            let gface = e.reg.face(gcard.def, chars_lite(e, g.cards[0], -1).face_idx);
+            for &si in &gi.statics {
+                if let Ability::Static { m: StaticMod::HostPowerAdd { n }, while_ } = &gface.abilities[si as usize] {
+                    if let Some(w) = while_ {
+                        if !eval_cond(&CC::new(e, card.owner).with_self(g.cards[0]), w) {
+                            continue;
+                        }
+                    }
+                    p += n;
+                }
+            }
+        }
+    }
+    // 自分の他のカードのパワーを増やす(アルカディアス・モモキング)
+    if game_has(e, Feat::PowerAddOthers) {
+        any_static_if(e, |m| matches!(m, StaticMod::PowerAddOthers { .. }), |st| {
+            if let StaticMod::PowerAddOthers { n, cond } = st.m {
+                if st.controller == card.owner && st.src != uid {
+                    let cc = CC::new(e, card.owner).with_self(st.src).with_it(uid, card.face);
+                    if eval_cond(&cc, cond) {
+                        p += n;
+                    }
+                }
+            }
+            false
+        });
+    }
+    // パワーアタッカー: 攻撃中だけ
+    if !info.statics.is_empty() && is_attacking(e, perm.pid) {
+        for &si in &info.statics {
+            if let Ability::Static { m: StaticMod::PowerAttacker { n }, while_ } = &face_for_abilities.abilities[si as usize] {
+                if let Some(w) = while_ {
+                    if !eval_cond(&CC::new(e, card.owner).with_self(uid), w) {
+                        continue;
+                    }
+                }
                 p += n;
             }
         }
@@ -253,6 +401,7 @@ pub enum Kw {
     ExLife,
     Slayer,
     Unblockable,
+    CannotBeAttacked,
 }
 
 pub fn has_keyword(e: Env, perm: &Perm, kw: Kw) -> bool {
@@ -267,6 +416,7 @@ pub fn has_keyword(e: Env, perm: &Perm, kw: Kw) -> bool {
         Kw::ExLife => info.ex_life,
         Kw::Slayer => info.slayer,
         Kw::Unblockable => false,
+        Kw::CannotBeAttacked => false,
     };
     if yes {
         return true;
@@ -280,15 +430,13 @@ pub fn has_keyword(e: Env, perm: &Perm, kw: Kw) -> bool {
         Kw::ExLife => s::EX_LIFE,
         Kw::Slayer => s::KW_SLAYER,
         Kw::Unblockable => s::KW_UNBLOCKABLE,
+        Kw::CannotBeAttacked => sym("cannotBeAttacked"),
     };
     if e.s.effects.iter().any(|ef| ef.pid == perm.pid && matches!(ef.m, EffectMod::Grant(k) if k == ks)) {
         return true;
     }
     // 場の常在型能力(grantKeyword)で与えられているか
-    if matches!(kw, Kw::SpeedAttacker | Kw::MachFighter | Kw::Slayer | Kw::Unblockable) {
-        return granted_by_static(e, perm, ks);
-    }
-    false
+    granted_by_static(e, perm, ks)
 }
 
 fn granted_by_static(e: Env, perm: &Perm, ks: Sym) -> bool {
@@ -300,7 +448,7 @@ fn granted_by_static(e: Env, perm: &Perm, ks: Sym) -> bool {
         let card = &e.s.cards[su as usize];
         let def = &e.reg.defs[card.def as usize];
         let fidx = if card.face >= 0 && (card.face as usize) < def.faces.len() { card.face } else { 0 };
-        let info = e.reg.info(card.def, fidx);
+        let info = if !e.s.effects.is_empty() || e.s.sealed { info_of(e, su) } else { e.reg.info(card.def, fidx) };
         if info.statics.is_empty() {
             continue;
         }
@@ -331,6 +479,9 @@ pub fn is_unblockable(e: Env, attacker: &Perm) -> bool {
 
 pub fn breaker_count(e: Env, perm: &Perm) -> i32 {
     let uid = perm.cards[0];
+    if has_self_static(e, uid, |m| matches!(m, StaticMod::CannotBreak)) {
+        return 0; // シールドをブレイクできない
+    }
     let card = &e.s.cards[uid as usize];
     let info = info_of(e, uid);
     let face = e.reg.face(card.def, chars_lite(e, uid, -1).face_idx);
@@ -345,21 +496,62 @@ pub fn breaker_count(e: Env, perm: &Perm) -> i32 {
             n = n.max(bn.unwrap_or(2));
         }
     }
+    // パワード・ブレイカー: パワー n ごとに、シールドをもう1つ(1 + パワー / n)
+    if let Some(pb) = info.powered_breaker {
+        if pb > 0 {
+            n = n.max(1 + power_of(e, perm).div_euclid(pb));
+        }
+    }
+    for ef in &e.s.effects {
+        if ef.pid == perm.pid {
+            if let EffectMod::Breaker(b) = ef.m {
+                n = n.max(b);
+            }
+        }
+    }
     n
 }
 
 // ───────────────────────── 攻撃・ブロック・選択 ─────────────────────────
 
-pub fn can_be_chosen(e: Env, perm: &Perm, by: PlayerId) -> bool {
+pub fn can_be_chosen(e: Env, perm: &Perm, by: PlayerId, source: Option<i32>) -> bool {
     let owner = e.s.cards[perm.cards[0] as usize].owner;
     if owner == by {
         return true;
     }
-    !e.s.effects.iter().any(|ef| ef.pid == perm.pid && ef.m == EffectMod::CannotBeChosen)
+    if e.s.effects.iter().any(|ef| ef.pid == perm.pid && ef.m == EffectMod::CannotBeChosen) {
+        return false;
+    }
+    let uid = perm.cards[0];
+    let info = info_of(e, uid);
+    if !info.statics.is_empty() {
+        if has_self_static_unconditional(e, uid, |m| matches!(m, StaticMod::CannotBeChosen)) {
+            return false;
+        }
+        // 「呪文によって相手に選ばれない」: 選ぶ効果の発生源が呪文の時
+        if let Some(src) = source {
+            if chars_lite(e, src, -1).ty == FaceType::Spell && has_self_static_unconditional(e, uid, |m| matches!(m, StaticMod::ProtectFromSpells)) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// while を見ずに、そのカード自身が持つ常在型能力に pred に合うものがあるか(TS 版の info.statics.some(...))
+fn has_self_static_unconditional(e: Env, uid: i32, pred: impl Fn(&StaticMod) -> bool) -> bool {
+    let info = info_of(e, uid);
+    let card = &e.s.cards[uid as usize];
+    let face = e.reg.face(card.def, chars_lite(e, uid, -1).face_idx);
+    info.statics.iter().any(|&si| matches!(&face.abilities[si as usize], Ability::Static { m, .. } if pred(m)))
 }
 
 pub fn can_be_attacked(e: Env, perm: &Perm) -> bool {
-    !e.s.effects.iter().any(|ef| ef.pid == perm.pid && ef.m == EffectMod::CannotBeAttacked)
+    if e.s.effects.iter().any(|ef| ef.pid == perm.pid && ef.m == EffectMod::CannotBeAttacked) {
+        return false;
+    }
+    // 場の常在型能力で、攻撃されなくなっている(ガチャンコ ガチロボ)
+    !granted_by_static(e, perm, sym("cannotBeAttacked"))
 }
 
 fn has_effect(e: Env, pid: i32, m: &EffectMod) -> bool {
@@ -379,19 +571,119 @@ pub fn is_sick(e: Env, perm: &Perm) -> bool {
     if !perm.sick {
         return false;
     }
+    if perm.rush == Some(e.s.turn) {
+        return false; // アビスラッシュ: そのターン、プレイヤーを攻撃できる
+    }
     !chars_lite(e, perm.cards[0], -1).ty.is_evo()
 }
 
 pub fn can_attack(e: Env, perm: &Perm, target: &crate::state::Target) -> bool {
+    use crate::state::Target;
+    if !can_attack_base(e, perm, target) {
+        return false;
+    }
+    // 「相手のクリーチャーが攻撃するなら、可能ならこのクリーチャーを攻撃する」(バイラス・カースド)
+    if game_has(e, Feat::AttackMeFirst) {
+        let owner = e.s.cards[perm.cards[0] as usize].owner;
+        let mut pids: Vec<i32> = Vec::new();
+        any_static(e, |st| {
+            if matches!(st.m, StaticMod::AttackMeFirst) && st.controller != owner {
+                let pid = e.s.cards[st.src as usize].pid;
+                if can_attack_base(e, perm, &Target::Creature(pid)) {
+                    pids.push(pid);
+                }
+            }
+            false
+        });
+        if !pids.is_empty() {
+            return matches!(target, Target::Creature(p) if pids.contains(p));
+        }
+    }
+    true
+}
+
+/// 「各ターン1度までしか、クリーチャーで攻撃もブロックもできない」の制限で、もう動けないか
+fn acts_limited(e: Env, player: PlayerId) -> bool {
+    if !e.s.effects.iter().any(|ef| ef.m == EffectMod::OncePerTurnActs && ef.controller != player) {
+        return false;
+    }
+    let mut n = 0;
+    for ev in &e.s.turn_log {
+        if (ev.ty == s::ATTACK_DECLARED || ev.ty == s::BLOCKED) && ev.int(s::OWNER) == Some(player as i64) {
+            n += 1;
+        }
+    }
+    n >= 1
+}
+
+/// 「表記コストが n のクリーチャーは、攻撃もブロックもできない」(♪やせ蛙)に当たるか
+fn cost_locked(e: Env, uid: i32) -> bool {
+    if e.s.effects.is_empty() {
+        return false;
+    }
+    let owner = e.s.cards[uid as usize].owner;
+    e.s.effects.iter().any(|ef| matches!(ef.m, EffectMod::CannotActCost(n) if ef.controller != owner && cost_base(e, uid) == n))
+}
+
+/// ガードマン: 攻撃先が自分のクリーチャーの時に、ブロッカーのかわりにその攻撃先を変更できるか
+pub fn can_guard(e: Env, perm: &Perm) -> bool {
+    if perm.tapped {
+        return false;
+    }
+    let uid = perm.cards[0];
+    if e.s.sealed && is_sealed(e, uid) {
+        return false;
+    }
+    if cost_locked(e, uid) {
+        return false;
+    }
+    if has_effect(e, perm.pid, &EffectMod::CannotBlock) {
+        return false;
+    }
+    if acts_limited(e, e.s.cards[uid as usize].owner) {
+        return false;
+    }
+    if !chars_lite(e, uid, -1).ty.is_creature() {
+        return false;
+    }
+    has_self_static(e, uid, |m| matches!(m, StaticMod::Guardman))
+}
+
+fn can_attack_base(e: Env, perm: &Perm, target: &crate::state::Target) -> bool {
     crate::prof!(13);
     use crate::state::Target;
     let s = e.s;
     let uid = perm.cards[0];
+    if !chars_lite(e, uid, -1).ty.is_creature() {
+        return false; // タマシード・フィールド・クロスギアは攻撃できない
+    }
     let owner = s.cards[uid as usize].owner;
+    if s.sealed && is_sealed(e, uid) {
+        return false;
+    }
+    if acts_limited(e, owner) {
+        return false;
+    }
+    if !s.effects.is_empty() && s.effects.iter().any(|ef| ef.m == EffectMod::CannotAttackAny && ef.controller != owner) {
+        return false;
+    }
+    if cost_locked(e, uid) {
+        return false;
+    }
     if perm.tapped {
         return false;
     }
+    // 「相手のクリーチャーは、出たターン攻撃できない」(聖カオスマントラ)
+    if perm.entered_turn == s.turn && game_has(e, Feat::NoAttackOnEntry) && any_static(e, |st| matches!(st.m, StaticMod::NoAttackOnEntry) && st.controller != owner) {
+        return false;
+    }
     if has_effect(e, perm.pid, &EffectMod::CannotAttack) {
+        return false;
+    }
+    if has_self_static(e, uid, |m| matches!(m, StaticMod::CannotAttack)) {
+        return false;
+    }
+    if matches!(target, Target::Player) && has_self_static(e, uid, |m| matches!(m, StaticMod::CannotAttackPlayer)) {
         return false;
     }
     let speed = has_keyword(e, perm, Kw::SpeedAttacker);
@@ -408,6 +700,21 @@ pub fn can_attack(e: Env, perm: &Perm, target: &crate::state::Target) -> bool {
             if player_attack_blocked_by_entry(e, perm, owner) {
                 return false;
             }
+            // 「自分は、このクリーチャーよりパワーが小さいクリーチャーに攻撃されない」(大樹王 ギガンディダノス)
+            if game_has(e, Feat::ProtectPlayerFromWeaker) {
+                let atk_power = power_of(e, perm);
+                let blocked = any_static(e, |st| {
+                    if matches!(st.m, StaticMod::ProtectPlayerFromWeaker) && st.controller != owner {
+                        if let Some(sp) = s.perm(s.cards[st.src as usize].pid) {
+                            return atk_power < power_of(e, sp);
+                        }
+                    }
+                    false
+                });
+                if blocked {
+                    return false;
+                }
+            }
             true
         }
         Target::Creature(pid) => {
@@ -420,6 +727,13 @@ pub fn can_attack(e: Env, perm: &Perm, target: &crate::state::Target) -> bool {
             }
             let tperm = &s.players[towner as usize].battle[ti];
             if !can_be_attacked(e, tperm) {
+                return false;
+            }
+            // 飛行: 飛行を持たないクリーチャーからは、攻撃されない
+            if game_has(e, Feat::Flying)
+                && has_self_static(e, tperm.cards[0], |m| matches!(m, StaticMod::Flying))
+                && !has_self_static(e, uid, |m| matches!(m, StaticMod::Flying))
+            {
                 return false;
             }
             if tperm.tapped {
@@ -435,6 +749,22 @@ pub fn can_block(e: Env, perm: &Perm) -> bool {
     if perm.tapped {
         return false;
     }
+    let uid = perm.cards[0];
+    if e.s.sealed && is_sealed(e, uid) {
+        return false;
+    }
+    if cost_locked(e, uid) {
+        return false;
+    }
+    if has_effect(e, perm.pid, &EffectMod::CannotBlock) {
+        return false;
+    }
+    if acts_limited(e, e.s.cards[uid as usize].owner) {
+        return false;
+    }
+    if !chars_lite(e, uid, -1).ty.is_creature() {
+        return false;
+    }
     has_keyword(e, perm, Kw::Blocker)
 }
 
@@ -447,6 +777,11 @@ pub fn must_block(e: Env, perm: &Perm) -> bool {
 
 /// 召喚・詠唱するカードの最終コスト(0未満にならない)。
 pub fn cost_of(e: Env, uid: i32, face_idx: i32, taps: &[i32], free: bool) -> i32 {
+    cost_of_once(e, uid, face_idx, taps, free, &mut Vec::new())
+}
+
+/// cost_of に加えて、「各ターンに1度」の軽減を使った発生源を once に集める(使ったと記録するのは、実際に使う側)
+pub fn cost_of_once(e: Env, uid: i32, face_idx: i32, taps: &[i32], free: bool, once: &mut Vec<i32>) -> i32 {
     crate::prof!(12);
     let s = e.s;
     let card = &s.cards[uid as usize];
@@ -463,12 +798,52 @@ pub fn cost_of(e: Env, uid: i32, face_idx: i32, taps: &[i32], free: bool) -> i32
     if info.hyper_energy && !taps.is_empty() {
         cost -= 2 * taps.len() as i32;
     }
+    if !info.self_costs.is_empty() {
+        let cc = CC::new(e, card.owner).with_self(uid);
+        let fc = e.reg.face(card.def, face_idx);
+        for &si in &info.self_costs {
+            if let Ability::SelfCost { delta, cond, floor } = &fc.abilities[si as usize] {
+                if let Some(cn) = cond {
+                    if !eval_cond(&cc, cn) {
+                        continue;
+                    }
+                }
+                cost += eval_expr(&cc, delta) as i32;
+                if let Some(fl) = floor {
+                    if cost < *fl {
+                        cost = *fl;
+                    }
+                }
+            }
+        }
+    }
+    // 「このターン、次に召喚する自分のクリーチャーのコストを少なくする」
+    if !s.effects.is_empty() && face.ty.is_creature() {
+        for ef in &s.effects {
+            if let EffectMod::NextSummon { delta, .. } = ef.m {
+                if ef.controller == card.owner {
+                    cost += delta;
+                }
+            }
+        }
+    }
     any_static(e, |st| {
-        if let StaticMod::CostDelta { delta, cond } = st.m {
+        if let StaticMod::CostDelta { delta, cond, once_per_turn, floor } = st.m {
             if st.controller == card.owner {
+                if *once_per_turn && s.usage_get(&UKey::Other(format!("cd:{}", st.src))) == Some(s.turn as i64) {
+                    return false;
+                }
                 let cc = CC::new(e, st.controller).with_self(st.src).with_it(uid, face_idx);
                 if eval_cond(&cc, cond) {
-                    cost += delta;
+                    cost += eval_expr(&cc, delta) as i32;
+                    if let Some(fl) = floor {
+                        if cost < *fl {
+                            cost = *fl;
+                        }
+                    }
+                    if *once_per_turn {
+                        once.push(st.src);
+                    }
                 }
             }
         }
@@ -482,7 +857,37 @@ pub fn pay_need(cost: i32, civ_count: i32) -> i32 {
     cost.max(civ_count).max(0)
 }
 
+const ALL_CIVS: [Civ; 5] = [Civ::Light, Civ::Water, Civ::Darkness, Civ::Fire, Civ::Nature];
+
+/// マナの支払いに使える、アンタップのカード(マナゾーンのカードと、「タップしてマナとして使える」クリーチャー)
+pub fn mana_sources(e: Env, player: PlayerId, exclude: &[i32]) -> Vec<i32> {
+    let s = e.s;
+    let mut out: Vec<i32> = s.players[player as usize].mana.iter().copied().filter(|u| !s.cards[*u as usize].tapped && !exclude.contains(u)).collect();
+    if game_has(e, Feat::TapAsMana) {
+        for perm in &s.players[player as usize].battle {
+            let u = perm.cards[0];
+            if !perm.tapped && !exclude.contains(&u) && has_self_static(e, u, |m| matches!(m, StaticMod::TapAsMana)) {
+                out.push(u);
+            }
+        }
+    }
+    out
+}
+
+/// マナの支払いに使う時の文明(「すべての文明を持つかのように」使えるクリーチャーは、すべて)
+pub fn source_civs<'a>(e: Env<'a>, uid: i32) -> &'a [Civ] {
+    if e.s.cards[uid as usize].zone == Zone::Battle {
+        return &ALL_CIVS;
+    }
+    mana_civs(e, uid)
+}
+
 pub fn mana_civs<'a>(e: Env<'a>, uid: i32) -> &'a [Civ] {
+    let card = &e.s.cards[uid as usize];
+    // 「自分のマナゾーンにあるカードは、すべての文明を持つ」(怪盗妖精カサブランカ)
+    if card.zone == Zone::Mana && game_has(e, Feat::ManaAllCivs) && any_static(e, |st| matches!(st.m, StaticMod::ManaAllCivs) && st.controller == card.owner) {
+        return &ALL_CIVS;
+    }
     chars_lite(e, uid, -1).civs
 }
 
@@ -490,6 +895,9 @@ pub fn mana_civs<'a>(e: Env<'a>, uid: i32) -> &'a [Civ] {
 pub fn can_pay(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: &[i32]) -> bool {
     if need <= 0 {
         return true;
+    }
+    if game_has(e, Feat::TapAsMana) {
+        return plan_payment(e, player, civs, need, exclude, &[]).is_some();
     }
     let s = e.s;
     let mut masks = [0u8; 32];
@@ -502,7 +910,7 @@ pub fn can_pay(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: &[i32
             return plan_payment(e, player, civs, need, exclude, &[]).is_some();
         }
         let mut m = 0u8;
-        for c in chars_lite(e, u, -1).civs {
+        for c in mana_civs(e, u) {
             m |= 1 << (*c as u8);
         }
         masks[n] = m;
@@ -535,16 +943,13 @@ pub fn can_pay(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: &[i32
 /// 手札の他のカードの文明条件を残しやすいように、価値の低いマナからタップする。払えなければ None。
 pub fn plan_payment(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: &[i32], keep_for: &[i32]) -> Option<Vec<i32>> {
     crate::prof!(11);
-    let s = e.s;
     if need <= 0 {
         return Some(vec![]);
     }
-    let mana = &s.players[player as usize].mana;
-    let n_avail = mana.iter().filter(|u| !s.cards[**u as usize].tapped && !exclude.contains(u)).count();
-    if (n_avail as i32) < need {
+    let avail: Vec<i32> = mana_sources(e, player, exclude);
+    if (avail.len() as i32) < need {
         return None;
     }
-    let avail: Vec<i32> = mana.iter().copied().filter(|u| !s.cards[*u as usize].tapped && !exclude.contains(u)).collect();
     // 価値(残したいほど高い)
     let mut want = [0i32; 5];
     for &h in keep_for {
@@ -555,7 +960,7 @@ pub fn plan_payment(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: 
     let mut mc: Vec<(i32, &[Civ])> = Vec::with_capacity(avail.len());
     let mut value: Vec<(i32, f64)> = Vec::with_capacity(avail.len());
     for &u in &avail {
-        let cs = mana_civs(e, u);
+        let cs = source_civs(e, u);
         mc.push((u, cs));
         let mut v = 0.01 * cs.len() as f64;
         for cv in cs {
@@ -664,11 +1069,88 @@ pub fn plan_payment(e: Env, player: PlayerId, civs: &[Civ], need: i32, exclude: 
 
 // ───────────────────────── 呪文の制限 ─────────────────────────
 
+/// そのクリーチャーは、離れない効果を受けているか
+pub fn cannot_leave(e: Env, uid: i32, cause: Option<Sym>) -> bool {
+    let card = &e.s.cards[uid as usize];
+    if card.zone != Zone::Battle {
+        return false;
+    }
+    if !e.s.effects.is_empty() && e.s.effects.iter().any(|ef| ef.pid == card.pid && ef.m == EffectMod::CannotLeave) {
+        return true;
+    }
+    if !game_has(e, Feat::CannotLeaveOwn) {
+        return false;
+    }
+    any_static(e, |st| {
+        if let StaticMod::CannotLeaveOwn { cond, except_destroy } = st.m {
+            if st.controller != card.owner {
+                return false;
+            }
+            if *except_destroy && cause == Some(s::DESTROY) {
+                return false;
+            }
+            return eval_cond(&CC::new(e, st.controller).with_self(st.src).with_it(uid, card.face), cond);
+        }
+        false
+    })
+}
+
+/// クロスのコスト(クロスギアのマナコストをもう一度払う。コスト軽減の効果も受ける)と文明
+pub fn cross_cost(e: Env, gear: i32) -> (i32, Rc<Vec<Civ>>) {
+    let card = &e.s.cards[gear as usize];
+    let fi = chars_lite(e, gear, -1).face_idx;
+    (cost_of(e, gear, fi, &[], false), e.reg.face(card.def, fi).civs.clone())
+}
+
+/// 「相手は、〜のカードを使えない」(超球の超人)に当たらないか。召喚・唱える・出すのすべてに働く
+pub fn can_play_card(e: Env, player: PlayerId, uid: i32, face_idx: i32) -> bool {
+    if !game_has(e, Feat::CannotPlay) {
+        return true;
+    }
+    !any_static(e, |st| {
+        if let StaticMod::CannotPlay { cond } = st.m {
+            if st.controller != player {
+                return eval_cond(&CC::new(e, st.controller).with_self(st.src).with_it(uid, face_idx), cond);
+            }
+        }
+        false
+    })
+}
+
 /// プレイヤーがこの呪文(面)を唱えられるか(ドルファディロムの制限など)
 pub fn can_cast(e: Env, player: PlayerId, uid: i32, face_idx: i32) -> bool {
-    // 「次の自分のターンのはじめまで、相手は呪文を唱えられない」(XXDDZ)
-    if e.s.effects.iter().any(|ef| ef.m == EffectMod::CannotCast && ef.controller != player) {
-        return false;
+    let s = e.s;
+    // 「相手は、自身のターンに1回までしか呪文を唱えられない」(ジョギラゴン&ジョニー)
+    if game_has(e, Feat::OneSpellPerTurn) && s.active == player && any_static(e, |st| matches!(st.m, StaticMod::OneSpellPerTurn) && st.controller != player) {
+        if s.turn_log.iter().any(|ev| ev.ty == s::CAST && ev.int(s::OWNER) == Some(player as i64)) {
+            return false;
+        }
+    }
+    // 「呪文を唱えられなくする効果を無視して、〜を唱えてもよい」(卍 新世壊 卍)
+    let ignore = any_static(e, |st| {
+        if let StaticMod::IgnoreCastBan { cond } = st.m {
+            if st.controller == player {
+                return eval_cond(&CC::new(e, player).with_self(st.src).with_it(uid, face_idx), cond);
+            }
+        }
+        false
+    });
+    if ignore {
+        return true;
+    }
+    // 「次の自分のターンのはじめまで、相手は呪文を唱えられない」(XXDDZ)。n があれば、そのコストの呪文だけ
+    if !s.effects.is_empty() {
+        let cost = e.reg.defs[s.cards[uid as usize].def as usize].faces.get(face_idx as usize).map_or(0, |f| f.cost);
+        for ef in &s.effects {
+            if ef.controller == player {
+                continue;
+            }
+            match ef.m {
+                EffectMod::CannotCast(n) if n.map_or(true, |n| n == cost) => return false,
+                EffectMod::CannotCastLte(n) if cost <= n => return false,
+                _ => {}
+            }
+        }
     }
     // 「相手は〜できない」(自分の常在能力は対象外)
     !any_static(e, |st| {
@@ -680,6 +1162,65 @@ pub fn can_cast(e: Env, player: PlayerId, uid: i32, face_idx: i32) -> bool {
         }
         false
     })
+}
+
+/// 「自分のターン中、〜を from のゾーンから召喚してもよい」(allowPlayFrom)で、このカードを from から召喚できる発生源。なければ None。
+pub fn granted_play_from(e: Env, player: PlayerId, uid: i32, face_idx: i32, from: Zone) -> Option<i32> {
+    let s = e.s;
+    // 冒険妖精ポレキチ: このターン、そのクリーチャーをマナゾーンから召喚してもよい
+    if from == Zone::Mana && s.active == player && s.usage_get(&UKey::Other(format!("pm:{}:{}", uid, s.cards[uid as usize].ep))) == Some(s.turn as i64) {
+        return Some(uid);
+    }
+    if s.active != player || !game_has(e, Feat::AllowPlayFrom) {
+        return None;
+    }
+    if from == Zone::Deck && s.players[player as usize].deck.first() != Some(&uid) {
+        return None; // 山札から召喚できるのは、一番上のカードだけ
+    }
+    let mut found: Option<i32> = None;
+    any_static(e, |st| {
+        if let StaticMod::AllowPlayFrom { from: z, cond, once_per_turn, .. } = st.m {
+            if st.controller != player || *z != from {
+                return false;
+            }
+            if *once_per_turn && s.usage_get(&UKey::Other(format!("gp:{}", st.src))) == Some(s.turn as i64) {
+                return false;
+            }
+            if let Some(cn) = cond {
+                if !eval_cond(&CC::new(e, player).with_self(st.src).with_it(uid, face_idx), cn) {
+                    return false;
+                }
+            }
+            found = Some(st.src);
+            return true;
+        }
+        false
+    });
+    found
+}
+
+/// allowPlayFrom の発生源が、アビスラッシュを与えているか
+pub fn grants_rush(e: Env, src: i32) -> bool {
+    let info = info_of(e, src);
+    let card = &e.s.cards[src as usize];
+    let face = e.reg.face(card.def, chars_lite(e, src, -1).face_idx);
+    info.statics.iter().any(|&si| matches!(&face.abilities[si as usize], Ability::Static { m: StaticMod::AllowPlayFrom { rush: true, .. }, .. }))
+}
+
+/// そのカードを召喚してよいか(「すべてのプレイヤーは、パワー5000以下のクリーチャーを召喚できない」と、召喚封じ(can_summon))
+pub fn can_summon_card(e: Env, player: PlayerId, uid: i32, face_idx: i32) -> bool {
+    if game_has(e, Feat::CannotSummonAll) {
+        let blocked = any_static(e, |st| {
+            if let StaticMod::CannotSummonAll { cond } = st.m {
+                return eval_cond(&CC::new(e, st.controller).with_self(st.src).with_it(uid, face_idx), cond);
+            }
+            false
+        });
+        if blocked {
+            return false;
+        }
+    }
+    can_summon(e, player, e.reg.defs[e.s.cards[uid as usize].def as usize].faces.get(face_idx as usize).map_or(0, |f| f.cost))
 }
 
 /// 「相手はコストが cost 以下のクリーチャーを召喚できない」(ミラダンテXII のファイナル革命)に当たらないか

@@ -15,8 +15,14 @@ pub struct Face {
     pub civs: Rc<Vec<Civ>>,
     pub power: Option<i32>,
     pub races: Vec<String>,
+    /// カード定義に races の項目があるか(呪文面には無い。useCip が見る)
+    pub has_races: bool,
     pub abilities: Vec<Ability>,
     pub evolve_from: Option<Cond>,
+    /// スター進化(離れる時、かわりに一番上のカードだけが離れる)
+    pub star: bool,
+    /// 究極進化
+    pub ultimate: bool,
     /// 呪文が、相手のクリーチャーがいなければ空振りになるか(ルールベースAIが、相手の盤面が空の時に避ける。
     /// カードのデータから判定する。TS 版の ai/spellTargets.ts と同じ)
     pub needs_opp_creature: bool,
@@ -90,7 +96,52 @@ pub struct FaceInfo {
     pub permissions: Vec<u16>,
     pub triggers: Vec<u16>,
     pub spell: Option<u16>,
+    pub self_costs: Vec<u16>,
+    pub alt_costs: Vec<u16>,
+    /// ハイパー化の、タップする他のクリーチャーの数
+    pub hyperize: Option<i32>,
+    /// パワード・ブレイカー: パワー n ごとにシールドをもう1つブレイクする
+    pub powered_breaker: Option<i32>,
+    pub shinkalize: bool,
 }
+
+/// 機能ごとの「その機能を持つカード」(TS 版の FeatureName)。持つカードが対局のデッキに無ければ、その機能を探す処理を省く
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u8)]
+pub enum Feat {
+    EntryReplace,
+    AfterCast,
+    MoveReplace,
+    LeaveReplace,
+    HandReplace,
+    DrawEmpty,
+    MustBeChosen,
+    FirstBattleWins,
+    EnterTapped,
+    AllowPlayFrom,
+    NoOppShieldTrigger,
+    AttackMeFirst,
+    SBack,
+    EnteredFrom,
+    OneSpellPerTurn,
+    PowerAddOthers,
+    CannotPlay,
+    BattleProxy,
+    HostPowerAdd,
+    StUsed,
+    CannotLeaveOwn,
+    NoAttackOnEntry,
+    SpellShieldTrigger,
+    ManaAllCivs,
+    TapAsMana,
+    Flying,
+    NoGStrike,
+    OppManaTapped,
+    CannotSummonAll,
+    ProtectPlayerFromWeaker,
+}
+
+pub const N_FEAT: usize = 30;
 
 #[derive(Clone, Debug)]
 pub enum Instr {
@@ -130,6 +181,12 @@ pub struct Registry {
     pub trig_defs: Vec<Option<Vec<u16>>>,
     /// [def][face][idx] → (任意あり, 任意なし)
     progs: Vec<Vec<Vec<Option<(Program, Program)>>>>,
+    /// 定義ごとの、持つ機能のビット(Feat の番号)
+    pub feat_def: Vec<u64>,
+    /// いずれかの定義が持つ機能のビット(デッキが分からない状態で使う)
+    pub feat_any: u64,
+    /// 能力を無視されているカードの FaceInfo(何の能力も持たない)
+    pub empty_info: FaceInfo,
 }
 
 fn civs_of(j: &Json) -> R<Vec<Civ>> {
@@ -167,11 +224,14 @@ impl Registry {
                     civs: Rc::new(civs_of(f.get("civs").ok_or("civs")?)?),
                     power: f.get("power").and_then(|x| x.as_i64()).map(|x| x as i32),
                     races: f.get("races").and_then(|r| r.as_arr()).map(|r| r.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect()).unwrap_or_default(),
+                    has_races: f.get("races").is_some(),
                     abilities,
                     evolve_from: match f.get("evolveFrom") {
                         Some(c) => Some(parse_cond(c).map_err(|e| format!("{}: {}", id, e))?),
                         None => None,
                     },
+                    star: f.get("star").and_then(|x| x.as_bool()).unwrap_or(false),
+                    ultimate: f.get("ultimate").and_then(|x| x.as_bool()).unwrap_or(false),
                     needs_opp_creature: f
                         .get("abilities")
                         .and_then(|a| a.as_arr())
@@ -222,11 +282,18 @@ impl Registry {
                             KeywordName::HyperEnergy => info.hyper_energy = true,
                             KeywordName::ShieldTrigger => info.shield_triggers.push(ai),
                             KeywordName::GStrike => info.g_strike = Some(ai),
+                            KeywordName::PoweredBreaker => info.powered_breaker = Some(n.unwrap_or(6000)),
                             _ => {}
                         },
                         Ability::Trigger { spec, .. } => {
                             info.triggers.push(ai);
+                            // 同じ種類のイベントを複数のパターンで聞く能力も、その種類の索引には1回だけ載せる
+                            let mut seen: Vec<Sym> = Vec::new();
                             for on in &spec.on {
+                                if seen.contains(&on.ty) {
+                                    continue;
+                                }
+                                seen.push(on.ty);
                                 let v = trig_map.entry(on.ty).or_insert_with(|| vec![Vec::new(); nd]);
                                 v[di].push(TrigRef { def: di as u16, face: fi as u8, idx: ai });
                             }
@@ -235,6 +302,10 @@ impl Registry {
                         Ability::Replace { .. } => info.replaces.push(ai),
                         Ability::Permission { .. } => info.permissions.push(ai),
                         Ability::Spell { .. } => info.spell = Some(ai),
+                        Ability::SelfCost { .. } => info.self_costs.push(ai),
+                        Ability::AltCost { .. } => info.alt_costs.push(ai),
+                        Ability::Hyperize { tap_other } => info.hyperize = Some(*tap_other),
+                        Ability::Shinkalize => info.shinkalize = true,
                     }
                 }
                 finfo.push(info);
@@ -252,6 +323,8 @@ impl Registry {
                         Ability::Trigger { steps, .. } => Some(steps),
                         Ability::Spell { steps } => Some(steps),
                         Ability::Keyword { steps, .. } => steps.as_ref(),
+                        Ability::Replace { apply: ReplaceApply::Steps(st), .. } => Some(st),
+                        Ability::Replace { apply: ReplaceApply::ChangeDest { then: Some(st), .. }, .. } => Some(st),
                         _ => None,
                     };
                     let steps_v: Vec<StepDef> = steps.cloned().unwrap_or_default();
@@ -285,7 +358,85 @@ impl Registry {
             }
         }
         let id_syms: Vec<Sym> = ids.iter().map(|i| sym(i)).collect();
-        Ok(Registry { defs, infos, by_id, ids, id_syms, trig_by_def, trig_defs, progs })
+        // 機能ごとの定義のビット
+        let mut feat_def: Vec<u64> = vec![0; defs.len()];
+        let enter = sym("enter");
+        let after_cast = sym("afterCast");
+        let mv = sym("move");
+        let leave = sym("leave");
+        let moved = sym("moved");
+        let drawn_empty = sym("drawEmpty");
+        for (di, d) in defs.iter().enumerate() {
+            let mut bits = 0u64;
+            let mut set = |f: Feat| bits |= 1u64 << (f as u32);
+            for (fi, f) in d.faces.iter().enumerate() {
+                let _ = fi;
+                for a in &f.abilities {
+                    match a {
+                        Ability::Replace { match_, .. } => {
+                            if match_.ty == enter {
+                                set(Feat::EntryReplace);
+                            } else if match_.ty == after_cast {
+                                set(Feat::AfterCast);
+                            } else if match_.ty == mv {
+                                set(Feat::MoveReplace);
+                            } else if match_.ty == leave {
+                                set(Feat::LeaveReplace);
+                            } else if match_.ty == drawn_empty {
+                                set(Feat::DrawEmpty);
+                            }
+                            if match_.ty == moved && match_.from == Some(s::Z_HAND) {
+                                set(Feat::HandReplace);
+                            }
+                        }
+                        Ability::Static { m, .. } => match m {
+                            StaticMod::MustBeChosen => set(Feat::MustBeChosen),
+                            StaticMod::FirstBattleWins => set(Feat::FirstBattleWins),
+                            StaticMod::EnterTappedFirst | StaticMod::EnterTapped => set(Feat::EnterTapped),
+                            StaticMod::AllowPlayFrom { .. } => set(Feat::AllowPlayFrom),
+                            StaticMod::NoOppShieldTrigger => set(Feat::NoOppShieldTrigger),
+                            StaticMod::AttackMeFirst => set(Feat::AttackMeFirst),
+                            StaticMod::OneSpellPerTurn => set(Feat::OneSpellPerTurn),
+                            StaticMod::PowerAddOthers { .. } => set(Feat::PowerAddOthers),
+                            StaticMod::CannotPlay { .. } => set(Feat::CannotPlay),
+                            StaticMod::HostPowerAdd { .. } => set(Feat::HostPowerAdd),
+                            StaticMod::CannotLeaveOwn { .. } => set(Feat::CannotLeaveOwn),
+                            StaticMod::NoAttackOnEntry => set(Feat::NoAttackOnEntry),
+                            StaticMod::SpellShieldTrigger => set(Feat::SpellShieldTrigger),
+                            StaticMod::ManaAllCivs => set(Feat::ManaAllCivs),
+                            StaticMod::TapAsMana => set(Feat::TapAsMana),
+                            StaticMod::Flying => set(Feat::Flying),
+                            StaticMod::NoGStrike => set(Feat::NoGStrike),
+                            StaticMod::CannotSummonAll { .. } => set(Feat::CannotSummonAll),
+                            StaticMod::ProtectPlayerFromWeaker => set(Feat::ProtectPlayerFromWeaker),
+                            StaticMod::OppManaTapped => set(Feat::OppManaTapped),
+                            StaticMod::BattleProxy { .. } => set(Feat::BattleProxy),
+                            _ => {}
+                        },
+                        Ability::Keyword { name: KeywordName::SBack, .. } => set(Feat::SBack),
+                        Ability::Trigger { spec, .. } => {
+                            if spec.on.iter().any(|p| p.ty == s::ENTERED && p.from.is_some()) {
+                                set(Feat::EnteredFrom);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            feat_def[di] = bits;
+        }
+        // stUsed: 能力の JSON に "stUsed" を含むカード
+        for (di, (_, d)) in items.iter().enumerate() {
+            let has = d.get("faces").and_then(|f| f.as_arr()).map_or(false, |fs| {
+                fs.iter().any(|f| f.get("abilities").map_or(false, |a| format!("{}", a).contains("\"stUsed\"")))
+            });
+            if has {
+                feat_def[di] |= 1u64 << (Feat::StUsed as u32);
+            }
+        }
+        let feat_any = feat_def.iter().fold(0u64, |a, b| a | b);
+        let empty_info = FaceInfo { breaker: 1, ..Default::default() };
+        Ok(Registry { defs, infos, by_id, ids, id_syms, trig_by_def, trig_defs, progs, feat_def, feat_any, empty_info })
     }
 
     pub fn def_index(&self, id: &str) -> Option<u16> {
