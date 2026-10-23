@@ -270,6 +270,15 @@ describe('D13 頂上混成 ガリュディアス・モモミーズ\'22', () => {
     const sim = new Sim({ p0: { hand: ["頂上混成 ガリュディアス"], mana: mana(12), grave: [N] } });
     expect(sim.canPlay("頂上混成 ガリュディアス")).toBe(false);
   });
+  it('自分のターンの終わりに、クリーチャーを1体、自分の手札から出してもよい', () => {
+    const sim = new Sim({ p0: { battle: [{ c: "頂上混成 ガリュディアス・モモミーズ'22" }], hand: [W], deck: [N, N, N] }, p1: { deck: [N, N, N] } });
+    sim.endMain();
+    sim.endTurn();
+    expect(sim.pending.why).toBe('may');
+    sim.use(W); // 「使うか」と「どれを出すか」を1問にしてある(選べば使う)
+    sim.drain();
+    expect(sim.has(0, 'battle', W)).toBe(true);
+  });
   it('相手は光ではない呪文を唱えられない', () => {
     const sim = new Sim({ p0: { battle: ["頂上混成 ガリュディアス"] }, p1: { hand: [D], mana: mana(9, D) }, active: 1 });
     expect(sim.canPlay(D)).toBe(false);
