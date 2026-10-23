@@ -131,6 +131,13 @@ describe('I06 マグナム / I07 Napo獅子 / I08 ピーカプ / I09 決断', ()
     expect(sim.s.effects.some((e) => e.mod.kind === 'untapAfterAttack')).toBe(true);
     expect(sim.s.effects.some((e) => e.mod.kind === 'grant')).toBe(true);
   });
+  it('決断: 「手札から出す」は強制(出せるクリーチャーが1体なら、聞かずに出す)', () => {
+    const sim = new Sim({ p0: { hand: ['瞬閃と疾駆と双撃の決断', 'AQvibrato'], mana: [F, F, F], deck: [N, N, N] } });
+    sim.play('瞬閃と疾駆と双撃の決断');
+    sim.option(0, 1);
+    sim.drain();
+    expect(sim.has(0, 'battle', 'AQvibrato')).toBe(true);
+  });
 });
 
 describe('I10 カクメイジン / I11 カラクリバーシ', () => {

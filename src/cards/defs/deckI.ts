@@ -37,7 +37,7 @@ export const DECK_I: CardDef[] = [
   // 2. アシスター・Mogi林檎
   card(
     'dm26sd1-I02',
-    creature('アシスター・Mogi林檎', 2, 'W', 2000, ['マジック・マーフォーク'], [justDiver(), staticAb({ type: 'costDelta', delta: -1, cond: race(MAGIC), oncePerTurn: true })]),
+    creature('アシスター・Mogi林檎', 2, 'W', 2000, ['マジック・マーフォーク'], [justDiver(), staticAb({ type: 'costDelta', delta: -1, cond: race(MAGIC), oncePerTurn: true, floor: 1 })]),
   ),
 
   // 3. 歌舞音愛 ヒメカット / ♪蛙の子 遭えるの何処? 好きと謂ひて
@@ -138,7 +138,7 @@ export const DECK_I: CardDef[] = [
         options: [
           {
             label: 'コスト3以下のクリーチャーを1体、自分の手札から出す',
-            steps: [selectUpTo('$p', { zone: 'hand', owner: 'self', type: 'creature', where: and(costLte(3), notEvolution) }, 1), act({ put: { sel: '$p' } })],
+            steps: [select('$p', { zone: 'hand', owner: 'self', type: 'creature', where: and(costLte(3), notEvolution) }, { prompt: '手札から出すコスト3以下のクリーチャーを選んでください' }), act({ put: { sel: '$p' } })],
           },
           {
             label: 'このターン、自分のクリーチャー1体に「スピードアタッカー」を与える',
