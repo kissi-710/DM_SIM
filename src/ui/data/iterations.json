@@ -3,73 +3,133 @@
  "levels": [
   {
    "iterations": 5,
-   "vsRule": null,
+   "vsRule": {
+    "rate": 0.64625,
+    "ci": 0.03064701733802445,
+    "games": 800
+   },
    "vsDouble": {
     "rate": 0.431875,
     "ci": 0.022249671741127786,
     "games": 1600
    },
-   "secPerGameVsRule": null,
+   "secPerGameVsRule": 0.065,
    "secPerGameVsDouble": 0.17375000000000002
   },
   {
    "iterations": 10,
-   "vsRule": null,
+   "vsRule": {
+    "rate": 0.7137500000000001,
+    "ci": 0.029462832689695833,
+    "games": 800
+   },
    "vsDouble": {
     "rate": 0.431875,
     "ci": 0.02308174863338725,
     "games": 1600
    },
-   "secPerGameVsRule": null,
+   "secPerGameVsRule": 0.07625,
    "secPerGameVsDouble": 0.165625
   },
   {
    "iterations": 20,
-   "vsRule": null,
-   "vsDouble": null,
-   "secPerGameVsRule": null,
-   "secPerGameVsDouble": null
+   "vsRule": {
+    "rate": 0.8075,
+    "ci": 0.026663885271613695,
+    "games": 800
+   },
+   "vsDouble": {
+    "rate": 0.4275,
+    "ci": 0.021659062333253917,
+    "games": 1600
+   },
+   "secPerGameVsRule": 0.10875,
+   "secPerGameVsDouble": 0.80375
   },
   {
    "iterations": 40,
-   "vsRule": null,
-   "vsDouble": null,
-   "secPerGameVsRule": null,
-   "secPerGameVsDouble": null
+   "vsRule": {
+    "rate": 0.85375,
+    "ci": 0.023044948941518,
+    "games": 800
+   },
+   "vsDouble": {
+    "rate": 0.45375000000000004,
+    "ci": 0.022660212263993604,
+    "games": 1600
+   },
+   "secPerGameVsRule": 0.16625,
+   "secPerGameVsDouble": 0.45125000000000004
   },
   {
    "iterations": 80,
-   "vsRule": null,
-   "vsDouble": null,
-   "secPerGameVsRule": null,
-   "secPerGameVsDouble": null
+   "vsRule": {
+    "rate": 0.8937499999999999,
+    "ci": 0.02088060757562558,
+    "games": 800
+   },
+   "vsDouble": {
+    "rate": 0.470625,
+    "ci": 0.021593334355023527,
+    "games": 1600
+   },
+   "secPerGameVsRule": 0.2675,
+   "secPerGameVsDouble": 1.154375
   },
   {
    "iterations": 160,
-   "vsRule": null,
-   "vsDouble": null,
-   "secPerGameVsRule": null,
-   "secPerGameVsDouble": null
+   "vsRule": {
+    "rate": 0.9275,
+    "ci": 0.017013344435733047,
+    "games": 800
+   },
+   "vsDouble": {
+    "rate": 0.48,
+    "ci": 0.021606077133424228,
+    "games": 1600
+   },
+   "secPerGameVsRule": 0.43124999999999997,
+   "secPerGameVsDouble": 2.3875
   },
   {
    "iterations": 320,
-   "vsRule": null,
-   "vsDouble": null,
-   "secPerGameVsRule": null,
-   "secPerGameVsDouble": null
+   "vsRule": {
+    "rate": 0.92375,
+    "ci": 0.01776473993191245,
+    "games": 800
+   },
+   "vsDouble": {
+    "rate": 0.4774999999999999,
+    "ci": 0.020398601723189427,
+    "games": 1600
+   },
+   "secPerGameVsRule": 0.75125,
+   "secPerGameVsDouble": 3.9524999999999997
   },
   {
    "iterations": 640,
-   "vsRule": null,
-   "vsDouble": null,
-   "secPerGameVsRule": null,
-   "secPerGameVsDouble": null
+   "vsRule": {
+    "rate": 0.9299999999999999,
+    "ci": 0.01718355303624646,
+    "games": 800
+   },
+   "vsDouble": {
+    "rate": 0.48687499999999995,
+    "ci": 0.020563732054396766,
+    "games": 1600
+   },
+   "secPerGameVsRule": 1.19875,
+   "secPerGameVsDouble": 4.630625
   },
   {
    "iterations": 1280,
-   "vsRule": null,
+   "vsRule": {
+    "rate": 0.9325,
+    "ci": 0.01722232225451562,
+    "games": 800
+   },
    "vsDouble": null,
-   "secPerGameVsRule": null,
+   "secPerGameVsRule": 1.9487500000000002,
    "secPerGameVsDouble": null
   }
  ]
