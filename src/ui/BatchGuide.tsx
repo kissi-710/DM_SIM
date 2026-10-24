@@ -34,11 +34,11 @@ interface Level {
 const pct = (x: number, d = 1) => (x * 100).toFixed(d);
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
-/** 2倍にした側の勝率から、伸びの判定 */
-export function verdict(doubledSideRate: number, ci: number): string {
-  if (doubledSideRate - ci > 0.52) return '伸びる';
-  if (doubledSideRate - ci > 0.5 || doubledSideRate > 0.52) return '鈍化';
-  return '飽和';
+/** 2倍にした側の勝率から、伸びの判定(54% 以上 = 伸びる、51.5〜54% = 緩やか(倍ごとに +1.5〜4pt)、それ未満 = ほぼ飽和) */
+export function verdict(doubledSideRate: number): string {
+  if (doubledSideRate >= 0.54) return '伸びる';
+  if (doubledSideRate >= 0.515) return '緩やか';
+  return 'ほぼ飽和';
 }
 
 export function BatchGuide({ games, iterations }: { games: number; iterations: number }) {
@@ -111,7 +111,7 @@ export function BatchGuide({ games, iterations }: { games: number; iterations: n
                 <td>{l.iterations}</td>
                 <td>{l.vsRule ? `${pct(l.vsRule.rate)}% ±${pct(l.vsRule.ci)}` : '-'}</td>
                 <td>{dbl !== null && l.vsDouble ? `${pct(dbl)}% ±${pct(l.vsDouble.ci)}` : '-'}</td>
-                <td>{dbl !== null && l.vsDouble ? verdict(dbl, l.vsDouble.ci) : '-'}</td>
+                <td>{dbl !== null && l.vsDouble ? verdict(dbl) : '-'}</td>
                 <td className="muted">{l.secPerGameVsRule !== null ? l.secPerGameVsRule.toFixed(2) : '-'}</td>
               </tr>
             );
@@ -119,7 +119,7 @@ export function BatchGuide({ games, iterations }: { games: number; iterations: n
         </tbody>
       </table>
       <ul className="muted">
-        <li>判定: 2倍側の勝率の下限が 52% 超なら「伸びる」、50% 超または 52% 超なら「鈍化」、それ以外は「飽和」。</li>
+        <li>判定: 2倍側の勝率が 54% 以上なら「伸びる」、51.5〜54% は「緩やか」(2倍にして +1.5〜4pt)、それ未満は「ほぼ飽和」。各行の区間は ±2pt 前後なので、隣の行との差は誤差の内です。</li>
         <li>ルールベースに対する勝率は 90% 前後が天井で、反復の違いが見えにくい。反復の差を見るなら「2N が N に勝つ率」を使います。</li>
         <li>測定の方法と生データの場所: docs/saturation.md。</li>
       </ul>
