@@ -1,0 +1,76 @@
+{
+ "generated": "2026-10",
+ "levels": [
+  {
+   "iterations": 5,
+   "vsRule": null,
+   "vsDouble": {
+    "rate": 0.431875,
+    "ci": 0.022249671741127786,
+    "games": 1600
+   },
+   "secPerGameVsRule": null,
+   "secPerGameVsDouble": 0.17375000000000002
+  },
+  {
+   "iterations": 10,
+   "vsRule": null,
+   "vsDouble": {
+    "rate": 0.431875,
+    "ci": 0.02308174863338725,
+    "games": 1600
+   },
+   "secPerGameVsRule": null,
+   "secPerGameVsDouble": 0.165625
+  },
+  {
+   "iterations": 20,
+   "vsRule": null,
+   "vsDouble": null,
+   "secPerGameVsRule": null,
+   "secPerGameVsDouble": null
+  },
+  {
+   "iterations": 40,
+   "vsRule": null,
+   "vsDouble": null,
+   "secPerGameVsRule": null,
+   "secPerGameVsDouble": null
+  },
+  {
+   "iterations": 80,
+   "vsRule": null,
+   "vsDouble": null,
+   "secPerGameVsRule": null,
+   "secPerGameVsDouble": null
+  },
+  {
+   "iterations": 160,
+   "vsRule": null,
+   "vsDouble": null,
+   "secPerGameVsRule": null,
+   "secPerGameVsDouble": null
+  },
+  {
+   "iterations": 320,
+   "vsRule": null,
+   "vsDouble": null,
+   "secPerGameVsRule": null,
+   "secPerGameVsDouble": null
+  },
+  {
+   "iterations": 640,
+   "vsRule": null,
+   "vsDouble": null,
+   "secPerGameVsRule": null,
+   "secPerGameVsDouble": null
+  },
+  {
+   "iterations": 1280,
+   "vsRule": null,
+   "vsDouble": null,
+   "secPerGameVsRule": null,
+   "secPerGameVsDouble": null
+  }
+ ]
+}
