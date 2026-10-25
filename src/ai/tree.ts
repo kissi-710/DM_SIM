@@ -13,7 +13,7 @@ import { FAIR } from '../engine/view';
 import { determinize } from './determinize';
 import { withWeights } from './eval';
 import { withL1 } from './l1params';
-import { HARD_MAX_ITERATIONS, nativeUnsupported, planSearch, rollout, roundSeed, runSearch, seededRand, worldSeed, type MctsOpts, type SearchEnv, type TreeOpts } from './mcts';
+import { HARD_MAX_ITERATIONS, dropRecross, nativeUnsupported, planSearch, rollout, roundSeed, runSearch, seededRand, worldSeed, type MctsOpts, type SearchEnv, type TreeOpts } from './mcts';
 export type { TreeOpts } from './mcts';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
 import type { Agent, AgentCtx } from './types';
@@ -253,6 +253,7 @@ export function makeTreeMcts(o: MctsOpts & Partial<TreeOpts> & { paired?: boolea
     name: o.paired ? 'モンテカルロ(木・ペア比較)' : 'モンテカルロ(木)',
     policy,
     chooseAction(view, legal, ctx: AgentCtx) {
+      legal = dropRecross(view, legal);
       if (legal.length === 1) return legal[0];
       const plan = planSearch(view, legal, ctx, o, l1);
       if (o.paired) {
