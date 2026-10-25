@@ -19,6 +19,8 @@ export interface MatchOpts {
   seed: number;
   /** 試合の通し番号の開始位置(範囲を分けて並列に実行する時に、同じ試合が同じシードになるようにする。既定 0) */
   startIndex?: number;
+  /** 1試合の手数の上限(超えた試合は勝敗なし=引き分け。reasons に「手数の上限」で数える)。既定は playGame の既定。繰り返しが終わらないカードの組み合わせで、バッチが止まらなくなるのを防ぐ */
+  maxSteps?: number;
   /** fixed: Aが常に先攻 / alternate: 交互 / random: 乱数 / duplicate: 同じシードで席を入れ替えて2回ずつ */
   first?: FirstMode;
   cfg?: Partial<GameConfig>;
@@ -111,10 +113,11 @@ export function runMatches(db: CardDB | Registry, o: MatchOpts): MatchStats {
       seed: gameSeed,
       first: 0,
       cfg: o.cfg,
+      maxSteps: o.maxSteps,
     });
     const rounds = roundOf(r.turns);
     turnHist[rounds] = (turnHist[rounds] ?? 0) + 1;
-    const rs = r.reason ?? '不明';
+    const rs = r.reason ?? (r.winner === null ? '手数の上限' : '不明');
     reasons[rs] = (reasons[rs] ?? 0) + 1;
     const aFirst = aSeat === 0;
     if (aFirst) aFirstGames++;

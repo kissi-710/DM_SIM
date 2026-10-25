@@ -29,6 +29,8 @@ const DIR = opt('dir', `docs/data/matrix-mcts${ITER}`);
 const [LO, HI] = opt('range', '0-9999').split('-').map(Number);
 const STATE = `${DIR}/state.json`;
 const SEED0 = 800000;
+// 通常の試合は 200 手以内(150 試合の最大 170)。繰り返しが終わらない組み合わせ(デッキ R の再クロス、デッキ C の三眼槍の置換の連鎖)で止まらないよう、打ち切る
+const MAX_STEPS = 1500;
 
 const ids = DECK_PRESETS.map((d) => d.id);
 interface Cell {
@@ -40,6 +42,7 @@ interface Cell {
   winsB: number;
   draws: number;
   turns: number; // 往復ターン数の合計
+  cut?: number; // 手数の上限(MAX_STEPS)で打ち切った試合(引き分け扱い)
   acc: RateAcc;
 }
 interface State {
@@ -108,7 +111,7 @@ async function run() {
       const agent = { kind: 'mcts' as const, iterations: ITER };
       const opts: MatchOpts[] = wave.map((k) => {
         const c = s.cells[k];
-        return { deckA: deckCards(c.a), deckB: deckCards(c.b), agentA: agent, agentB: agent, games: BLOCK, seed: SEED0 + order.indexOf(k), startIndex: c.blocks * BLOCK, first: 'duplicate' };
+        return { deckA: deckCards(c.a), deckB: deckCards(c.b), agentA: agent, agentB: agent, games: BLOCK, seed: SEED0 + order.indexOf(k), startIndex: c.blocks * BLOCK, first: 'duplicate', maxSteps: MAX_STEPS };
       });
       const stats = (await runParallel({ type: 'batch', opts }, JOBS)) as MatchStats[];
       wave.forEach((k, i) => {
@@ -120,6 +123,7 @@ async function run() {
         c.winsB += m.winsB;
         c.draws += m.draws;
         c.turns += m.avgTurns * m.games;
+        c.cut = (c.cut ?? 0) + (m.reasons['手数の上限'] ?? 0);
         c.acc = addAcc(c.acc, m.acc);
       });
       save(s);
@@ -138,7 +142,7 @@ function exportUi() {
     const { rate, ci } = estimateRate(c.acc);
     const f = c.acc.nF ? c.acc.sF / c.acc.nF : null; // A が先攻の時の A の勝率
     const b = c.acc.nS ? c.acc.sS / c.acc.nS : null;
-    return { a: c.a, b: c.b, games: c.games, rate: +rate.toFixed(4), lo: +ci[0].toFixed(4), hi: +ci[1].toFixed(4), aFirst: f === null ? null : +f.toFixed(4), aSecond: b === null ? null : +b.toFixed(4), draw: +(c.draws / Math.max(1, c.games)).toFixed(4), turns: +(c.turns / Math.max(1, c.games)).toFixed(2) };
+    return { a: c.a, b: c.b, games: c.games, rate: +rate.toFixed(4), lo: +ci[0].toFixed(4), hi: +ci[1].toFixed(4), aFirst: f === null ? null : +f.toFixed(4), aSecond: b === null ? null : +b.toFixed(4), draw: +(c.draws / Math.max(1, c.games)).toFixed(4), turns: +(c.turns / Math.max(1, c.games)).toFixed(2), cut: c.cut ?? 0 };
   });
   writeFileSync('src/ui/data/matrix.json', JSON.stringify({ iterations: s.iterations, head: s.head, decks: s.decks, cells }));
   console.log('書き出し', cells.length, '組');
