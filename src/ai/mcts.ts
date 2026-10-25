@@ -13,6 +13,7 @@ import { evaluate, reward, RULE_WEIGHTS, withWeights, type RewardWeights } from 
 import { L1_DEFAULT, withL1, type L1Params } from './l1params';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
 import type { Agent, AgentCtx } from './types';
+import { withLoopGuard } from './loopGuard';
 
 /** ターン内の行動列を木にする探索の設定(tree.ts) */
 export interface TreeOpts {
@@ -552,7 +553,7 @@ export function dropRecross(view: { pending?: { player: number } | null; players
 export function makeMcts(o: MctsOpts = {}): Agent {
   const policy = o.policy ?? FAIR;
   const l1 = makeRuleBased({ policy, candidateDecks: o.candidateDecks });
-  return {
+  return withLoopGuard({
     name: 'モンテカルロ',
     policy,
     chooseAction(view, legal, ctx: AgentCtx) {
@@ -560,5 +561,5 @@ export function makeMcts(o: MctsOpts = {}): Agent {
       if (legal.length === 1) return legal[0];
       return runSearch(planSearch(view, legal, ctx, o, l1), ctx.reg, o.onSearch);
     },
-  };
+  });
 }
