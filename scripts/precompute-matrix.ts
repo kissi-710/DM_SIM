@@ -24,7 +24,9 @@ const MAX_BLOCKS = Number(opt('max-blocks', '40'));
 const JOBS = Number(opt('jobs', '12'));
 const BLOCK = Number(opt('block', '200')); // 偶数(複製対局のペアを割らない)
 const WAVE = Number(opt('wave', '96'));
-const DIR = `docs/data/matrix-mcts${ITER}`;
+const DIR = opt('dir', `docs/data/matrix-mcts${ITER}`);
+// 組の並び順の番号の範囲(例: 140-199)。クラウドのセッションなどに分ける用。シードは並び順で決まるので、分けても結果は同じ
+const [LO, HI] = opt('range', '0-9999').split('-').map(Number);
 const STATE = `${DIR}/state.json`;
 const SEED0 = 800000;
 
@@ -94,7 +96,8 @@ async function run() {
   const t0 = Date.now();
   let totalGames = 0;
   for (;;) {
-    const need = order.filter((k) => {
+    const need = order.filter((k, oi) => {
+      if (oi < LO || oi > HI) return false;
       const c = s.cells[k];
       return c.blocks < MIN_BLOCKS || (c.blocks < MAX_BLOCKS && half(c) > TARGET);
     });
@@ -125,7 +128,7 @@ async function run() {
       console.log(`${new Date().toISOString().slice(11, 19)} ウェーブ ${wave.length} 組 完了(残り ${left} 組 / 今回 ${totalGames} 試合 / ${((Date.now() - t0) / 60000).toFixed(1)} 分)`);
     }
   }
-  const hs = Object.values(s.cells).map(half);
+  const hs = order.filter((_, oi) => oi >= LO && oi <= HI).map((k) => half(s.cells[k]));
   console.log(`全 ${hs.length} 組が終了。最大の半幅 ${(Math.max(...hs) * 100).toFixed(2)}%、平均 ${((hs.reduce((a, b) => a + b, 0) / hs.length) * 100).toFixed(2)}%`);
 }
 
@@ -141,5 +144,17 @@ function exportUi() {
   console.log('書き出し', cells.length, '組');
 }
 
+/** 分けて計算した状態(--dir)を 1 つにまとめる: precompute-matrix.ts merge <dir...> --dir <出力先> */
+function merge() {
+  const out = load();
+  for (const d of argv.slice(1).filter((a, i, v) => !a.startsWith('--') && v[i - 1] !== '--dir' && v[i - 1] !== '--iter')) {
+    const s: State = JSON.parse(readFileSync(`${d}/state.json`, 'utf8'));
+    for (const [k, c] of Object.entries(s.cells)) if (c.blocks > out.cells[k].blocks) out.cells[k] = c;
+  }
+  save(out);
+  console.log('統合 →', STATE, Object.values(out.cells).filter((c) => c.blocks > 0).length, '組');
+}
+
 if (cmd === 'export') exportUi();
+else if (cmd === 'merge') merge();
 else void run();
