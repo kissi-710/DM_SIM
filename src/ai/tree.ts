@@ -13,8 +13,9 @@ import { FAIR } from '../engine/view';
 import { determinize } from './determinize';
 import { withWeights } from './eval';
 import { withL1 } from './l1params';
-import { HARD_MAX_ITERATIONS, nativeUnsupported, planSearch, rollout, roundSeed, runSearch, seededRand, worldSeed, type MctsOpts, type SearchEnv, type TreeOpts } from './mcts';
+import { HARD_MAX_ITERATIONS, dropRecross, nativeUnsupported, planSearch, rollout, roundSeed, runSearch, seededRand, worldSeed, type MctsOpts, type SearchEnv, type TreeOpts } from './mcts';
 export type { TreeOpts } from './mcts';
+import { withLoopGuard } from './loopGuard';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
 import type { Agent, AgentCtx } from './types';
 
@@ -249,10 +250,11 @@ export function makeTreeMcts(o: MctsOpts & Partial<TreeOpts> & { paired?: boolea
   const topts: TreeOpts = { c: o.c ?? DEFAULT_TREE_OPTS.c, maxDepth: o.maxDepth ?? DEFAULT_TREE_OPTS.maxDepth };
   // 木のペア比較は、env に設定を載せて評価側(Worker など)にも伝える
   if (o.paired) o = { ...o, tree: topts };
-  return {
+  return withLoopGuard({
     name: o.paired ? 'モンテカルロ(木・ペア比較)' : 'モンテカルロ(木)',
     policy,
     chooseAction(view, legal, ctx: AgentCtx) {
+      legal = dropRecross(view, legal);
       if (legal.length === 1) return legal[0];
       const plan = planSearch(view, legal, ctx, o, l1);
       if (o.paired) {
@@ -275,5 +277,5 @@ export function makeTreeMcts(o: MctsOpts & Partial<TreeOpts> & { paired?: boolea
       o.onSearch?.({ iterations: st.visits.reduce((a, b) => a + b, 0), ms: Date.now() - t0, timeDriven: plan.timeDriven, decided: false, arms: legal.length });
       return legal[bestFromStats(st, plan.baseIdx)];
     },
-  };
+  });
 }

@@ -14,6 +14,8 @@ import { EngineWarning, type TsFallback } from './EngineWarning';
 import { runSimJob, type RunningJob } from './simClient';
 import { downloadText } from './util';
 import { errorMessage } from '../engine/types';
+import { BatchGuide } from './BatchGuide';
+import { PrecomputedRate } from './PrecomputedRate';
 
 /** シード欄が空なら、実行のたびにランダムに決める(結果に表示するので、同じ値を入れれば再現できる) */
 function resolveSeed(raw: string): number {
@@ -266,6 +268,8 @@ export function BatchView() {
           )}
         </div>
         <EngineWarning fallback={kindA === 'mcts' || kindB === 'mcts' ? tsFallback : null} />
+        <PrecomputedRate deckA={deckA} deckB={deckB} />
+        <BatchGuide games={games} iterations={iterations} />
         {error && <div className="panel" style={{ borderColor: 'var(--bad)' }}>{error}</div>}
         {results && (
           <div className="panel col">

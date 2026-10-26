@@ -13,6 +13,7 @@ import { evaluate, reward, RULE_WEIGHTS, withWeights, type RewardWeights } from 
 import { L1_DEFAULT, withL1, type L1Params } from './l1params';
 import { chooseTurnAction, makeRuleBased } from './rulebased';
 import type { Agent, AgentCtx } from './types';
+import { withLoopGuard } from './loopGuard';
 
 /** ターン内の行動列を木にする探索の設定(tree.ts) */
 export interface TreeOpts {
@@ -535,15 +536,30 @@ export async function runSearchParallel(
   return plan.env.legal[search.best()];
 }
 
+/**
+ * クロス済みのクロスギアを、別のクリーチャーにクロスし直す手を、探索の候補から外す(L19: 再クロスは規則上できるが、
+ * 「クロスのコストが 0」になるカード(freeCross)があると、評価が同じ手を毎回選び続けて、ターンが終わらず試合が止まらなくなる)。
+ * ルールベースは、最初のクロスしかしない(rulebased.ts)。
+ */
+export function dropRecross(view: { pending?: { player: number } | null; players: { battle: { pid: number; crossedOn?: number }[] }[] }, legal: Action[]): Action[] {
+  const me = view.pending?.player;
+  if (me === undefined) return legal;
+  const crossed = new Set(view.players[me].battle.filter((x) => x.crossedOn !== undefined).map((x) => x.pid));
+  if (crossed.size === 0) return legal;
+  const out = legal.filter((a) => !(a.type === 'CROSS' && crossed.has(a.gear)));
+  return out.length > 0 ? out : legal;
+}
+
 export function makeMcts(o: MctsOpts = {}): Agent {
   const policy = o.policy ?? FAIR;
   const l1 = makeRuleBased({ policy, candidateDecks: o.candidateDecks });
-  return {
+  return withLoopGuard({
     name: 'モンテカルロ',
     policy,
     chooseAction(view, legal, ctx: AgentCtx) {
+      legal = dropRecross(view, legal);
       if (legal.length === 1) return legal[0];
       return runSearch(planSearch(view, legal, ctx, o, l1), ctx.reg, o.onSearch);
     },
-  };
+  });
 }
