@@ -500,7 +500,7 @@ function perform(s, proposal: Proposal): { s, events } {
 |---|---|---|
 | ヨビニオン・トライブ | 破壊される時、墓地のかわりにマナゾーンに置く | `replace(match: moved(battle→grave, cause=destroy, self), apply: changeDest(mana))` |
 | EXライフ(キーナリー、ザーディクリカ、ドルファディロム) | 離れる時、かわりにEXのシールドを墓地に置く。出る時、山札の上をシールドにする | `replace(match: moved(from=battle, self), apply: swap → move(exShield → grave))`。ドルファディロムは「EXシールドが離れた」を `moved(from=shield, flag=exLife)` で誘発させる |
-| ジャオウガ | ゲームに負ける時/離れる時、かわりに自分の表向きのカード3枚を破壊してもよい | `replace(match: gameLoss(self) or moved(from=battle,self), optional, apply: …)`。身代わりの「破壊」自体はさらに置換できない(連鎖禁止)。対象はバトルゾーンの他のカードだけ(Q&A 41461)。3枚を超える時は持ち主が選ぶ(`select`) |
+| ジャオウガ | ゲームに負ける時/離れる時、かわりに自分の表向きのカード3枚を破壊してもよい | `replace(match: gameLoss(self) or moved(from=battle,self), optional, apply: …)`。身代わりの「破壊」自体はさらに置換できない(連鎖禁止)。身代わりに選ばれたEXライフ持ちは、EXライフの置換を使えずそのまま破壊されるが、EXライフのシールドは(クリーチャーが離れても)残る。公式Q&Aに直接の記述は見つからず、「置換効果に別の置換効果は適用できない」(公式Q&A: 水上第九院 シャコガイル)からの帰結としている。対象はバトルゾーンの他のカードだけ(Q&A 41461)。3枚を超える時は持ち主が選ぶ(`select`) |
 | キーナリー | 相手のクリーチャーが出て、その能力がトリガーする時、かわりにトリガーしない | `replace(match: abilityTriggered-proposal(controller=opponent, trigger=entered), apply: cancel)`。5.1 の `applyTriggerReplacement` |
 | ザーディクリカ/決断(墓地から) | 唱えた後、墓地に置かず山札の下に置く | 置換ではなく、プレイ手順の `after: "deckBottom"`(9章)。解決後の移動先を手続きの変数で上書きする |
 

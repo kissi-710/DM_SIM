@@ -167,6 +167,22 @@ describe('A11 CRYMAX ジャオウガ', () => {
     expect(sim.has(0, 'grave', 'ヨビニオン・トライブ')).toBe(true);
     expect(sim.has(0, 'mana', 'ヨビニオン・トライブ')).toBe(false);
   });
+  it('身代わりの破壊で、EXライフを持つクリーチャーはそのまま破壊される(EXライフの置換は連鎖しない)。EXライフのシールドは残る', () => {
+    const sim = new Sim({
+      active: 1,
+      p0: { battle: ['CRYMAX ジャオウガ', { c: '終末縫合王 ザ=キラー・キーナリー', ex: true }, '天災 デドダム', 'ヨビニオン・トライブ'], shield: 3 },
+      p1: { hand: ['修羅の死神フミシュナ'], mana: mana(5, W), deck: 5 },
+    });
+    sim.play('修羅の死神フミシュナ', { face: 1 });
+    sim.option(0, 1);
+    sim.pick('CRYMAX ジャオウガ');
+    sim.option(0); // 置換する: キーナリー・デドダム・トライブが破壊される
+    expect(sim.has(0, 'grave', '終末縫合王 ザ=キラー・キーナリー')).toBe(true);
+    expect(sim.has(0, 'battle', '終末縫合王 ザ=キラー・キーナリー')).toBe(false);
+    expect(sim.evs('moved').some((e) => e.cause === 'exLifeSwap')).toBe(false);
+    // EXライフのシールド自体は(クリーチャーが離れても)墓地に置かれず残る
+    expect(sim.count(0, 'shield')).toBe(4);
+  });
   it('ダイレクトアタックで負ける時も、かわりに表向きのカード3枚を破壊してもよい(置換)', () => {
     const sim = new Sim({
       active: 1,
