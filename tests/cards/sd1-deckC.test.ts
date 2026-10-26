@@ -277,6 +277,29 @@ describe('C11 一王二命三眼槍', () => {
     expect(sim.has(0, 'hand', '一王二命三眼槍')).toBe(false);
     expect(sim.names(0, 'deck').at(-1)).toBe('一王二命三眼槍');
   });
+  it('置換は1回の出来事に1回だけ。続けて攻撃されれば、別の出来事として、手札に残った2枚目で置換できる(連鎖せず、3回目で負ける)', () => {
+    const sim = new Sim({
+      p0: { hand: ['一王二命三眼槍', '一王二命三眼槍'], mana: [D, F], shield: 0, deck: 5 },
+      p1: { battle: ['アクアン', 'アクアン', 'アクアン'] },
+      active: 1,
+    });
+    const atk = (i: number) => sim.do({ type: 'ATTACK', attacker: sim.s.players[1].battle[i].pid, target: { kind: 'player' } });
+    atk(0);
+    expect(sim.pending.why).toBe('replaceChoice');
+    sim.option(0);
+    sim.drain();
+    expect(sim.s.winner).toBeNull();
+    expect(sim.count(0, 'hand')).toBe(1); // 1枚だけが山札の下へ(同じ出来事で2枚目は使われない)
+    atk(1);
+    expect(sim.pending.why).toBe('replaceChoice');
+    sim.option(0);
+    sim.drain();
+    expect(sim.s.winner).toBeNull();
+    expect(sim.count(0, 'hand')).toBe(0);
+    atk(2);
+    sim.drain();
+    expect(sim.s.winner).toBe(1);
+  });
   it('マナに火がなければ置換できず、負ける', () => {
     const sim = new Sim({
       p0: { hand: ['一王二命三眼槍'], mana: [D, D], shield: 0 },
